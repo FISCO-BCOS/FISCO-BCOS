@@ -1,8 +1,8 @@
 name: C2 OP e2e (manual + nightly full run)
-# Per-PR coverage comes from workflow.yml → c2_e2e, which now runs the FULL
-# adversarial + kona depth (CONTEST=1, KONA_VERIFY=1) reusing the l2_unit_suites
-# artifact. This workflow is the full run — it builds fisco-bcos from scratch — and
-# is triggered manually or nightly.
+# Per-PR coverage comes from workflow.yml → c2_e2e, which runs the FULL
+# adversarial + kona depth (CONTEST=1, KONA_VERIFY=1) reusing the build job's
+# fisco-bcos artifact. This workflow is the full run — it builds fisco-bcos
+# from scratch — and is triggered manually or nightly.
 on:
   workflow_dispatch:
     inputs:
@@ -22,10 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # STEP-SET TWIN of workflow.yml's c2_e2e job (that one downloads the
-  # l2_unit_suites fisco-bcos artifact; this one builds from source with
-  # WITH_L2_CONTRACTS=ON): every shared step must be edited in lockstep in
-  # both files.
+  # STEP-SET TWIN of workflow.yml's c2_e2e job (that one downloads the build
+  # job's fisco-bcos artifact; this one builds from source): every shared step
+  # must be edited in lockstep in both files.
   c2_e2e:
     name: C2 deposit/withdraw e2e
     runs-on: ubuntu-26.04
@@ -36,11 +35,10 @@ jobs:
       # Manual runs pass the input; a scheduled run has none, so default to the full
       # adversarial variant there.
       CONTEST: ${{ github.event.inputs.contest || '1' }}
-      # Same sizing as workflow.yml's l2 leg, whose prefix this job restores (restore-only;
-      # the l2 leg owns the writes): 300M is two or three revisions of headroom above the
-      # ~103MB working set. The l2 leg's prune step keeps the prefix at one live generation;
-      # without it the 7-day retention would hold ~7. See workflow.yml's build-matrix env
-      # comment for the full model.
+      # Same sizing as workflow.yml's build matrix: 300M is two or three revisions of
+      # headroom above the ~103MB working set. The build matrix's prune step keeps its
+      # prefix at one live generation; without it the 7-day retention would hold ~7.
+      # See workflow.yml's build-matrix env comment for the full model.
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 300M
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -59,12 +57,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          # Pinned at a post-#7 merge commit: #7 added the kona native replay phase 3.6, and
-          # the later pins enable the debug namespace on the C2 web3 listener (setup_c2.sh
-          # enable_debug_api=true — the preimage oracle kona-host reads debug_dbGet /
-          # debug_getRawHeader off it) and drop the removed feature_l2_ethereum_compat bit
-          # from the genesis feature_flags so the node's verifyL2FeatureFlagsSlot passes.
-          ref: 5a2ad071ab2162972073ed9dfcf814e55a77fc8f
+          # FISCO-BCOS/op-stack-e2e-tests#13 moves the harness to the 3.18 config surface
+          # ([engine_rpc], no [op_fork_schedule], separate config.ini / config.genesis, no
+          # SystemConfig feature_flags slot). This is that PR's head commit, reachable through
+          # refs/pull/13/head; re-pin to its merge commit on the default branch once it merges.
+          # It descends from the previous pin 5a2ad071a, so it keeps the kona native replay
+          # phase 3.6 and setup_c2.sh's [web3_rpc] enable_debug_api=true (kona-host's preimage
+          # oracle).
+          ref: dac984d09777de634279025b6f6013106ae42b5c
           path: .ci-op-e2e-tests
 
       - name: Initialize vcpkg submodule
@@ -96,14 +96,17 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          # Daily bucket + "v1-" restore prefix, matching workflow.yml's l2 leg. This job is
-          # restore-only: it builds just --target fisco-bcos, a strict subset of what the l2
-          # leg builds, and actions/cache/save locks a daily key to its first writer - a
-          # nightly save here could seed the shared prefix with the subset and starve the l2
-          # leg's full refresh for that day. The l2 leg owns the writes.
-          key: ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-${{ steps.ccache-bucket.outputs.day }}
+          # Restores the build matrix's prefix (the l2 leg that used to own a
+          # separate ccache-l2-* scope was removed: WITH_L2_CONTRACTS=ON never
+          # changed a compile line, so its objects were identical to the plain
+          # ubuntu-26.04 leg's). This job is restore-only: it builds just
+          # --target fisco-bcos, a strict subset of what the build leg builds,
+          # and actions/cache/save locks a daily key to its first writer - a
+          # nightly save here could seed the shared prefix with the subset and
+          # starve the build leg's full refresh for that day.
+          key: ccache-${{ github.ref_name }}-ubuntu-26.04-${{ runner.arch }}-v1-${{ steps.ccache-bucket.outputs.day }}
           restore-keys: |
-            ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-
+            ccache-${{ github.ref_name }}-ubuntu-26.04-${{ runner.arch }}-v1-
 
       - name: Install system packages
         run: |
@@ -218,12 +221,15 @@ jobs:
             .ci-c2-bins
           key: c2-op-${{ steps.op-pin.outputs.commit }}-kona1-${{ runner.os }}-${{ runner.arch }}
 
-      - name: Configure FISCO (WITH_L2_CONTRACTS=ON)
+      - name: Configure FISCO
+        # No WITH_L2_CONTRACTS=ON: it only wires forge custom targets that are
+        # not part of the default build (the "Forge build L2 contracts" step
+        # below is the real coverage), so the flag would change nothing here.
         run: |
           mkdir -p build
           cd build
           CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld \
-            -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON \
+            -DTESTS=ON -DCOVERAGE=OFF \
             -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
             -DWITH_TARS_SERVICES=OFF -DTOOL=OFF \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \

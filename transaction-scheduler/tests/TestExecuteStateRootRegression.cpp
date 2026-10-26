@@ -31,7 +31,6 @@
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
@@ -42,6 +41,8 @@
 #include <boost/test/unit_test.hpp>
 #include <array>
 #include <fakeit.hpp>
+
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 
 // Regression test for the zero-stateRoot bug introduced by #5215 (ba902b6bb):
 // BaselineScheduler::coExecuteBlock passed view.backendStorageRef() instead of
@@ -180,7 +181,7 @@ public:
         auto blockHeader = block->blockHeader();
         task::syncWait(ledger::prewriteBlock(mockLedger.get(),
             std::make_shared<protocol::ConstTransactions>(), block, false, backendStorage));
-        bytes headerBuffer;
+        bcos::bytes headerBuffer;
         blockHeader->encode(headerBuffer);
 
         storage::Entry number2HeaderEntry;
@@ -197,7 +198,7 @@ public:
         blockHeader->setNumber(number);
         blockHeader->setVersion(blockVersion);
         blockHeader->calculateHash(*hashImpl);
-        bytes input;
+        bcos::bytes input;
         block->appendTransaction(transactionFactory->createTransaction(
             0, "to", input, std::to_string(number), 100, "chain", "group", 0));
         writeBlock(block);

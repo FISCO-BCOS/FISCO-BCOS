@@ -31,8 +31,9 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
-#include <limits>
 #include <evmc/evmc.hpp>
+#include <functional>
+#include <limits>
 #include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <optional>
@@ -335,13 +336,20 @@ private:
     std::map<bcos::protocol::BlockNumber, evmc_revision> m_forkTransitions;
 };
 
-/// The latest EVM revision supported by the ethereum-executor. This is a fallback only:
-/// NodeConfig::loadExecutorConfig requires an explicit evm_revision for executor_version>=2,
-/// so a fresh v2 chain always persists its revision on-chain, and the startup path refuses
-/// to boot a v2 chain whose row is absent (no binary-side default). The constant applies
-/// solely on the (defensive) v2-missing-config path in getLedgerConfig, plus test /
-/// EEST-runner convenience.
+/// The base revision encodeEVMCRevisionConfig writes when a fork list has no block-0 entry.
+/// No genesis writes an evmc_revision row any more (a v2 chain derives its revision from
+/// [fork_timestamps], see EvmcRevisionSchedule); the codec stays for rows already on disk and
+/// for tests.
 inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
+
+/// executor_version=2 (the L1 EL lane): the EVM revision of a block with @p timestampSeconds
+/// and @p difficulty (0 = PoS), as the genesis [fork_timestamps] schedule assigns it. The lane
+/// records no evmc_revision row; the block verifier stamps the revision per block itself
+/// (fillExecutionLedgerConfig), and every other reader (the eth_call / eth_estimateGas dry
+/// run, transaction admission) is handed this function by the Initializer, built over
+/// scheduler_v1::evmcRevisionForTimestamp. Empty on every other lane.
+using EvmcRevisionSchedule =
+    std::function<evmc_revision(int64_t timestampSeconds, u256 const& difficulty)>;
 
 /// The executor-slot ladder: which scheduler an executor_version value selects. The
 /// values are the MultiVersionScheduler slot indices and the on-chain decimal string.
@@ -370,15 +378,11 @@ static_assert(static_cast<int>(ExecutorLane::Opstack) == 3);
 /// the newest slot the node actually wired, which is this one only when the OP slot is
 /// unwired.
 ///
-/// PRE-RELEASE SEMANTICS: executor_version = 2 was introduced mid-branch (2026-08) and is
-/// NOT part of any upstream release — upstream releases have no v2. The version gates
-/// consensus-critical behaviour (Ethereum trie roots for txsRoot/receiptsRoot/stateRoot,
-/// the system-address migration to /apps/), and its exact rules may still change between
-/// commits; no cross-commit compatibility is guaranteed for a chain that ran v2 on a
-/// pre-release binary. Before any formal release ships with v2 selectable, this gate must
-/// be re-hung on a proper feature flag / activation block height (Features::Flag) instead
-/// of a bare version compare — tracked in
-/// https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5563.
+/// The Ethereum lane is a GENESIS property, not a governable one: `executor.version` in
+/// config.genesis seeds the on-chain row, SystemConfigPrecompiled refuses a runtime write that
+/// would enter the lane (compat >= 3.18.0), and neither Ethereum-lane executor serves the
+/// system-config precompile. A v2 chain is v2 from block 0, so the bare version compare IS the
+/// gate — there is no activation height to hang a Features flag on (#5563, closed).
 inline constexpr int ETHEREUM_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::Ethereum);
 
 /// The executor version that selects the OP-Stack OpSchedulerSeam (op composition root).
@@ -400,6 +404,14 @@ inline constexpr bool isOpLaneVersion(int executorVersion)
 {
     return executorVersion >= OPSTACK_EXECUTOR_VERSION;
 }
+
+/// The compatibility version of every Ethereum-lane chain (executor_version >= 2). These
+/// lanes fork on the Ethereum / OP schedule only: genesis [version] is ignored, no
+/// compatibility_version row is written, and shared code that still needs a compat number
+/// (block header version, genesis pin, table layout) reads this constant. It is part of the
+/// genesis pin, so it must never move with the binary's MAX_VERSION.
+inline constexpr auto ETHEREUM_LANE_COMPATIBILITY_VERSION =
+    static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION);
 
 /// The highest executor_version a TRANSACTION may set: the newest defined lane, derived
 /// from the ladder above and never hand-copied — wiring a new lane moves the bound with
@@ -581,9 +593,8 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
         if (parsed.error == ConfigUint64Error::outOfRange)
         {
             BOOST_THROW_EXCEPTION(
-                InvalidOpEip1559Config()
-                << errinfo_comment(
-                       "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
+                InvalidOpEip1559Config() << errinfo_comment(
+                    "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
         }
         if (!parsed.value.has_value())
         {
@@ -610,9 +621,9 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
     // parser would refuse.
     if (auto const problem = opEip1559ParamsRowProblem(params))
     {
-        BOOST_THROW_EXCEPTION(InvalidOpEip1559Config() << errinfo_comment(
-                                  "op_eip1559_params value carries a " + *problem + ": " +
-                                  std::string(value)));
+        BOOST_THROW_EXCEPTION(
+            InvalidOpEip1559Config() << errinfo_comment(
+                "op_eip1559_params value carries a " + *problem + ": " + std::string(value)));
     }
     return params;
 }

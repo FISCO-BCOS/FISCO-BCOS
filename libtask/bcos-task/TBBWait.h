@@ -20,8 +20,7 @@
 #include "Trait.h"
 #include <oneapi/tbb/task.h>
 #include <oneapi/tbb/task_group.h>
-#include <boost/atomic/atomic.hpp>
-#include <boost/atomic/atomic_flag.hpp>
+#include <atomic>
 
 namespace bcos::task::tbb
 {
@@ -38,8 +37,8 @@ transactions in the following functions
 constexpr inline struct SyncWait
 {
     template <class Task>
-    auto operator()(
-        Task&& task, auto&&... args) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
+    auto operator()(Task&& task, auto&&... args) const
+        -> AwaitableReturnType<std::remove_cvref_t<Task>>
         requires IsAwaitable<Task>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
@@ -50,11 +49,11 @@ constexpr inline struct SyncWait
             std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
 
         ReturnVariant result;
-        boost::atomic_flag finished{};
-        boost::atomic<oneapi::tbb::task::suspend_point> suspendPoint{};
+        std::atomic_flag finished{};
+        std::atomic<oneapi::tbb::task::suspend_point> suspendPoint{};
 
-        auto waitTask = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
-                            boost::atomic<oneapi::tbb::task::suspend_point>& suspendPoint,
+        auto waitTask = [](Task&& task, decltype(result)& result, std::atomic_flag& finished,
+                            std::atomic<oneapi::tbb::task::suspend_point>& suspendPoint,
                             auto&&...) -> task::Task<void> {
             try
             {

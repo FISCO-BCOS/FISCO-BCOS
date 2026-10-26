@@ -23,7 +23,7 @@
 
 #include "../common/FrontServiceBuilder.h"
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <range/v3/view/single.hpp>
 
 using namespace std;
@@ -89,15 +89,14 @@ int main(int argc, const char** argv)
             {
                 auto nodeID = keyFactory->createKey(fromHex(nodeIDStr));
                 std::string randStr = boost::uuids::to_string(boost::uuids::random_generator()());
-                GATEWAY_MAIN_LOG(INFO)
-                    << LOG_DESC("request") << LOG_KV("to", nodeID->hex())
-                    << LOG_KV("content", randStr);
+                GATEWAY_MAIN_LOG(INFO) << LOG_DESC("request") << LOG_KV("to", nodeID->hex())
+                                       << LOG_KV("content", randStr);
 
                 auto payload = bytesConstRef((bcos::byte*)randStr.data(), randStr.size());
 
-                auto result = task::syncWait(frontService->sendMessageByNodeID(
-                    bcos::protocol::ModuleID::AMOP, nodeID, ::ranges::views::single(payload),
-                    10000));
+                auto result =
+                    task::syncWait(frontService->sendMessageByNodeID(bcos::protocol::ModuleID::AMOP,
+                        nodeID, ::ranges::views::single(payload), 10000));
 
                 if (result.error && (result.error->errorCode() != 0))
                 {

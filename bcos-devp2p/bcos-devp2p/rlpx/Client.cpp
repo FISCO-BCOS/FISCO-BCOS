@@ -27,8 +27,8 @@
 #include <bcos-network/Common.h>
 #include <bcos-task/Deadline.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/post.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <atomic>

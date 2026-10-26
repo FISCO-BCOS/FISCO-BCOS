@@ -9,17 +9,19 @@
 #pragma once
 
 #include "bcos-utilities/Error.h"
+#include "bcos-network/Endpoint.h"
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <set>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
+#include <string_view>
 
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
-#define HOST_LOG(LEVEL) BCOS_LOG(LEVEL) << "[NETWORK][Host]"
-#define SESSION_LOG(LEVEL) BCOS_LOG(LEVEL) << "[SESSION][Session]"
-#define ASIO_LOG(LEVEL) BCOS_LOG(LEVEL) << "[ASIO][ASIO]"
+#define HOST_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[NETWORK][Host]"
+#define SESSION_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[SESSION][Session]"
+#define ASIO_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[ASIO][ASIO]"
 
 namespace bcos::network
 {
@@ -117,4 +119,12 @@ inline Error::Ptr toError(NetworkException const& e)
 
 /// @returns the string form of the given disconnection reason.
 std::string reasonOf(DisconnectReason _reason);
+/// @returns the PeerDisconnected reason tag (see docs/ops/log-events.md):
+/// remote_close|local_close|timeout|handshake_failed|duplicate|blacklist|error
+std::string_view disconnectReasonTag(DisconnectReason _reason);
+/// the single emission point of the HandshakeFailed event. Inbound failures are INFO: anyone who
+/// can reach the P2P port triggers them at their own rate; outbound (static peers) and protocol
+/// mismatches after a successful TLS handshake are WARNING.
+void logHandshakeFailed(bcos::LogLevel _level, NodeIPEndpoint const& _endpoint,
+    std::string_view _reason, std::string_view _detail);
 }  // namespace bcos::network

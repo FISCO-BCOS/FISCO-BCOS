@@ -15,8 +15,8 @@
 #include <bcos-ledger/Ledger.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/VersionConverter.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/lexical_cast.hpp>
@@ -41,10 +41,8 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
 public:
     LedgerImpl(Hasher hasher, Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storageInterface, size_t blockLimit,
-        bcos::storage::StorageInterface::Ptr blockStorage = nullptr,
-        bcos::IOServicePool::Ptr ioServicePool = nullptr)
-      : Ledger(std::move(blockFactory), storageInterface, blockLimit, blockStorage,
-            c_defaultMerkleTreeCacheSize, std::move(ioServicePool)),
+        bcos::storage::StorageInterface::Ptr blockStorage = nullptr)
+      : Ledger(std::move(blockFactory), storageInterface, blockLimit, blockStorage),
         m_hasher(std::move(hasher)),
         m_backupStorage(storageInterface),
         m_storage{std::move(storage)},
@@ -195,7 +193,8 @@ protected:
         co_return abiStr;
     }
 
-    task::Task<void> impl_getTransactions(::ranges::range auto const& hashes, ::ranges::range auto& out)
+    task::Task<void> impl_getTransactions(
+        ::ranges::range auto const& hashes, ::ranges::range auto& out)
     {
         bcos::concepts::resizeTo(out, ::ranges::size(hashes));
         using DataType = ::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>;

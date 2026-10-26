@@ -24,10 +24,6 @@
  *        shouldBuildMPT).
  */
 #include "FullChainFixture.h"
-// Test-asset helper shared with the bcos-ledger genesis tests: computes the
-// feature_flags Entry slot Ledger's genesis verification requires in the
-// SystemConfig predeploy alloc (quoted include resolves relative to this file).
-#include "../../bcos-ledger/test/unittests/ledger/GenesisFeatureFlagsHelper.h"
 #include "bcos-ledger/mpt/Constants.h"
 #include "bcos-ledger/mpt/HashBuilder.h"
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -82,10 +78,6 @@ ledger::GenesisConfig genL2Genesis()
     genesis.m_web3ChainID = genesis.m_chainID;
     genesis.m_allocs.push_back(genContractAlloc());
     genesis.m_allocs.push_back(genEoaAlloc());
-    // The contract sits at the SystemConfig predeploy address: Ledger verifies
-    // the feature_flags Entry slot is IN the alloc (P0: the state root commits
-    // it), so the fixture must carry it like real build-allocs.py output.
-    bcos::test::appendGenesisFeatureFlagsSlot(genesis);
     return genesis;
 }
 
@@ -106,8 +98,7 @@ Address genAddress(std::string_view hex)
 h256 genContractStorageRoot(std::map<h256, bytes> const& extraSlots = {})
 {
     std::map<h256, bytes> entries;
-    // Iterate the ACTUAL genesis alloc storage (includes the feature_flags
-    // Entry slot appended in genL2Genesis), not a bare genContractAlloc() —
+    // Iterate the ACTUAL genesis alloc storage, not a bare genContractAlloc() —
     // the oracle must cover exactly what genesis committed.
     auto const genesisForOracle = genL2Genesis();
     for (auto const& [slotHexKey, valueHex] : genesisForOracle.m_allocs[0].storage)

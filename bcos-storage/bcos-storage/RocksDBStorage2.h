@@ -340,8 +340,7 @@ public:
 
         auto next()
         {
-            task::Immediate<std::optional<std::tuple<KeyType, StorageValueType<ValueType>>>>
-                result;
+            task::Immediate<std::optional<std::tuple<KeyType, StorageValueType<ValueType>>>> result;
             if (m_iterator->Valid())
             {
                 auto key = m_storage->m_keyResolver.decode(m_iterator->key().ToStringView());

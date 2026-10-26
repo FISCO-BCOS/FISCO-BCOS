@@ -24,11 +24,11 @@
 #include "Ledger.h"
 #include "GenesisStateRoot.h"
 #include "LedgerMethods.h"
-#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -56,8 +56,8 @@
 #include <bcos-framework/storage/Table.h>
 #include <bcos-task/Wait.h>
 #include <bcos-tool/BfsFileFactory.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/hex.hpp>
@@ -91,15 +91,24 @@ using namespace std::string_view_literals;
 void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
     bcos::protocol::Block::ConstPtr block, std::function<void(Error::UniquePtr&&)> _callback)
 {
+    auto startT = utcTime();
+    // The single log line of this function; reason= tells which of the three exits was taken.
+    auto logResult = [startT](std::string_view reason, int64_t number, size_t txsSize,
+                         size_t unStoredTxs, bcos::Error const* error) {
+        LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs") << LOG_KV("reason", reason)
+                         << LOG_KV("number", number) << LOG_KV("txsSize", txsSize)
+                         << LOG_KV("unStoredTxs", unStoredTxs)
+                         << LOG_KV("msg", error ? error->errorMessage() : "success")
+                         << LOG_KV("code", error ? error->errorCode() : 0)
+                         << LOG_KV("timeCost", (utcTime() - startT));
+    };
     // Note: in the case of block-sync, no-need to save transactions when prewriteBlock
     if (!_blockTxs || _blockTxs->empty())
     {
-        LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: empty txs")
-                         << LOG_KV("number", (block ? block->blockHeader()->number() : -1));
+        logResult("empty", (block ? block->blockHeader()->number() : -1), 0, 0, nullptr);
         _callback(nullptr);
         return;
     }
-    auto startT = utcTime();
     auto blockTxsSize = _blockTxs->size();
     auto blockNumber = block->blockHeader()->number();
     // Select + encode the transactions not yet persisted (dedup via the storeToBackend
@@ -108,8 +117,7 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
     auto pending = encodeUnsavedBlockTransactions(block, _blockTxs);
     if (pending.empty())
     {
-        LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: no unstored txs")
-                         << LOG_KV("txsSize", blockTxsSize) << LOG_KV("number", blockNumber);
+        logResult("no_unstored", blockNumber, blockTxsSize, 0, nullptr);
         _callback(nullptr);
         return;
     }
@@ -126,13 +134,7 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
         // transactional, preventing write conflicts
         RecursiveGuard l(m_mutex);
         auto error = getBlockStorage()->setRows(SYS_HASH_2_TX, keys, values);
-        LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: store uncommitted txs")
-                         << LOG_KV("blockNumber", blockNumber)
-                         << LOG_KV("blockTxsSize", blockTxsSize)
-                         << LOG_KV("unStoredTxs", pending.size())
-                         << LOG_KV("msg", error ? error->errorMessage() : "success")
-                         << LOG_KV("code", error ? error->errorCode() : 0)
-                         << LOG_KV("timeCost", (utcTime() - startT));
+        logResult("stored", blockNumber, blockTxsSize, pending.size(), error.get());
         if (error)
         {
             _callback(std::make_unique<Error>(*error));
@@ -262,6 +264,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     std::atomic_int64_t totalCount = 0;
     std::atomic_int64_t failedCount = 0;
+    // -1 when this call does not write txs/receipts (block-sync path)
+    int64_t writeReceiptsTime = -1;
+    int64_t writeTxsTime = -1;
     if (writeTxsAndReceipts)
     {
         // hash 2 receipts
@@ -288,7 +293,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
         auto start = utcTime();
         auto error = getBlockStorage()->setRows(SYS_HASH_2_RECEIPT, txsHash, receiptsView);
-        auto writeReceiptsTime = utcTime() - start;
+        writeReceiptsTime = static_cast<int64_t>(utcTime() - start);
         if (error)
         {
             LEDGER_LOG(ERROR) << LOG_DESC("ledger write receipts failed")
@@ -297,11 +302,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
         start = utcTime();
         asyncPreStoreBlockTxs(_blockTxs, block, setRowCallback);
-        auto writeTxsTime = utcTime() - start;
-        LEDGER_LOG(INFO) << LOG_DESC("asyncPrewriteBlock")
-                         << LOG_KV("number", block->blockHeader()->number())
-                         << LOG_KV("writeReceiptsTime(ms)", writeReceiptsTime)
-                         << LOG_KV("writeTxsTime(ms)", writeTxsTime);
+        writeTxsTime = static_cast<int64_t>(utcTime() - start);
     }
     else
     {
@@ -319,9 +320,12 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                       << LOG_KV("number", blockNumberStr) << LOG_KV("totalCount", totalCount)
                       << LOG_KV("failedCount", failedCount);
 
-    // total transaction count
+    // total transaction count. Everything is captured by value: asyncGetTotalTransactionCount
+    // reaches this callback through task::wait, which does not wait, so the callback can run
+    // after this function has returned and its locals are gone.
     asyncGetTotalTransactionCount(
-        [storage, block, &setRowCallback, &totalCount, &failedCount](
+        [storage, block, setRowCallback, totalCount = totalCount.load(),
+            failedCount = failedCount.load(), writeReceiptsTime, writeTxsTime](
             Error::Ptr error, int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
             if (error)
             {
@@ -352,7 +356,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
                              << LOG_KV("number", block->blockHeader()->number())
                              << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
-                             << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount);
+                             << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount)
+                             << LOG_KV("writeReceiptsMs", writeReceiptsTime)
+                             << LOG_KV("writeTxsMs", writeTxsTime);
         });
 }
 
@@ -1459,117 +1465,6 @@ static task::Task<void> setGenesisFeatures(::ranges::input_range auto const& fea
     co_await writeToStorage(features, storage, 0);
 }
 
-// L2 SystemConfig predeploy: feature_flags is seeded at genesis from the
-// resolved feature set, so the on-chain SystemConfig mirrors the feature bitmap.
-// SystemConfig (bcos-l2-contracts) is a generic mapping(string => Entry); a
-// key's slot is keccak256(utf8(key) || be32(baseSlot)), baseSlot 101 pinned by
-// storage-layout/SystemConfig.json. At genesis the Entry.enableNumber is 0, so
-// the slot value is just the packed flags number (Entry.value, uint192).
-static constexpr std::string_view c_l2FeatureFlagsKey = "feature_flags";
-static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
-static constexpr std::string_view c_l2SystemConfigTemplateAddress =
-    "43000000000000000000000000000000000000c0";
-
-// Verify the L2 SystemConfig feature_flags alloc slot against this node's
-// feature set. Called from TWO places: buildGenesisBlock runs it with the
-// purely-computed expected feature set on the FIRST-INIT path (after the
-// genesis-exists early return) — before ANY genesis write, so a mismatching
-// config cannot leave B0 committed under a state root no alloc rows back (the
-// datadir stays untouched and a config fix is a plain retry); on restart the
-// importGenesisState re-run verifies with the persisted feature set (a change
-// after the fact is caught before the chain runs with it), and the feature
-// enum/default change can never strand an initialized chain here.
-static void verifyL2FeatureFlagsSlot(
-    ::ranges::input_range auto const& allocs, Features const& features)
-{
-    // The lookup is keyed on the SLOT, not on the account address: the feature_flags mapping
-    // key derives from the SystemConfig storage layout (base slot 101, pinned by
-    // storage-layout/SystemConfig.json), so whichever account carries it IS the SystemConfig
-    // account — that is what makes the value check work on any layout, not just the template's
-    // 0x43...C0. The PRESENCE mandate is a separate duty and remains keyed on the template
-    // address (see the note below for why it is not extended yet).
-    //
-    // slot = keccak256(utf8("feature_flags") || be32(101))
-    bcos::bytes slotInput;
-    slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
-    slotInput.insert(slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
-    bcos::bytes baseSlotBytes(32, 0);
-    baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
-    slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
-    auto const slotKeyHex = crypto::keccak256Hash(bcos::ref(slotInput)).hex();
-
-    // expected value = packed flags number as 32-byte big-endian (enableNumber = 0)
-    std::array<uint8_t, 32> expectedValue{};
-    auto flagsNumber = features.toFlagsNumber();
-    for (size_t i = 0; i < expectedValue.size(); ++i)
-    {
-        expectedValue[expectedValue.size() - 1 - i] =
-            (flagsNumber & 0xFF).convert_to<uint8_t>();
-        flagsNumber >>= 8;
-    }
-
-        // Two duties, without guessing which account plays the SystemConfig role:
-        //  * any account carrying the slot has its VALUE compared (the slot-key lookup below), so
-        //    the check covers every layout the allocs actually use, not just the template's;
-        //  * an account at the TEMPLATE address (0x43...C0) must carry the slot — the layout the
-        //    generator writes for (build-allocs.py's requirement is keyed on that address).
-        // The presence mandate is deliberately NOT extended to other layouts yet: their allocs
-        // do not carry the slot today (the harness's chain-config leaves `system_config` empty for
-        // the committed C2 layout, so build-allocs.py writes no slot there), and mandating it
-        // refuses such a node at genesis — measured: the C2 e2e goes red. Extend the mandate in
-        // the same change that makes the generator write the slot for that layout.
-        // This runs before ANY genesis write, so a refusal leaves the datadir untouched and a
-        // config fix is a plain retry.
-    for (auto const& importAccount : allocs)
-    {
-        const ledger::Alloc::State* featureFlagsSlot = nullptr;
-        for (auto const& state : importAccount.storage)
-        {
-            std::string keyHex(ledger::stripHexPrefix(state.first));
-            std::transform(keyHex.begin(), keyHex.end(), keyHex.begin(),
-                [](unsigned char c) { return std::tolower(c); });
-            if (keyHex == slotKeyHex)
-            {
-                featureFlagsSlot = &state;
-                break;
-            }
-        }
-        std::string addressHexLower(ledger::stripHexPrefix(importAccount.address));
-        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
-            [](unsigned char c) { return std::tolower(c); });
-        if (addressHexLower == c_l2SystemConfigTemplateAddress && featureFlagsSlot == nullptr)
-        {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
-                                      "L2 genesis allocs must carry the SystemConfig "
-                                      "feature_flags Entry slot (keccak256(\"feature_flags\" "
-                                      "|| be32(101)) = 0x" +
-                                      slotKeyHex +
-                                      ") so the genesis state root commits it; regenerate "
-                                      "the allocs with build-allocs.py"));
-        }
-        if (featureFlagsSlot == nullptr)
-        {
-            continue;
-        }
-        auto valueHex = ledger::stripHexPrefix(featureFlagsSlot->second);
-        std::array<uint8_t, 32> actualValue{};
-        ledger::unhexAllocExact(
-            valueHex, "feature_flags slot value", actualValue.data(), actualValue.size());
-        if (actualValue != expectedValue)
-        {
-            BOOST_THROW_EXCEPTION(
-                bcos::tool::InvalidConfig() << errinfo_comment(
-                    "SystemConfig feature_flags slot in the genesis allocs does not match "
-                    "this node's genesis feature set (Features::toFlagsNumber()): alloc=0x" +
-                    toHex(actualValue) + " expected=0x" + toHex(expectedValue) +
-                    " (account 0x" + std::string(importAccount.address) +
-                    "); the alloc artifact and the node's [features] config disagree"));
-        }
-    }
-    // No slot anywhere and no template-layout SystemConfig account: nothing to verify here —
-    // the precondition note above records why other layouts are not mandated yet.
-}
-
 // Genesis import writes go to the node's local state storage, whose operations
 // complete inline (never suspend on I/O). Drive them with task::syncWait instead of
 // co_await on purpose: a per-account co_await loop accumulates one native-stack
@@ -1649,20 +1544,13 @@ static void importGenesisAccount(
 static task::Task<void> importGenesisState(::ranges::forward_range auto const& allocs,
     auto& storage, const crypto::Hash& hashImpl, bool ethLane)
 {
-    Features features;
-    co_await ledger::readFromStorage(features, storage, 0);
-
-    // Verify the SystemConfig feature_flags slot BEFORE the first write (see
-    // verifyL2FeatureFlagsSlot): a mismatch must not leave partially-written
-    // accounts in the genesis batch.
-    verifyL2FeatureFlagsSlot(allocs, features);
-
     // The account-table naming rule (lane rule vs the v1 /sys/ routing) lives in
     // importGenesisAccount, keyed on the executor_version lane.
     for (auto&& importAccount : allocs)
     {
         importGenesisAccount(storage, hashImpl, ethLane, importAccount);
     }
+    co_return;
 }
 
 // A3: project the [eth_genesis_header] artifact fields onto B0. Precondition:
@@ -1793,6 +1681,10 @@ bool Ledger::buildGenesisBlock(
         // computeGenesisStateTrie only reads genesis.m_allocs, so it does not
         // depend on the genesis state being written first.
         GenesisStateTrie ethStateTrie = co_await computeGenesisStateTrie(genesis);
+        // Ethereum lanes (v2/v3) run on the Ethereum / OP fork schedule only: their genesis
+        // writes no Features rows, no feature_rpbft and no compatibility_version row, and a
+        // restart never backfills them.
+        bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
         if (genesisBlockHash)
         {
             // genesis block exists, quit
@@ -1851,9 +1743,7 @@ bool Ledger::buildGenesisBlock(
             // non-empty -> empty alloc drift is caught too. Legacy
             // (non-Ethereum-lane) chains carry no allocs and leave the genesis
             // stateRoot zero — the comparison does not apply to them.
-            bool const ethLaneRestart =
-                genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
-            if (existsGenesisData == genesisData && ethLaneRestart &&
+            if (existsGenesisData == genesisData && ethLane &&
                 genesisBlockHeader->stateRoot() != ethStateTrie.root)
             {
                 LEDGER_LOG(FATAL) << LOG_BADGE("buildGenesisBlock")
@@ -1869,6 +1759,10 @@ bool Ledger::buildGenesisBlock(
                         " computed=" + ethStateTrie.root.hex()));
             }
 
+            if (existsGenesisData == genesisData && ethLane)
+            {
+                co_return true;
+            }
             if (existsGenesisData == genesisData)
             {
                 auto version = genesis.m_compatibilityVersion;
@@ -1925,46 +1819,34 @@ bool Ledger::buildGenesisBlock(
             }
         }
 
-        // First-init path only (a restart either returned true above or threw
-        // on the pin/stateRoot guards): verify the L2 SystemConfig
-        // feature_flags alloc slot NOW — before ANY genesis write (the first
-        // is the asyncCreateTable loop far below). A mismatch surfacing after
-        // prewriteBlockToStorage would leave B0 committed under a state root
-        // no alloc rows back: the next start would then pass the restart
-        // guards on an empty world state, block 1 would die on a missing trie
-        // node, and the datadir would be unrecoverable without a wipe. The
-        // expected feature set is computed purely here — version defaults +
-        // the rpbft auto-flag + [features] — identical to what the write side
-        // persists below; the importGenesisState-internal re-check compares
-        // against what was actually persisted.
-        //
-        // This must NOT run on the restart path: the stateRoot comparison
-        // above already refuses to start on any alloc drift (the slot value
-        // is part of the trie), while expectedFeatures derives from this
-        // binary's Features enum and version defaults — re-checking it on
-        // every start would let a future release that changes the enum or a
-        // genesis default strand an initialized chain with an unactionable
-        // "regenerate the allocs" error (the allocs are pinned by B0's
-        // stateRoot and cannot be regenerated for a live chain).
-        if (!genesis.m_allocs.empty())
+        // First-init path only (a restart either returned true above or threw on the
+        // pin/stateRoot guards): hold [features] to the governance dependency rules before
+        // ANY genesis write, so a refused config leaves the datadir untouched. The first-init
+        // path is also taken by a NEW node joining an existing chain (empty datadir), so the
+        // check only applies from compatibility_version 3.18.0, which no released chain
+        // carries: an older genesis that predates a rule (e.g. feature_balance_precompiled
+        // without feature_balance) keeps initializing as it always did. Ethereum lanes ignore
+        // [features].
+        if (!ethLane && genesis.m_compatibilityVersion >=
+                            static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION))
         {
-            Features expectedFeatures;
-            expectedFeatures.setGenesisFeatures(
+            Features genesisFeatures;
+            genesisFeatures.setGenesisFeatures(
                 protocol::BlockVersion(genesis.m_compatibilityVersion));
-            if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
-                genesis.m_compatibilityVersion >=
-                    static_cast<uint32_t>(protocol::BlockVersion::V3_5_VERSION))
+            for (auto const& featureSet : genesis.m_features)
             {
-                expectedFeatures.set(ledger::Features::Flag::feature_rpbft);
+                if (featureSet.enable > 0)
+                {
+                    genesisFeatures.set(featureSet.flag);
+                }
             }
             for (auto const& featureSet : genesis.m_features)
             {
                 if (featureSet.enable > 0)
                 {
-                    expectedFeatures.set(featureSet.flag);
+                    genesisFeatures.validateDependencies(featureSet.flag);
                 }
             }
-            verifyL2FeatureFlagsSlot(genesis.m_allocs, expectedFeatures);
         }
 
         auto versionNumber = genesis.m_compatibilityVersion;
@@ -2007,7 +1889,6 @@ bool Ledger::buildGenesisBlock(
         // — the FISCO-BCOS native stateRoot for blocks >= 1 is an XOR of
         // per-block state-change hashes, a different domain from this MPT root,
         // so only the (previously empty) genesis block carries it.
-        bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
         if (!genesis.m_allocs.empty() || ethLane)
         {
             // Publish the computed trie root — the same expression the restart
@@ -2158,7 +2039,7 @@ bool Ledger::buildGenesisBlock(
             sysTable->setRow(INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA, std::move(genesisDataEntry));
         }
 
-        if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
+        if (!ethLane && RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
             versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
         {
             // rpbft config
@@ -2179,9 +2060,12 @@ bool Ledger::buildGenesisBlock(
             sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
         }
 
-        co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await importGenesisState(genesis.m_allocs, *m_stateStorage,
-            *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
+        if (!ethLane)
+        {
+            co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
+        }
+        co_await importGenesisState(
+            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
 
         // Ethereum lane (executor_version >= 2): block 1 builds the MPT incrementally on top
         // of the genesis state
@@ -2215,15 +2099,19 @@ bool Ledger::buildGenesisBlock(
             SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_leaderSwitchPeriod), 0}));
         sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
-        LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
-                         << LOG_KV("versionNumber", versionNumber);
-        // write compatibility version
-        Entry compatibilityVersionEntry;
-        compatibilityVersionEntry.set(bcos::storage::serialize::encode(
-            SystemConfigEntry{tool::fromVersionNumber(static_cast<protocol::BlockVersion>(
-                                  genesis.m_compatibilityVersion)),
-                0}));
-        sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
+        if (!ethLane)
+        {
+            LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
+                             << LOG_KV("versionNumber", versionNumber);
+            // write compatibility version
+            Entry compatibilityVersionEntry;
+            compatibilityVersionEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{tool::fromVersionNumber(static_cast<protocol::BlockVersion>(
+                                      genesis.m_compatibilityVersion)),
+                    0}));
+            sysTable->setRow(
+                SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
+        }
 
         if (versionCompareTo(versionNumber, BlockVersion::V3_3_VERSION) >= 0)
         {
@@ -2262,19 +2150,6 @@ bool Ledger::buildGenesisBlock(
                 executor_v1::StateKey(
                     SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::balance_transfer)),
                 balanceTransfer);
-        }
-
-        // Write EVMC revision config (consumed by ethereum-executor, executor_version=2).
-        // Only written when explicitly configured in the genesis config; otherwise
-        // getLedgerConfig falls back to the latest revision from genesis.
-        if (versionNumber >= BlockVersion::V3_18_0_VERSION &&
-            (genesis.m_evmcRevision || !genesis.m_evmcRevisionForks.empty()))
-        {
-            Entry evmcRevisionEntry;
-            evmcRevisionEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{
-                encodeEVMCRevisionConfig(genesis.m_evmcRevision, genesis.m_evmcRevisionForks), 0}));
-            co_await storage2::writeOne(*m_stateStorage,
-                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EVMC_REVISION), evmcRevisionEntry);
         }
 
         // Write excess blob gas config (consumed by ethereum-executor, executor_version=2,
@@ -2323,29 +2198,13 @@ bool Ledger::buildGenesisBlock(
         // the RPC estimate gas-cap gate (M1) among them — keys fork activation on the
         // chain's own schedule in every deployment. The SYS_OP_CHAIN_METADATA triple is the
         // integrity-bound copy the Initializer's boot probe validates (absent = legal;
-        // partial/corrupt/mis-bound = startup refusal). Both declaration channels resolve
-        // through the ONE resolver the boot probe also compares against
-        // ([op_fork_schedule] canonicalized verbatim, else the [op_fork_timestamps]
-        // shorthand folded by the rule the executor applies), so the writer and the probe
-        // cannot disagree about what this node declares — and the NORMALIZED canonical is
-        // what gets bound ("0:Isthmus" persists as "0:isthmus").
+        // partial/corrupt/mis-bound = startup refusal). Both are generated from the
+        // [op_fork_timestamps] shorthand through the ONE resolver the boot probe also compares
+        // against, so the writer and the probe cannot disagree about what this node declares.
         std::optional<std::string> resolvedOpSchedule;
-        // A dual declaration must agree before this branch resolves it: the loader refuses a
-        // divergent pair (NodeConfig), and a direct GenesisConfig caller (tooling, tests, a
-        // future genesis wizard) must not be able to persist the canonical side while the
-        // executor runs the differing shorthand — the exact state the loader then refuses to
-        // read. Same rule set as the loader, one helper.
-        if (auto const problem = opForkScheduleDualDeclarationProblem(
-                genesis.m_opstackForkSchedule, genesis.m_opForkSchedule))
-        {
-            throwInvalidOpForkSchedule(*problem);
-        }
-        if (auto const resolved = resolvedLocalOpForkScheduleCanonical(
-                genesis.m_opForkSchedule, genesis.m_opstackForkSchedule);
+        if (auto const resolved = resolvedLocalOpForkScheduleCanonical(genesis.m_opForkSchedule);
             resolved.has_value())
         {
-            // Same integrity triple for either channel (both persist identical triples; a
-            // chain declared via [op_fork_timestamps] must not lack the integrity-bound copy).
             // The binding target is header->hash() — block 0's own hash — so the boot probe
             // validates it against the config's [eth_genesis_header] when the node declares
             // one, and against this stored genesis header itself when it does not (the
@@ -2687,8 +2546,7 @@ task::Task<int64_t> Ledger::fetchExecutorVersionAt(protocol::BlockNumber _blockN
 {
     // Same single-row idiom as fetchFeature: an absent row is a pre-Ethereum-lane chain (0);
     // a row whose enableNumber is after _blockNumber reads as 0 for that block.
-    auto const key =
-        std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
+    auto const key = std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
     auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
     if (error || !entry)
     {
@@ -2708,8 +2566,8 @@ task::Task<int64_t> Ledger::fetchExecutorVersionAt(protocol::BlockNumber _blockN
     {
         // Boot (readOnChainExecutorVersion) refuses an unparseable row, so reaching this
         // means the row was corrupted afterwards -- corruption, not a legacy chain.
-        BOOST_THROW_EXCEPTION(std::runtime_error(
-            "on-chain executor_version is not an integer: '" + value + "'"));
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("on-chain executor_version is not an integer: '" + value + "'"));
     }
 }
 bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
@@ -2721,32 +2579,25 @@ bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
         // getABI function begin in version 320
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
-        auto [error, entry] =
-            m_stateStorage->getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
-        if (!entry || error)
+        // Ethereum lanes run on the lane constant (same rule as applyLedgerConfig) and write
+        // no compatibility_version row; only v0/v1 read it.
+        uint32_t version = ledger::ETHEREUM_LANE_COMPATIBILITY_VERSION;
+        if (task::syncWait(fetchExecutorVersionAt(0)) < ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(GetStorageError, "Not found compatibilityVersion."));
+            auto [error, entry] = m_stateStorage->getRow(
+                ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
+            if (!entry || error)
+            {
+                BOOST_THROW_EXCEPTION(
+                    BCOS_ERROR(GetStorageError, "Not found compatibilityVersion."));
+            }
+            auto [compatibilityVersionStr, _] =
+                bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+            version = bcos::tool::toVersionNumber(compatibilityVersionStr);
         }
-        auto [compatibilityVersionStr, _] =
-            bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
-        auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
         auto stateStorage = stateStorageFactory.createStateStorage(
             m_stateStorage, version, true, false, keyPageIgnoreTables);
         return stateStorage;
     }
     return std::make_shared<bcos::storage::StateStorage>(m_stateStorage, true);
-}
-
-task::Task<void> Ledger::loadL2Config(protocol::BlockNumber blockNumber, ledger::LedgerConfig& cfg)
-{
-    // No loader configured (non-L2 mode, or PBFT short-circuit before the L2
-    // workflow wires one): nothing to refresh.
-    if (!m_l2Loader)
-    {
-        co_return;
-    }
-    // Delegate to the injected loader. A revert / short return / OOG throws out of
-    // here so the caller aborts the current block — we never swallow it.
-    co_await m_l2Loader->loadIntoLedgerConfig(blockNumber, cfg);
-    co_return;
 }

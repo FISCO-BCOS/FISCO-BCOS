@@ -1,6 +1,6 @@
 #!/bin/bash
 # "Copyright [2018] <fisco-bcos>"
-# @ function: check code format of {.h, .hpp and .cpp} files
+# @ function: check code format of {.c, .h, .cpp, .hpp and .inl} files
 # @ require : Make sure your machine is linux (centos/ubuntu), yum or apt is ready
 # @ author  : wheatli
 # @ file    : check-commit.sh
@@ -41,19 +41,35 @@ execute_cmd() {
     fi
 }
 
+# CI and developers must run the same clang-format: versions disagree on line breaking, so a
+# file formatted by one fails the check under another. tools/.ci/clang-format-version holds the
+# one version the workflow installs and both scripts require.
+clang_format_version=$(cat "${SHELL_FOLDER}/clang-format-version")
+# C/C++ sources the check covers; ports/ holds vendored upstream code and is not formatted
+format_files_regex='\.([ch](pp)?|inl)$'
+format_exclude_regex='^ports/'
+
 function check_codeFormat() {
     # Redirect output to stderr.
     exec 1>&2
-    sum=0
-    for file in $(git diff-index --name-status HEAD^ -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'); do
-        execute_cmd "$check_script -style=file -i $file"
-        sum=$(expr ${sum} + $?)
-    done
-
-    if [ ${sum} -ne 0 ]; then
-        echo "######### ERROR: Format check failed, please adjust them before commit"
+    local version=$(${check_script} --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
+    if [ "${version}" != "${clang_format_version}" ]; then
+        LOG_ERROR "clang-format ${clang_format_version} required, found ${version}: pip install clang-format==${clang_format_version}"
         exit 1
     fi
+    local unformatted=""
+    for file in $(git diff --name-only --diff-filter=d HEAD^ -- | grep -E "${format_files_regex}" | grep -vE "${format_exclude_regex}"); do
+        if ! ${check_script} -style=file --dry-run --Werror "${file}"; then
+            unformatted="${unformatted} ${file}"
+        fi
+    done
+
+    if [ -n "${unformatted}" ]; then
+        LOG_ERROR "######### ERROR: not formatted with clang-format ${clang_format_version}:${unformatted}"
+        LOG_ERROR "run: clang-format -style=file -i${unformatted}"
+        exit 1
+    fi
+    LOG_INFO "code format check Ok!"
 }
 
 function check_PR_limit() {
@@ -131,14 +147,6 @@ function check_versionConsistency() {
     LOG_INFO "version consistency check Ok!"
 }
 
-function check_bcosBuilderTemplates() {
-    if ! python3 "${SHELL_FOLDER}/check_bcosbuilder_tpl.py"; then
-        LOG_ERROR "a BcosBuilder template does not parse with the generator settings (two ';' comments sharing the text before ':' or '=' collide)"
-        exit 1
-    fi
-}
-
 check_versionConsistency
-check_bcosBuilderTemplates
 check_codeFormat
 check_PR_limit

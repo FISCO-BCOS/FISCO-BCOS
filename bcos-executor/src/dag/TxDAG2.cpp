@@ -22,14 +22,14 @@
 
 #include "TxDAG2.h"
 #include "CriticalFields.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::executor::critical;
 using namespace tbb::flow;
 
-#define DAG_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("DAG")
+#define DAG_LOG(LEVEL) BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("DAG")
 
 // Generate DAG according with given transactions
 void TxDAG2::init(critical::CriticalFieldsInterface::Ptr _txsCriticals)

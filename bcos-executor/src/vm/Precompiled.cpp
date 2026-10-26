@@ -23,6 +23,8 @@
 #include "../Common.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "wedpr-crypto/WedprCrypto.h"
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -38,9 +40,11 @@
 #include <evmone_precompiles/sha256.hpp>
 #include <intx/intx.hpp>
 #include <span>
-#include <bcos-utilities/BoostLog.h>
 
-using namespace std;
+using std::max;
+using std::min;
+using std::numeric_limits;
+using std::pair;
 using namespace bcos;
 using namespace bcos::crypto;
 
@@ -326,7 +330,8 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
     using namespace evmmax::bn254;
 
     uint8_t buf[128]{};
-    std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
+    if (_in.size() != 0)
+        std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
 
     const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf, 64});
     const auto q = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf + 64, 64});
@@ -343,7 +348,8 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
     using namespace evmmax::bn254;
 
     uint8_t buf[96]{};
-    std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
+    if (_in.size() != 0)
+        std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
 
     const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf, 64});
     if (!p.has_value() || !validate(*p))

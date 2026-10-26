@@ -22,8 +22,9 @@
 #include "AMOPClient.h"
 
 #include <bcos-task/Wait.h>
-#include <utility>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
+#include <utility>
 
 namespace bcos::rpc
 {
@@ -61,9 +62,9 @@ protected:
             auto error = co_await _gateway->subscribeTopic(_clientID, _topicInfo);
             if (error)
             {
-                BCOS_LOG(WARNING) << LOG_DESC("subscribeTopic error")
-                                  << LOG_KV("code", error->errorCode())
-                                  << LOG_KV("msg", error->errorMessage());
+                AMOP_CLIENT_LOG(WARNING)
+                    << LOG_DESC("subscribeTopic error") << LOG_KV("code", error->errorCode())
+                    << LOG_KV("msg", error->errorMessage());
             }
         }(m_gateway, m_clientID, std::move(topicInfo)));
     }
@@ -73,10 +74,10 @@ protected:
         bcos::task::wait([](bcos::gateway::GatewayInterface::Ptr _gateway, std::string _clientID,
                              std::vector<std::string> _topicsToRemove) -> bcos::task::Task<void> {
             auto error = co_await _gateway->removeTopic(_clientID, _topicsToRemove);
-            BCOS_LOG(INFO) << LOG_DESC("removeTopic")
-                           << LOG_KV("removedSize", _topicsToRemove.size())
-                           << LOG_KV("code", error ? error->errorCode() : 0)
-                           << LOG_KV("msg", error ? error->errorMessage() : "");
+            AMOP_CLIENT_LOG(INFO) << LOG_DESC("removeTopic")
+                                  << LOG_KV("removedSize", _topicsToRemove.size())
+                                  << LOG_KV("code", error ? error->errorCode() : 0)
+                                  << LOG_KV("msg", error ? error->errorMessage() : "");
         }(m_gateway, m_clientID, _topicsToRemove));
     }
 };

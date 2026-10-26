@@ -22,9 +22,11 @@
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/BoostLogInitializer.h>
-#include <bcos-utilities/RateLimiter.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/LogStream.h>
+#include <bcos-utilities/RateLimiter.h>
+#include <boost/property_tree/ini_parser.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;

@@ -21,7 +21,7 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-cpp-sdk/Sdk.h>
 #include <bcos-cpp-sdk/SdkFactory.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -115,8 +115,7 @@ void* thread_function(std::shared_ptr<bcos_sdk_c_config> arg)
         auto sdk = factory->buildSdk(wsConfig, arg->send_rpc_request_to_highest_block_node);
         sdk->start();
         auto rpc = sdk->jsonRpc();
-        rpc->getBlockNumber(
-            "group0", "", [](bcos::Error::Ptr error, bcos::bytes resp) {});
+        rpc->getBlockNumber("group0", "", [](bcos::Error::Ptr error, bcos::bytes resp) {});
         usleep(100);
         sdk->stop();
         sdk.reset(nullptr);

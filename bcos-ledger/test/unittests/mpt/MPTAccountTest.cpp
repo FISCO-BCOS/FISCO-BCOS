@@ -33,8 +33,6 @@
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <evmc/evmc.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
@@ -43,6 +41,8 @@
 #include <string_view>
 
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 
 namespace bcos::ledger::mpt::test
 {
@@ -502,8 +502,8 @@ BOOST_AUTO_TEST_CASE(MissingCodeRowThrowsAndNeverFallsBackToFlat)
 
     auto account = state.accountAt(legacyAddr);
     BOOST_CHECK_EQUAL(bcos::task::syncWait(account.codeHash(root)), makeHash(0x77));
-    BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(account.code(root)), bcos::ledger::mpt::MPTInvariantViolation,
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(account.code(root)),
+        bcos::ledger::mpt::MPTInvariantViolation,
         [](auto const& e) { return errinfoContains(e, "s_code_binary has no such row"); });
     // The flat path still serves those bytes; only the historical path refuses them.
     auto const flat = bcos::task::syncWait(account.code());

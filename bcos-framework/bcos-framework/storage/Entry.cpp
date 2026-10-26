@@ -3,7 +3,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage/Common.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/endian/conversion.hpp>
 
 namespace bcos::storage
@@ -118,8 +118,7 @@ Entry::Holder Entry::makeBuffer(EntryStatus es, const char* data, size_t sz)
 /* static */ Entry Entry::decode(bytesConstRef data)
 {
     Entry entry;
-    entry.set(std::string_view(
-        reinterpret_cast<const char*>(data.data()), data.size()));
+    entry.set(std::string_view(reinterpret_cast<const char*>(data.data()), data.size()));
     return entry;
 }
 

@@ -66,7 +66,9 @@ BOOST_AUTO_TEST_CASE(NormalCompletionDeliversResult)
 // hanging or leaking.
 BOOST_AUTO_TEST_CASE(DroppedCompletionDeliversErrorResult)
 {
-    auto result = runOnce([](auto completion) { (void)completion; /* dropped, never invoked */ });
+    auto result = runOnce([](auto completion) {
+        (void)completion; /* dropped, never invoked */
+    });
     BOOST_CHECK_EQUAL(result, -1);
 }
 

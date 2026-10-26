@@ -152,12 +152,12 @@ BOOST_AUTO_TEST_CASE(test_encode_golden_header)
 
     // version(2) type(2) status(2) seqLen(2) seq(4) ext(2) payload(4)
     const bcos::bytes expected = {
-        0x00, 0x00,  // version = 0 (setVersion is a no-op)
-        0x12, 0x34,  // packetType = 0x1234
-        0x00, 0x5A,  // status = 0x5A
-        0x00, 0x04,  // seqLength = 4
+        0x00, 0x00,              // version = 0 (setVersion is a no-op)
+        0x12, 0x34,              // packetType = 0x1234
+        0x00, 0x5A,              // status = 0x5A
+        0x00, 0x04,              // seqLength = 4
         0x61, 0x62, 0x63, 0x64,  // seq = "abcd"
-        0x00, 0xFF,  // ext = 0xFF
+        0x00, 0xFF,              // ext = 0xFF
         0x01, 0x02, 0x03, 0x04   // payload
     };
     BOOST_CHECK(buffer == expected);
@@ -171,8 +171,7 @@ BOOST_AUTO_TEST_CASE(test_encode_golden_header)
     BOOST_CHECK_EQUAL(decoded.status(), 0x005A);
     BOOST_CHECK_EQUAL(decoded.seq(), "abcd");
     BOOST_CHECK_EQUAL(decoded.ext(), 0x00FF);
-    const bcos::bytes decodedPayload(
-        decoded.payload().begin(), decoded.payload().end());
+    const bcos::bytes decodedPayload(decoded.payload().begin(), decoded.payload().end());
     const bcos::bytes expectedPayload{0x01, 0x02, 0x03, 0x04};
     BOOST_CHECK(decodedPayload == expectedPayload);
 }

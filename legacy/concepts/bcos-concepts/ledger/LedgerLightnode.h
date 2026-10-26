@@ -1,7 +1,7 @@
 #pragma once
-#include <bcos-concepts/ByteBuffer.h>
-#include "Ledger.h"
 #include "../protocol/Block.h"
+#include "Ledger.h"
+#include <bcos-concepts/ByteBuffer.h>
 
 namespace bcos::concepts::ledger
 {
@@ -20,10 +20,7 @@ public:
             blockNumber, block, nodeList);
     }
 
-    auto getAllPeersStatus()
-    {
-        return static_cast<Impl&>(*this).impl_getAllPeersStatus();
-    }
+    auto getAllPeersStatus() { return static_cast<Impl&>(*this).impl_getAllPeersStatus(); }
 
     template <class LedgerType, bcos::concepts::block::Block BlockType>
         requires std::derived_from<LedgerType, LedgerBase<LedgerType>> ||
@@ -37,8 +34,8 @@ public:
 };
 
 template <class Impl>
-concept LedgerLightnode =
-    std::derived_from<Impl, LedgerLightnodeBase<Impl>> ||
-    std::derived_from<typename Impl::element_type, LedgerLightnodeBase<typename Impl::element_type>>;
+concept LedgerLightnode = std::derived_from<Impl, LedgerLightnodeBase<Impl>> ||
+                          std::derived_from<typename Impl::element_type,
+                              LedgerLightnodeBase<typename Impl::element_type>>;
 
 }  // namespace bcos::concepts::ledger

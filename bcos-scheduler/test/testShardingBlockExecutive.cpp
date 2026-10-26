@@ -1,4 +1,3 @@
-#include <bcos-utilities/IOServicePool.h>
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -22,6 +21,7 @@
 #include <bcos-tars-protocol/protocol/TransactionMetaDataImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <boost/test/unit_test.hpp>
@@ -47,7 +47,7 @@ public:
         bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory,
         bcos::protocol::TransactionFactory::Ptr transactionFactory,
         bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory)
-      : BlockFactoryImpl(cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory){};
+      : BlockFactoryImpl(cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory) {};
 
     ~MockBlockFactory() override = default;
 
@@ -68,7 +68,7 @@ struct ShardingBlockExecutiveFixture
         signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
         ledger = std::make_shared<MockLedger3>();
-        executorManager = std::make_shared<scheduler::ExecutorManager>();
+        executorManager = std::make_shared<scheduler::ExecutorManager>(ioService);
 
         // create RocksDBStorage
         rocksdb::DB* db;
@@ -106,6 +106,7 @@ struct ShardingBlockExecutiveFixture
         ioServicePool = nullptr;  // destroy the pool now -> stop + join threads
     }
 
+    boost::asio::io_context ioService;
     bcos::IOServicePool::Ptr ioServicePool;
     bcos::ledger::LedgerInterface::Ptr ledger;
     bcos::scheduler::ExecutorManager::Ptr executorManager;

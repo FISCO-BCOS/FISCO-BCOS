@@ -34,18 +34,31 @@ constexpr inline struct Wait
     void operator()(Task&& task) const
     {
         auto asyncTask = executeTask(std::forward<Task>(task));
-        asyncTask.start();
+        try
+        {
+            asyncTask.start();
+        }
+        catch (...)
+        {
+            // The exception escaped the detached chain: its top frame is stranded at its final
+            // suspend point (see AsyncTask::promise_type::unhandled_exception). Reclaim it —
+            // and the frames its parameter copies own — before the caller catches.
+            detail::reclaimEscapedFrames();
+            throw;
+        }
     }
 } wait{};
 
 // NOTE (measured 2026-10, do not "optimize" this away): wait()'s AsyncTask wrapper is NOT
 // redundant overhead — it is the LIFETIME OWNER of the detached task.
 //
-// A coroutine frame cannot destroy itself at final_suspend, so a fire-and-forget task needs an owner
-// that outlives its suspension points. executeTask IS that owner: it is the frame that keeps the
-// task alive while it is parked and destroys it when the body completes. Starting the Task directly
-// and dropping the handle (a tempting `task::detach`) frees the frame at the FIRST suspension point
-// instead. Measured, with a payload moved into a parked task's frame:
+// A coroutine frame parked at an inner co_await never runs again on its own, so a
+// fire-and-forget task needs an owner that outlives its suspension points. executeTask IS that
+// owner: it is the frame that keeps the task alive while it is parked and destroys it when the
+// body completes (or, when the body escapes with an exception, has it reclaimed through the
+// escaped-frame registry — see AsyncTask.h). Starting the Task and dropping the handle (a
+// tempting `task::detach`) frees the frame at the FIRST suspension point instead. Measured,
+// with a payload moved into a parked task's frame:
 //     task::wait(task)  -> use_count 2 after launch (frame alive, payload owned)
 //     task.start()      -> use_count 1 after launch (frame freed, payload destroyed)
 // The second form then resumes into freed memory as soon as a completion fires the parked
@@ -65,8 +78,7 @@ constexpr inline struct SyncWait
             std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
         ReturnVariant result;
 
-        auto handle = [](Task&& task, decltype(result)& result,
-                          auto&&... args) -> task::SyncTask {
+        auto handle = [](Task&& task, decltype(result)& result, auto&&... args) -> task::SyncTask {
             try
             {
                 if constexpr (std::is_void_v<ReturnType>)

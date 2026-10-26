@@ -47,11 +47,11 @@ using CallbackFunc = std::function<void(
  */
 struct SendResult
 {
-    bcos::Error::Ptr error;                     // non-null on gateway send failure or timeout
-    bcos::crypto::NodeIDPtr nodeID;             // the node that sent the response
-    bcos::bytes payload;                        // owned copy of the response body
-    std::string uuid;                           // request uuid (echoed by the peer response)
-    std::function<void(bytesConstRef)> respond; // optional follow-up response to the peer
+    bcos::Error::Ptr error;                      // non-null on gateway send failure or timeout
+    bcos::crypto::NodeIDPtr nodeID;              // the node that sent the response
+    bcos::bytes payload;                         // owned copy of the response body
+    std::string uuid;                            // request uuid (echoed by the peer response)
+    std::function<void(bytesConstRef)> respond;  // optional follow-up response to the peer
 };
 
 /**
@@ -207,11 +207,10 @@ public:
      *        state as coroutine parameters)
      * @return error: nullptr on success, the gateway send failure otherwise
      */
-    virtual task::Task<Error::Ptr> sendResponse(std::string _id, int _moduleID,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) = 0;
+    virtual task::Task<Error::Ptr> sendResponse(
+        std::string _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) = 0;
 
-    virtual task::Task<void> broadcastMessage(
-        uint16_t type, int moduleID,
+    virtual task::Task<void> broadcastMessage(uint16_t type, int moduleID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) = 0;
 
     /**
@@ -258,8 +257,7 @@ public:
      * @param moduleID: moduleID
      * @param payload: already-encoded message body; ownership is transferred to the callee
      */
-    virtual void broadcastMessageByOwnedPayload(
-        uint16_t type, int moduleID, bytesPointer payload)
+    virtual void broadcastMessageByOwnedPayload(uint16_t type, int moduleID, bytesPointer payload)
     {
         task::wait([](FrontServiceInterface::Ptr self, uint16_t _type, int _moduleID,
                        bytesPointer _payload) -> task::Task<void> {
@@ -287,10 +285,9 @@ public:
         int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload)
     {
         task::wait([](FrontServiceInterface::Ptr self, int _moduleID,
-                       bcos::crypto::NodeIDPtr _nodeID,
-                       bytesPointer _payload) -> task::Task<void> {
-            co_await self->sendMessageByNodeID(_moduleID, std::move(_nodeID),
-                ::ranges::views::single(bcos::ref(*_payload)), 0);
+                       bcos::crypto::NodeIDPtr _nodeID, bytesPointer _payload) -> task::Task<void> {
+            co_await self->sendMessageByNodeID(
+                _moduleID, std::move(_nodeID), ::ranges::views::single(bcos::ref(*_payload)), 0);
         }(shared_from_this(), moduleID, std::move(nodeID), std::move(payload)));
     }
 

@@ -20,7 +20,6 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
@@ -47,6 +46,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "bcos-protocol/TransactionStatus.h"
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -1769,8 +1770,8 @@ public:
                 // system_call_block_start read as block_hashes.get_block_hash(number - 1).
                 // A failure is tolerated (upstream asserts success — a release-mode no-op —
                 // and silently continues): the post-state check remains the arbiter.
-                auto sysErr = task::tbb::syncWait(eth::systemCallBlockStart(storage,
-                    executor.vm(), bi, blockHashes.get_block_hash(bi.number - 1), blockRev));
+                auto sysErr = task::tbb::syncWait(eth::systemCallBlockStart(storage, executor.vm(),
+                    bi, blockHashes.get_block_hash(bi.number - 1), blockRev));
                 if (sysErr.has_value() && !g_opts.quiet)
                 {
                     printLine("block-start system call skipped: " + *sysErr);

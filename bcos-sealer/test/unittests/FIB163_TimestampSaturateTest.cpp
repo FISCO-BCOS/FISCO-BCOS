@@ -29,6 +29,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tool/NodeTimeMaintenance.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <boost/log/core.hpp>
 #include <boost/test/unit_test.hpp>
 #include <limits>
 

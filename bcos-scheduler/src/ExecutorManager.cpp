@@ -1,5 +1,5 @@
 #include "ExecutorManager.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/throw_exception.hpp>
@@ -7,6 +7,33 @@
 
 using namespace bcos;
 using namespace bcos::scheduler;
+
+ExecutorManager::ExecutorManager(boost::asio::io_context& _ioService)
+{
+    m_timer = std::make_shared<Timer>(_ioService, EXECUTOR_MANAGER_CHECK_PERIOD, "executorMgr");
+    m_timer->registerTimeoutHandler([this]() { checkExecutorStatus(); });
+}
+
+ExecutorManager::~ExecutorManager()
+{
+    stopTimer();
+}
+
+void ExecutorManager::startTimer()
+{
+    if (m_timer)
+    {
+        m_timer->start();
+    }
+}
+
+void ExecutorManager::stopTimer()
+{
+    if (m_timer)
+    {
+        m_timer->stop();
+    }
+}
 
 void ExecutorManager::forEachExecutor(
     std::function<void(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr)>
@@ -73,6 +100,8 @@ void ExecutorManager::stop()
     {
         executor->stop();
     }
+
+    stopTimer();
 }
 
 void ExecutorManager::setExecutorChangeHandler(std::function<void()> _handler)
@@ -204,12 +233,13 @@ bool ExecutorManager::removeExecutor(const std::string_view& name)
         auto& executorInfo = it->second;
 
         for (auto contractIt = executorInfo->contracts.begin();
-             contractIt != executorInfo->contracts.end(); ++contractIt)
+            contractIt != executorInfo->contracts.end(); ++contractIt)
         {
             auto count = m_contract2ExecutorInfo.unsafe_erase(*contractIt);
             if (count < 1)
             {
-                BOOST_THROW_EXCEPTION(bcos::Exception{} << errinfo_comment("Can't find contract in container"));
+                BOOST_THROW_EXCEPTION(
+                    bcos::Exception{} << errinfo_comment("Can't find contract in container"));
             }
         }
 
@@ -235,4 +265,91 @@ bool ExecutorManager::removeExecutor(const std::string_view& name)
     }
 
     return notify;
+}
+
+
+std::pair<bool, bcos::protocol::ExecutorStatus::UniquePtr> ExecutorManager::getExecutorStatus(
+    const std::string& _executorName,
+    const bcos::executor::ParallelTransactionExecutorInterface::Ptr& _executor)
+{
+    // fetch status
+    EXECUTOR_MANAGER_LOG(TRACE) << "Query executor status" << LOG_KV("executorName", _executorName);
+    std::promise<bcos::protocol::ExecutorStatus::UniquePtr> statusPromise;
+    _executor->status([&_executorName, &statusPromise](bcos::Error::UniquePtr error,
+                          bcos::protocol::ExecutorStatus::UniquePtr status) {
+        if (error)
+        {
+            EXECUTOR_MANAGER_LOG(ERROR)
+                << LOG_BADGE("getExecutorStatus") << "Could not get executor status"
+                << LOG_KV("executorName", _executorName) << LOG_KV("code", error->errorCode())
+                << LOG_KV("message", error->errorMessage());
+            statusPromise.set_value(nullptr);
+        }
+        else
+        {
+            statusPromise.set_value(std::move(status));
+        }
+    });
+
+    bcos::protocol::ExecutorStatus::UniquePtr status = statusPromise.get_future().get();
+    if (status == nullptr)
+    {
+        return {false, nullptr};
+    }
+    else
+    {
+        EXECUTOR_MANAGER_LOG(TRACE)
+            << "Get executor status success" << LOG_KV("executorName", _executorName)
+            << LOG_KV("statusSeq", status->seq());
+        return {true, std::move(status)};
+    }
+}
+
+
+void ExecutorManager::checkExecutorStatus()
+{
+    bool notify = false;
+
+    {
+        ReadGuard lock(m_mutex);
+        for (auto& [executorNameView, executorInfo] : m_name2Executors)
+        {
+            const std::string& executorName = executorInfo->name;
+            auto [success, status] = getExecutorStatus(executorName, executorInfo->executor);
+            if (!success)
+            {
+                EXECUTOR_MANAGER_LOG(INFO)
+                    << LOG_BADGE("checkExecutorStatus") << LOG_DESC("getExecutorStatus failed")
+                    << LOG_KV("executorName", executorInfo->name);
+                notify = true;
+                break;
+            }
+
+            int64_t oldSeq = executorInfo->seq;
+            int64_t newSeq = status->seq();
+            // reset seq to newSeq
+            executorInfo->seq = newSeq;
+            if (newSeq != oldSeq)
+            {
+                EXECUTOR_MANAGER_LOG(INFO)
+                    << LOG_BADGE("checkExecutorStatus") << LOG_DESC("executor seq has been changed")
+                    << LOG_KV("executorName", executorInfo->name) << LOG_KV("oldSeq", oldSeq)
+                    << LOG_KV("newSeq", newSeq);
+                notify = true;
+                break;
+            }
+        }
+    }
+
+    if (notify && m_executorChangeHandler)
+    {
+        m_executorChangeHandler();
+    }
+
+    EXECUTOR_MANAGER_LOG(TRACE) << LOG_BADGE("checkExecutorStatus") << LOG_KV("notify", notify);
+
+    if (m_timer)
+    {
+        m_timer->restart();
+    }
 }

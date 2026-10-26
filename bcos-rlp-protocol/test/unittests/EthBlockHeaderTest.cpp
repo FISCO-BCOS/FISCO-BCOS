@@ -94,10 +94,9 @@ static bcos::protocol::BlockHeader::Ptr makeEthHeader(
 template <typename F>
 static void expectRlpError(F&& fn, int32_t expectedCode, std::string_view messageNeedle = {})
 {
-    auto const checkError = [&](std::exception const& e) {
-        auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
-        BOOST_REQUIRE(code != nullptr);
-        BOOST_CHECK_EQUAL(*code, expectedCode);
+    auto const checkError = [&](boost::exception const& e) {
+        // -1 is no DecodingError value: an exception without the code info fails the check.
+        BOOST_CHECK_EQUAL(bcos::codec::rlp::rlpErrorCode(e, -1), expectedCode);
         if (!messageNeedle.empty())
         {
             auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);

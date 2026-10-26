@@ -50,7 +50,8 @@ constexpr int64_t c_pruneWindow = 2;
 /// The committed-state backend type: MultiLayerStorage::latestBackend() is the checkpoint
 /// storage's OPENED handle (RocksDBStorage2) — what the pruner and the production
 /// initializer (decltype over the same expression) are parameterized on.
-using FCBackend = std::remove_cvref_t<decltype(std::declval<FCMultiLayerStorage&>().latestBackend())>;
+using FCBackend =
+    std::remove_cvref_t<decltype(std::declval<FCMultiLayerStorage&>().latestBackend())>;
 using FCPruner = mpt::MPTPruner<FCBackend>;
 
 /// The production init lookup (Initializer.cpp): the committed header's stateRoot, nullopt
@@ -274,15 +275,14 @@ BOOST_AUTO_TEST_CASE(batchedRebuildWithSharedStorageTrie)
     auto pruner = std::make_shared<FCPruner>(backend, c_pruneWindow);
     // Phase 1's countWalk resolves the popped hashes through ONE readSome per 64-entry batch
     // — rocksdb::MultiGet underneath here — with duplicate hashes inside a batch.
-    BOOST_REQUIRE_NO_THROW(
-        task::syncWait(pruner->init(
-            2, /*executorVersion=*/0, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false)));
+    BOOST_REQUIRE_NO_THROW(task::syncWait(pruner->init(
+        2, /*executorVersion=*/0, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false)));
     // Every node on disk is reachable from block 2's root and counted once per referencing
     // path: the distinct-key count equals the on-disk row count...
     BOOST_CHECK_EQUAL(pruner->trackedCount(), fixture.backendNodeCount());
     // ...while the shared storage root carries the full K-fold tally — the in-batch dedup
     // must not collapse the per-encounter counting.
-    std::map<h256, bytes> oracleSlots;
+    std::map<h256, bcos::bytes> oracleSlots;
     for (auto const& [slot, value] : slots)
     {
         oracleSlots.emplace(slot, value.ref().toBytes());

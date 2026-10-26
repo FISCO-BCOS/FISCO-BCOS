@@ -14,7 +14,6 @@ target_include_directories(mempool PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-mempool>)
 target_link_libraries(mempool PUBLIC bcos-framework ledger bcos-crypto bcos-utilities TBB::tbb)
-set_target_properties(mempool PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
 	enable_testing()

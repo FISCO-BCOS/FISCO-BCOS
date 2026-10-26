@@ -27,6 +27,7 @@
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+#include <boost/property_tree/ini_parser.hpp>
 // #include "bcos-framework/security/KeyEncryptionType.h"
 #include <algorithm>
 
@@ -55,7 +56,7 @@ void GatewayInitializer::init(std::string const& _configPath)
     auto protocolInitializer = std::make_shared<bcos::initializer::ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
 
-    // Create IOServicePool for the Pro/tars gateway service.
+    // Create IOServicePool for the MAX/TARS gateway service.
     // In AIR mode this pool is shared across all modules; here each service
     // runs in its own process and needs its own pool.
     m_ioServicePool = std::make_shared<bcos::IOServicePool>(

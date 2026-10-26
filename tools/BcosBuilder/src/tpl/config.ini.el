@@ -1,12 +1,13 @@
 ; ============================================================================
 ; FISCO-BCOS Ethereum L1 EL-mode node configuration (config.ini)
-; Run as a pure Ethereum execution-layer client: [ethereum] mode=el makes the
-; node download blocks from RLPx bootnodes, verify them with the Ethereum
-; block verifier (executor v2) and commit them locally. No FISCO gateway /
-; PBFT / txpool network is started.
+; Run as a pure Ethereum execution-layer client: config.genesis executor
+; version 2 makes the node download blocks from RLPx bootnodes and serve the
+; Engine API to a consensus client, verify blocks with the Ethereum block
+; verifier and commit them locally. No FISCO gateway / PBFT / txpool network is
+; started.
 ;
 ; Usage:
-;   fisco-bcos -c config.ini -g config.genesis [--el] [--bootnodes bootnodes.json]
+;   fisco-bcos -c config.ini -g config.genesis [--bootnodes bootnodes.json]
 ;
 ; CURRENT LIMITATIONS (follow-up work, tracked):
 ;   - Sync is serial and no full Sepolia from-genesis time/disk benchmark is
@@ -29,8 +30,6 @@
     gateway=chain0
 
 [ethereum]
-    ; EL mode: none (default) = normal FISCO node; el = Ethereum L1 execution layer
-    mode=el
     ; geth-style bootnodes file (a JSON array of enode:// strings); see bootnodes.json
     ;
     ; TRUST MODEL: the bootnodes list is the trust root for chain data. The node
@@ -72,29 +71,15 @@
     ; deposit contract; this template targets Sepolia, whose deposit contract is:
     deposit_contract_address=0x7f02c3e3c98b133055b8b348b2ac625669182295
 
-[chain]
-    ; use SM crypto or not — EL mode is always plain secp256k1/keccak
-    sm_crypto=false
-    ; the group id (kept for FISCO compatibility; unused by the Ethereum stack)
-    group_id=group0
-    ; the chain id — must be the numeric Ethereum chain id (11155111 for Sepolia)
-    chain_id=11155111
-
-[web3]
-    ; Ethereum chain id used by web3 RPC (decimal string)
-    chain_id=11155111
-
 [engine_rpc]
     ; Authenticated Engine API listener (JSON-RPC over HTTP + JWT) for a consensus
-    ; client. Requires ethereum.mode=el; mutually exclusive with [op_engine_rpc] and
-    ; consensus.enable_single_node_consensus.
-    ; With this enabled the node is CL-DRIVEN: newPayload payloads are verified AND
+    ; client. Always served on executor version 2 (there is no enable key).
+    ; The node is CL-DRIVEN once a consensus client connects: newPayload payloads are verified AND
     ; executed/committed locally through the shared EthereumBlockVerifier, and
     ; forkchoiceUpdated advances the head; the devp2p sync loop is demoted to a
     ; backfiller — it bootstraps up to the peer tip, then idles and only downloads
     ; when the Engine API answers SYNCING for a payload whose ancestors are missing.
-    ; With enable=false the sync loop stays fully autonomous (devp2p import only).
-    enable=false
+    ; Until the first forkchoiceUpdated the sync loop is autonomous (devp2p import only).
     listen_ip=127.0.0.1
     listen_port=8551
     ;request_body_size_limit=10485760
@@ -145,6 +130,11 @@
     log_path=./log
     level=info
     max_log_file_size=200
+    ; flush every log line to disk immediately (default false: lines are flushed
+    ; when the log queue drains; under sustained load at most 100ms plus up to 63 lines of write latency)
+    ; under a sustained flood beyond the 32768-line backlog new lines are dropped
+    ; (a "[log] dropped N log line(s)" marker follows; cumulative count via admin_getLogLevel droppedLines)
+    ;flush=false
 
 [thread_pool]
     ; Shared IOServicePool thread count

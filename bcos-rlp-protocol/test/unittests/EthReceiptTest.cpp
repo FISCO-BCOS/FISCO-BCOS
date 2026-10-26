@@ -22,11 +22,12 @@
 #include "bcos-rlp-protocol/EthLog.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/Exceptions.h>
-#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+
+#include <bcos-protocol/TransactionStatus.h>
+#include <bcos-utilities/DataConvertUtility.h>
 
 using namespace bcos;
 using namespace bcos::protocol;

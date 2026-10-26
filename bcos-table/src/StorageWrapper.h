@@ -26,8 +26,8 @@ constexpr static std::string_view M_ACCOUNT_CODE_HASH{"codeHash"};
 class StorageWrapper
 {
 public:
-    StorageWrapper(storage::StateStorageInterface::Ptr storage, bcos::storage::Recoder::Ptr recoder)
-            ;
+    StorageWrapper(
+        storage::StateStorageInterface::Ptr storage, bcos::storage::Recoder::Ptr recoder);
 
     StorageWrapper(const StorageWrapper&) = delete;
     StorageWrapper(StorageWrapper&&) = delete;
@@ -46,9 +46,9 @@ public:
         const std::string_view& table, const std::string_view& _key);
 
     virtual std::vector<std::optional<storage::Entry>> getRows(const std::string_view& table,
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access |
-                ::ranges::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys);
 
     virtual void setRow(

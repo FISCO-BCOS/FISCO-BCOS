@@ -39,11 +39,11 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-transaction-scheduler/EthereumBlockVerifier.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <ethereum-executor/EthStorageErrorGuard.h>
 #include <ethereum-executor/EthereumExecutor.h>
 #include <boost/test/unit_test.hpp>
 
+#include <bcos-utilities/IOServicePool.h>
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -407,8 +407,8 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
             key, std::forward<decltype(args)>(args)...);
     }
 
-    auto readSomeRaw(
-        ::ranges::input_range auto keys, auto&&... args) -> task::Task<std::vector<DataValue>>
+    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
+        -> task::Task<std::vector<DataValue>>
     {
         if (accountReadGate->load(std::memory_order_acquire) ||
             accountReadThrowRemaining->load(std::memory_order_acquire) > 0)
@@ -429,8 +429,8 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
             std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto readSome(::ranges::input_range auto keys,
-        auto&&... args) -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
+    auto readSome(::ranges::input_range auto keys, auto&&... args)
+        -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
     {
         if (accountReadGate->load(std::memory_order_acquire) ||
             accountReadThrowRemaining->load(std::memory_order_acquire) > 0)

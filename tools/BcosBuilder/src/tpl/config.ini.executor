@@ -1,0 +1,35 @@
+[chain]
+    ; use SM crypto or not, should never be changed
+    sm_crypto=false
+    ; the group id, should never be changed
+    group_id=group0
+    ; the chain id, should never be changed
+    chain_id=chain0
+[service]
+    scheduler=chain0
+
+    ; run without tars framework
+    ; without_tars_framework = true
+    ; tars_proxy_conf = conf/tars_proxy.ini
+
+[storage]
+    enable_cache=true
+    key_page_size=10240
+
+[executor]
+    enable_dag=true
+
+[log]
+    enable=true
+    log_path=./log
+    ; info debug trace
+    level=info
+    ; MB
+    max_log_file_size=200
+    enable_rate_collector=false
+    ; flush every log line to disk immediately (default false: lines are flushed
+    ; when the log queue drains; under sustained load at most 100ms plus up to 63 lines of write latency)
+    ; under a sustained flood beyond the 32768-line backlog new lines are dropped
+    ; (a "[log] dropped N log line(s)" marker follows; cumulative count via admin_getLogLevel droppedLines)
+    ;flush=false
+

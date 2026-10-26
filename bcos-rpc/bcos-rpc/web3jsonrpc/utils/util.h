@@ -122,8 +122,8 @@ bcos::task::Task<std::optional<bcos::bytes>> readCodeByHash(
     StateStorage& stateStorage, bcos::h256 const& codeHash)
 {
     std::string const codeHashStr = codeHash.toRawString();
-    auto const codeEntry = co_await bcos::storage2::readOne(stateStorage,
-        executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
+    auto const codeEntry = co_await bcos::storage2::readOne(
+        stateStorage, executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
     if (!codeEntry.has_value())
     {
         co_return std::nullopt;

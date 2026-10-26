@@ -85,9 +85,7 @@ public:
     using Ptr = std::shared_ptr<RateLimiterStat>;
     using ConstPtr = std::shared_ptr<const RateLimiterStat>;
 
-    explicit RateLimiterStat(boost::asio::io_context& _ioContext)
-      : m_ioContext(&_ioContext)
-    {}
+    explicit RateLimiterStat(boost::asio::io_context& _ioContext) : m_ioContext(&_ioContext) {}
 
     void start();
     void stop();

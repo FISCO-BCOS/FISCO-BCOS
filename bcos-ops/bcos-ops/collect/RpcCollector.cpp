@@ -17,7 +17,9 @@
  */
 #include "RpcCollector.h"
 #include "GroupFacts.h"
+#include "bcos-ops/Mode.h"
 #include "bcos-ops/OpsError.h"
+#include <algorithm>
 #include <chrono>
 
 namespace bcos::ops
@@ -60,7 +62,15 @@ int64_t asInt64(Json::Value const& _value)
 {
     if (_value.isString())
     {
-        return std::stoll(_value.asString());
+        // the whole string must be the number: "0x80" or "12abc" is an error, not 0 or 12
+        auto text = _value.asString();
+        size_t used = 0;
+        auto parsed = std::stoll(text, &used);
+        if (used != text.size())
+        {
+            throw std::invalid_argument("not a decimal integer: " + text);
+        }
+        return parsed;
     }
     return _value.asInt64();
 }
@@ -78,7 +88,7 @@ std::string discoverGroup(RpcCall const& _call)
 }
 
 NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
-    std::string const& _source, LocalFallbacks const& _fallbacks)
+    std::string const& _source, LocalFallbacks const& _fallbacks, std::string const& _mode)
 {
     NodeStatus status;
     status.source = _source;
@@ -88,24 +98,35 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
     status.groupId = _group;
     std::string const node;  // empty: the node that serves the connection
 
-    tryCall(status, _call, "getConsensusStatus", params(_group, node),
-        {"nodeID", "isConsensusNode", "view", "leaderIndex", "changeCycle", "inTimeout",
-            "consensusNodesNum", "connectedGroupNodes", "minRequiredQuorum"},
-        [&](Json::Value const& v) {
-            status.nodeId = v["nodeID"].asString();
-            status.isConsensusNode = v["isConsensusNode"].asBool();
-            status.view = asInt64(v["view"]);
-            status.leaderIndex = asInt64(v["leaderIndex"]);
-            status.changeCycle = asInt64(v["changeCycle"]);
-            status.inTimeout = v["timeout"].asBool();
-            status.consensusNodesNum = asInt64(v["consensusNodesNum"]);
-            status.connectedGroupNodes = asInt64(v["connectedNodeList"]);
-            status.minRequiredQuorum = asInt64(v["minRequiredQuorum"]);
-            if (v.isMember("consensusTimeout"))  // 3.18+: the node reports its own period
-            {
-                status.consensusTimeoutMs = asInt64(v["consensusTimeout"]);
-            }
-        });
+    status.mode = _mode;
+    auto const consensusFields = {"nodeID", "isConsensusNode", "view", "leaderIndex", "changeCycle",
+        "inTimeout", "consensusNodesNum", "connectedGroupNodes", "minRequiredQuorum"};
+    if (!readsPbft(_mode))
+    {
+        for (auto const* field : consensusFields)
+        {
+            status.missing(field, noPbftReason(_mode) + ": getConsensusStatus not sent");
+        }
+    }
+    else
+    {
+        tryCall(status, _call, "getConsensusStatus", params(_group, node), consensusFields,
+            [&](Json::Value const& v) {
+                status.nodeId = v["nodeID"].asString();
+                status.isConsensusNode = v["isConsensusNode"].asBool();
+                status.view = asInt64(v["view"]);
+                status.leaderIndex = asInt64(v["leaderIndex"]);
+                status.changeCycle = asInt64(v["changeCycle"]);
+                status.inTimeout = v["timeout"].asBool();
+                status.consensusNodesNum = asInt64(v["consensusNodesNum"]);
+                status.connectedGroupNodes = asInt64(v["connectedNodeList"]);
+                status.minRequiredQuorum = asInt64(v["minRequiredQuorum"]);
+                if (v.isMember("consensusTimeout"))  // 3.18+: the node reports its own period
+                {
+                    status.consensusTimeoutMs = asInt64(v["consensusTimeout"]);
+                }
+            });
+    }
 
     try
     {
@@ -114,6 +135,15 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
         status.version = facts.version;
         status.smCrypto = facts.smCrypto;
         status.authCheck = facts.authCheck;
+        for (auto [field, known] : {std::pair{"version", facts.version.has_value()},
+                 std::pair{"smCrypto", facts.smCrypto.has_value()},
+                 std::pair{"authCheck", facts.authCheck.has_value()}})
+        {
+            if (!known)
+            {
+                status.missing(field, "getGroupInfo: not in iniConfig");
+            }
+        }
     }
     catch (std::exception const& e)
     {
@@ -149,7 +179,9 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
             status.isSyncing = v["isSyncing"].asBool();
             status.knownHighestNumber = asInt64(v["knownHighestNumber"]);
             auto local = status.blockNumber ? *status.blockNumber : asInt64(v["blockNumber"]);
-            status.lag = *status.knownHighestNumber - local;
+            // peer-supplied heights: both non-negative, so the difference cannot overflow
+            status.lag =
+                std::max<int64_t>(*status.knownHighestNumber, 0) - std::max<int64_t>(local, 0);
             status.peerCount = static_cast<int64_t>(v["peers"].size());
         });
 

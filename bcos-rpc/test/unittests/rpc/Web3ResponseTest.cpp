@@ -17,10 +17,10 @@
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <string_view>
 
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;
@@ -1056,8 +1056,8 @@ BOOST_AUTO_TEST_CASE(combineTxResponseVFieldFromTarsSignature)
         bcostars::protocol::TransactionImpl txImpl(
             [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
         Json::Value result = Json::objectValue;
-        combineTxResponse(result, txImpl, /*transactionIndex=*/0u, /*blockNumber=*/1,
-            bcos::crypto::HashType{});
+        combineTxResponse(
+            result, txImpl, /*transactionIndex=*/0u, /*blockNumber=*/1, bcos::crypto::HashType{});
         return result;
     };
 

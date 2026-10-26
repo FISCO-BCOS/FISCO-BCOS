@@ -21,10 +21,10 @@
 #include "bcos-cpp-sdk/utilities/Common.h"
 #include "bcos-cpp-sdk/utilities/abi/ContractABIType.h"
 #include <bcos-cpp-sdk/utilities/abi/ContractABITypeCodec.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/LogStream.h>
 #include <climits>
 #include <exception>
 #include <iterator>
@@ -36,16 +36,16 @@ using namespace bcos;
 using namespace bcos::cppsdk;
 using namespace bcos::cppsdk::abi;
 
-#define verifyBufferOffset(_buffer, _offset)                                                      \
-    do                                                                                            \
-    {                                                                                             \
-        if (_offset >= _buffer.size())                                                            \
-        {                                                                                         \
-            std::stringstream ss;                                                                 \
-            ss << "abi encode exception for offset overflow, offset: " << _offset                 \
+#define verifyBufferOffset(_buffer, _offset)                                               \
+    do                                                                                     \
+    {                                                                                      \
+        if (_offset >= _buffer.size())                                                     \
+        {                                                                                  \
+            std::stringstream ss;                                                          \
+            ss << "abi encode exception for offset overflow, offset: " << _offset          \
                << " ,buffer length: " << _buffer.size() << " ,buffer: " << toHex(_buffer); \
-            BOOST_THROW_EXCEPTION(std::length_error(ss.str().c_str()));                           \
-        }                                                                                         \
+            BOOST_THROW_EXCEPTION(std::length_error(ss.str().c_str()));                    \
+        }                                                                                  \
     } while (0);
 
 //--------------- ContractABITypeCodecSolImpl::serialize begin ----------------------
@@ -292,7 +292,7 @@ void ContractABITypeCodecSolImpl::deserialize(
     verifyBufferOffset(_buffer, _offset + MAX_BYTE_LENGTH - 1);
 
     _out = fromBigEndian<u256>(bcos::bytesConstRef((bcos::byte*)_buffer.data(), _buffer.size())
-                                   .getCroppedData(_offset, MAX_BYTE_LENGTH));
+            .getCroppedData(_offset, MAX_BYTE_LENGTH));
 }
 
 // int256
@@ -876,7 +876,8 @@ void ContractABITypeCodecLiquidImpl::deserialize(
             auto templateTV = dyListRef.value()[0];
             dyListRef.setEmpty();
             for (std::size_t i = 0; i < listSize; i++)
-            {}
+            {
+            }
         }
         else
         {
@@ -907,7 +908,8 @@ void ContractABITypeCodecLiquidImpl::deserialize(
     {
         auto& structRef = static_cast<bcos::cppsdk::abi::Struct&>(_out);
         for (std::size_t i = 0; i < structRef.value().size(); ++i)
-        {}
+        {
+        }
         break;
     }  // struct
 

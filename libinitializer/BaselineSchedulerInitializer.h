@@ -44,16 +44,18 @@ public:
         std::shared_ptr<ledger::LedgerInterface> ledger,
         std::shared_ptr<Executor> transactionExecutor,
         std::shared_ptr<ledger::mpt::CommitObserver> mptCommitObserver = nullptr,
-        bool notifyTransactions = true)
+        bool notifyTransactions = true, ledger::EvmcRevisionSchedule evmcRevisionSchedule = {})
     {
         auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
-            Executor, SchedulerType, ledger::LedgerInterface>>(
-            storageInitializer->storage(), *scheduler, *transactionExecutor, *blockFactory, *ledger,
-            *txpool, *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
+            Executor, SchedulerType, ledger::LedgerInterface>>(storageInitializer->storage(),
+            *scheduler, *transactionExecutor, *blockFactory, *ledger, *txpool,
+            *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
         // MPT pruning seam (CommitObserver.h): a null observer keeps the built-in Noop — the
         // scheduler then pays nothing on the commit path (setMPTCommitObserver contract) and
         // skips the refCountDeltas tally on the execute path (needsRefCountDeltas).
         baselineScheduler->setMPTCommitObserver(std::move(mptCommitObserver));
+        // The v2 (L1 EL) dry-run revision source; empty on every other lane.
+        baselineScheduler->setEvmcRevisionSchedule(std::move(evmcRevisionSchedule));
         if (notifyTransactions)
         {
             baselineScheduler->registerTransactionNotifier(
@@ -66,11 +68,12 @@ public:
         }
         else
         {
-            // Single-node consensus mode ([consensus] enable_single_node_consensus): the legacy
-            // txpool is bypassed and never initialized, so a commit that fires the transaction
-            // notifier must not dereference it (asyncNotifyBlockResult on an uninitialized pool
-            // segfaults in MemoryStorage::batchRemoveSealedTxs). sendRawTransaction returns the
-            // tx hash immediately in this mode, so no one is waiting on a notify anyway.
+            // Every driver but PBFT (e.g. [debug] enable, the in-process single-node driver):
+            // the legacy txpool is bypassed and never initialized, so a commit that fires the
+            // transaction notifier must not dereference it (asyncNotifyBlockResult on an
+            // uninitialized pool segfaults in MemoryStorage::batchRemoveSealedTxs).
+            // sendRawTransaction returns the tx hash immediately in this mode, so no one is
+            // waiting on a notify anyway.
             baselineScheduler->registerTransactionNotifier(
                 [](bcos::protocol::BlockNumber /*blockNumber*/,
                     bcos::protocol::TransactionSubmitResultsPtr /*result*/,

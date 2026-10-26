@@ -16,6 +16,9 @@
  * @file Checks.cpp
  */
 #include "Checks.h"
+#include "Mode.h"
+#include <algorithm>
+#include <limits>
 
 namespace bcos::ops
 {
@@ -44,8 +47,18 @@ std::vector<Check> evaluate(
     }
     else
     {
-        auto ageMs = _nowMs - *_status.latestTimestamp;
-        auto limitMs = static_cast<int64_t>(_thresholds.stallFactor * *_status.consensusTimeoutMs);
+        // the timestamp and the timeout come from the RPC peer: clamp both before the int64
+        // arithmetic so an extreme value cannot overflow it
+        auto ageMs = _nowMs - std::clamp<int64_t>(*_status.latestTimestamp, 0, _nowMs);
+        auto limit = _thresholds.stallFactor * static_cast<double>(*_status.consensusTimeoutMs);
+        auto limitMs = limit >= 9.2e18 ? std::numeric_limits<int64_t>::max() :
+                                         static_cast<int64_t>(std::max(limit, 0.0));
+        if (!readsPbft(_status.mode))
+        {
+            // no PBFT timer drives the blocks: an L1 EL seals every ~12 s and an OP sequencer
+            // follows its CL, so the PBFT-derived limit (2 x 3 s) would flag a healthy node
+            limitMs = std::max<int64_t>(limitMs, c_elStallFloorMs);
+        }
         bool fail = ageMs > limitMs && *_status.pendingTxSize > 0;
         auto check = verdict("height_advancing", fail,
             fail ? "pending txs but no block for " + std::to_string(ageMs) + "ms" : "");
@@ -55,8 +68,12 @@ std::vector<Check> evaluate(
         checks.push_back(std::move(check));
     }
 
-    // 2. consensus_stable
-    if (!_status.inTimeout)
+    // 2. consensus_stable (EL modes: no PBFT, blocks come from the EL sync / the CL)
+    if (!readsPbft(_status.mode))
+    {
+        checks.push_back(skipped("consensus_stable", noPbftReason(_status.mode)));
+    }
+    else if (!_status.inTimeout)
     {
         checks.push_back(skipped("consensus_stable", "inTimeout unknown"));
     }
@@ -85,12 +102,12 @@ std::vector<Check> evaluate(
     {
         // behind is behind whether or not a download is running: an idle node that stopped
         // following its peers passes height_advancing whenever its txpool is empty
-        bool syncing = _status.isSyncing && *_status.isSyncing;
+        std::string syncState = !_status.isSyncing ? "sync state unknown" :
+                                *_status.isSyncing ? "syncing" :
+                                                     "not syncing";
         bool fail = *_status.lag >= _thresholds.maxLag;
         auto check = verdict("sync_caught_up", fail,
-            fail ? std::string(syncing ? "syncing" : "not syncing") + " and " +
-                       std::to_string(*_status.lag) + " blocks behind" :
-                   "");
+            fail ? syncState + " and " + std::to_string(*_status.lag) + " blocks behind" : "");
         check.values["lag"] = static_cast<Json::Int64>(*_status.lag);
         check.values["maxLag"] = static_cast<Json::Int64>(_thresholds.maxLag);
         if (_status.isSyncing)
@@ -101,7 +118,11 @@ std::vector<Check> evaluate(
     }
 
     // 4. quorum_connected
-    if (_status.isConsensusNode && !*_status.isConsensusNode)
+    if (!readsPbft(_status.mode))
+    {
+        checks.push_back(skipped("quorum_connected", noPbftReason(_status.mode)));
+    }
+    else if (_status.isConsensusNode && !*_status.isConsensusNode)
     {
         checks.push_back(skipped("quorum_connected", "not a consensus node"));
     }

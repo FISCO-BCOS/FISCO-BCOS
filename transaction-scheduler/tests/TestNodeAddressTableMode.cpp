@@ -49,7 +49,6 @@
 #include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
@@ -66,6 +65,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 
 namespace
 {
@@ -155,8 +156,8 @@ struct RAExecutor
     };
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& /*blockHeader*/,
         protocol::Transaction const& /*transaction*/, int32_t /*contextID*/,
-        ledger::LedgerConfig const& /*ledgerConfig*/,
-        bool /*call*/) -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
+        ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
+        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
     {
         co_return {};
     }

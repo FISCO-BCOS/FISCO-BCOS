@@ -22,9 +22,10 @@
 
 namespace bcos::task
 {
-// A value that is ALREADY THERE: await_ready() is always true, so `co_await` never suspends and the
-// awaiting frame is never left parked. This is the synchronous end of the library's awaitables —
-// the counterpart of task::OneShot, which delivers its values LATER (and may never deliver them at all).
+// A value that is ALREADY THERE: await_ready() is always true, so `co_await` never suspends and
+// the awaiting frame is never left parked. This is the synchronous end of the library's awaitables
+// — the counterpart of task::OneShot, which delivers its values LATER (and may never deliver them
+// at all).
 //
 // The name is load-bearing, not decorative: code in the tree asserts on this exact type to prove a
 // backend can be driven without ever blocking a worker thread (MPTPruner's "never suspends" check).

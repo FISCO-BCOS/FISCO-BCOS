@@ -4,14 +4,15 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/Web3AccessList.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/LogStream.h"
 
 namespace bcos::executor
 {
 namespace
 {
-#define WEB3_ACCESS_LIST_RESOLVER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("WEB3_ACCESS_LIST")
+#define WEB3_ACCESS_LIST_RESOLVER_LOG(LEVEL) \
+    BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("WEB3_ACCESS_LIST")
 
 void buildAccessListFromWeb3(bcos::rpc::Web3Transaction const& w3, Web3AccessListResolved& out)
 {

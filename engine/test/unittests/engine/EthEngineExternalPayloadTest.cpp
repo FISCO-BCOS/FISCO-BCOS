@@ -51,7 +51,7 @@ using Service = EthEngineService<bcos::txpool::MemPoolImpl, RealGlobalStateStora
     StubScheduler>;
 
 class MockExternalPayloadVerifier
-    : public engine_common::IExternalPayloadVerifier<RealGlobalStateStorage>
+  : public engine_common::IExternalPayloadVerifier<RealGlobalStateStorage>
 {
 public:
     MockExternalPayloadVerifier()
@@ -80,13 +80,18 @@ public:
         co_return rollbackResult;
     }
     task::Task<engine_common::ExternalL1Context> deriveL1Context(
-        bcos::protocol::EthBlockHeaderData const& parentHeader,
-        int64_t timestampSeconds) override
+        bcos::protocol::EthBlockHeaderData const& parentHeader, int64_t timestampSeconds) override
     {
         ++deriveCalls;
         lastDeriveParent = parentHeader;
         lastDeriveTimestamp = timestampSeconds;
         co_return l1Context;
+    }
+    std::optional<bcos::protocol::EthBlockVersion> forkVersionAt(
+        int64_t timestampSeconds) const override
+    {
+        forkVersionAtCalls.push_back(timestampSeconds);
+        return l1Context.forkVersion;
     }
     task::Task<engine_common::ExternalBuildResult> buildL1Block(
         RealGlobalStateStorage::ViewType&, engine_common::ExternalBuildBlock const& block) override
@@ -99,7 +104,8 @@ public:
     unsigned calls = 0;
     std::optional<engine_common::ExternalPayloadBlock> lastBlock;
     engine_common::ExternalPayloadResult result{
-        .outcome = engine_common::ExternalPayloadOutcome::Valid, .error = {}};
+        .outcome = engine_common::ExternalPayloadOutcome::Valid,
+        .error = {}};
     unsigned rollbackCalls = 0;
     std::optional<bcos::protocol::BlockNumber> lastRollbackTarget;
     engine_common::ExternalRollbackResult rollbackResult{.rolledBack = true, .error = {}};
@@ -109,6 +115,7 @@ public:
     engine_common::ExternalL1Context l1Context{.baseFee = 7,
         .excessBlobGas = 0,
         .forkVersion = bcos::protocol::EthBlockVersion::CANCUN};
+    mutable std::vector<int64_t> forkVersionAtCalls;
     unsigned buildCalls = 0;
     std::optional<engine_common::ExternalBuildBlock> lastBuild;
     engine_common::ExternalBuildResult buildResult;
@@ -183,16 +190,15 @@ protocol::EthBlockHeaderData expectedEthHeader(NewPayloadRequest const& request)
 
 /// A Shanghai (V2) external payload whose blockHash commits to the expected header.
 NewPayloadRequest makeExternalRequestV2(h256 const& parentHash, protocol::BlockNumber number,
-    std::vector<bcos::bytes> rawTxs = {}, std::optional<std::vector<WithdrawalV1>> withdrawals =
-                                          std::vector<WithdrawalV1>{})
+    std::vector<bcos::bytes> rawTxs = {},
+    std::optional<std::vector<WithdrawalV1>> withdrawals = std::vector<WithdrawalV1>{})
 {
     NewPayloadRequest request;
     auto& payload = request.executionPayload;
     payload.parentHash = parentHash;
     payload.feeRecipient = Address("1234567890abcdef1234567890abcdef12345678");
     payload.stateRoot = h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-    payload.receiptsRoot =
-        h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    payload.receiptsRoot = h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
     payload.prevRandao = h256("1111111111111111111111111111111111111111111111111111111111111111");
     payload.gasLimit = 30000000;
     payload.gasUsed = 21000 * rawTxs.size();
@@ -202,7 +208,8 @@ NewPayloadRequest makeExternalRequestV2(h256 const& parentHash, protocol::BlockN
     payload.extraData = bytes{0xde, 0xad};
     for (auto& raw : rawTxs)
     {
-        payload.transactions.push_back(EngineTransaction{.raw = std::move(raw), .decoded = nullptr});
+        payload.transactions.push_back(
+            EngineTransaction{.raw = std::move(raw), .decoded = nullptr});
     }
     payload.withdrawals = std::move(withdrawals);
     payload.blockHash = protocol::ethHeaderHash(expectedEthHeader(request));
@@ -281,8 +288,9 @@ struct ExternalPayloadFixture
 
 WithdrawalV1 makeWithdrawal(uint64_t index, uint64_t validator, uint64_t amount)
 {
-    return WithdrawalV1{
-        .index = index, .validatorIndex = validator, .amount = amount,
+    return WithdrawalV1{.index = index,
+        .validatorIndex = validator,
+        .amount = amount,
         .address = Address("5656565656565656565656565656565656565656")};
 }
 }  // namespace
@@ -353,8 +361,8 @@ BOOST_AUTO_TEST_CASE(validateExecutionPayloadL1Dialect)
 
 BOOST_AUTO_TEST_CASE(adapterRoundtripAndRejection)
 {
-    auto request = makeExternalRequestV2(
-        c_headHash, c_headNumber + 1, /*rawTxs=*/{bytes{0x02, 0xc0}, bytes{0xf8, 0x6a}},
+    auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1,
+        /*rawTxs=*/{bytes{0x02, 0xc0}, bytes{0xf8, 0x6a}},
         std::vector<WithdrawalV1>{makeWithdrawal(7, 42, 32000000000ULL)});
 
     auto converted = engine::detail::executionPayloadToEthBlock(request);
@@ -370,8 +378,8 @@ BOOST_AUTO_TEST_CASE(adapterRoundtripAndRejection)
     auto tampered = request;
     tampered.executionPayload.blockHash =
         h256("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-    BOOST_CHECK(std::holds_alternative<std::string>(
-        engine::detail::executionPayloadToEthBlock(tampered)));
+    BOOST_CHECK(
+        std::holds_alternative<std::string>(engine::detail::executionPayloadToEthBlock(tampered)));
 
     // A sub-second timestamp cannot be an L1 header timestamp.
     auto subSecond = request;
@@ -381,10 +389,9 @@ BOOST_AUTO_TEST_CASE(adapterRoundtripAndRejection)
 
     // A withdrawal field above uint64 range has no RLP-domain representation.
     auto overflowing = request;
-    (*overflowing.executionPayload.withdrawals)[0].amount =
-        u256(1) << 64;
-    BOOST_CHECK(
-        std::holds_alternative<std::string>(engine::detail::executionPayloadToEthBlock(overflowing)));
+    (*overflowing.executionPayload.withdrawals)[0].amount = u256(1) << 64;
+    BOOST_CHECK(std::holds_alternative<std::string>(
+        engine::detail::executionPayloadToEthBlock(overflowing)));
 
     // V4: executionRequests commit to the header requestsHash.
     auto requestV4 = makeExternalRequestV4(
@@ -402,8 +409,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadValidPath, ExternalPayloadFixture)
 {
     seedHead();
     auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1,
-        /*rawTxs=*/{bytes{0x02, 0xc0}},
-        std::vector<WithdrawalV1>{makeWithdrawal(0, 1, 2)});
+        /*rawTxs=*/{bytes{0x02, 0xc0}}, std::vector<WithdrawalV1>{makeWithdrawal(0, 1, 2)});
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Valid);
     BOOST_REQUIRE(status.latestValidHash.has_value());
@@ -545,15 +551,13 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadBlobTransactionReachesVerifier, ExternalP
     blob.signatureR.assign(32, byte{0x12});
     blob.signatureS.assign(32, byte{0x34});
     blob.signatureV = 1;
-    auto request = makeExternalRequestV2(
-        c_headHash, c_headNumber + 1, /*rawTxs=*/{blob.encode()});
+    auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1, /*rawTxs=*/{blob.encode()});
     request.executionPayload.blobGasUsed = u256(0);
     request.executionPayload.excessBlobGas = u256(0);
     request.parentBeaconBlockRoot =
         h256("5555555555555555555555555555555555555555555555555555555555555555");
     request.expectedBlobVersionedHashes = {versionedHash};
-    request.executionPayload.blockHash =
-        protocol::ethHeaderHash(expectedEthHeader(request));
+    request.executionPayload.blockHash = protocol::ethHeaderHash(expectedEthHeader(request));
     auto status = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK(status.status == PayloadValidationStatus::Valid);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 1);
@@ -636,8 +640,7 @@ BOOST_FIXTURE_TEST_CASE(fcuUnknownHeadSyncingAndRequestsBackfill, ExternalPayloa
 BOOST_FIXTURE_TEST_CASE(fcuHeadBehindTipAcceptedThenJumpsToTip, ExternalPayloadFixture)
 {
     seedHead();
-    auto const olderHash =
-        h256("3333333333333333333333333333333333333333333333333333333333333333");
+    auto const olderHash = h256("3333333333333333333333333333333333333333333333333333333333333333");
     storageFixture.setCanonicalBlock(olderHash, c_headNumber - 2);
 
     ForkchoiceState behind{olderHash, h256{}, h256{}};
@@ -664,8 +667,7 @@ BOOST_FIXTURE_TEST_CASE(fcuHeadBehindTipAcceptedThenJumpsToTip, ExternalPayloadF
 BOOST_FIXTURE_TEST_CASE(fcuAttributesOnBehindTipHeadRewindsAndBuilds, ExternalPayloadFixture)
 {
     seedHead();
-    auto const olderHash =
-        h256("3333333333333333333333333333333333333333333333333333333333333333");
+    auto const olderHash = h256("3333333333333333333333333333333333333333333333333333333333333333");
     storageFixture.setCanonicalBlock(olderHash, c_headNumber - 2);
     // The EL build lane reads the parent's header row for the L1 context derivation.
     seedHeaderRow(c_headNumber - 2);
@@ -696,11 +698,10 @@ BOOST_FIXTURE_TEST_CASE(fcuAttributesOnBehindTipHeadRewindsAndBuilds, ExternalPa
 BOOST_FIXTURE_TEST_CASE(fcuAttributesRollbackRefusedAnswersSyncing, ExternalPayloadFixture)
 {
     seedHead();
-    auto const olderHash =
-        h256("3333333333333333333333333333333333333333333333333333333333333333");
+    auto const olderHash = h256("3333333333333333333333333333333333333333333333333333333333333333");
     storageFixture.setCanonicalBlock(olderHash, c_headNumber - 2);
-    mockVerifier->rollbackResult = engine_common::ExternalRollbackResult{
-        .rolledBack = false, .error = "beyond reorg window"};
+    mockVerifier->rollbackResult =
+        engine_common::ExternalRollbackResult{.rolledBack = false, .error = "beyond reorg window"};
 
     auto attributes = makePayloadAttributesV3();
     ForkchoiceState behind{olderHash, h256{}, h256{}};
@@ -710,6 +711,43 @@ BOOST_FIXTURE_TEST_CASE(fcuAttributesRollbackRefusedAnswersSyncing, ExternalPayl
     BOOST_CHECK_EQUAL(mockVerifier->rollbackCalls, 1u);
     BOOST_REQUIRE(mockVerifier->lastRollbackTarget.has_value());
     BOOST_CHECK_EQUAL(*mockVerifier->lastRollbackTarget, c_headNumber - 2);
+}
+
+// newPayload for a payload this node built, whose parent is no longer the forkchoice head
+// (another block at the same height was committed and became the head after the build): the
+// miss path reconstructs the block hash at the era forkVersionAt assigns to the payload
+// timestamp in SECONDS, then answers SYNCING. A different era reconstructs a different hash,
+// so the returned era is the one checked.
+BOOST_FIXTURE_TEST_CASE(builtPayloadParentUnknownReadsEraFromForkSchedule, ExternalPayloadFixture)
+{
+    seedHead();
+    auto attributes = makePayloadAttributesV3();
+    ForkchoiceState head{c_headHash, h256{}, h256{}};
+    auto built = task::syncWait(service.updateForkchoice(head, &attributes, 3));
+    BOOST_REQUIRE(built.payloadId.has_value());
+    auto payload = task::syncWait(service.getPayload(*built.payloadId, 3));
+    BOOST_REQUIRE(payload);
+
+    auto const otherHash = h256("4444444444444444444444444444444444444444444444444444444444444444");
+    seedHead(otherHash, c_headNumber + 1);
+    ForkchoiceState moved{otherHash, h256{}, h256{}};
+    auto movedResult = task::syncWait(service.updateForkchoice(moved, nullptr, 3));
+    BOOST_REQUIRE(movedResult.payloadStatus.status == PayloadValidationStatus::Valid);
+
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    // The built header committed to the attributes' beacon root.
+    request.parentBeaconBlockRoot = attributes.parentBeaconBlockRoot;
+    auto status = task::syncWait(service.newPayload(request, 3));
+    BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
+    BOOST_REQUIRE_EQUAL(mockVerifier->forkVersionAtCalls.size(), 1U);
+    BOOST_CHECK_EQUAL(mockVerifier->forkVersionAtCalls[0],
+        static_cast<int64_t>(payload->executionPayload.timestamp / 1000));
+    BOOST_CHECK_EQUAL(mockVerifier->calls, 0U);
+
+    mockVerifier->l1Context.forkVersion = bcos::protocol::EthBlockVersion::PRAGUE;
+    auto mismatched = task::syncWait(service.newPayload(request, 3));
+    BOOST_CHECK(mismatched.status == PayloadValidationStatus::InvalidBlockHash);
+    BOOST_CHECK_EQUAL(mockVerifier->forkVersionAtCalls.size(), 2U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -38,7 +38,7 @@ class FakeConsensusConfig : public ConsensusConfig
 {
 public:
     explicit FakeConsensusConfig(bcos::crypto::KeyPairInterface::Ptr _key)
-      : ConsensusConfig(_key){};
+      : ConsensusConfig(_key) {};
     bool shouldRotateSealers(protocol::BlockNumber) const override { return true; }
     virtual void updateQuorum() override {}
     uint64_t minRequiredQuorum() const override { return 0; }
@@ -47,7 +47,11 @@ class FakeConsensus : public ConsensusInterface
 {
 public:
     using Ptr = std::shared_ptr<FakeConsensus>;
-    FakeConsensus() { m_taskPool = std::make_shared<IOServicePool>(1, "task"); m_strand = std::make_unique<Strand>(m_taskPool); }
+    FakeConsensus()
+    {
+        m_taskPool = std::make_shared<IOServicePool>(1, "task");
+        m_strand = std::make_unique<Strand>(m_taskPool);
+    }
     FakeConsensus(bcos::crypto::KeyPairInterface::Ptr _keyPair) : FakeConsensus()
     {
         m_kp = _keyPair;
@@ -69,8 +73,7 @@ public:
     // the sync module calls this interface to check block
     void asyncCheckBlock(Block::Ptr, std::function<void(Error::Ptr, bool)> _onVerifyFinish) override
     {
-        m_strand->post(
-            [_onVerifyFinish, this]() { _onVerifyFinish(nullptr, m_checkBlockResult); });
+        m_strand->post([_onVerifyFinish, this]() { _onVerifyFinish(nullptr, m_checkBlockResult); });
     }
 
     // the sync module calls this interface to notify new block

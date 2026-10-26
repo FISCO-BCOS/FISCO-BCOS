@@ -20,12 +20,12 @@
  */
 #pragma once
 
+#include "../eth/ForkId.h"
+#include "../eth/Protocol.h"
 #include "Crypto.h"
 #include "Handshake.h"
 #include "Messages.h"
 #include "Session.h"
-#include "../eth/ForkId.h"
-#include "../eth/Protocol.h"
 #include <bcos-network/ASIOInterface.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <mutex>
@@ -57,8 +57,8 @@ struct EstablishedSession
     HelloMessage peerHello;
     bcos::devp2p::eth::StatusMessage peerStatus;
 
-    EstablishedSession(Session&& _session, HelloMessage _hello,
-        bcos::devp2p::eth::StatusMessage _status)
+    EstablishedSession(
+        Session&& _session, HelloMessage _hello, bcos::devp2p::eth::StatusMessage _status)
       : session(std::move(_session)), peerHello(std::move(_hello)), peerStatus(std::move(_status))
     {}
 };

@@ -1,8 +1,9 @@
 #include "MemPoolImpl.h"
-#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-crypto/kzg/Kzg4844.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/LogStream.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <charconv>
 
@@ -188,8 +189,8 @@ bcos::txpool::MemPoolImpl::blobsByVersionedHashes(
         (void)txHash;
         for (std::size_t i = 0; i < sidecar.commitments.size(); ++i)
         {
-            auto const versionedHash = crypto::kzg::versionedHashFromCommitment(
-                bcos::ref(sidecar.commitments[i]));
+            auto const versionedHash =
+                crypto::kzg::versionedHashFromCommitment(bcos::ref(sidecar.commitments[i]));
             for (std::size_t j = 0; j < versionedHashes.size(); ++j)
             {
                 if (!out[j].has_value() && versionedHashes[j] == versionedHash)

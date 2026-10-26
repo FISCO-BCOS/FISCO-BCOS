@@ -281,8 +281,7 @@ BOOST_AUTO_TEST_CASE(web3ChainIdSharesParseWeb3ChainId)
     BOOST_CHECK_THROW(trySet("4294967296"), PrecompiledError);
 }
 
-// feature_l2_ethereum_compat is gone, not merely gated: bit 57 is now the tombstone
-// reserved_removed_l2_ethereum_compat (Features.h), and the old name is deliberately NOT
+// feature_l2_ethereum_compat is gone, not merely gated: the old name is deliberately NOT
 // recognised -- Features::string2Flag throws NoSuchFeatureError for it, so a config or
 // transaction still carrying the name fails loudly instead of silently enabling nothing.
 // The lane it used to switch on is a genesis property now (executor_version >= 2). This
@@ -310,6 +309,24 @@ BOOST_AUTO_TEST_CASE(removedL2FlagNameIsRefusedByGovernance)
         std::string("bugfix_eip161_1052_account_semantics"), std::string("1"));
     setParameters->m_input = bcos::ref(setInput);
     BOOST_CHECK_NO_THROW(systemConfigPrecompiled.call(executive, setParameters));
+}
+
+// Governance holds EVM fork flags to the dependency table: feature_evm_prague needs
+// feature_evm_cancun already enabled.
+BOOST_AUTO_TEST_CASE(evmForkFlagWithoutPreviousForkIsRefusedByGovernance)
+{
+    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
+    auto setParameters = std::make_shared<PrecompiledExecResult>();
+    CodecWrapper codec(hashImpl);
+
+    auto setInput = codec.encodeWithSig(
+        "setValueByKey(string,string)", std::string("feature_evm_prague"), std::string("1"));
+    setParameters->m_input = bcos::ref(setInput);
+    BOOST_CHECK_EXCEPTION(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError,
+        [](PrecompiledError const& e) {
+            auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
+            return msg != nullptr && msg->find("feature_evm_cancun") != std::string::npos;
+        });
 }
 
 // The Ethereum lane (executor_version >= ledger::ETHEREUM_EXECUTOR_VERSION: L1 EL at 2, OP-Stack

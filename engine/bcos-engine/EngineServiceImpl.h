@@ -41,11 +41,11 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-ledger/mpt/CommitObserver.h>
 #include <bcos-ledger/mpt/Constants.h>
@@ -446,8 +446,8 @@ private:
     /// up: adapting to Karst does not make the older versions incompatible at the window
     /// level. BUILDING a payload however requires an on-chain EVM revision and therefore
     /// executor_version >= 2 — buildPayload's fork/version gates reject a method version
-    /// whose response shape the chain fork cannot fill, so the unsafe_allow_v1_executor
-    /// escape hatch (executor_version < 2) can no longer build any payload.
+    /// whose response shape the chain fork cannot fill, so an executor_version < 2 build of
+    /// this service cannot build any payload.
     static bool isForkchoiceVersionSupported(std::uint32_t version)
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
@@ -1067,17 +1067,12 @@ private:
             // go through detail::withdrawalsRootFor), so a CL submitting the same
             // placeholder round-trips while a foreign root is rejected.
             //
-            // This is a KNOWN UNCONTAINED gap, not a test-harness-only one. The
-            // [op_engine_rpc] guard in libinitializer/Initializer.cpp REQUIRES
-            // executor_version >= 2 (it throws for executor_version < 2 unless the
-            // test-only escape hatch unsafe_allow_v1_executor is set); it does not keep
-            // this code off a production endpoint. EngineServiceInitializer still
-            // constructs this template; EthEngineService / OpEngineService are not in
-            // this extract. The v2 EthereumExecutor build still stamps the same
-            // placeholder withdrawalsRoot here, so the
-            // intended production configuration — executor_version >= 2 with
-            // [op_engine_rpc] enabled — serves exactly this placeholder: FCU V3 stamps it
-            // here, getPayloadV5 serializes it, and
+            // This is a KNOWN UNCONTAINED gap, not a test-harness-only one.
+            // EngineServiceInitializer still constructs this template; EthEngineService /
+            // OpEngineService are not in this extract. The v2 EthereumExecutor build still
+            // stamps the same placeholder withdrawalsRoot here, so an executor_version >= 2
+            // node serving this template on [engine_rpc] serves exactly this placeholder:
+            // FCU V3 stamps it here, getPayloadV5 serializes it, and
             // newPayloadV4 accepts it on presence alone. Until C4 computes and verifies the real
             // L2ToL1MessagePasser storage root, no L1 withdrawal proof may be taken against a root
             // produced by this node. The v2 instantiation serving the empty-trie root is pinned by

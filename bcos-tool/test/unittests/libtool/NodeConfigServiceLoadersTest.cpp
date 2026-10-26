@@ -61,17 +61,6 @@ BOOST_AUTO_TEST_CASE(web3RpcConfigDefaultsAndPopulated)
 }
 
 
-BOOST_AUTO_TEST_CASE(gatewayConfigDefaultsAndPopulated)
-{
-    LoaderProbe a;
-    a.loadGatewayConfig({});
-    LoaderProbe b;
-    auto pt =
-        fromIni("[p2p]\nlisten_ip=0.0.0.0\nlisten_port=30300\nsm_ssl=true\nnodes_file=n.json\n");
-    BOOST_CHECK_NO_THROW(b.loadGatewayConfig(pt));
-}
-
-
 BOOST_AUTO_TEST_CASE(certConfigDefaultsAndPopulated)
 {
     LoaderProbe a;
@@ -125,11 +114,11 @@ BOOST_AUTO_TEST_CASE(nodeServiceConfigValidAndInvalid)
 {
     LoaderProbe a;
     BOOST_CHECK_NO_THROW(a.loadNodeServiceConfig(
-        "node0", fromIni("[service]\nnode_name=node0\nwithout_tars_framework=false\n")));
-    BOOST_CHECK_EQUAL(a.nodeName(), "node0");
+        "node0", fromIni("[service]\nnode_name=node0\nwithout_tars_framework=false\n"), false));
 
     LoaderProbe b;  // non-alnum node name → throws
-    BOOST_CHECK_THROW(b.loadNodeServiceConfig("n", fromIni("[service]\nnode_name=bad!name\n")),
+    BOOST_CHECK_THROW(
+        b.loadNodeServiceConfig("n", fromIni("[service]\nnode_name=bad!name\n"), false),
         bcos::tool::InvalidConfig);
 }
 

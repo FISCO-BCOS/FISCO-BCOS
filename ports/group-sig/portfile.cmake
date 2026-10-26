@@ -15,6 +15,16 @@ vcpkg_execute_build_process(
     LOGNAME "patch-${TARGET_TRIPLET}"
 )
 
+# Pre-place the pbc/pbc_sig tarballs in the ExternalProject download dir
+# (${CMAKE_SOURCE_DIR}/deps/src). ExternalProject skips the download when the
+# file exists and its SHA256 matches URL_HASH, so builds no longer depend on
+# crypto.stanford.edu (which CI can fail to reach).
+file(MAKE_DIRECTORY "${SOURCE_PATH}/deps/src")
+file(COPY
+    "${CMAKE_CURRENT_LIST_DIR}/pbc-0.5.14.tar.gz"
+    "${CMAKE_CURRENT_LIST_DIR}/pbc_sig-0.0.8.tar.gz"
+    DESTINATION "${SOURCE_PATH}/deps/src")
+
 # ProjectPbc.cmake/ProjectPbcSig.cmake use PREFIX ${CMAKE_SOURCE_DIR}/deps (an
 # absolute path in the shared source tree). CMake 3.30's ExternalProject writes
 # deps/tmp/<name>-mkdirs.cmake before that dir exists, so pre-create it.

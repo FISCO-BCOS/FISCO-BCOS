@@ -148,15 +148,15 @@ static protocol::Transaction::Ptr makeFeeTx(
 static bcos::bytes makeBlobSigningPayload(std::size_t blobCount)
 {
     bcos::bytes body;
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));      // chainId
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));      // nonce
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));      // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));           // chainId
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));           // nonce
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));           // maxPriorityFeePerGas
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(1000000000));  // maxFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));  // gasLimit
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));      // gasLimit
     bcos::codec::rlp::encode(body, bcos::Address("1111111111111111111111111111111111111111"));
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));      // value
-    bcos::codec::rlp::encode(body, bcos::bytes{});                 // data
-    body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);              // empty accessList
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));           // value
+    bcos::codec::rlp::encode(body, bcos::bytes{});                      // data
+    body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);                   // empty accessList
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(1000000000));  // maxFeePerBlobGas
     bcos::bytes hashesBody;
     for (std::size_t i = 0; i < blobCount; ++i)
@@ -236,8 +236,7 @@ BOOST_AUTO_TEST_CASE(l1_rejects_blob_without_versioned_hashes)
 
 BOOST_AUTO_TEST_CASE(l1_rejects_blob_over_max_blobs_per_transaction)
 {
-    MemPoolImpl pool{
-        MemPoolConfig{.chainKind = ChainKind::L1, .maxBlobsPerTransaction = 2}};
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1, .maxBlobsPerTransaction = 2}};
     std::string sender("cccccccccccccccccccc", 20);
     BOOST_CHECK(pool.tryAdd(makeBlobTx(sender, 0, 3)) == TransactionStatus::Malformed);
     BOOST_CHECK(pool.tryAdd(makeBlobTx(sender, 0, 2)) == TransactionStatus::None);
@@ -346,8 +345,7 @@ BOOST_AUTO_TEST_CASE(seal_respects_account_nonce_from_state)
     FeeMarketStateStorage state{};
     evmc_address addr{};
     std::copy_n(sender.begin(), sizeof(addr.bytes), addr.bytes);
-    ledger::account::EVMAccount account(
-        state, addr, ledger::account::nodeAddressTableMode());
+    ledger::account::EVMAccount account(state, addr, ledger::account::nodeAddressTableMode());
     task::syncWait(account.setNonce("1"));
 
     std::vector<protocol::Transaction::Ptr> out;
@@ -427,8 +425,7 @@ BOOST_AUTO_TEST_CASE(capacity_evicts_cheapest_transaction)
 
 BOOST_AUTO_TEST_CASE(lifetime_evicts_expired_transactions_on_seal)
 {
-    MemPoolImpl pool{
-        MemPoolConfig{.chainKind = ChainKind::L1, .txLifetimeMs = 60 * 1000}};
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1, .txLifetimeMs = 60 * 1000}};
     std::string senderA("OOOOOOOOOOOOOOOOOOOO", 20);
     std::string senderB("PPPPPPPPPPPPPPPPPPPP", 20);
     auto stale = makeFeeTx(senderA, 0, 100, 100);
@@ -463,7 +460,8 @@ static engine::BlobTxSidecar makeSidecar(std::size_t blobCount)
         blob[0] = bcos::byte{static_cast<uint8_t>(i + 1)};
         bcos::bytes commitment, proof;
         BOOST_REQUIRE(crypto::kzg::blobToKzgCommitment(bcos::ref(blob), commitment));
-        BOOST_REQUIRE(crypto::kzg::computeBlobKzgProof(bcos::ref(blob), bcos::ref(commitment), proof));
+        BOOST_REQUIRE(
+            crypto::kzg::computeBlobKzgProof(bcos::ref(blob), bcos::ref(commitment), proof));
         sidecar.blobs.push_back(std::move(blob));
         sidecar.commitments.push_back(std::move(commitment));
         sidecar.proofs.push_back(std::move(proof));
@@ -525,8 +523,7 @@ BOOST_AUTO_TEST_CASE(sidecar_dropped_with_its_transaction)
 
 BOOST_AUTO_TEST_CASE(sidecar_dropped_on_expiry)
 {
-    MemPoolImpl pool{
-        MemPoolConfig{.chainKind = ChainKind::L1, .txLifetimeMs = 60 * 1000}};
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1, .txLifetimeMs = 60 * 1000}};
     std::string sender("sdSdSdSdSdSdSdSdSdSd", 20);
     auto stale = makeBlobTx(sender, 0, 1);
     auto const staleHash = stale->hash();
@@ -548,14 +545,14 @@ BOOST_AUTO_TEST_CASE(blobs_by_versioned_hashes)
     std::vector<crypto::HashType> versionedHashes;
     for (auto const& commitment : sidecar.commitments)
     {
-        versionedHashes.push_back(
-            crypto::kzg::versionedHashFromCommitment(bcos::ref(commitment)));
+        versionedHashes.push_back(crypto::kzg::versionedHashFromCommitment(bcos::ref(commitment)));
     }
     auto const blobs = sidecar.blobs;
     auto const proofs = sidecar.proofs;
     BOOST_CHECK(pool.tryAdd(std::move(tx), std::move(sidecar)) == TransactionStatus::None);
 
-    crypto::HashType const unknown("0x9999999999999999999999999999999999999999999999999999999999999999");
+    crypto::HashType const unknown(
+        "0x9999999999999999999999999999999999999999999999999999999999999999");
     std::vector<crypto::HashType> query{versionedHashes[0], unknown, versionedHashes[1]};
     auto items = pool.blobsByVersionedHashes(query);
     BOOST_REQUIRE_EQUAL(items.size(), 3);

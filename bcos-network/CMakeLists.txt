@@ -25,9 +25,9 @@ find_package(Boost REQUIRED COMPONENTS filesystem)
 find_package(OpenSSL REQUIRED)
 find_package(range-v3 REQUIRED)
 
-# No UNITY_BUILD here: the headers are heavy template code (Host/BasicSession are class
-# templates instantiated by the consumer's TU); the four sources are small and the old
-# gateway unity grouping would only mask ODR/include issues.
+# The four sources are unity-built under the repo-wide CMAKE_UNITY_BUILD like every other
+# module; keep them self-contained (no file-scope `using namespace std;` — it leaks into the
+# other TUs in the batch and collides with range-v3's `ranges`).
 add_library(bcos-network
     bcos-network/ASIOInterface.cpp
     bcos-network/Common.cpp

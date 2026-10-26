@@ -7,7 +7,7 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define TIMESYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TIMESYNC")
 

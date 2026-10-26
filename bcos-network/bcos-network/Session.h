@@ -20,6 +20,7 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/error.hpp>
 #include <boost/asio/post.hpp>
+#include <boost/asio/ssl/error.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/container/small_vector.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -589,7 +590,7 @@ public:
         // (Service's pending-request table). The channel close below reaches the Service receive
         // pump, whose exit path fails exactly the waiters whose outbound session this is.
         int errorCode = P2PExceptionType::Disconnect;
-        std::string errorMsg = "Disconnect";
+        std::string errorMsg(disconnectReasonTag(_reason));
         if (_reason == DuplicatePeer)
         {
             errorCode = P2PExceptionType::DuplicateSession;
@@ -728,10 +729,14 @@ private:
 
                 if (ec)
                 {
-                    SESSION_LOG(INFO) << LOG_DESC("readLoop failed")
-                                      << LOG_KV("endpoint", nodeIPEndpoint())
-                                      << LOG_KV("message", ec.message());
-                    drop(TCPError);
+                    SESSION_LOG(DEBUG)
+                        << LOG_DESC("readLoop failed") << LOG_KV("endpoint", nodeIPEndpoint())
+                        << LOG_KV("message", ec.message());
+                    // eof / reset / truncated stream: the peer closed the connection
+                    bool remoteClosed = (ec == boost::asio::error::eof) ||
+                                        (ec == boost::asio::error::connection_reset) ||
+                                        (ec == boost::asio::ssl::error::stream_truncated);
+                    drop(remoteClosed ? ClientQuit : TCPError);
                     co_return;
                 }
 

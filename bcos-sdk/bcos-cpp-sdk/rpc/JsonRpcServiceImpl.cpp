@@ -19,8 +19,8 @@
  */
 
 #include <bcos-cpp-sdk/rpc/JsonRpcServiceImpl.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/LogStream.h>
 
 using namespace bcos;
 using namespace bcos::cppsdk;

@@ -24,7 +24,9 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-utilities/Common.h"
 #include "rocksdb/convenience.h"
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/LogStream.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
@@ -37,7 +39,6 @@
 #include <mutex>
 #include <optional>
 #include <variant>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos::storage;
 using namespace bcos::protocol;
@@ -505,9 +506,11 @@ void RocksDBStorage::asyncRollback(
 }
 
 bcos::Error::Ptr RocksDBStorage::setRows(std::string_view tableName,
-    ::ranges::any_view<std::string_view, ::ranges::category::random_access | ::ranges::category::sized>
+    ::ranges::any_view<std::string_view,
+        ::ranges::category::random_access | ::ranges::category::sized>
         keys,
-    ::ranges::any_view<std::string_view, ::ranges::category::random_access | ::ranges::category::sized>
+    ::ranges::any_view<std::string_view,
+        ::ranges::category::random_access | ::ranges::category::sized>
         values) noexcept
 {
     __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,

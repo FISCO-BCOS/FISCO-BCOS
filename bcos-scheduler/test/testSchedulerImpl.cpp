@@ -15,17 +15,19 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
+#include <bcos-framework/testutils/LogCapture.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionMetaDataImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-utilities/BlockStat.h>
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
-#include <future>
 #include <boost/test/unit_test.hpp>
+#include <future>
 
 
 using namespace std;
@@ -50,7 +52,7 @@ struct schedulerImplFixture
         signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
         ledger = std::make_shared<MockLedger3>();
-        executorManager = std::make_shared<scheduler::ExecutorManager>();
+        executorManager = std::make_shared<scheduler::ExecutorManager>(ioService);
 
         // create RocksDBStorage
         rocksdb::DB* db;
@@ -92,6 +94,7 @@ struct schedulerImplFixture
         ioServicePool = nullptr;  // destroy the pool now -> stop + join threads
     }
     bcos::IOServicePool::Ptr ioServicePool;
+    boost::asio::io_context ioService;
     bcos::test::MockLedger3::Ptr ledger;
     bcos::scheduler::ExecutorManager::Ptr executorManager;
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory;
@@ -395,9 +398,9 @@ BOOST_AUTO_TEST_CASE(commitBlock)
 
 BOOST_AUTO_TEST_CASE(handlerBlockTest)
 {
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0, ioServicePool);
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
     auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
     scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
 
@@ -474,11 +477,55 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
 }
 
 
+// SCHEDULER BlockStat at commit prints the committed block's own execute time: blocks 6 and 7
+// both execute before 6 commits, and the mock gives block N an execute time of N * 100 ms
+BOOST_AUTO_TEST_CASE(blockStatExecMsIsTheCommittedBlocksOwn)
+{
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
+    scheduler->setBlockExecutiveFactory(
+        std::make_shared<bcos::test::MockBlockExecutiveFactory>(false));
+    std::vector<bcos::protocol::BlockHeader::Ptr> executed;
+    for (bcos::protocol::BlockNumber number : {6, 7})
+    {
+        auto block = blockFactory->createBlock();
+        block->blockHeader()->setNumber(number);
+        block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
+        block->appendTransactionMetaData(
+            std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(number), "c1"));
+        std::promise<bcos::protocol::BlockHeader::Ptr> done;
+        scheduler->executeBlock(block, false,
+            [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
+                BOOST_CHECK(!error);
+                done.set_value(std::move(header));
+            });
+        executed.push_back(done.get_future().get());
+        BOOST_REQUIRE(executed.back());
+    }
+
+    bcos::BlockStat::enable();
+    LogCapture capture;
+    std::promise<bcos::Error::Ptr> committed;
+    scheduler->commitBlock(
+        executed[0], [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&&) {
+            committed.set_value(std::move(error));
+        });
+    auto error = committed.get_future().get();
+    auto text = capture.text();
+    bcos::BlockStat::disable();
+    BOOST_REQUIRE_MESSAGE(!error, (error ? error->errorMessage() : std::string()));
+    // the number field is the mock ledger's committed height, not the block's
+    BOOST_CHECK_MESSAGE(
+        text.find("[SCHEDULER][METRIC]BlockStat,number=") != std::string::npos, text);
+    BOOST_CHECK_MESSAGE(text.find(",execMs=600,") != std::string::npos, text);
+}
+
 BOOST_AUTO_TEST_CASE(getCode)
 {
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0, ioServicePool);
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
     auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
     scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
 
@@ -495,9 +542,9 @@ BOOST_AUTO_TEST_CASE(getCode)
 BOOST_AUTO_TEST_CASE(call)
 {
     // Add executor
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0, ioServicePool);
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
     // auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
     // scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
     auto executor = std::make_shared<MockParallelExecutorForCall>("executor1");
@@ -552,9 +599,9 @@ BOOST_AUTO_TEST_CASE(call)
 
 BOOST_AUTO_TEST_CASE(testDeploySysContract)
 {
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0, ioServicePool);
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
     // Add executor
     auto executor1 = std::make_shared<MockParallelExecutor>("executor1");
     executorManager->addExecutor("executor1", executor1);
@@ -585,9 +632,9 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
 
 BOOST_AUTO_TEST_CASE(testCallSysContract)
 {
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0, ioServicePool);
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
     // Add executor
     auto executor1 = std::make_shared<MockParallelExecutorForCall>("executor1");
     executorManager->addExecutor("executor1", executor1);

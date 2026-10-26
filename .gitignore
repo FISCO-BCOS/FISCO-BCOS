@@ -63,6 +63,9 @@ vcpkg
 compile_commands.json
 .cache
 
+# vcpkg binary cache, redirected here by CI (VCPKG_BINARY_SOURCES)
+.vcpkg-archives
+
 # generated test
 tools/BcosAirBuilder/nodes**
 tools/BcosProBuilder/generated**
@@ -95,3 +98,9 @@ CLAUDE.local.md
 .worktrees/
 .claude/worktrees
 .claude/agents
+
+# Gradle
+.gradle/
+
+# Local build_chain.sh output
+tools/nodes/

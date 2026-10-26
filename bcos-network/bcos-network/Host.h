@@ -694,9 +694,10 @@ protected:
     {
         if (error)
         {
-            HOST_LOG(INFO) << LOG_DESC("handshakeServer Handshake failed")
-                           << LOG_KV("value", error.value()) << LOG_KV("message", error.message())
-                           << LOG_KV("endpoint", socket->nodeIPEndpoint());
+            // inbound ssl handshake failed: certificate verification (incl. blacklist/whitelist in
+            // newVerifyCallback) or a protocol error; error.message() says which
+            logHandshakeFailed(
+                bcos::LogLevel::INFO, socket->nodeIPEndpoint(), "ssl_handshake", error.message());
             socket->close();
             return;
         }
@@ -776,10 +777,8 @@ protected:
         erasePendingConns(_nodeIPEndpoint);
         if (error)
         {
-            HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed")
-                              << LOG_KV("endpoint", _nodeIPEndpoint)
-                              << LOG_KV("value", error.value())
-                              << LOG_KV("message", error.message());
+            logHandshakeFailed(
+                bcos::LogLevel::WARNING, _nodeIPEndpoint, "ssl_handshake", error.message());
 
             if (socket->isConnected())
             {
@@ -795,6 +794,7 @@ protected:
         // identity).
         if (m_run)
         {
+            clearConnectFailures(_nodeIPEndpoint);
             HOST_LOG(INFO) << LOG_DESC("handshakeClient succ")
                            << LOG_KV("local endpoint", socket->localEndpoint());
             auto session = startPeerSession(socket);
@@ -819,6 +819,33 @@ protected:
             m_pendingConns.erase(it);
         }
     }
+
+    /// the single emission point of the PeerConnectFailed event (see docs/ops/log-events.md):
+    /// rate-limited per endpoint — the first failure and then every c_connectFailLogEvery-th one;
+    /// the counter resets on handshake success.
+    void recordConnectFailure(
+        NodeIPEndpoint const& nodeIPEndpoint, std::string_view reason, std::string_view detail)
+    {
+        uint32_t failures = 0;
+        {
+            bcos::Guard lock(x_connectFailures);
+            failures = ++m_connectFailures[nodeIPEndpoint];
+        }
+        if (failures == 1 || failures % c_connectFailLogEvery == 0)
+        {
+            HOST_LOG(INFO) << LOG_DESC("PeerConnectFailed") << LOG_KV("endpoint", nodeIPEndpoint)
+                           << LOG_KV("reason", reason) << LOG_KV("detail", detail)
+                           << LOG_KV("consecutiveFailures", failures);
+        }
+    }
+
+    void clearConnectFailures(NodeIPEndpoint const& nodeIPEndpoint)
+    {
+        bcos::Guard lock(x_connectFailures);
+        m_connectFailures.erase(nodeIPEndpoint);
+    }
+
+    constexpr static uint32_t c_connectFailLogEvery = 10;
 
     void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint)
     {
@@ -1074,8 +1101,7 @@ private:
             connectDeadline->arm([this, socket, _nodeIPEndpoint](boost::system::error_code) {
                 if (socket->isConnected())
                 {
-                    HOST_LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
-                                      << LOG_KV("endpoint", _nodeIPEndpoint);
+                    recordConnectFailure(_nodeIPEndpoint, "timeout", "connect/handshake timer");
                     erasePendingConns(_nodeIPEndpoint);
                     socket->close();
                 }
@@ -1084,9 +1110,7 @@ private:
             auto [ec] = co_await m_asioInterface->awaitableResolveConnect(socket);
             if (ec)
             {
-                HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
-                                << LOG_KV("endpoint", _nodeIPEndpoint)
-                                << LOG_KV("message", ec.message());
+                recordConnectFailure(_nodeIPEndpoint, "tcp_connect", ec.message());
                 // disarm() is thread-safe (the guard flag is atomic and a queued expiry observes it
                 // as false), so the resolver-thread resume this branch can run on no longer needs
                 // the hand-rolled `post(socket->ioService(), [...]{ connectTimer->cancel(); })`
@@ -1156,6 +1180,11 @@ protected:
 
     std::set<NodeIPEndpoint> m_pendingConns;
     bcos::Mutex x_pendingConns;
+
+    // PeerConnectFailed rate limiting: consecutive connect failures per endpoint (see
+    // recordConnectFailure); reset by clearConnectFailures on handshake success.
+    std::map<NodeIPEndpoint, uint32_t> m_connectFailures;
+    bcos::Mutex x_connectFailures;
 
     std::string m_listenHost;
     uint16_t m_listenPort = 0;

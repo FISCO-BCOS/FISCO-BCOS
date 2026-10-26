@@ -135,8 +135,8 @@ DepositTx buildOpEthL1AttributesDeposit(const OpEthL1BlockInfo& l1Info, bool jov
     bcos::toBigEndian(l1Info.number, numberField);
     storeU256BE(dataSpan.subspan(c_baseFeeOffset, 32), l1Info.baseFee);
     storeU256BE(dataSpan.subspan(c_blobBaseFeeOffset, 32), l1Info.blobBaseFee);
-    std::copy_n(l1Info.blockHash.bytes, sizeof(evmc::bytes32),
-        deposit.data.begin() + c_blockHashOffset);
+    std::copy_n(
+        l1Info.blockHash.bytes, sizeof(evmc::bytes32), deposit.data.begin() + c_blockHashOffset);
     std::copy_n(l1Info.batcherHash.bytes, sizeof(evmc::bytes32),
         deposit.data.begin() + c_batcherHashOffset);
     storeU32BE(dataSpan.subspan(c_operatorFeeScalarOffset, 4), l1Info.operatorFeeScalar);

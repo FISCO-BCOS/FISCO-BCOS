@@ -31,15 +31,20 @@
 #include <string>
 #include <utility>
 
-using namespace bcos;
-using namespace bcos::ledger;
-using namespace bcos::protocol;
-using namespace bcos::crypto;
-using namespace bcos::consensus;
 namespace bcos
 {
 namespace test
 {
+// Using-directives live INSIDE bcos::test on purpose: at global scope they leak into
+// every consumer TU (and every unity-build batch-mate), making names like
+// ConsensusNodeList ambiguous for unrelated files that pull both bcos::ledger and
+// bcos::consensus. From here they still reach all consumers - test code lives in
+// bcos::test, and [namespace.udir] nominates the names into the enclosing bcos -
+// while batch-mates outside bcos::test no longer see them.
+using namespace bcos::ledger;
+using namespace bcos::protocol;
+using namespace bcos::crypto;
+using namespace bcos::consensus;
 
 class FakeLedger : public LedgerInterface, public std::enable_shared_from_this<FakeLedger>
 {

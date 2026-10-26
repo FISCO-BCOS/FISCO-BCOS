@@ -1,4 +1,6 @@
 #pragma once
+#include <chrono>
+#include <thread>
 
 // Shared mock executor / scheduler / storage for the BaselineScheduler unit tests.
 //
@@ -110,17 +112,19 @@ struct SharedMockExecutor
     evmc_bytes32 m_probeSlot{};
     evmc_bytes32 m_writeValue{};
     protocol::BlockNumber m_lastExecutedHeaderNumber{-1};
+    std::optional<evmc_revision> m_lastExecutedRevision;
     bool m_checkTimestamp99{};
 
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int /*contextID*/, ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
+        int /*contextID*/, ledger::LedgerConfig const& ledgerConfig, bool /*call*/)
     {
         if (m_checkTimestamp99 && transaction.version() == 99)
         {
             BOOST_CHECK_EQUAL(blockHeader.timestamp(), 10088);
         }
         m_lastExecutedHeaderNumber = blockHeader.number();
+        m_lastExecutedRevision = ledgerConfig.evmcRevision();
         if (m_mode == Mode::Trivial)
         {
             co_return {};
@@ -148,8 +152,8 @@ struct SharedMockExecutor
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& /*blockHeader*/,
         protocol::Transaction const& /*transaction*/, int32_t /*contextID*/,
-        ledger::LedgerConfig const& /*ledgerConfig*/,
-        bool /*call*/) -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
+        ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
+        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
     {
         co_return {};
     }
@@ -172,6 +176,9 @@ struct SharedMockScheduler
     std::map<protocol::BlockNumber, std::vector<RowOp>> const* m_plan{};
     std::vector<RowOp> m_everyBlockRows;
     bool m_receiptsWithLogs{};
+    // executing this block number takes at least m_slowBlockMs (execution-timing tests)
+    protocol::BlockNumber m_slowBlock{-1};
+    int m_slowBlockMs{};
 
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
         auto& /*executor*/, protocol::BlockHeader const& blockHeader,
@@ -194,6 +201,10 @@ struct SharedMockScheduler
                 }
             }
         };
+        if (blockHeader.number() == m_slowBlock)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(m_slowBlockMs));
+        }
         co_await writeRows(m_everyBlockRows);
         if (m_plan)
         {
@@ -304,11 +315,11 @@ inline std::shared_ptr<bcostars::protocol::TransactionImpl> makeWeb3FillerTx(
     // Signing payload: 0x02 || rlp([chainId, nonce, maxPriorityFeePerGas, maxFeePerGas,
     // gasLimit, to, value, data, accessList]) — the canonical EIP-1559 shape.
     bcos::bytes body;
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));            // chainId
-    bcos::codec::rlp::encode(body, nonce);                               // nonce
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));            // maxPriorityFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1000000000));   // maxFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));       // gasLimit
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));           // chainId
+    bcos::codec::rlp::encode(body, nonce);                              // nonce
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));           // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1000000000));  // maxFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));      // gasLimit
     bcos::codec::rlp::encode(
         body, bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes))));
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));  // value
@@ -316,8 +327,8 @@ inline std::shared_ptr<bcostars::protocol::TransactionImpl> makeWeb3FillerTx(
     body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);          // empty accessList
     bcos::bytes payloadBytes;
     payloadBytes.push_back(0x02);
-    bcos::codec::rlp::encodeHeader(payloadBytes,
-        bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+    bcos::codec::rlp::encodeHeader(
+        payloadBytes, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
     payloadBytes.insert(payloadBytes.end(), body.begin(), body.end());
 
     bcos::bytes signature(65, 0);

@@ -19,9 +19,9 @@
  */
 
 #include "Common.h"
+#include <boost/atomic.hpp>
 #include <clocale>
 #include <cstdlib>
-#include <boost/atomic.hpp>
 
 namespace bcos::node
 {

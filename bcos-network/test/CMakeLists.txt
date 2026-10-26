@@ -21,9 +21,11 @@ include(SearchTestCases)
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-network)
 
-# No UNITY_BUILD here: same rationale as the library target itself — the headers are heavy
-# template code and a unity batch would only mask ODR/include issues. The suite is small.
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
+# main.cpp defines BOOST_TEST_MODULE; when merged into a unity batch, boost.test
+# headers are already included by earlier files and the entry macro is disabled,
+# leaving the linker without init_unit_test_suite.
+set_source_files_properties("unittests/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 
 find_package(Boost REQUIRED unit_test_framework)

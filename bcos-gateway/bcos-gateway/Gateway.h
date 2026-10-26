@@ -29,7 +29,7 @@
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include "filter/ReadOnlyFilter.h"
 #include <range/v3/range/concepts.hpp>
 
@@ -123,8 +123,8 @@ public:
     task::Task<Error::Ptr> subscribeTopic(
         std::string const& _clientID, std::string const& _topicInfo) override;
 
-    task::Task<Error::Ptr> removeTopic(std::string const& _clientID,
-        std::vector<std::string> const& _topicList) override;
+    task::Task<Error::Ptr> removeTopic(
+        std::string const& _clientID, std::vector<std::string> const& _topicList) override;
 
     bcos::amop::AMOPImpl::Ptr amop();
 

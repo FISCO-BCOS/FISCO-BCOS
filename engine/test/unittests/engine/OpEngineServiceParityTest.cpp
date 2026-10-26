@@ -59,14 +59,14 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
-#include <bcos-utilities/Exceptions.h>
 #include <opstack-executor/OpEthL1Attributes.h>  // synthesize fixture: DepositTx / OP_ETH_* constants
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -985,7 +985,7 @@ BOOST_AUTO_TEST_CASE(op_fcu_rejects_non_canonical_safe)
 
 BOOST_AUTO_TEST_CASE(op_fcu_rejects_empty_txs_when_synthesis_disabled)
 {
-    // op_engine_rpc / op-geth: do not invent an L1-attributes deposit.
+    // Production [engine_rpc] / op-geth: do not invent an L1-attributes deposit.
     OpServicePair pair(/*allowSynthesizedL1Attributes=*/false);
     auto attrs = makeOpPayloadAttributes();
     attrs.minBaseFee = std::nullopt;

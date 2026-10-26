@@ -25,8 +25,7 @@ bcos::boostssl::NodeIPEndpoint::NodeIPEndpoint(
   : m_host(_addr.to_string()), m_port(_port), m_ipv6(_addr.is_v6())
 {}
 
-bcos::boostssl::NodeIPEndpoint::NodeIPEndpoint(
-    const boost::asio::ip::tcp::endpoint& _endpoint)
+bcos::boostssl::NodeIPEndpoint::NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint)
   : m_host(_endpoint.address().to_string()),
     m_port(_endpoint.port()),
     m_ipv6(_endpoint.address().is_v6())

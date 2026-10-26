@@ -47,9 +47,10 @@ int main(int argc, const char* argv[])
     {
         return bcos::ops::runOps(argc, argv);
     }
-    // FIB-184: the log-sink abort path is now closed at the source — every async sink in
-    // BoostLogInitializer installs make_exception_suppressor(), so an exception on the log
-    // feeding thread drops the record instead of reaching std::terminate. This handler is kept
+    // FIB-184: the log-sink abort path is now closed at the source — the whole-line sinks
+    // guard consumeLine and flush with catch(...) in LineAsyncSink::feedOne and flushBackend,
+    // so an exception on the log feeding thread drops one line instead of reaching
+    // std::terminate. This handler is kept
     // only as a last-resort backstop for genuinely unexpected terminations; it must NOT swallow
     // exceptions (that would hide unrelated crashes), it only prints a backtrace then aborts.
     std::set_terminate([]() {
@@ -84,8 +85,8 @@ int main(int argc, const char* argv[])
                 // normally either way.
                 initializer->init(param);
                 std::cout << "[" << bcos::getCurrentDateTime() << "] ";
-                std::cout << "importing Ethereum blocks from " << param.importBlocksPath
-                          << " ..." << std::endl;
+                std::cout << "importing Ethereum blocks from " << param.importBlocksPath << " ..."
+                          << std::endl;
                 auto summary = initializer->importEthereumBlocks(param.importBlocksPath);
                 // Skips are the consume-rlp contract (invalid blocks are rejected and
                 // the run continues). A run that imported nothing is a hard failure

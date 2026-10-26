@@ -18,13 +18,14 @@
  */
 
 #include "Hash.h"
-#include <bcos-framework/storage/Serialize.h>
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageInterface.h"
+#include <bcos-framework/storage/Serialize.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -32,17 +33,17 @@
 #include <tbb/concurrent_vector.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/log/core/core.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <iostream>
+#include <list>
 #include <optional>
 #include <random>
 #include <sstream>
 #include <string>
 #include <unordered_map>
-#include <list>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::storage;
@@ -2997,7 +2998,8 @@ BOOST_AUTO_TEST_CASE(TableMeta_read_write_mutex)
         meta->insertPageInfoNoLock(
             storage::KeyPageStorage::PageInfo(std::to_string(i), i % 2 == 0 ? 0 : i, i, nullptr));
     }
-    std::shared_ptr<bcos::IOServicePool> threadPool = std::make_shared<bcos::IOServicePool>(2, "test");
+    std::shared_ptr<bcos::IOServicePool> threadPool =
+        std::make_shared<bcos::IOServicePool>(2, "test");
     auto promise = std::make_shared<std::promise<void>>();
     threadPool->post([&]() {
         std::cout << "==================== parallelTraverse" << std::endl;

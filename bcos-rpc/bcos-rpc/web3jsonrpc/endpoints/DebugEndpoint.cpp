@@ -28,6 +28,8 @@
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <bcos-rpc/util.h>
+#include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -56,8 +58,7 @@ task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& r
     co_await requireOpStackLane(*m_nodeService->ledger(), "debug_dbGet");
     if (request.size() < 1 || !request[0U].isString())
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "debug_dbGet expects one hex key"));
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "debug_dbGet expects one hex key"));
     }
     auto const keyView = toView(request[0U]);
     bcos::bytes rawKey;
@@ -169,9 +170,9 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
     {
         // QTY|TAG: resolve through the shared tag resolver (same as eth_getBlockByNumber).
         auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
-        auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag,
-            m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth(), std::nullopt,
-            std::nullopt, false);
+        auto [number, _] =
+            bcos::rpc::getBlockNumberByTag(latest, blockTag, m_nodeService->safeBlockDepth(),
+                m_nodeService->finalizedBlockDepth(), std::nullopt, std::nullopt, false);
         blockNumber = number;
         head = latest;
     }
@@ -200,8 +201,8 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
     {
         // A header whose fields cannot be RLP-encoded (a native FISCO header with a
         // sub-second timestamp, or an incomplete fork-field set) has no Ethereum RLP to serve.
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InternalError, std::string("Header RLP encode failed: ") + e.what()));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InternalError, std::string("Header RLP encode failed: ") + e.what()));
     }
     if (protocol::canonicalBlockHash(header) != bcos::crypto::keccak256Hash(bcos::ref(encoded)))
     {

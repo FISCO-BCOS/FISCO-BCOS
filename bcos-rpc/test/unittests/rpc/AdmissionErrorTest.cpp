@@ -18,13 +18,14 @@
  * @date 2026/9/9
  */
 
-#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/AdmissionError.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <cstdint>
 #include <limits>
+
+#include <bcos-protocol/TransactionStatus.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -124,7 +125,7 @@ BOOST_AUTO_TEST_CASE(detailIsAppendedInParentheses)
 }
 
 // Which codes the table is allowed to answer at all. An in-process pool only ever throws a
-// TransactionStatus, but the same interface carries a Pro/tars client's own faults through the
+// TransactionStatus, but the same interface carries a MAX/TARS client's own faults through the
 // same int field, and the table's fallback would name one of those "Unknown" -- a refusal's code
 // for a node fault. A code this node has no name for is not a verdict.
 BOOST_AUTO_TEST_CASE(onlyANamedStatusIsAVerdict)

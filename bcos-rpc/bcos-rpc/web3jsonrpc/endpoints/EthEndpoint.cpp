@@ -26,7 +26,6 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/web3jsonrpc/utils/FeeHistory.h"
 #include "bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h"
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -55,17 +54,21 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <array>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <variant>
 #include <vector>
+
+#include "bcos-protocol/TransactionStatus.h"
+#include <bcos-utilities/DataConvertUtility.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -77,6 +80,120 @@ namespace
 /// never execute a call with a zero budget — a raw `gas=0` is rejected as "intrinsic gas too
 /// low". The target block's own gasLimit bounds it further when it is readable and non-zero.
 constexpr uint64_t c_ethCallGasCap = 50'000'000;
+
+/// The human-readable form of the ABI-encoded revert payload the way geth's abi.UnpackRevert
+/// reads it: Error(string) → the string, Panic(uint256) → the Solidity panic description.
+/// nullopt for raw / custom-error / malformed data (the caller then decodes `data` itself).
+std::optional<std::string> decodeRevertReason(bytesConstRef output)
+{
+    constexpr size_t c_selectorSize = 4;
+    constexpr size_t c_wordSize = 32;
+    constexpr std::array<uint8_t, 4> c_errorSelector{0x08, 0xc3, 0x79, 0xa0};  // Error(string)
+    constexpr std::array<uint8_t, 4> c_panicSelector{0x4e, 0x48, 0x7b, 0x71};  // Panic(uint256)
+    if (output.size() < c_selectorSize + c_wordSize)
+    {
+        return std::nullopt;
+    }
+    auto const selector = output.getCroppedData(0, c_selectorSize);
+    if (std::equal(selector.begin(), selector.end(), c_panicSelector.begin()))
+    {
+        auto const code = fromBigEndian<u256>(output.getCroppedData(c_selectorSize, c_wordSize));
+        auto panicCode = [](u256 value) {
+            static constexpr std::string_view c_hexDigits = "0123456789abcdef";
+            std::string digits;
+            do
+            {
+                digits.push_back(c_hexDigits[static_cast<size_t>(value & 0xf)]);
+                value >>= 4;
+            } while (value != 0);
+            std::reverse(digits.begin(), digits.end());
+            return "0x" + digits;
+        };
+        if (code > 0xff)
+        {
+            return "unknown panic code: " + panicCode(code);
+        }
+        switch (static_cast<uint64_t>(code))
+        {
+        case 0x00:
+            return "generic panic";
+        case 0x01:
+            return "assert(false)";
+        case 0x11:
+            return "arithmetic underflow or overflow";
+        case 0x12:
+            return "division or modulo by zero";
+        case 0x21:
+            return "enum overflow";
+        case 0x22:
+            return "invalid encoded storage byte array accessed";
+        case 0x31:
+            return "out-of-bounds array access; popping on an empty array";
+        case 0x32:
+            return "out-of-bounds access of an array or bytesN";
+        case 0x41:
+            return "out of memory";
+        case 0x51:
+            return "uninitialized function";
+        default:
+            return "unknown panic code: " + panicCode(code);
+        }
+    }
+    if (!std::equal(selector.begin(), selector.end(), c_errorSelector.begin()))
+    {
+        return std::nullopt;
+    }
+    // Error(string): selector ‖ offset(32) ‖ length(32) ‖ bytes, padded to a 32-byte boundary.
+    auto const offset = fromBigEndian<u256>(output.getCroppedData(c_selectorSize, c_wordSize));
+    if (offset != c_wordSize || output.size() < c_selectorSize + 2 * c_wordSize)
+    {
+        return std::nullopt;
+    }
+    auto const length =
+        fromBigEndian<u256>(output.getCroppedData(c_selectorSize + c_wordSize, c_wordSize));
+    auto const dataStart = c_selectorSize + 2 * c_wordSize;
+    if (length > output.size() - dataStart)
+    {
+        return std::nullopt;
+    }
+    auto const reason = output.getCroppedData(dataStart, static_cast<size_t>(length));
+    return std::string(reason.begin(), reason.end());
+}
+
+/// The JSON-RPC `error` object for an eth_call / eth_estimateGas whose execution did not
+/// succeed (issue #5709). Code and sentence come from the status table shared with
+/// eth_sendRawTransaction (AdmissionError.cpp): a REVERT is code 3 "execution reverted", every
+/// other execution fault -32000 with geth's words or the status name. viem and ethers.js key on
+/// exactly these codes to recognise a revert and decode `data` — the internal TransactionStatus
+/// value (16, 19, ...) with an empty message left them showing an empty error with no reason.
+/// Like geth, a REVERT gets its decoded reason appended. When no reason decodes, the receipt's
+/// own message is the fallback for any status (precompiled and FISCO-native reverts carry text
+/// there). @p output is the raw return data, @p outputHex its 0x-prefixed form for `data`.
+Json::Value callFailureError(protocol::TransactionStatus status, std::string_view receiptMessage,
+    bytesConstRef output, std::string outputHex)
+{
+    auto const base = admissionError(status);
+    auto message = base.msg();
+    auto hasDecodedReason = false;
+    if (status == protocol::TransactionStatus::RevertInstruction)
+    {
+        if (auto reason = decodeRevertReason(output); reason && !reason->empty())
+        {
+            message += ": " + *reason;
+            hasDecodedReason = true;
+        }
+    }
+    if (!hasDecodedReason && !receiptMessage.empty())
+    {
+        message += ": ";
+        message += receiptMessage;
+    }
+    Json::Value error = Json::objectValue;
+    error["code"] = base.code();
+    error["message"] = std::move(message);
+    error["data"] = std::move(outputHex);
+    return error;
+}
 
 /// Resolve an EIP-1186/EIP-1898 block parameter to its canonical string form. The fault-proof
 /// preimage server (kona-host) sends the OBJECT form for a block hash — alloy's BlockId::Hash
@@ -200,8 +317,8 @@ task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value& response
 }
 task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
 {
-    // Reads via LedgerConfig (not a raw SYS_CONFIG single-key read) so L2-mode governance
-    // (SystemConfig.sol via L2ConfigLoader) flows through one path. getLedgerConfig
+    // Reads via LedgerConfig (not a raw SYS_CONFIG single-key read) so every lane's chain id
+    // flows through one path (getLedgerConfig -> fetchAllSystemConfigs). getLedgerConfig
     // over-fetches (~5 storage reads) per call; a per-request cache is a follow-up.
     auto const ledger = m_nodeService->ledger();
     auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
@@ -1269,7 +1386,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         // the mempool branch instead, so both pools refuse the same transaction the same way.
         //
         // Only for a code that is a verdict. This interface also carries faults that are the
-        // node's own -- a Pro/tars deployment's TxPoolServiceClient throws "No value!" and TARS
+        // node's own -- a MAX/TARS deployment's TxPoolServiceClient throws "No value!" and TARS
         // transport codes through it -- and those keep going to the catch-all, which answers
         // -32603 with the message they came with, as they did before this table existed.
         // bcos::Error only, where the mempool branch catches everything: an in-process pool has
@@ -1477,13 +1594,10 @@ task::Task<void> EthEndpoint::call(
                     }
                     else
                     {
-                        // https://docs.infura.io/api/networks/ethereum/json-rpc-methods/eth_call#returns
-                        Json::Value jsonResult = Json::objectValue;
-                        jsonResult["code"] = result->status();
-                        jsonResult["message"] = result->message();
-                        jsonResult["data"] = output;
                         m_response["jsonrpc"] = "2.0";
-                        m_response["error"] = std::move(jsonResult);
+                        m_response["error"] = callFailureError(
+                            static_cast<protocol::TransactionStatus>(result->status()),
+                            result->message(), result->output(), std::move(output));
                     }
 
                     if (m_gasUsed)

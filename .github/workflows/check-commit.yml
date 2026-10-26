@@ -23,6 +23,7 @@ jobs:
 
       - name: Check
         run: |
-          sudo apt-get update
-          sudo apt-get -y install clang-format
+          python3 -m pip install --user "clang-format==$(cat tools/.ci/clang-format-version)"
+          export PATH="$HOME/.local/bin:$PATH"
           bash tools/.ci/check-commit.sh
+          bash tools/.ci/check_log_events.sh

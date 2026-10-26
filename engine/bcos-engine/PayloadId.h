@@ -168,8 +168,8 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
         // diverge from op-geth's fixed Bytes8. Require the Holocene 8-byte pair.
         if (attrs.eip1559Params->size() != 8)
         {
-            BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} <<
-                                  bcos::errinfo_comment{"eip1559Params must be 8 bytes"});
+            BOOST_THROW_EXCEPTION(
+                InvalidEngineEncoding{} << bcos::errinfo_comment{"eip1559Params must be 8 bytes"});
         }
         updateBytes(attrs.eip1559Params->data(), attrs.eip1559Params->size());
     }

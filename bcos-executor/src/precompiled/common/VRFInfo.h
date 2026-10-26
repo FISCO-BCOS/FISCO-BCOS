@@ -33,8 +33,8 @@ public:
     VRFInfo(VRFInfo&&) = default;
     VRFInfo& operator=(const VRFInfo&) = default;
     VRFInfo& operator=(VRFInfo&&) = default;
-        VRFInfo(bcos::bytes _vrfProof, bcos::bytes _vrfPk, bcos::bytes _vrfInput,
-                bcos::sealer::VrfCurveType vrfCurveType = bcos::sealer::VrfCurveType::CURVE25519);
+    VRFInfo(bcos::bytes _vrfProof, bcos::bytes _vrfPk, bcos::bytes _vrfInput,
+        bcos::sealer::VrfCurveType vrfCurveType = bcos::sealer::VrfCurveType::CURVE25519);
 
     virtual ~VRFInfo() = default;
     virtual bool verifyProof();

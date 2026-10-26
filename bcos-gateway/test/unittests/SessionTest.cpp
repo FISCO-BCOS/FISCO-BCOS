@@ -29,10 +29,10 @@
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "unittests/utils/TlsLoopback.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/test/tools/old/interface.hpp>
@@ -42,9 +42,9 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <list>
 #include <mutex>
 #include <optional>
-#include <list>
 #include <range/v3/view/single.hpp>
 #include <thread>
 #include <vector>
@@ -60,8 +60,7 @@ BOOST_FIXTURE_TEST_SUITE(SessionTest, TestPromptFixture)
 class FakeASIO : public bcos::network::ASIOInterface
 {
 public:
-    using ReadCompletion =
-        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
+    using ReadCompletion = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO()
       : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
@@ -371,8 +370,8 @@ BOOST_AUTO_TEST_CASE(sendMessageCompression)
     // The wire frame must actually be compressed: parse the header
     // [length:4][version:2][packetType:2][seq:4][ext:2] (Message::MESSAGE_HEADER_LENGTH = 14).
     BOOST_REQUIRE(received.size() >= Message::MESSAGE_HEADER_LENGTH);
-    uint16_t frameExt = (static_cast<uint16_t>(received[12]) << 8) |
-                        static_cast<uint16_t>(received[13]);
+    uint16_t frameExt =
+        (static_cast<uint16_t>(received[12]) << 8) | static_cast<uint16_t>(received[13]);
     BOOST_CHECK(frameExt & bcos::protocol::MessageExtFieldFlag::COMPRESS);
 }
 

@@ -15,7 +15,7 @@
  *
  * @file OneShot.h
  * @brief One-shot, allocation-free value delivery to a coroutine: the asynchronous counterpart of
- *        Immediate (the "single-slot Channel").
+ *        Immediate.
  */
 
 #pragma once
@@ -30,8 +30,18 @@
 namespace bcos::task
 {
 // A ONE-SHOT slot carrying Values... to a coroutine that may `co_await` it: the value arrives LATER
-// (possibly never), exactly once. This is the asynchronous end of the library's awaitables — the
-// counterpart of Immediate, whose value is already there and which never suspends.
+// (possibly never), exactly once — the asynchronous counterpart of Immediate, whose value is
+// already there and which never suspends.
+//
+// How it relates to FireAwaitable, the library's other asynchronous awaitable: FireAwaitable
+// adapts ONE callback-style initiation (an initiate callable plus its asio-style completion
+// handler) into a co_await, rescuing the wait with an initial error when the handler is dropped
+// uninvoked. OneShot is instead a NAMED slot that several independent producers can race to
+// settle (ack vs timeout vs teardown flush), with an explicit cancel() teardown path, and with
+// consumer exceptions propagating to the settler rather than being logged and swallowed. Neither
+// replaces the other: wrap a callback API with makeFireAwaitable; use OneShot when the completion
+// comes from an event that is not the operation's own caller. (Dedicated wrappers cover their own
+// specific idioms — e.g. Deadline.h's awaitableSleep for the hand-built timer awaitable.)
 //
 // This is the pattern that kept being hand-rolled wherever an operation is completed by an event
 // that is not its own caller — a write completion fired by a write loop, an acknowledgement fired
@@ -54,20 +64,21 @@ namespace bcos::task
 //  - TOTAL COMPLETION: every path that can end the wait must settle the slot — complete() with a
 //    value, or cancel() when there is no value to deliver (socket torn down, host stopped, request
 //    dropped). A cancelled wait throws in await_resume() instead of returning default-constructed
-//    values, so a teardown can never be mistaken for a real result. Like Channel::cancel(), this
-//    exists as its own name because the tree has repeatedly hand-rolled that wake-up.
+//    values, so a teardown can never be mistaken for a real result. cancel() exists as its own
+//    name — not just as an error-flavoured complete() — because the tree has repeatedly
+//    hand-rolled that wake-up.
 //  - NO ALLOCATION: the single mutable slot lives inside this object (hence inside the coroutine
 //    frame when declared as a local), not on the heap. Heap-own it only when the completion sink
 //    outlives the frame — every path that can settle it must then go through the shared_ptr, which
 //    is exactly the ownership the old std::function-callback version left implicit.
 //
-// LIFETIME CONTRACT (the one thing a caller must get right): the OneShot must outlive the co_await,
-// and one that still has a PARKED awaiter must be settled before it is destroyed. Settling is what
-// wakes the frame; a destructor cannot do it, because in the common frame-embedded shape the slot is
-// destroyed by the dying frame itself and resuming from there would re-enter a coroutine that is
-// being torn down. A frame-embedded slot is safe because Task::destroy() reclaims a suspended frame
-// without needing it to be resumed; a heap-owned slot is safe because the sink that owns it drains
-// its waiters in its own teardown path.
+// LIFETIME CONTRACT: the OneShot must outlive every co_await on it and every settle call —
+// complete()/cancel() touch the slot itself. The waiting frame, by contrast, may be destroyed
+// at any time: destroying it while parked ABANDONS the wait (the parked awaitable deregisters
+// itself, so a later settle only records the outcome instead of resuming a dead frame). That is
+// what makes the heap-owned teardown order "drop the consumer, then flush the sink" safe. The
+// one ordering a caller must still serialize is destroying the parked frame against an IN-FLIGHT
+// settle: a settle that already claimed the resume owns the frame until its resume() returns.
 //
 // Threading: complete() and cancel() may be called from any thread; the awaiting coroutine is
 // resumed on whichever thread settled it. A caller that needs the continuation to run on a specific
@@ -87,7 +98,10 @@ public:
 
     // Settle the slot with a value. Returns false when it had already been settled (by a peer
     // producer, by an earlier completion, or by cancel()) — the caller may use that to tell "I was
-    // the one who settled it" from "somebody beat me to it".
+    // the one who settled it" from "somebody beat me to it". There is a THIRD outcome: publish()
+    // resumes the parked awaiter inline, so an awaiter that does not catch lets its exception
+    // propagate out of complete() — the settle HAS happened (settled() is true, the value is
+    // recorded) even though the caller never saw the return (see cancel(), same boundary).
     bool complete(Values... values)
     {
         if (!claim())
@@ -103,6 +117,8 @@ public:
     // counterpart of complete() on every teardown path — a host shutdown, a dropped request, a
     // session closed under a parked sender. A parked (or later) awaiter rethrows `error` from
     // await_resume(); with no error given it throws std::runtime_error("one-shot slot cancelled").
+    // If the parked awaiter does not catch that rethrow, it propagates back out of cancel() to
+    // the caller (see publish() — this is why the settle path is not noexcept).
     // Calling it after complete() is a no-op, so a value that did arrive is never lost.
     bool cancel(std::exception_ptr error = nullptr)
     {
@@ -110,9 +126,9 @@ public:
         {
             return false;
         }
-        m_result.error = error ? std::move(error) :
-                                 std::make_exception_ptr(
-                                     std::runtime_error("one-shot slot cancelled"));
+        m_result.error = error ?
+                             std::move(error) :
+                             std::make_exception_ptr(std::runtime_error("one-shot slot cancelled"));
         publish();
         return true;
     }
@@ -122,39 +138,39 @@ public:
     bool settled() const noexcept { return m_result.completed.load(std::memory_order_acquire); }
 
     // Await the slot. `co_await once` and `co_await *oncePtr` both work. The returned
-    // awaitable holds a reference into this object, which must outlive the co_await.
-    GetResultAwaitable<Values...> operator co_await() { return GetResultAwaitable<Values...>(m_result); }
+    // awaitable holds a reference into this object, which must outlive the co_await. A successful
+    // await_resume() moves the value tuple out; a later co_await only observes an intact value
+    // when the payload's moved-from state remains meaningful.
+    GetResultAwaitable<Values...> operator co_await()
+    {
+        return GetResultAwaitable<Values...>(m_result);
+    }
 
 private:
     // The shared state is task::GetResultAwaitable's Result: the exactly-once claim, the suspend
-    // handshake (INIT/SUSPENDED/DONE) and the fast path are all implemented there and are shared
-    // with the frame-embedded users of that primitive. This class only adds ownership ergonomics and
-    // the cancel path.
+    // handshake (INIT/SUSPENDED/WOKEN/DONE) and the fast path are all implemented there and are
+    // shared with the frame-embedded users of that primitive. This class only adds ownership
+    // ergonomics and the cancel path.
     using Result = GetResultAwaitable<Values...>::Result;
 
-    // The exactly-once claim, shared with GetResultAwaitable::complete() so that a cancel() racing a
-    // complete() settles the wait exactly once.
+    // The exactly-once claim, shared with GetResultAwaitable::complete() so that a cancel() racing
+    // a complete() settles the wait exactly once.
     bool claim() noexcept
     {
         auto expected = false;
-        return m_result.completed.compare_exchange_strong(expected, true,
-            std::memory_order_acq_rel, std::memory_order_acquire);
+        return m_result.completed.compare_exchange_strong(
+            expected, true, std::memory_order_acq_rel, std::memory_order_acquire);
     }
 
-    // Publish the settled state: resume the parked awaiter, or let a later co_await take the
-    // await_ready() fast path. Mirrors GetResultAwaitable::complete()'s handshake so both settle
-    // paths are interchangeable.
-    void publish() noexcept
-    {
-        typename Result::State expected = Result::State::INIT;
-        if (m_result.state.compare_exchange_strong(expected, Result::State::DONE,
-                std::memory_order_acq_rel, std::memory_order_acquire))
-        {
-            // the awaiter has not parked yet: it will take the await_ready fast path
-            return;
-        }
-        m_result.handle.resume();
-    }
+    // Publish the settled state: resume the parked awaiter, or record the settle when nobody is
+    // parked (never parked — a later co_await takes the fast path — or the wait was abandoned).
+    // Shares GetResultAwaitable's publish handshake so both settle paths are interchangeable —
+    // including the exception contract: resume() runs the awaiter INLINE, so an awaiter that does
+    // not catch (e.g. a task::wait consumer whose await_resume() rethrows a cancellation) lets the
+    // exception propagate back out of publish() to the caller of complete()/cancel(). Like
+    // complete(), this is therefore deliberately NOT noexcept — marking it noexcept would turn an
+    // uncaught consumer exception into std::terminate on the settling thread.
+    void publish() { GetResultAwaitable<Values...>::publish(m_result); }
 
     Result m_result;
 };

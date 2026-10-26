@@ -82,8 +82,9 @@ bcostars::Error TxPoolServiceServer::broadcastTransactionBuffer(
     return {};
 }
 
-bcostars::Error TxPoolServiceServer::asyncFillBlock(const std::vector<std::vector<tars::Char>>& txHashs,
-    std::vector<bcostars::Transaction>& filled, tars::TarsCurrentPtr current)
+bcostars::Error TxPoolServiceServer::asyncFillBlock(
+    const std::vector<std::vector<tars::Char>>& txHashs, std::vector<bcostars::Transaction>& filled,
+    tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     auto hashList = std::make_shared<std::vector<bcos::crypto::HashType>>();
@@ -118,9 +119,9 @@ bcostars::Error TxPoolServiceServer::asyncFillBlock(const std::vector<std::vecto
 }
 
 
-bcostars::Error TxPoolServiceServer::asyncMarkTxs(const std::vector<std::vector<tars::Char>>& txHashs,
-    tars::Bool sealedFlag, tars::Int64 _batchId, const std::vector<tars::Char>& _batchHash,
-    tars::TarsCurrentPtr current)
+bcostars::Error TxPoolServiceServer::asyncMarkTxs(
+    const std::vector<std::vector<tars::Char>>& txHashs, tars::Bool sealedFlag,
+    tars::Int64 _batchId, const std::vector<tars::Char>& _batchHash, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     auto hashList = ::ranges::views::transform(txHashs, [](auto& txHash) {
@@ -158,8 +159,8 @@ bcostars::Error TxPoolServiceServer::asyncNotifyBlockResult(tars::Int64 blockNum
 }
 
 bcostars::Error TxPoolServiceServer::asyncNotifyTxsSyncMessage(const bcostars::Error& error,
-    const std::string& id, const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data,
-    tars::TarsCurrentPtr current)
+    const std::string& id, const std::vector<tars::Char>& nodeID,
+    const std::vector<tars::Char>& data, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 
@@ -209,8 +210,9 @@ bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
     return {};
 }
 
-bcostars::Error TxPoolServiceServer::asyncVerifyBlock(const std::vector<tars::Char>& generatedNodeID,
-    const bcostars::Block& block, tars::Bool& result, tars::TarsCurrentPtr current)
+bcostars::Error TxPoolServiceServer::asyncVerifyBlock(
+    const std::vector<tars::Char>& generatedNodeID, const bcostars::Block& block,
+    tars::Bool& result, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 

@@ -27,12 +27,13 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/RateCollector.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <memory>
 #include <string>
 #include <thread>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace std;
 using namespace bcos;
@@ -75,8 +76,7 @@ int main(int argc, const char** argv)
 
         constexpr static int RATE_REPORT_INTERVAL = 10000;  // 10s
         boost::asio::io_context ioService;
-        auto reporter =
-            std::make_shared<RateCollector>(ioService, workModel, RATE_REPORT_INTERVAL);
+        auto reporter = std::make_shared<RateCollector>(ioService, workModel, RATE_REPORT_INTERVAL);
         reporter->start();
 
         // load the config items
@@ -177,8 +177,8 @@ int main(int argc, const char** argv)
                 // the removed asyncSendMessageByNodeID callback path): the message is passed as a
                 // coroutine parameter so it is copied into the frame and stays alive for the whole
                 // (possibly deferred) send.
-                task::wait([](Service::Ptr _service, bcos::network::P2pID _p2pID, Message _message)
-                               -> task::Task<void> {
+                task::wait([](Service::Ptr _service, bcos::network::P2pID _p2pID,
+                               Message _message) -> task::Task<void> {
                     try
                     {
                         co_await _service->sendMessageByNodeID(_p2pID, _message,

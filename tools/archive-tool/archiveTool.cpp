@@ -56,6 +56,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/program_options.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstdlib>
@@ -382,8 +383,8 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
         std::vector<std::string> txHashes;
         try
         {
-            txHashes = task::syncWait(ledger::getBlockTransactionHashStrings(
-                *localStorage, blockNumber, *blockFactory));
+            txHashes = task::syncWait(
+                ledger::getBlockTransactionHashStrings(*localStorage, blockNumber, *blockFactory));
         }
         catch (std::exception& e)
         {
@@ -708,8 +709,8 @@ int main(int argc, const char* argv[])
     }
     else
     {
-        std::cerr << "archive storage type not support, only support RocksDB, type: "
-                  << archiveType << std::endl;
+        std::cerr << "archive storage type not support, only support RocksDB, type: " << archiveType
+                  << std::endl;
         return 1;
     }
     if (isArchive)

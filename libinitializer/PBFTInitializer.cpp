@@ -375,7 +375,7 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
     m_pbft->registerVersionInfoNotification([_rpc, this](uint32_t _version) {
         // Note: the nodeInfo and the groupInfo are mutable
         auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
-        // Note: notify groupInfo to all rpc nodes in pro mode
+        // Note: notify groupInfo to all rpc nodes in pro/max mode
         nodeInfo->setCompatibilityVersion(_version);
         _rpc->asyncNotifyGroupInfo(m_groupInfo, [_version](bcos::Error::Ptr&& _error) {
             if (!_error)
@@ -522,8 +522,8 @@ void PBFTInitializer::syncGroupNodeInfo()
         if (_error != nullptr)
         {
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("getGroupNodeInfo failed")
-                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+                << LOG_DESC("getGroupNodeInfo failed") << LOG_KV("code", _error->errorCode())
+                << LOG_KV("msg", _error->errorMessage());
             co_return;
         }
         try

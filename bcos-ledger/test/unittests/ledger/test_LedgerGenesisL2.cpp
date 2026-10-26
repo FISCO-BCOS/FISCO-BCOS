@@ -17,7 +17,6 @@
  * @brief buildGenesisBlock L2 branch: allocs flat-KV writes + persisted op-geth
  *        genesis state root row.
  */
-#include "GenesisFeatureFlagsHelper.h"
 #include "L2GenesisTestStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/Features.h"
@@ -94,7 +93,6 @@ BOOST_AUTO_TEST_CASE(L2BranchWritesAllocsToFlatKV)
             .nonce = "0",
             .code = code,
             .storage = {{slotKey, slotValue}}});
-        appendGenesisFeatureFlagsSlot(genesisConfig);
 
         co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
 
@@ -146,8 +144,8 @@ BOOST_AUTO_TEST_CASE(L2BranchWritesAllocsToFlatKV)
         // 4) the executor_version row persisted: the Ethereum lane is genesis-fixed
         // through it (SystemConfigPrecompiled refuses governance writes crossing
         // ETHEREUM_EXECUTOR_VERSION).
-        BOOST_CHECK_EQUAL(co_await ledger->fetchExecutorVersionAt(0),
-            bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
+        BOOST_CHECK_EQUAL(
+            co_await ledger->fetchExecutorVersionAt(0), bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
     }());
 }
 
@@ -290,7 +288,6 @@ BOOST_AUTO_TEST_CASE(LargeAllocImportDoesNotStackOverflow)
                 .code = "",
                 .storage = {}});
         }
-        appendGenesisFeatureFlagsSlot(genesisConfig);
 
         auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
         BOOST_CHECK(ok);

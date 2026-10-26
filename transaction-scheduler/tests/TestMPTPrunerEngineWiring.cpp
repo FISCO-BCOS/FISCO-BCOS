@@ -47,17 +47,18 @@ using namespace bcos;
 using namespace bcos::test::fullchain;
 namespace mpt = bcos::ledger::mpt;
 
-constexpr int64_t c_pruneWindow = 2;
+constexpr int64_t c_enginePruneWindow = 2;
 
 /// The committed-state backend type: MultiLayerStorage::latestBackend() is the checkpoint
 /// storage's OPENED handle (RocksDBStorage2) — what the pruner and the production
 /// initializer (decltype over the same expression) are parameterized on.
-using FCBackend = std::remove_cvref_t<decltype(std::declval<FCMultiLayerStorage&>().latestBackend())>;
+using FCBackend =
+    std::remove_cvref_t<decltype(std::declval<FCMultiLayerStorage&>().latestBackend())>;
 using FCPruner = mpt::MPTPruner<FCBackend>;
 
 /// The production init lookup (Initializer.cpp): the committed header's stateRoot, nullopt
 /// when the block is not on chain.
-FCPruner::StateRootLookup stateRootLookup(std::shared_ptr<bcos::ledger::Ledger> const& ledger)
+FCPruner::StateRootLookup engineStateRootLookup(std::shared_ptr<bcos::ledger::Ledger> const& ledger)
 {
     return [ledger](protocol::BlockNumber number) -> task::Task<std::optional<h256>> {
         auto block = co_await ledger::getBlockData(*ledger, number, ledger::HEADER);
@@ -65,13 +66,13 @@ FCPruner::StateRootLookup stateRootLookup(std::shared_ptr<bcos::ledger::Ledger> 
     };
 }
 
-bool nodeRowInBackend(FCBackend& backend, h256 const& hash)
+bool engineNodeRowInBackend(FCBackend& backend, h256 const& hash)
 {
     return task::syncWait(storage2::existsOne(backend, bcos::ledger::mptNodeStateKey(hash)));
 }
 
 /// Rows under any "/sys/mpt_prune_*" table — the in-memory pruner must never write one.
-size_t pruneMetadataRowCount(FCBackend& backend)
+size_t enginePruneMetadataRowCount(FCBackend& backend)
 {
     return task::syncWait([](FCBackend& backend) -> task::Task<size_t> {
         size_t count = 0;
@@ -91,11 +92,12 @@ size_t pruneMetadataRowCount(FCBackend& backend)
 /// A SYS_CONFIG row a governance action would write ({value, enableNumber}); the engine's
 /// getLedgerConfig reads the executor_version / evmc_revision pair through the same
 /// production readFromStorage path as the features.
-void writeSysConfig(
-    FullChainFixture& fixture, std::string_view key, std::string value, protocol::BlockNumber enableNumber = 0)
+void writeSysConfig(FullChainFixture& fixture, std::string_view key, std::string value,
+    protocol::BlockNumber enableNumber = 0)
 {
     storage::Entry entry;
-    entry.set(storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), enableNumber}));
+    entry.set(
+        storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), enableNumber}));
     task::syncWait(storage2::writeOne(fixture.m_multiLayerStorage.latestBackend(),
         executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
 }
@@ -113,10 +115,10 @@ public:
 /// transactions have no EIP-2718 wire form and are excluded). The stub scheduler never
 /// executes it, so only encodability matters. One fresh nonce per block keeps the tx
 /// hashes distinct across blocks.
-protocol::Transaction::Ptr makeWeb3Tx(crypto::Hash const& hashImpl, std::string_view senderBytes,
-    uint64_t nonce)
+protocol::Transaction::Ptr makeWeb3Tx(
+    crypto::Hash const& hashImpl, std::string_view senderBytes, uint64_t nonce)
 {
-    bytes body;
+    bcos::bytes body;
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));  // chainId
     bcos::codec::rlp::encode(body, nonce);
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
@@ -124,9 +126,9 @@ protocol::Transaction::Ptr makeWeb3Tx(crypto::Hash const& hashImpl, std::string_
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(21000));  // gasLimit
     bcos::codec::rlp::encode(body, Address("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"));
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));  // value
-    bcos::codec::rlp::encode(body, bytes{});                   // data
+    bcos::codec::rlp::encode(body, bcos::bytes{});             // data
     body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);          // empty accessList
-    bytes payload;
+    bcos::bytes payload;
     payload.push_back(0x02);
     bcos::codec::rlp::encodeHeader(
         payload, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
@@ -135,13 +137,13 @@ protocol::Transaction::Ptr makeWeb3Tx(crypto::Hash const& hashImpl, std::string_
     auto tx = std::make_shared<TestTransactionImpl>();
     tx->mutableInner().type = static_cast<int>(bcos::protocol::TransactionType::Web3Transaction);
     tx->mutableInner().extraTransactionBytes.assign(payload.begin(), payload.end());
-    bytes signature(65, 0);
+    bcos::bytes signature(65, 0);
     signature[31] = 0x12;  // r != 0
     signature[63] = 0x34;  // s != 0
     signature[64] = 0x01;  // yParity
     tx->mutableInner().signature.assign(signature.begin(), signature.end());
     tx->setNonce("0x" + std::to_string(nonce));
-    tx->forceSender(bytes{reinterpret_cast<const byte*>(senderBytes.data()),
+    tx->forceSender(bcos::bytes{reinterpret_cast<const byte*>(senderBytes.data()),
         reinterpret_cast<const byte*>(senderBytes.data()) + senderBytes.size()});
     tx->calculateHash(hashImpl);
     tx->markClean();
@@ -158,7 +160,8 @@ struct StubMemPool
 
     void remove(storage2::ReadableStorage<executor_v1::StateKeyView> auto& /*state*/) {}
     void seal(int64_t /*limit*/,
-        storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& /*state*/,
+        storage2::ReadWriteStorage<executor_v1::StateKeyView,
+            executor_v1::StateValue> auto& /*state*/,
         std::output_iterator<protocol::Transaction::Ptr> auto out)
     {
         if (m_tx)
@@ -192,16 +195,16 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
     // The engine derives the header fork era from the chain's on-chain EVM revision and
     // fails closed (UnsupportedFork) without one. CANCUN pins the V3 method triple
     // (forkchoiceUpdatedV3 / getPayloadV3 / newPayloadV3).
-    writeSysConfig(
-        fixture, ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}));
+    writeSysConfig(fixture, ledger::SYSTEM_KEY_EVMC_REVISION,
+        ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}));
 
     auto& backend = fixture.m_multiLayerStorage.latestBackend();
-    auto pruner = std::make_shared<FCPruner>(backend, c_pruneWindow);
+    auto pruner = std::make_shared<FCPruner>(backend, c_enginePruneWindow);
     // Fresh chain at the genesis block on the Ethereum lane: firstMptBlock is 0, so init
     // walks the head root — the EMPTY genesis trie — and starts with trackedCount 0; the
     // first block's full build seeds the counts through the ordinary delta path.
     task::syncWait(pruner->init(0, /*executorVersion=*/ledger::ETHEREUM_EXECUTOR_VERSION,
-        stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false));
+        engineStateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(pruner->trackedCount(), 0U);
 
     StubMemPool memPool;
@@ -212,13 +215,11 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
     auto const genesisHash = task::syncWait(ledger::getBlockHash(*fixture.m_ledger, 0));
     // Whole-second millisecond timestamps, strictly past the genesis header's (the Eth RLP
     // boundary rejects sub-second timestamps).
-    auto const baseTimestamp =
-        (fixture.headerOnChain(0)->timestamp() / 1000 + 1) * 1000;
+    auto const baseTimestamp = (fixture.headerOnChain(0)->timestamp() / 1000 + 1) * 1000;
 
     auto const addressA = FullChainFixture::makeAddress(0xA5);
     auto const sender = FullChainFixture::makeAddress(0xB0);
-    std::string const senderBytes(
-        reinterpret_cast<char const*>(sender.data()), sender.size());
+    std::string const senderBytes(reinterpret_cast<char const*>(sender.data()), sender.size());
 
     constexpr protocol::BlockNumber c_head = 8;
     std::map<protocol::BlockNumber, h256> roots;
@@ -236,8 +237,7 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
 
         bcos::engine::ForkchoiceState forkchoiceState{headHash, headHash, headHash};
         bcos::engine::PayloadAttributes payloadAttributes;
-        payloadAttributes.timestamp =
-            static_cast<std::uint64_t>(baseTimestamp + number * 12000);
+        payloadAttributes.timestamp = static_cast<std::uint64_t>(baseTimestamp + number * 12000);
         payloadAttributes.prevRandao =
             fixture.m_hashImpl->hash(std::string("randao") + std::to_string(number));
         payloadAttributes.suggestedFeeRecipient =
@@ -250,7 +250,8 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
             engineService.updateForkchoice(forkchoiceState, &payloadAttributes, /*version=*/3));
         BOOST_REQUIRE_MESSAGE(fcResult.payloadId.has_value(),
             "forkchoiceUpdated returned no payload id for block " + std::to_string(number) +
-                (fcResult.payloadStatus.validationError ? *fcResult.payloadStatus.validationError : ""));
+                (fcResult.payloadStatus.validationError ? *fcResult.payloadStatus.validationError :
+                                                          ""));
         auto payload = task::syncWait(engineService.getPayload(*fcResult.payloadId, /*version=*/3));
         BOOST_REQUIRE(payload);
         BOOST_REQUIRE_EQUAL(payload->executionPayload.blockNumber, number);
@@ -260,8 +261,7 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
         request.executionPayload = payload->executionPayload;
         request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
         auto status = task::syncWait(engineService.newPayload(request, /*version=*/3));
-        BOOST_REQUIRE_MESSAGE(
-            status.status == bcos::engine::PayloadValidationStatus::Valid,
+        BOOST_REQUIRE_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Valid,
             "newPayload rejected block " + std::to_string(number) +
                 (status.validationError ? ": " + *status.validationError : ""));
         headHash = payload->executionPayload.blockHash;
@@ -274,7 +274,7 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
         // deadline — and no metadata row may have landed with any block.
         BOOST_CHECK(pruner->countOf(roots[number]) == std::optional<uint64_t>{1});
         BOOST_CHECK(!pruner->deadlineOf(roots[number]).has_value());
-        BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
+        BOOST_CHECK_EQUAL(enginePruneMetadataRowCount(backend), 0U);
     }
 
     // (a) The engine commit path really fired the hooks: the pruner tracks the live window's
@@ -296,12 +296,12 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
     // are all gone.
     for (protocol::BlockNumber number = 6; number <= 8; ++number)
     {
-        BOOST_CHECK_MESSAGE(nodeRowInBackend(backend, roots[number]),
+        BOOST_CHECK_MESSAGE(engineNodeRowInBackend(backend, roots[number]),
             "in-window root of block " + std::to_string(number) + " was pruned");
     }
     for (protocol::BlockNumber number = 1; number <= 5; ++number)
     {
-        BOOST_CHECK_MESSAGE(!nodeRowInBackend(backend, roots[number]),
+        BOOST_CHECK_MESSAGE(!engineNodeRowInBackend(backend, roots[number]),
             "out-of-window root of block " + std::to_string(number) + " still on disk");
     }
     // The root of block 1 was obsoleted at block 2 and deleted at block 4 — its in-memory
@@ -310,7 +310,7 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
     BOOST_CHECK(pruner->countOf(roots[8]) == std::optional<uint64_t>{1});
 
     // (d) The in-memory pruner never wrote a "/sys/mpt_prune_*" metadata row.
-    BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
+    BOOST_CHECK_EQUAL(enginePruneMetadataRowCount(backend), 0U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

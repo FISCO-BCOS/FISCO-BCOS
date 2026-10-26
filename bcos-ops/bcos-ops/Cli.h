@@ -46,7 +46,19 @@ struct Command
 /// be linked into fisco-bcos)
 std::map<std::string, Command>& commandTable();
 void registerCommand(std::string _name, Command _command);
-void registerStatusCommand();  // cmd/StatusCmd.cpp
+void registerAccountCommand();    // cmd/AccountCmd.cpp
+void registerAmopCommand();       // cmd/AmopCmd.cpp
+void registerAuthCommand();       // cmd/AuthCmd.cpp
+void registerBalanceCommand();    // cmd/BalanceCmd.cpp
+void registerConsensusCommand();  // cmd/ConsensusCmd.cpp
+void registerSysconfigCommand();  // cmd/SysconfigCmd.cpp
+void registerStatusCommand();     // cmd/StatusCmd.cpp
+void registerTxCommand();         // cmd/TxCmd.cpp
+void registerBlockCommand();      // cmd/BlockCmd.cpp
+void registerAttachCommands();    // cmd/AttachCmd.cpp: attach, log-level
+void registerLogCommand();        // cmd/LogCmd.cpp
+void registerTuiCommand();        // cmd/TuiCmd.cpp
+void registerCommitteeCommand();  // cmd/CommitteeCmd.cpp: committee
 
 /// argv[0] is the program, argv[1] the subcommand. Does not return: it leaves the process with
 /// std::_Exit(exit code), so the SDK transports kept by retainTransport() are never destroyed.

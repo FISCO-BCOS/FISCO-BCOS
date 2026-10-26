@@ -29,9 +29,10 @@
 #include "bcos-sync/protocol/PB/BlocksMsgImpl.h"
 #include "bcos-sync/protocol/proto/BlockSync.pb.h"
 #include "bcos-sync/utilities/Common.h"
-#include <bcos-protocol/Common.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+
+#include <bcos-protocol/Common.h>
 
 using namespace bcos;
 using namespace bcos::sync;

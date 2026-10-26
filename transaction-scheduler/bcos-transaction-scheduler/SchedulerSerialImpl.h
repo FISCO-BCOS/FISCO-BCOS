@@ -7,7 +7,7 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-utilities/ITTAPI.h"  // ittapi::Report / ITT_DOMAINS (self-contained)
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <oneapi/tbb/cache_aligned_allocator.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/partitioner.h>
@@ -52,7 +52,8 @@ template <class C>
 concept ValueInitValidBlockContext =
     std::same_as<C, EmptyBlockContext> || requires { C::kValueInitializedValid; };
 
-#define SERIAL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
+#define SERIAL_SCHEDULER_LOG(LEVEL) \
+    BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
 
 class SchedulerSerialImpl
 {

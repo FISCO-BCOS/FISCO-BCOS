@@ -33,7 +33,6 @@ target_include_directories(rpc PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 target_link_libraries(rpc PUBLIC bcos-boostssl ledger codec bcos-crypto rlp-protocol protocol-tars mempool bcos-tx-validator jsoncpp_static jwt-cpp::jwt-cpp tarscpp::tarsservant tarscpp::tarsutil)
 add_dependencies(rpc BuildInfo.h)
-set_target_properties(rpc PROPERTIES UNITY_BUILD "ON")
 
  if (TESTS)
     enable_testing()

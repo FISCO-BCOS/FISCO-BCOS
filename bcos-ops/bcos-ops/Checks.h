@@ -25,6 +25,9 @@
 
 namespace bcos::ops
 {
+/// height_advancing floor when no PBFT drives the blocks (EL / unknown modes): 30 s
+constexpr int64_t c_elStallFloorMs = 30000;
+
 struct Thresholds
 {
     double stallFactor =
@@ -37,7 +40,7 @@ struct Check
 {
     std::string name;
     std::string state;  // "ok" | "fail" | "skipped" | "info" (reported, never a verdict)
-    std::string detail;
+    std::string detail{};
     Json::Value values{Json::objectValue};
     bool ok() const { return state == "ok"; }
     bool failed() const { return state == "fail"; }

@@ -34,7 +34,7 @@ class ExecutiveState
 public:
     using Ptr = std::shared_ptr<ExecutiveState>;
 
-        ExecutiveState(ExecutiveFactory::Ptr executiveFactory, CallParameters::UniquePtr input);
+    ExecutiveState(ExecutiveFactory::Ptr executiveFactory, CallParameters::UniquePtr input);
 
     enum Status
     {

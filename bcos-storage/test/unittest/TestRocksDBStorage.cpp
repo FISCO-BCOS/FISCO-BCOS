@@ -10,6 +10,7 @@
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/log/core.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/test/unit_test.hpp>
 #include <future>
@@ -464,8 +465,8 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->get(),
-                            std::string("hello world!") + table1Keys[i][3]);
+                        BOOST_CHECK_EQUAL(
+                            entries[i]->get(), std::string("hello world!") + table1Keys[i][3]);
                     }
                 });
         });
@@ -487,8 +488,8 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->get(),
-                            std::string("hello world!abc") + table2Keys[i][3]);
+                        BOOST_CHECK_EQUAL(
+                            entries[i]->get(), std::string("hello world!abc") + table2Keys[i][3]);
                     }
                 });
         });

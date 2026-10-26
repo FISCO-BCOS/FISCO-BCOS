@@ -18,7 +18,6 @@
  * @date 2021-10-26
  */
 #include "AMOPImpl.h"
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-network/Common.h"
@@ -45,8 +44,9 @@ bcos::Error::Ptr decodeAMOPErrorResponse(bcos::amop::AMOPMessage::Ptr const& _am
     // tars error
     if (_amopMsg->status() == (uint16_t)(-8) || _amopMsg->status() == (uint16_t)(-7))
     {
-        errorMessage = "Access to the remote RPC service timed out, please make sure it "
-                       "is online";
+        errorMessage =
+            "Access to the remote RPC service timed out, please make sure it "
+            "is online";
         errorCode = -1;
     }
     return BCOS_ERROR_PTR(errorCode, errorMessage);
@@ -303,8 +303,8 @@ bcos::task::Task<std::tuple<bytesPointer, int16_t>> AMOPImpl::onReceiveAMOPMessa
     amopMsg->setData(bytesConstRef((bcos::byte*)errorMessage.c_str(), errorMessage.size()));
     auto buffer = std::make_shared<bcos::bytes>();
     amopMsg->encode(*buffer);
-    AMOP_LOG(WARNING) << LOG_DESC("notifyAMOPMessage failed")
-                      << LOG_KV("code", error->errorCode()) << LOG_KV("msg", error->errorMessage());
+    AMOP_LOG(WARNING) << LOG_DESC("notifyAMOPMessage failed") << LOG_KV("code", error->errorCode())
+                      << LOG_KV("msg", error->errorMessage());
     co_return std::make_tuple(buffer, (int16_t)GatewayMessageType::AMOPMessageType);
 }
 
@@ -475,10 +475,9 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
                     // at-least-once, worse than the documented 30s-timeout duplicate). Fail
                     // the caller instead; retry is reserved for sends that never reached a
                     // peer (null response / send exception).
-                    AMOP_LOG(WARNING)
-                        << LOG_DESC("sendMessageByTopic: decode response failed")
-                        << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
-                        << LOG_KV("size", responseData.size());
+                    AMOP_LOG(WARNING) << LOG_DESC("sendMessageByTopic: decode response failed")
+                                      << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
+                                      << LOG_KV("size", responseData.size());
                     error = BCOS_ERROR_PTR(CommonError::AMOPSendMsgFailed,
                         "unable to decode the AMOP response from the peer");
                     responseData = bytesConstRef();
@@ -494,8 +493,7 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
             }
             AMOP_LOG(INFO) << LOG_DESC("sendMessageByTopic: receive responseData")
                            << LOG_KV("size", responseData.size()) << LOG_KV("type", packetType);
-            co_return std::make_tuple(
-                std::move(error), packetType, responseData.toBytes());
+            co_return std::make_tuple(std::move(error), packetType, responseData.toBytes());
         }
         catch (bcos::network::NetworkException const& e)
         {
@@ -562,8 +560,7 @@ void AMOPImpl::dispatcherAMOPMessage(P2PSession::Ptr _session, Message _message)
     // zero copy overhead
     auto amopMessage = m_messageFactory->buildMessage(_message.payload());
     auto amopMsgType = amopMessage->type();
-    auto fromNodeID =
-        _message.srcP2PNodeID().empty() ? _session->p2pID() : _message.srcP2PNodeID();
+    auto fromNodeID = _message.srcP2PNodeID().empty() ? _session->p2pID() : _message.srcP2PNodeID();
     switch (amopMsgType)
     {
     case AMOPMessage::Type::TopicSeq:

@@ -2,16 +2,15 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
-#include <chrono>
 #include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/multiprecision/fwd.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <iostream>
-#include <memory_resource>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -178,10 +177,10 @@ struct SleepTask
     constexpr void await_resume() const {}
 };
 
-// GCC -Wmismatched-new-delete false positive: std::generator's promise allocator is diagnosed inside
-// the coroutine body below (the diagnostic points at libstdc++ internals, not this code). It is
-// triggered at -Os + -Werror, so scope the suppression to this construct rather than downgrading the
-// warning for the whole project. Same idiom as bcos-utilities/BucketMap.h.
+// GCC -Wmismatched-new-delete false positive: std::generator's promise allocator is diagnosed
+// inside the coroutine body below (the diagnostic points at libstdc++ internals, not this code).
+// It is triggered at -Os + -Werror, so scope the suppression to this construct rather than
+// downgrading the warning for the whole project. Same idiom as bcos-utilities/BucketMap.h.
 #if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmismatched-new-delete"

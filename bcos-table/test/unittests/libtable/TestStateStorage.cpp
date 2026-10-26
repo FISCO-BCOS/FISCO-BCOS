@@ -626,8 +626,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
                             {
                                 BOOST_CHECK_EQUAL(entry->dirty(), false);
                             }
-                            BOOST_CHECK_EQUAL(
-                                entry->get(), boost::lexical_cast<std::string>(i));
+                            BOOST_CHECK_EQUAL(entry->get(), boost::lexical_cast<std::string>(i));
                         }
                     }
                 }

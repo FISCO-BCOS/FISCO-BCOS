@@ -1,6 +1,9 @@
 #!/bin/bash
 
 pem_file="$1"
+# the web3 listener of the chain under test (ci_check_air.sh runs the executor-v1 chain on
+# CI_PORT_BASE's web3 port + 200; the Hardhat corpus reads the URL from .env)
+web3_port="${WEB3_PORT:-8545}"
 hex_privatekey=$(openssl ec -in "$pem_file" -text -noout | 
            grep -A3 'priv:' | 
            tail -n +2 | 
@@ -29,8 +32,8 @@ npm install node@22.14.0
 
 cat << EOF > .env
 PRIVATE_KEY=$hex_privatekey
-BCOS_HOST_URL=http://127.0.0.1:8545
-LOCAL_HOST_URL=http://127.0.0.1:8545
+BCOS_HOST_URL=http://127.0.0.1:${web3_port}
+LOCAL_HOST_URL=http://127.0.0.1:${web3_port}
 INFURA_API_KEY=your_infura_api_key_here
 MAINNET_URL=https://mainnet.infura.io/v3/your_infura_api_key_here
 SEPOLIA_URL=https://sepolia.infura.io/v3/your_infura_api_key_here
@@ -48,8 +51,8 @@ rm -rf .env
 
 cat << EOF > .env
 PRIVATE_KEY=$hex_privatekey
-BCOS_HOST_URL=ws://127.0.0.1:8545
-LOCAL_HOST_URL=ws://127.0.0.1:8545
+BCOS_HOST_URL=ws://127.0.0.1:${web3_port}
+LOCAL_HOST_URL=ws://127.0.0.1:${web3_port}
 INFURA_API_KEY=your_infura_api_key_here
 MAINNET_URL=https://mainnet.infura.io/v3/your_infura_api_key_here
 SEPOLIA_URL=https://sepolia.infura.io/v3/your_infura_api_key_here

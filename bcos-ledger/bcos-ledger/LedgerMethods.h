@@ -46,14 +46,14 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <concepts>
 #include <optional>
 #include <type_traits>
 
-#define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
+#define LEDGER2_LOG(LEVEL) BCOS_MODULE_LOG(LEDGER, LEVEL) << LOG_BADGE("LEDGER2")
 namespace bcos::ledger
 {
 
@@ -61,8 +61,8 @@ struct InvalidConsensusType : public bcos::Exception
 {
 };
 
-inline task::Immediate<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/,
-    auto& ledger, GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
+inline task::Immediate<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/, auto& ledger,
+    GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
 {
     return {ledger.buildGenesisBlock(genesis, ledgerConfig)};
 }
@@ -494,6 +494,15 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
 task::Task<void> tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger, LedgerConfig& ledgerConfig);
 
+/// The executor_version a SYS_CONFIG snapshot records; 0 (the legacy lane) when absent.
+/// Both getLedgerConfig overloads key on it to skip the Features read on Ethereum lanes,
+/// which fork on the Ethereum / OP schedule only and write no Features rows.
+inline int executorVersionOf(ledger::SystemConfigs const& sysConfig)
+{
+    auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
+    return versionConfig ? boost::lexical_cast<int>(versionConfig->first) : 0;
+}
+
 /// Shared LedgerConfig assembly used by both getLedgerConfig overloads (the
 /// LedgerInterface-based one in LedgerMethods.cpp and the storage2-view one below). The two
 /// call sites only differ in how they fetch their inputs (node list, system configs /
@@ -597,27 +606,28 @@ inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
-    int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
+    int const executorVersion = executorVersionOf(sysConfig);
+    if (sysConfig.get(ledger::SystemConfig::executor_version))
     {
-        executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
         ledgerConfig.setExecutorVersion(executorVersion);
     }
+    if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        // Ethereum lanes write no compatibility_version row; the block header version and
+        // the PBFT/sealer path read the lane constant instead.
+        ledgerConfig.setCompatibilityVersion(ledger::ETHEREUM_LANE_COMPATIBILITY_VERSION);
+    }
 
-    // EVMC revision — consumed only by the pure-Ethereum EthereumExecutor
-    // (executor_version=2); v0/v1 schedulers never read evmcRevision()/evmcRevisionForBlock(),
-    // so a non-v2 chain is left untouched (no implicit default injection, which would be an
-    // unnoticed behavior change if a future v0/v1 path started reading it). For v2, an
-    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock).
-    // A v2 chain WITHOUT one stays UNCONFIGURED here (no binary-side default injected): the
-    // consumers fail closed — EthereumExecutor throws EvmcRevisionNotConfigured and
-    // EngineService buildPayload throws UnsupportedFork — rather than hash state or block
-    // headers under a fork the chain never configured. The initializer already refuses to
-    // boot such a chain, so this branch only fires on corrupt/legacy state.
+    // EVMC revision row — read on executor_version >= 2 only. No genesis writes it any more:
+    // a v2 genesis derives the revision from [fork_timestamps] (the block verifier stamps it
+    // per block; the dry run and admission get ledger::EvmcRevisionSchedule), and the OP lane
+    // from [op_fork_timestamps]. The row is still parsed when a datadir carries one (the
+    // Initializer's runtime-switch probe, engine tests that seed it). Absent, the revision
+    // stays UNCONFIGURED here (no binary-side default injected): a consumer with no other
+    // source fails closed — EthereumExecutor throws EvmcRevisionNotConfigured and
+    // EngineService buildPayload throws UnsupportedFork.
     //
     // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
-    // The effective revision is parsed and logged once at startup (Initializer), which the
-    // CI pins and where a corrupt value becomes a boot refusal.
     if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)
@@ -715,7 +725,10 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     }
 
     Features features;
-    co_await readFromStorage(features, storage, blockNumber);
+    if (executorVersionOf(sysConfig) < ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        co_await readFromStorage(features, storage, blockNumber);
+    }
 
     applyLedgerConfig(ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp,
         blockHash, headBaseFee);

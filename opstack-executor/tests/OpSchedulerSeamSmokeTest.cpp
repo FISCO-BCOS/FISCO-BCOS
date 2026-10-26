@@ -4,7 +4,7 @@
 // OpSchedulerSeamSmokeTest — minimal compile-and-run verification that
 // `bcos::evm::engine::OpSchedulerSeam` instantiates against the current branch's types and
 // that its engine-facing seam surface works. Exercises only:
-//   1. construction over a real MultiLayerStorage ViewType;
+//   1. construction over a real MultiLayerStorage SeamViewType;
 //   2. the static seam surface the engine reaches as dependent names
 //      (computeTxRoot / commitmentsOf / isJovianActive);
 //   3. synthesizeL1AttributesEnvelope, the seam's L1-attributes deposit path (the seam
@@ -36,12 +36,12 @@ namespace
 // Minimal CheckpointStorage stub — per-file local copy (the source-branch fixture's rationale:
 // do not cross-include another module's test-private header).
 template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
+struct SeamTrivialCheckpointStorage
 {
     using CheckpointName = bcos::h256;
 
     Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
+    explicit SeamTrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
     Storage& open() & { return m_storage; }
     [[noreturn]] Storage& open(CheckpointName const& /*unused*/) &
     {
@@ -64,9 +64,9 @@ using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
 using BackendMemStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
     std::hash<StateKey>>;
-using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendMemStorage>;
-using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
-using ViewType = typename MLS::ViewType;
+using SeamCheckpointBackend = SeamTrivialCheckpointStorage<StateKey, StateValue, BackendMemStorage>;
+using SeamMLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, SeamCheckpointBackend>;
+using SeamViewType = typename SeamMLS::ViewType;
 
 // Named selectors so BOOST_CHECK_EQUAL_COLLECTIONS does not dangle temporaries.
 constexpr std::array<uint8_t, 4> kIsthmusSelector{0x09, 0x89, 0x99, 0xbe};
@@ -116,14 +116,14 @@ BOOST_AUTO_TEST_SUITE(OpSchedulerSeamSmokeSuite)
 BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
 {
     BackendMemStorage backendStorage;
-    CheckpointBackend checkpointBackend(backendStorage);
-    MLS multiLayerStorage(checkpointBackend);
+    SeamCheckpointBackend checkpointBackend(backendStorage);
+    SeamMLS multiLayerStorage(checkpointBackend);
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
     // OpEthL1BlockInfo is required (no silent default). Construction with the unset sentinel is
     // allowed; synthesizeL1AttributesEnvelope is what refuses it.
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, {});
+    bcos::evm::engine::OpSchedulerSeam<SeamViewType> scheduler(kSeamSchedule, {});
 
     // Fork predicate: per block, from the block's own timestamp against the genesis schedule.
     // The ms->s conversion is pinned here: kSeamKarstTime * 1000 - 1 is still Jovian.
@@ -171,7 +171,7 @@ BOOST_AUTO_TEST_CASE(SynthesizeL1AttributesIsDepositEnvelope)
 
 BOOST_AUTO_TEST_CASE(SynthesizeRefusesUnsetL1BlockInfo)
 {
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, {});
+    bcos::evm::engine::OpSchedulerSeam<SeamViewType> scheduler(kSeamSchedule, {});
     BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(kJovianMs, kJovianMs),
         std::invalid_argument);
 }
@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(SynthesizeRefusesZeroSystemConfig)
     auto l1Info = filledL1Info();
     l1Info.baseFeeScalar = 0;
     std::fill(l1Info.batcherHash.bytes, l1Info.batcherHash.bytes + 32, 0);
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
+    bcos::evm::engine::OpSchedulerSeam<SeamViewType> scheduler(kSeamSchedule, l1Info);
     BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(kJovianMs, kJovianMs),
         std::invalid_argument);
 }
@@ -191,8 +191,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
     // All-zero L1 is a test-only fixture: call the encoder, not the production seam.
     const auto env = opeth::synthesizeOpEthL1AttributesDeposit(opeth::OpEthL1BlockInfo{}, false);
     BOOST_REQUIRE_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
-    auto const dep =
-        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    auto const dep = opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
 
     BOOST_CHECK(dep.from == opeth::OP_DEPOSITOR);
     BOOST_REQUIRE(dep.to.has_value());
@@ -226,10 +225,9 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
     std::copy_n(l1Info.blockHash.bytes, 32, hashBytes.begin());
     std::copy_n(l1Info.batcherHash.bytes, 32, batcherBytes.begin());
 
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
+    bcos::evm::engine::OpSchedulerSeam<SeamViewType> scheduler(kSeamSchedule, l1Info);
     const auto env = scheduler.synthesizeL1AttributesEnvelope(kJovianMs, kJovianMs);
-    auto const dep =
-        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    auto const dep = opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN);
     auto const& calldata = dep.data;
 
@@ -278,10 +276,9 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
     std::copy_n(l1Info.blockHash.bytes, 32, hashBytes.begin());
     std::copy_n(l1Info.batcherHash.bytes, 32, batcherBytes.begin());
 
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
+    bcos::evm::engine::OpSchedulerSeam<SeamViewType> scheduler(kSeamSchedule, l1Info);
     const auto env = scheduler.synthesizeL1AttributesEnvelope(kIsthmusMs, kIsthmusMs);
-    auto const dep =
-        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    auto const dep = opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
     auto const& calldata = dep.data;
 
@@ -328,8 +325,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayout)
     opeth::OpEthL1BlockInfo const unset{};
     const auto env = opeth::synthesizeOpEthL1AttributesDeposit(unset, true);
     BOOST_REQUIRE_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
-    auto const dep =
-        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    auto const dep = opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         dep.data.begin(), dep.data.begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
@@ -349,7 +345,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayout)
 BOOST_AUTO_TEST_CASE(JovianActivationBlockKeepsIsthmusL1AttributesLayout)
 {
     auto const l1Info = filledL1Info();
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
+    bcos::evm::engine::OpSchedulerSeam<SeamViewType> scheduler(kSeamSchedule, l1Info);
 
     constexpr int64_t kJovianActivationMs = static_cast<int64_t>(kSeamJovianTime) * 1000;
     constexpr int64_t kParentOfActivationMs = kJovianActivationMs - 1000;
@@ -361,8 +357,7 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockKeepsIsthmusL1AttributesLayout)
     };
 
     // Activation block: child is Jovian, parent is not -> still Isthmus's 176 bytes.
-    BOOST_CHECK_EQUAL(
-        layoutSize(kJovianActivationMs, kParentOfActivationMs),
+    BOOST_CHECK_EQUAL(layoutSize(kJovianActivationMs, kParentOfActivationMs),
         opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
     // The very next block: parent is Jovian too -> the 178-byte Jovian layout.
     BOOST_CHECK_EQUAL(layoutSize(kJovianActivationMs + 1000, kJovianActivationMs),

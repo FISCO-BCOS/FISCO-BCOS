@@ -42,12 +42,12 @@ enum MessageExtFieldFlag : uint32_t
 };
 using NodeType = MessageExtFieldFlag;
 
-// The values are kept as they were; 2 belonged to the retired MAX topology
 enum NodeArchitectureType
 {
     AIR = 0,
     PRO = 1,
-    LIGHT = 3
+    MAX = 2,
+    LIGHT
 };
 
 enum MessageType
@@ -173,12 +173,12 @@ enum class TransactionVersion : uint32_t
 // Version of an Ethereum-standard block header.
 enum class EthBlockVersion : uint8_t
 {
-    NON_ETH = 0,      // native FISCO-BCOS header
-    PRE_LONDON = 1,   // mandatory fields only
-    LONDON = 2,       // + baseFeePerGas
-    SHANGHAI = 3,     // + withdrawalsRoot
-    CANCUN = 4,       // + blobGasUsed / excessBlobGas / parentBeaconBlockRoot
-    PRAGUE = 5,       // + requestsHash
+    NON_ETH = 0,     // native FISCO-BCOS header
+    PRE_LONDON = 1,  // mandatory fields only
+    LONDON = 2,      // + baseFeePerGas
+    SHANGHAI = 3,    // + withdrawalsRoot
+    CANCUN = 4,      // + blobGasUsed / excessBlobGas / parentBeaconBlockRoot
+    PRAGUE = 5,      // + requestsHash
     MAX_ETH_VERSION = PRAGUE,
 };
 

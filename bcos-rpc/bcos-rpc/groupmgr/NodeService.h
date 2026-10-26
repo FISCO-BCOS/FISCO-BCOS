@@ -92,7 +92,7 @@ public:
         return m_engineService;
     }
 
-    /// Single-node consensus mode (config [consensus] enable_single_node_consensus): the
+    /// The DebugSelfProduce driver (config.ini [debug] enable) and the Engine driver: the
     /// in-process mempool that sendRawTransaction routes to instead of txpool. Owned by the
     /// Initializer, which outlives this NodeService, so a raw pointer is safe. Unset
     /// (nullptr) in normal mode and on tars-built nodes.
@@ -188,7 +188,7 @@ public:
 
     /// OP DA size caps, read by OpEngineService during payload assembly. The producer is the
     /// miner_setMaxDASize RPC handler (MinerEndpoint), registered only for a listener whose
-    /// own enable_miner_api key ([op_engine_rpc] or [web3_rpc]) is set and wired here by
+    /// own enable_miner_api key ([engine_rpc] or [web3_rpc]) is set and wired here by
     /// AirNodeInitializer::initNodeService — that key is the gate; the handler's
     /// MethodNotFound on null daCaps() is just the Ethereum-only-node fallback.
     void setDaCaps(std::shared_ptr<bcos::engine::DACaps> caps) noexcept
@@ -202,10 +202,10 @@ public:
     void setMPTPruneWindow(std::int64_t _window) noexcept { m_mptPruneWindow = _window; }
     std::int64_t mptPruneWindow() const noexcept { return m_mptPruneWindow; }
 
-    /// Ethereum L1 EL mode (ethereum.mode=el): blob transactions arrive in their network
-    /// wrapper and carry a sidecar (KZG-checked at the RPC entry), and EL-only gossip keys on
-    /// this flag. Wired by AirNodeInitializer::initNodeService from the node config. Blob
-    /// ADMISSION keys on the executor version (see setExecutorVersion), not on this flag.
+    /// A genesis executor.version=2 node (the Engine driver, or [debug] enable): blob
+    /// transactions arrive in their network wrapper and carry a sidecar (KZG-checked at the RPC
+    /// entry). Wired by AirNodeInitializer::initNodeService from the node config.
+    /// Blob ADMISSION keys on the executor version (see setExecutorVersion), not on this flag.
     void setEthereumELMode(bool _enabled) noexcept { m_ethereumELMode = _enabled; }
     bool ethereumELMode() const noexcept { return m_ethereumELMode; }
 

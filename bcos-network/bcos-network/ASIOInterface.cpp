@@ -13,7 +13,6 @@ namespace ba = boost::asio;
 namespace bi = ba::ip;
 using namespace bcos;
 using namespace bcos::network;
-using namespace std;
 
 ASIOInterface::ASIOInterface(IOServicePool::Ptr _ioServicePool, std::string listenHost,
     uint16_t listenPort, bool listen)

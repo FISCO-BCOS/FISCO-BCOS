@@ -56,8 +56,7 @@ BOOST_FIXTURE_TEST_SUITE(FIB70_FIB97_SessionLifecycleTest, TestPromptFixture)
 class FakeASIO_FIB : public bcos::network::ASIOInterface
 {
 public:
-    using ReadCompletion =
-        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
+    using ReadCompletion = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_FIB()
       : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),

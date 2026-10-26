@@ -20,7 +20,7 @@
 #include "RouterTableImpl.h"
 #include "../Common.h"
 #include "bcos-tars-protocol/Common.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -135,7 +135,8 @@ RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable()
     return std::make_shared<RouterTable>();
 }
 
-RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable(bcos::bytesConstRef _decodedData)
+RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable(
+    bcos::bytesConstRef _decodedData)
 {
     return std::make_shared<RouterTable>(_decodedData);
 }

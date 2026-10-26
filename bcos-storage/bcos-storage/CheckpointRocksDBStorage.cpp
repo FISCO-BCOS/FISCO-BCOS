@@ -1,12 +1,12 @@
 #include "bcos-storage/CheckpointRocksDBStorage.h"
 #include "bcos-storage/StateKVResolver.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <rocksdb/filter_policy.h>
 #include <rocksdb/statistics.h>
 #include <rocksdb/table.h>
 #include <rocksdb/utilities/checkpoint.h>
-#include <boost/throw_exception.hpp>
 #include <sys/resource.h>
+#include <boost/throw_exception.hpp>
 #include <filesystem>
 #include <optional>
 
@@ -82,8 +82,8 @@ std::unique_ptr<::rocksdb::DB> openCheckpointRocksDB(
                              ::rocksdb::DB::Open(options, path, &rocksDB);
     if (!status.ok())
     {
-        std::string message = "Open rocksdb failed, path: " + path +
-                              ", error: " + status.ToString();
+        std::string message =
+            "Open rocksdb failed, path: " + path + ", error: " + status.ToString();
         if (options.max_open_files == -1)
         {
             message +=
@@ -92,8 +92,7 @@ std::unique_ptr<::rocksdb::DB> openCheckpointRocksDB(
                 "[storage].rocksdb_max_open_files (soft rlimit_nofile=" +
                 std::to_string(softOpenFileLimit()) + ")";
         }
-        BOOST_THROW_EXCEPTION(
-            CheckpointRocksDBException{} << bcos::errinfo_comment(message));
+        BOOST_THROW_EXCEPTION(CheckpointRocksDBException{} << bcos::errinfo_comment(message));
     }
     return std::unique_ptr<::rocksdb::DB>(rocksDB);
 }
@@ -102,7 +101,8 @@ std::unique_ptr<::rocksdb::DB> openCheckpointRocksDB(
 
 template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
     Resolver<ValueType> ValueResolver>
-::rocksdb::Options CheckpointRocksDBStorage<KeyType, ValueType, KeyResolver, ValueResolver>::latestCheckpointOptions() const
+::rocksdb::Options CheckpointRocksDBStorage<KeyType, ValueType, KeyResolver,
+    ValueResolver>::latestCheckpointOptions() const
 {
     ::rocksdb::Options options;
     options.create_if_missing = true;
@@ -150,7 +150,8 @@ template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
 
 template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
     Resolver<ValueType> ValueResolver>
-::rocksdb::Options CheckpointRocksDBStorage<KeyType, ValueType, KeyResolver, ValueResolver>::historicalCheckpointOptions() const
+::rocksdb::Options CheckpointRocksDBStorage<KeyType, ValueType, KeyResolver,
+    ValueResolver>::historicalCheckpointOptions() const
 {
     ::rocksdb::Options options;
     options.create_if_missing = false;

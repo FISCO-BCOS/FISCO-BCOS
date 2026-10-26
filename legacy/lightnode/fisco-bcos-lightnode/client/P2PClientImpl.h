@@ -2,15 +2,15 @@
 
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-lightnode/Log.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Task.h>
-#include <range/v3/view/single.hpp>
 #include <random>
+#include <range/v3/view/single.hpp>
 
 namespace bcos::p2p
 {
@@ -36,12 +36,12 @@ public:
         bcos::bytes requestBuffer;
         bcos::concepts::serialize::encode(request, requestBuffer);
 
-        LIGHTNODE_LOG(DEBUG) << "P2P client send message: " << moduleID << " | "
-                             << nodeID->hex() << " | " << requestBuffer.size();
-        auto result = co_await m_front->sendMessageByNodeID(moduleID, nodeID,
-            ::ranges::views::single(bcos::ref(requestBuffer)), 30000);
-        LIGHTNODE_LOG(DEBUG) << "P2P client receive message: " << moduleID << " | "
-                             << nodeID->hex() << " | " << result.payload.size() << " | "
+        LIGHTNODE_LOG(DEBUG) << "P2P client send message: " << moduleID << " | " << nodeID->hex()
+                             << " | " << requestBuffer.size();
+        auto result = co_await m_front->sendMessageByNodeID(
+            moduleID, nodeID, ::ranges::views::single(bcos::ref(requestBuffer)), 30000);
+        LIGHTNODE_LOG(DEBUG) << "P2P client receive message: " << moduleID << " | " << nodeID->hex()
+                             << " | " << result.payload.size() << " | "
                              << (result.error ? result.error->errorCode() : 0) << " | "
                              << (result.error ? result.error->errorMessage() : "");
         if (result.error)
@@ -79,8 +79,7 @@ public:
                         {
                             nodeIDs.insert(it.first);
                             LIGHTNODE_LOG(TRACE)
-                                << LOG_KV("NodeID:", it.first)
-                                << LOG_KV("nodeType:", it.second);
+                                << LOG_KV("NodeID:", it.first) << LOG_KV("nodeType:", it.second);
                         }
                     }
                 }
@@ -141,8 +140,7 @@ public:
                         {
                             nodeIDs.insert(it.first);
                             LIGHTNODE_LOG(TRACE)
-                                << LOG_KV("NodeID:", it.first)
-                                << LOG_KV("nodeType:", it.second);
+                                << LOG_KV("NodeID:", it.first) << LOG_KV("nodeType:", it.second);
                         }
                     }
                 }

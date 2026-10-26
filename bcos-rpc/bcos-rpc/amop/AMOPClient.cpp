@@ -23,14 +23,16 @@
 #include "AMOPClient.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-protocol/amop/TopicItem.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-task/Wait.h>
+#include <json/json.h>
+
+#include <bcos-protocol/amop/TopicItem.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::boostssl::ws;
-using namespace bcostars;
+
 using namespace tars;
 using namespace bcos::gateway;
 using namespace bcos::protocol;
@@ -170,8 +172,7 @@ void AMOPClient::onRecvAMOPRequest(
                 AMOP_CLIENT_LOG(ERROR)
                     << LOG_BADGE("onRecvAMOPRequest error")
                     << LOG_DESC("AMOP async send message callback") << LOG_KV("seq", seq)
-                    << LOG_KV("code", error->errorCode())
-                    << LOG_KV("msg", error->errorMessage());
+                    << LOG_KV("code", error->errorCode()) << LOG_KV("msg", error->errorMessage());
                 session->asyncSendMessage(responseMsg);
                 co_return;
             }
@@ -195,8 +196,8 @@ void AMOPClient::onRecvAMOPRequest(
     }(self, m_gateway, topic, msgPtr, _session, seq));
 }
 
-bool AMOPClient::trySendAMOPRequestToLocalNode(std::shared_ptr<WsSession> _session,
-    std::string const& _topic, boostssl::ws::WsMessage _msg)
+bool AMOPClient::trySendAMOPRequestToLocalNode(
+    std::shared_ptr<WsSession> _session, std::string const& _topic, boostssl::ws::WsMessage _msg)
 {
     // the local node has no client subscribe to the topic
     auto selectedSession = randomChooseSession(_topic);
@@ -248,8 +249,7 @@ void AMOPClient::onRecvAMOPBroadcast(boostssl::ws::WsMessage _msg, std::shared_p
     task::wait([](bcos::gateway::GatewayInterface::Ptr gateway, std::string topic,
                    bcos::bytes payload) -> bcos::task::Task<void> {
         co_await gateway->sendBroadcastMessageByTopic(topic, bcos::ref(payload));
-    }(m_gateway, amopReq->topic(),
-        bcos::bytes(_msg.payload().begin(), _msg.payload().end())));
+    }(m_gateway, amopReq->topic(), bcos::bytes(_msg.payload().begin(), _msg.payload().end())));
     AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("onRecvAMOPBroadcast") << LOG_KV("seq", seq)
                            << LOG_KV("topic", amopReq->topic());
 }
@@ -291,17 +291,15 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, bytesPointer>> AMOPClient::sendMes
                     bcos::boostssl::ws::WsMessage _responseMsg, std::shared_ptr<WsSession>) {
                     if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
                     {
-                        AMOP_CLIENT_LOG(WARNING)
-                            << LOG_BADGE("notifyAMOPMessage")
-                            << LOG_DESC("asyncSendMessage callback failed")
-                            << LOG_KV("topic", topic) << LOG_KV("seq", seq)
-                            << LOG_KV("code", _error->errorCode())
-                            << LOG_KV("message", _error->errorMessage());
+                        AMOP_CLIENT_LOG(WARNING) << LOG_BADGE("notifyAMOPMessage")
+                                                 << LOG_DESC("asyncSendMessage callback failed")
+                                                 << LOG_KV("topic", topic) << LOG_KV("seq", seq)
+                                                 << LOG_KV("code", _error->errorCode())
+                                                 << LOG_KV("message", _error->errorMessage());
                     }
 
-                    AMOP_CLIENT_LOG(DEBUG)
-                        << LOG_BADGE("notifyAMOPMessage") << LOG_KV("seq", seq)
-                        << LOG_KV("data size", _responseMsg.payload().size());
+                    AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("notifyAMOPMessage") << LOG_KV("seq", seq)
+                                           << LOG_KV("data size", _responseMsg.payload().size());
                     auto buffer = std::make_shared<bcos::bytes>();
                     if (!_error)
                     {
@@ -309,9 +307,9 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, bytesPointer>> AMOPClient::sendMes
                         // only encode the real response
                         _responseMsg.encode(*buffer);
                     }
-                    state->error = _error ? BCOS_ERROR_PTR(_error->errorCode(),
-                                               _error->errorMessage()) :
-                                            bcos::Error::Ptr();
+                    state->error = _error ?
+                                       BCOS_ERROR_PTR(_error->errorCode(), _error->errorMessage()) :
+                                       bcos::Error::Ptr();
                     state->data = std::move(buffer);
                     if (state->sync.exchange(2, std::memory_order_acq_rel) == 1)
                     {
@@ -349,9 +347,8 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, bytesPointer>> AMOPClient::notifyA
         responseMessage.encode(*buffer);
         AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("notifyAMOPMessage: no client found")
                                << LOG_KV("topic", _topic);
-        co_return std::make_tuple(
-            BCOS_ERROR_PTR(CommonError::NotFoundClientByTopicDispatchMsg,
-                "NotFoundClientByTopicDispatchMsg"),
+        co_return std::make_tuple(BCOS_ERROR_PTR(CommonError::NotFoundClientByTopicDispatchMsg,
+                                      "NotFoundClientByTopicDispatchMsg"),
             buffer);
     }
     AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("notifyAMOPMessage") << LOG_KV("topic", _topic)
@@ -470,31 +467,30 @@ void AMOPClient::subscribeTopicToAllNodes()
             m_gatewayServiceName, endPoint.getEndpoint());
 
         auto serviceClient =
-            std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
-        bcos::task::wait(
-            [](std::weak_ptr<AMOPClient> _self, std::shared_ptr<GatewayServiceClient> _client,
-                std::string _clientID, std::string _topicInfo,
-                tars::EndpointInfo _endPoint) -> bcos::task::Task<void> {
-                auto error = co_await _client->subscribeTopic(_clientID, _topicInfo);
-                auto self = _self.lock();
-                if (!self)
-                {
-                    co_return;
-                }
-                if (error)
-                {
-                    AMOP_CLIENT_LOG(WARNING)
-                        << LOG_DESC("subscribeTopic failed")
-                        << LOG_KV("gateway", _endPoint.getEndpoint().toString())
-                        << LOG_KV("code", error->errorCode())
-                        << LOG_KV("msg", error->errorMessage());
-                    // set the notify topic flag to false when subscribeTopic failed
-                    self->m_notifyTopicSuccess.store(false);
-                    co_return;
-                }
-                AMOP_CLIENT_LOG(INFO) << LOG_DESC("subscribeTopic success")
-                                      << LOG_KV("gateway", _endPoint.getEndpoint().toString());
-            }(weak_from_this(), serviceClient, m_clientID, topicInfo, endPoint));
+            std::make_shared<bcostars::GatewayServiceClient>(servicePrx, m_gatewayServiceName);
+        bcos::task::wait([](std::weak_ptr<AMOPClient> _self,
+                             std::shared_ptr<bcostars::GatewayServiceClient> _client,
+                             std::string _clientID, std::string _topicInfo,
+                             tars::EndpointInfo _endPoint) -> bcos::task::Task<void> {
+            auto error = co_await _client->subscribeTopic(_clientID, _topicInfo);
+            auto self = _self.lock();
+            if (!self)
+            {
+                co_return;
+            }
+            if (error)
+            {
+                AMOP_CLIENT_LOG(WARNING)
+                    << LOG_DESC("subscribeTopic failed")
+                    << LOG_KV("gateway", _endPoint.getEndpoint().toString())
+                    << LOG_KV("code", error->errorCode()) << LOG_KV("msg", error->errorMessage());
+                // set the notify topic flag to false when subscribeTopic failed
+                self->m_notifyTopicSuccess.store(false);
+                co_return;
+            }
+            AMOP_CLIENT_LOG(INFO) << LOG_DESC("subscribeTopic success")
+                                  << LOG_KV("gateway", _endPoint.getEndpoint().toString());
+        }(weak_from_this(), serviceClient, m_clientID, topicInfo, endPoint));
     }
 }
 void AMOPClient::removeTopicFromAllNodes(std::vector<std::string> const& topicsToRemove)
@@ -502,22 +498,21 @@ void AMOPClient::removeTopicFromAllNodes(std::vector<std::string> const& topicsT
     auto activeEndPoints = getActiveGatewayEndPoints();
     for (auto const& endPoint : activeEndPoints)
     {
-        auto servicePrx = bcostars::createServantProxy<GatewayServicePrx>(
+        auto servicePrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
             m_gatewayServiceName, endPoint.getEndpoint());
 
         auto serviceClient =
-            std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
-        bcos::task::wait(
-            [](std::shared_ptr<GatewayServiceClient> _client, std::string _clientID,
-                std::vector<std::string> _topicsToRemove,
-                tars::EndpointInfo _endPoint) -> bcos::task::Task<void> {
-                auto error = co_await _client->removeTopic(_clientID, _topicsToRemove);
-                AMOP_CLIENT_LOG(INFO) << LOG_DESC("removeTopic")
-                                      << LOG_KV("gateway", _endPoint.getEndpoint().toString())
-                                      << LOG_KV("removedSize", _topicsToRemove.size())
-                                      << LOG_KV("code", error ? error->errorCode() : 0)
-                                      << LOG_KV("msg", error ? error->errorMessage() : "success");
-            }(serviceClient, m_clientID, topicsToRemove, endPoint));
+            std::make_shared<bcostars::GatewayServiceClient>(servicePrx, m_gatewayServiceName);
+        bcos::task::wait([](std::shared_ptr<bcostars::GatewayServiceClient> _client,
+                             std::string _clientID, std::vector<std::string> _topicsToRemove,
+                             tars::EndpointInfo _endPoint) -> bcos::task::Task<void> {
+            auto error = co_await _client->removeTopic(_clientID, _topicsToRemove);
+            AMOP_CLIENT_LOG(INFO) << LOG_DESC("removeTopic")
+                                  << LOG_KV("gateway", _endPoint.getEndpoint().toString())
+                                  << LOG_KV("removedSize", _topicsToRemove.size())
+                                  << LOG_KV("code", error ? error->errorCode() : 0)
+                                  << LOG_KV("msg", error ? error->errorMessage() : "success");
+        }(serviceClient, m_clientID, topicsToRemove, endPoint));
     }
 }
 

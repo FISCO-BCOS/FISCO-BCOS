@@ -27,11 +27,10 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/validator/CallValidator.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -46,7 +45,9 @@
 #include <string_view>
 #include <utility>
 
-using namespace std;
+#include "bcos-protocol/TransactionStatus.h"
+
+using std::string;
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::group;
@@ -560,17 +561,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         }
         catch (bcos::Error& e)
         {
-            auto info = boost::diagnostic_information(e);
-            if (e.errorCode() == (int64_t)bcos::protocol::TransactionStatus::TxPoolIsFull)
-            {
-                RPC_IMPL_LOG(DEBUG) << "sendTransaction error" << LOG_KV("errCode", e.errorCode())
-                                    << LOG_KV("msg", info);
-            }
-            else
-            {
-                RPC_IMPL_LOG(WARNING) << "sendTransaction error" << LOG_KV("errCode", e.errorCode())
-                                      << LOG_KV("msg", info);
-            }
+            // The refusal reaches the client in the RPC error; the txpool prints the per-tx
+            // TxRejected line (DEBUG) with the reason.
             respFunc(std::make_shared<bcos::Error>(std::move(e)), jResp);
         }
         catch (std::exception& e)

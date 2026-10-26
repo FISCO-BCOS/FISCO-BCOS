@@ -22,6 +22,7 @@
  * @date 2026/8/18
  */
 
+#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-codec/rlp/Common.h"
 #include "bcos-codec/rlp/RLPEncode.h"
@@ -48,7 +49,6 @@
 #include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
-#include "EthereumBlockHashLookup.h"
 #include <bcos-devp2p/eth/Protocol.h>
 #include <bcos-devp2p/rlpx/Client.h>
 #include <bcos-devp2p/sync/BlockExchange.h>
@@ -142,9 +142,8 @@ task::Task<void> EBSWriteSystemConfig(
 }
 
 /// Web3-shaped EIP-1559 value-transfer tx (maxFeePerGas must cover the block base fee).
-std::shared_ptr<EBSTestTransactionImpl> EBSMakeWeb3TransferTx(
-    evmc_address const& sender, evmc_address const& recipient, uint64_t value,
-    std::string const& nonce, uint64_t maxFeePerGas)
+std::shared_ptr<EBSTestTransactionImpl> EBSMakeWeb3TransferTx(evmc_address const& sender,
+    evmc_address const& recipient, uint64_t value, std::string const& nonce, uint64_t maxFeePerGas)
 {
     auto tx = std::make_shared<EBSTestTransactionImpl>();
     auto& inner = tx->mutableInner();
@@ -171,11 +170,11 @@ std::shared_ptr<EBSTestTransactionImpl> EBSMakeWeb3TransferTx(
     inner.web3TypedTxKind = 2;  // EIP-1559
 
     bcos::bytes body;
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));                // chainId
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));                // nonce
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));                // maxPriorityFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(maxFeePerGas));     // maxFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));           // gasLimit
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));             // chainId
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));             // nonce
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));             // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(maxFeePerGas));  // maxFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));        // gasLimit
     bcos::codec::rlp::encode(
         body, bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes))));
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(value));  // value
@@ -183,8 +182,8 @@ std::shared_ptr<EBSTestTransactionImpl> EBSMakeWeb3TransferTx(
     body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);              // empty accessList
     bcos::bytes payloadBytes;
     payloadBytes.push_back(0x02);
-    bcos::codec::rlp::encodeHeader(payloadBytes,
-        bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+    bcos::codec::rlp::encodeHeader(
+        payloadBytes, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
     payloadBytes.insert(payloadBytes.end(), body.begin(), body.end());
     inner.extraTransactionBytes.assign(payloadBytes.begin(), payloadBytes.end());
 
@@ -201,8 +200,8 @@ std::shared_ptr<EBSTestTransactionImpl> EBSMakeWeb3TransferTx(
 }
 
 /// A PoS header skeleton with real per-block roots filled in by the caller.
-bcos::protocol::EthBlockHeaderData EBSBaseHeader(int64_t number, int64_t timestamp,
-    bcos::h256 parentHash, uint64_t gasLimit, bcos::u256 baseFee)
+bcos::protocol::EthBlockHeaderData EBSBaseHeader(
+    int64_t number, int64_t timestamp, bcos::h256 parentHash, uint64_t gasLimit, bcos::u256 baseFee)
 {
     bcos::protocol::EthBlockHeaderData header;
     header.number = number;
@@ -243,8 +242,7 @@ public:
     {
         blockHashLookup = [&backend = backendStorage](
                               int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
-            return initializer::ethBlockHashLookupFromStorage(
-                backend, blockNumber, currentHeight);
+            return initializer::ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
         };
         executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
         blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
@@ -273,8 +271,7 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
         co_await EBSFundAccount(backendStorage, recipient2, 0);
 
         // The genesis (block-0) Ethereum header: its keccak(rlp) is the chain anchor.
-        auto genesisHeader = EBSBaseHeader(
-            0, 1600000000, bcos::h256{}, 30000000, EBSBaseFee);
+        auto genesisHeader = EBSBaseHeader(0, 1600000000, bcos::h256{}, 30000000, EBSBaseFee);
         genesisHeader.gasUsed = 0;
         auto genesisHash = bcos::protocol::ethHeaderHash(genesisHeader);
         co_await EBSWriteBlockHash(backendStorage, 0, genesisHash);
@@ -335,12 +332,12 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
             view1, *executor, prodHeader1, txs1 | ::ranges::views::indirect, prodConfig1);
         BOOST_REQUIRE_EQUAL(receipts1.size(), 1u);
         BOOST_CHECK_EQUAL(receipts1[0]->status(), 0);
-        auto comp1 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeEthereumRoots(receipts1, txs1 | ::ranges::views::indirect,
-                std::vector<bcos::bytes>{raw1});
+        auto comp1 = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts1, txs1 | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw1});
         // MPT state root from the (empty) genesis trie — world state only.
-        auto stateRoot1 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeMptStateRoot(view1, genesisHeader.stateRoot, prodConfig1);
+        auto stateRoot1 = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view1, genesisHeader.stateRoot, prodConfig1);
         prodStorage.pushView(std::move(view1));
 
         auto ethHeader1 = EBSBaseHeader(1, kTs1, genesisHash, kGasLimit, baseFee1);
@@ -381,13 +378,13 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
             view2, *executor, prodHeader2, txs2 | ::ranges::views::indirect, prodConfig2);
         BOOST_REQUIRE_EQUAL(receipts2.size(), 1u);
         BOOST_CHECK_EQUAL(receipts2[0]->status(), 0);
-        auto comp2 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeEthereumRoots(receipts2, txs2 | ::ranges::views::indirect,
-                std::vector<bcos::bytes>{raw2});
+        auto comp2 = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts2, txs2 | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw2});
         // MPT state root from block 1's root; the trie nodes written by block 1's build
         // are reachable through view2 (block 1's layer was pushed above).
-        auto stateRoot2 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeMptStateRoot(view2, ethHeader1.stateRoot, prodConfig2);
+        auto stateRoot2 = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view2, ethHeader1.stateRoot, prodConfig2);
 
         auto ethHeader2 = EBSBaseHeader(2, kTs2, block1.hash, kGasLimit, baseFee2);
         ethHeader2.stateRoot = stateRoot2;
@@ -429,8 +426,7 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
                 bcos::devp2p::test::serveRequests(established.session, chain);
             }
             catch (...)
-            {
-            }
+            {}
         });
 
         bcos::devp2p::rlpx::PeerConfig clientConfig;
@@ -452,8 +448,8 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
         };
 
         scheduler_v1::EvmcForkTimestamps forks;
-        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
-        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.londonTime = 0;  // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;   // unset fields default to UINT64_MAX = never active)
         forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
@@ -490,21 +486,15 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
                             block.withdrawals, forks, 1, block.uncles, 0, decoder, stateRootCalc));
                         if (!result.valid)
                         {
-                            std::cerr << "[EBS] verifyAndCommit INVALID at block "
-                                      << block.number() << ": " << result.error << std::endl;
+                            std::cerr << "[EBS] verifyAndCommit INVALID at block " << block.number()
+                                      << ": " << result.error << std::endl;
                             BOOST_TEST_MESSAGE(
-                                "verifyAndCommit invalid at block " << block.number() << ": "
-                                                                    << result.error
-                                                                    << " | receipts="
-                                                                    << result.receipts.size()
-                                                                    << " status="
-                                                                    << (result.receipts.empty() ?
-                                                                            -1 :
-                                                                            result.receipts[0]->status())
-                                                                    << " gasUsed="
-                                                                    << (result.receipts.empty() ?
-                                                                            -1 :
-                                                                            result.receipts[0]->gasUsed()));
+                                "verifyAndCommit invalid at block "
+                                << block.number() << ": " << result.error
+                                << " | receipts=" << result.receipts.size() << " status="
+                                << (result.receipts.empty() ? -1 : result.receipts[0]->status())
+                                << " gasUsed="
+                                << (result.receipts.empty() ? -1 : result.receipts[0]->gasUsed()));
                         }
                         BOOST_REQUIRE(result.valid);
                         BOOST_CHECK(result.error.empty());
@@ -532,17 +522,14 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
         serverThread.join();
 
         // ---- Committed state: both transfers landed. ----
-        auto balanceR1 =
-            co_await EBSReadBalance(multiLayerStorage.latestBackend(), recipient1);
+        auto balanceR1 = co_await EBSReadBalance(multiLayerStorage.latestBackend(), recipient1);
         BOOST_CHECK_EQUAL(balanceR1, u256(100));
-        auto balanceR2 =
-            co_await EBSReadBalance(multiLayerStorage.latestBackend(), recipient2);
+        auto balanceR2 = co_await EBSReadBalance(multiLayerStorage.latestBackend(), recipient2);
         BOOST_CHECK_EQUAL(balanceR2, u256(50));
-        auto balanceSender =
-            co_await EBSReadBalance(multiLayerStorage.latestBackend(), sender);
+        auto balanceSender = co_await EBSReadBalance(multiLayerStorage.latestBackend(), sender);
         auto baseFee2u = bcos::devp2p::sync::computeNextBaseFee(ethHeader1);
-        BOOST_CHECK_EQUAL(balanceSender, EBSFunding - 100 - u256(21000) * baseFee1 - 50 -
-                                             u256(21000) * baseFee2u);
+        BOOST_CHECK_EQUAL(balanceSender,
+            EBSFunding - 100 - u256(21000) * baseFee1 - 50 - u256(21000) * baseFee2u);
     }());
 }
 
@@ -603,11 +590,11 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
         std::vector<protocol::Transaction::Ptr> txs1{tx1};
         auto receipts1 = co_await scheduler.executeBlock(
             view1, *executor, prodHeader1, txs1 | ::ranges::views::indirect, prodConfig1);
-        auto comp1 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeEthereumRoots(receipts1, txs1 | ::ranges::views::indirect,
-                std::vector<bcos::bytes>{raw1});
-        auto stateRoot1 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeMptStateRoot(view1, genesisHeader.stateRoot, prodConfig1);
+        auto comp1 = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts1, txs1 | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw1});
+        auto stateRoot1 = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view1, genesisHeader.stateRoot, prodConfig1);
 
         auto ethHeader1 = EBSBaseHeader(1, kTs1, genesisHash, kGasLimit, baseFee1);
         ethHeader1.stateRoot = stateRoot1;
@@ -650,8 +637,7 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
                 bcos::devp2p::test::serveRequests(established.session, chain);
             }
             catch (...)
-            {
-            }
+            {}
         });
 
         bcos::devp2p::rlpx::PeerConfig clientConfig;
@@ -669,8 +655,8 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
             return rawToTx.at(raw);
         };
         scheduler_v1::EvmcForkTimestamps forks;
-        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
-        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.londonTime = 0;  // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;   // unset fields default to UINT64_MAX = never active)
         forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
@@ -692,8 +678,8 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
             devp2pConfig.cancunTime = std::numeric_limits<uint64_t>::max();
             devp2pConfig.pragueTime = std::numeric_limits<uint64_t>::max();
             bcos::devp2p::sync::BlockExchange exchange(1, genesisHeader, devp2pConfig);
-            exchange.downloadRange(established.session, chain.size() - 1,
-                [&](bcos::devp2p::sync::Block const& block) {
+            exchange.downloadRange(
+                established.session, chain.size() - 1, [&](bcos::devp2p::sync::Block const& block) {
                     auto result = task::syncWait(verifier.verifyAndCommit(multiLayerStorage,
                         *fakeLedger, block.header, genesisHeader, block.transactions,
                         block.withdrawals, forks, 1, block.uncles, 0, decoder, stateRootCalc));
@@ -706,8 +692,7 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
         serverThread.join();
         BOOST_CHECK(rejected);
         // Nothing committed.
-        auto balanceR1 =
-            co_await EBSReadBalance(multiLayerStorage.latestBackend(), recipient1);
+        auto balanceR1 = co_await EBSReadBalance(multiLayerStorage.latestBackend(), recipient1);
         BOOST_CHECK_EQUAL(balanceR1, u256(0));
     }());
 }
@@ -822,11 +807,11 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
             view1, *executor, prodHeader1, txs1 | ::ranges::views::indirect, prodConfig1);
         BOOST_REQUIRE_EQUAL(receipts1.size(), 1u);
         BOOST_CHECK_EQUAL(receipts1[0]->status(), 0);
-        auto comp1 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeEthereumRoots(receipts1, txs1 | ::ranges::views::indirect,
-                std::vector<bcos::bytes>{raw1});
-        auto stateRoot1 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeMptStateRoot(view1, genesisHeader.stateRoot, prodConfig1);
+        auto comp1 = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts1, txs1 | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw1});
+        auto stateRoot1 = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view1, genesisHeader.stateRoot, prodConfig1);
         prodStorage.pushView(std::move(view1));
 
         auto ethHeader1 = EBSBaseHeader(1, kTs1, genesisHash, kGasLimit, baseFee1);
@@ -867,13 +852,13 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
             view2, *executor, prodHeader2, txs2 | ::ranges::views::indirect, prodConfig2);
         BOOST_REQUIRE_EQUAL(receipts2.size(), 1u);
         BOOST_CHECK_EQUAL(receipts2[0]->status(), 0);
-        auto comp2 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeEthereumRoots(receipts2, txs2 | ::ranges::views::indirect,
-                std::vector<bcos::bytes>{raw2});
+        auto comp2 = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts2, txs2 | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw2});
         // MPT state root from block 1's root; the trie nodes written by block 1's
         // build are reachable through view2 (block 1's layer was pushed above).
-        auto stateRoot2 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeMptStateRoot(view2, ethHeader1.stateRoot, prodConfig2);
+        auto stateRoot2 = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view2, ethHeader1.stateRoot, prodConfig2);
 
         auto ethHeader2 = EBSBaseHeader(2, kTs2, block1.hash, kGasLimit, baseFee2);
         ethHeader2.stateRoot = stateRoot2;
@@ -913,8 +898,8 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
         };
 
         scheduler_v1::EvmcForkTimestamps forks;
-        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
-        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.londonTime = 0;  // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;   // unset fields default to UINT64_MAX = never active)
         forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
@@ -945,8 +930,7 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
                     bcos::devp2p::test::serveRequests(established.session, chain);
                 }
                 catch (...)
-                {
-                }
+                {}
             });
 
             bcos::devp2p::rlpx::PeerConfig clientConfig;
@@ -973,8 +957,8 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
             auto result = task::syncWait(verifier.verifyAndCommit(multiLayerStorage, *fakeLedger,
                 block.header, prevHeader, block.transactions, block.withdrawals, forks, 1,
                 block.uncles, 0, decoder, stateRootCalc));
-            BOOST_REQUIRE_MESSAGE(result.valid,
-                "peer-1 block " << block.number() << " invalid: " << result.error);
+            BOOST_REQUIRE_MESSAGE(
+                result.valid, "peer-1 block " << block.number() << " invalid: " << result.error);
             // FakeLedger::asyncPrewriteBlock is a no-op, so the commit does not
             // advance SYS_KEY_CURRENT_NUMBER the way the real Ledger::prewriteBlock
             // (Ledger.cpp:296-300) does — write the row the real commit would have
@@ -1015,8 +999,8 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
                 // classify the rejection as deterministic — catching it pins the
                 // type, so a revert to a plain std::runtime_error escapes this
                 // handler and fails the test.
-                BOOST_CHECK(std::string(e.what()).find("not the ledger head + 1") !=
-                            std::string::npos);
+                BOOST_CHECK(
+                    std::string(e.what()).find("not the ledger head + 1") != std::string::npos);
                 ++rejected;
                 replayParent = block.header;
                 return;
@@ -1043,8 +1027,8 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
         BOOST_CHECK_EQUAL(balanceR2, u256(50));
         auto balanceSender = co_await EBSReadBalance(multiLayerStorage.latestBackend(), sender);
         auto baseFee2u = bcos::devp2p::sync::computeNextBaseFee(ethHeader1);
-        BOOST_CHECK_EQUAL(balanceSender, EBSFunding - 100 - u256(21000) * baseFee1 - 50 -
-                                             u256(21000) * baseFee2u);
+        BOOST_CHECK_EQUAL(balanceSender,
+            EBSFunding - 100 - u256(21000) * baseFee1 - 50 - u256(21000) * baseFee2u);
     }());
 }
 
