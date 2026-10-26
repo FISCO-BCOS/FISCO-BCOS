@@ -139,9 +139,8 @@ constexpr inline struct SyncWait
 /// executeSinglePass`'s mergeLastStorage is exactly that: it merges into the in-memory mutable
 /// layer and returns, so the plain wait is both correct and cheaper.
 ///
-/// `runInCallArena` below is the third case: code on a plain thread (an RPC IO thread driving
-/// eth_call) that must *become* a TBB task. It enqueues into a shared arena, so the caller
-/// returns immediately and the body runs as a real TBB task.
+/// The third case is code on a plain thread (an RPC IO thread driving eth_call) that has to
+/// *become* a TBB task before it can wait on the EVM's state reads: `runInCallArena` below.
 
 /// The arena the read-only call round trips run in.
 ///
@@ -161,15 +160,9 @@ inline oneapi::tbb::task_arena& callArena()
 /// finishes, which is the opposite of what an RPC IO thread wants.)
 ///
 /// The caller returns as soon as the task is enqueued: enqueue is a hand-off, and the body runs
-/// later on an arena worker. That asynchrony is the point, but it does mean a completion
-/// callback invoked from the body never re-enters its caller's stack.
-///
-/// libtask/tests/TestCallArena.cpp pins the property this choice rests on, so a oneTBB upgrade
-/// that changes it fails instead of silently reintroducing the hazard: with a single worker
-/// slot, a body that suspends still completes, because the suspended enqueue_task releases the
-/// slot its completer needs. Under `execute` there would be no task to suspend at all -- that
-/// is a fact about which oneTBB context the body runs in, not something the test can observe
-/// from the outside, so it is recorded here rather than asserted there.
+/// later on an arena worker. That asynchrony is the point, but it also means the owner of the
+/// body must outlive it -- the caller's lifetime is not extended by this call. BaselineScheduler
+/// therefore counts its in-flight bodies and waits for the count to drain before it is destroyed.
 ///
 /// @p body must return void: enqueue has nowhere to put a value, so a body with a result would
 /// lose it silently. The constraint below turns that into a compile error.
@@ -181,7 +174,7 @@ inline oneapi::tbb::task_arena& callArena()
 /// made so; behind the pointer the body keeps its non-const operator().
 template <class Body>
     requires std::invocable<Body&> && std::is_void_v<std::invoke_result_t<Body&>> &&
-             std::copy_constructible<std::decay_t<Body>>
+             std::constructible_from<std::decay_t<Body>, Body&&>
 void runInCallArena(Body&& body)
 {
     auto holder = std::make_shared<std::decay_t<Body>>(std::forward<Body>(body));

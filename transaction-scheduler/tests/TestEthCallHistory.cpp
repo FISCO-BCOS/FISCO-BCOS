@@ -45,8 +45,10 @@
 #include "bcos-transaction-executor/vm/HostContext.h"
 #include "bcos-transaction-scheduler/HistoricalCallStorage.h"
 #include <boost/test/unit_test.hpp>
+#include <condition_variable>
 #include <fakeit.hpp>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -313,18 +315,37 @@ public:
         return headers;
     }
 
+    /// callAtBlock/call are asynchronous by design: the round trip is enqueued so the caller
+    /// (an RPC IO thread in production) is not blocked. A test that read the result straight
+    /// after the call would race the body -- and any stack object it writes would dangle. Wait
+    /// for the callback before reading.
+    template <class Start>
+    std::tuple<Error::Ptr, protocol::TransactionReceipt::Ptr> awaitCall(Start&& start)
+    {
+        Error::Ptr callError;
+        protocol::TransactionReceipt::Ptr receipt;
+        std::mutex mutex;
+        std::condition_variable cv;
+        bool done = false;
+        std::forward<Start>(start)([&](Error::Ptr error, protocol::TransactionReceipt::Ptr result) {
+            std::lock_guard lock(mutex);
+            callError = std::move(error);
+            receipt = std::move(result);
+            done = true;
+            cv.notify_all();
+        });
+        std::unique_lock lock(mutex);
+        cv.wait(lock, [&] { return done; });
+        return {std::move(callError), std::move(receipt)};
+    }
+
     std::tuple<Error::Ptr, protocol::TransactionReceipt::Ptr> callAt(protocol::BlockNumber number)
     {
         auto transaction = transactionFactory->createTransaction(
             0, "to", bytes{}, "callNonce", 100, "chain", "group", 0);
-        Error::Ptr callError;
-        protocol::TransactionReceipt::Ptr receipt;
-        baselineScheduler.callAtBlock(std::move(transaction), number,
-            [&](Error::Ptr error, protocol::TransactionReceipt::Ptr result) {
-                callError = std::move(error);
-                receipt = std::move(result);
-            });
-        return {std::move(callError), std::move(receipt)};
+        return awaitCall([&](auto callback) {
+            baselineScheduler.callAtBlock(std::move(transaction), number, std::move(callback));
+        });
     }
 
     static constexpr uint32_t blockVersion = 200;
@@ -488,13 +509,9 @@ BOOST_AUTO_TEST_CASE(callAtBlockServesEachHeight)
     // The plain latest-state call() still works.
     auto transaction = transactionFactory->createTransaction(
         0, "to", bytes{}, "latestNonce", 100, "chain", "group", 0);
-    Error::Ptr latestError;
-    protocol::TransactionReceipt::Ptr latestReceipt;
-    baselineScheduler.call(
-        std::move(transaction), [&](Error::Ptr error, protocol::TransactionReceipt::Ptr result) {
-            latestError = std::move(error);
-            latestReceipt = std::move(result);
-        });
+    auto [latestError, latestReceipt] = awaitCall([&](auto callback) {
+        baselineScheduler.call(std::move(transaction), std::move(callback));
+    });
     BOOST_REQUIRE_MESSAGE(
         !latestError, (latestError ? latestError->errorMessage() : std::string{}));
     BOOST_CHECK(outputOf(latestReceipt) == toBytes(hcEvmcValue(0x02)));

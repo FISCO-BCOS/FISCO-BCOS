@@ -21,6 +21,7 @@
 #include <oneapi/tbb/task_group.h>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <deque>
 #include <exception>
@@ -126,6 +127,41 @@ private:
     int64_t m_lastCommittedBlockNumber{-1};
     std::mutex m_commitMutex;
     tbb::task_group m_asyncGroup;
+
+    /// In-flight eth_call bodies handed to the shared arena by call()/callAtBlock(). The arena
+    /// does not know this scheduler exists, so nothing there can keep `this` alive: a body still
+    /// queued when the scheduler is destroyed would run against freed memory. Each body is
+    /// counted, and the destructor waits for the count to reach zero.
+    std::atomic<size_t> m_inflightCallBodies{0};
+    std::mutex m_inflightCallBodiesMutex;
+    std::condition_variable m_inflightCallBodiesCv;
+
+    void beginCallBody() noexcept { m_inflightCallBodies.fetch_add(1, std::memory_order_acq_rel); }
+
+    void endCallBody() noexcept
+    {
+        if (m_inflightCallBodies.fetch_sub(1, std::memory_order_acq_rel) == 1)
+        {
+            // Nothing left to drain; notify under the mutex so a destructor that is just about
+            // to wait cannot miss it.
+            std::lock_guard lock(m_inflightCallBodiesMutex);
+            m_inflightCallBodiesCv.notify_all();
+        }
+    }
+
+    /// Decrements on scope exit, including when the body throws.
+    struct endCallBodyOnExit
+    {
+        BaselineScheduler* m_self;
+        ~endCallBodyOnExit() { m_self->endCallBody(); }
+    };
+
+    void waitForCallBodies()
+    {
+        std::unique_lock lock(m_inflightCallBodiesMutex);
+        m_inflightCallBodiesCv.wait(
+            lock, [this] { return m_inflightCallBodies.load(std::memory_order_acquire) == 0; });
+    }
 
     struct ExecuteResult
     {

@@ -754,6 +754,10 @@ template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Le
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::~BaselineScheduler() noexcept
 {
+    // Bodies first: an eth_call body may still call into this scheduler (and into m_asyncGroup
+    // through executeBlock's path is impossible, but coCallLatest touches the storage), so it has
+    // to finish before the group wait below can be trusted to be the last thing running.
+    waitForCallBodies();
     m_asyncGroup.wait();
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
@@ -793,43 +797,45 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
 {
     // The EVM host resolves account/code/storage reads and BLOCKHASH through
     // task::tbb::syncWait, which suspends the calling TBB task. Block execution always has one
-    // (the serial scheduler runs it in a parallel_pipeline filter) but call()/callAtBlock()
-    // arrive straight from an RPC IO thread, which must neither suspend nor be blocked, so the
-    // round trip is *enqueued* into a shared arena: the IO thread returns immediately and the
-    // body runs as a real TBB task (see runInCallArena).
+    // (the serial scheduler runs it in a parallel_pipeline filter), but call()/callAtBlock()
+    // arrive straight from an RPC IO thread, which must neither suspend nor be blocked.
     //
-    // The body runs on an arena worker, later (enqueue is a hand-off, not execute), so the
-    // completion callback never re-enters this caller's stack. task::wait there starts the
-    // coroutine on that worker and returns at its first suspension: a body that has to await
-    // releases the worker instead of parking it, and the callback fires from whichever thread
-    // completes the work.
+    // runInCallArena turns that thread into a TBB task without blocking it: enqueue into a
+    // shared arena spawns the body (so syncWait has a task to suspend) and returns. The arena
+    // does not own the body's lifetime, though -- nothing in it knows about this scheduler --
+    // so every body is counted and ~BaselineScheduler waits for the count to drain. Without
+    // that, a body still queued when the scheduler is destroyed would call into freed memory.
+    beginCallBody();
     task::tbb::runInCallArena([self = this, transaction = std::move(transaction),
                                   callback = std::move(callback)]() mutable {
+        endCallBodyOnExit guard{self};
         task::wait([](BaselineScheduler* scheduler, protocol::Transaction::Ptr transaction,
                        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
                        -> task::Task<void> {
-            // The callback must run on every path: EthEndpoint's Awaitable resumes its
-            // coroutine from it, so an exception escaping here would strand the request.
+            // The callback is invoked exactly once, after the guarded region: an exception from
+            // the callback itself must not run it a second time from a handler, which is what
+            // happens when the success call sits inside the try.
+            Error::Ptr error;
+            protocol::TransactionReceipt::Ptr receipt;
             try
             {
-                callback(nullptr, co_await scheduler->coCallLatest(std::move(transaction)));
+                receipt = co_await scheduler->coCallLatest(std::move(transaction));
             }
             catch (std::exception const& e)
             {
-                BCOS_LOG(WARNING) << LOG_BADGE("BASELINE_SCHEDULER") << LOG_DESC("eth_call failed")
-                                  << LOG_KV("error", e.what());
-                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
-                             std::string("eth_call failed: ") + e.what()),
-                    nullptr);
+                BASELINE_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("eth_call failed") << LOG_KV("error", e.what());
+                error = BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
+                    std::string("eth_call failed: ") + e.what());
             }
             catch (...)
             {
-                BCOS_LOG(WARNING) << LOG_BADGE("BASELINE_SCHEDULER")
-                                  << LOG_DESC("eth_call failed with a non-std exception");
-                callback(BCOS_ERROR_UNIQUE_PTR(
-                             scheduler::SchedulerError::UnknownError, "eth_call failed"),
-                    nullptr);
+                BASELINE_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("eth_call failed with a non-std exception");
+                error = BCOS_ERROR_UNIQUE_PTR(
+                    scheduler::SchedulerError::UnknownError, "eth_call failed");
             }
+            callback(std::move(error), std::move(receipt));
         }(self, std::move(transaction), std::move(callback)));
     });
 }
@@ -855,14 +861,20 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
     protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
     std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
 {
-    // Same arena contract as call(): the historical path also runs the EVM, and it arrives on
-    // the same RPC IO thread.
+    // Same contract as call(): the historical path also runs the EVM and also arrives on an RPC
+    // IO thread, so it goes through the same group for the same two reasons -- a TBB task for
+    // syncWait to suspend, and a body the destructor drains.
+    beginCallBody();
     task::tbb::runInCallArena([self = this, transaction = std::move(transaction), blockNumber,
                                   callback = std::move(callback)]() mutable {
+        endCallBodyOnExit guard{self};
         task::wait([](BaselineScheduler* scheduler, protocol::Transaction::Ptr transaction,
                        protocol::BlockNumber blockNumber,
                        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
                        -> task::Task<void> {
+            // Filled inside, published once after the guarded region (see call()).
+            Error::Ptr error;
+            protocol::TransactionReceipt::Ptr receipt;
             try
             {
                 auto latestView = scheduler->m_multiLayerStorage.get().fork();
@@ -870,91 +882,93 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
                     co_await ledger::getCurrentBlockNumber(latestView, ledger::fromStorage);
                 if (blockNumber > latestNumber)
                 {
-                    callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
-                                 fmt::format("eth_call: block {} does not exist (latest: {})",
-                                     blockNumber, latestNumber)),
-                        nullptr);
-                    co_return;
+                    error = BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
+                        fmt::format("eth_call: block {} does not exist (latest: {})", blockNumber,
+                            latestNumber));
                 }
-                if (blockNumber == latestNumber)
+                else if (blockNumber == latestNumber)
                 {
-                    callback(nullptr, co_await scheduler->coCallLatest(std::move(transaction)));
-                    co_return;
+                    receipt = co_await scheduler->coCallLatest(std::move(transaction));
                 }
-                auto ledgerConfig = co_await ledger::getLedgerConfig(
-                    latestView, blockNumber, scheduler->m_blockFactory.get());
-                if (ledgerConfig->executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
+                else
                 {
-                    callback(
-                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                    auto ledgerConfig = co_await ledger::getLedgerConfig(
+                        latestView, blockNumber, scheduler->m_blockFactory.get());
+                    if (ledgerConfig->executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
+                    {
+                        error = BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
                             fmt::format("eth_call: historical call at block {} requires the "
                                         "full-fidelity MPT of an Ethereum-lane chain "
                                         "(executor_version >= 2, scenario B); this chain's state "
                                         "at that block is not completely committed to an MPT",
-                                blockNumber)),
-                        nullptr);
-                    co_return;
+                                blockNumber));
+                    }
+                    else
+                    {
+                        auto block = co_await ledger::getBlockData(latestView, blockNumber,
+                            ledger::HEADER, scheduler->m_blockFactory.get());
+                        auto stateRoot = block->blockHeader()->stateRoot();
+                        if (stateRoot == crypto::HashType{})
+                        {
+                            error = BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                                fmt::format("eth_call: no MPT state root recorded in block {}'s "
+                                            "header",
+                                    blockNumber));
+                        }
+                        else
+                        {
+                            scheduler->stampCallRevision(*ledgerConfig, *block->blockHeader());
+                            HistoricalStateBackend<typename MultiLayerStorage::ViewType>
+                                historicalBackend(
+                                    latestView, stateRoot, ledger::account::nodeAddressTableMode());
+                            storage2::View<typename MultiLayerStorage::MutableStorage, void,
+                                HistoricalStateBackend<typename MultiLayerStorage::ViewType>>
+                                historicalView(std::addressof(historicalBackend));
+                            historicalView.newMutable();
+                            receipt = co_await scheduler->m_executor.get().executeTransaction(
+                                historicalView, *block->blockHeader(), *transaction, 0,
+                                *ledgerConfig, true);
+                        }
+                    }
                 }
-                auto block = co_await ledger::getBlockData(
-                    latestView, blockNumber, ledger::HEADER, scheduler->m_blockFactory.get());
-                auto stateRoot = block->blockHeader()->stateRoot();
-                if (stateRoot == crypto::HashType{})
-                {
-                    callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                                 fmt::format("eth_call: no MPT state root recorded in block {}'s "
-                                             "header",
-                                     blockNumber)),
-                        nullptr);
-                    co_return;
-                }
-
-                scheduler->stampCallRevision(*ledgerConfig, *block->blockHeader());
-                HistoricalStateBackend<typename MultiLayerStorage::ViewType> historicalBackend(
-                    latestView, stateRoot, ledger::account::nodeAddressTableMode());
-                storage2::View<typename MultiLayerStorage::MutableStorage, void,
-                    HistoricalStateBackend<typename MultiLayerStorage::ViewType>>
-                    historicalView(std::addressof(historicalBackend));
-                historicalView.newMutable();
-                auto receipt = co_await scheduler->m_executor.get().executeTransaction(
-                    historicalView, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
-                callback(nullptr, std::move(receipt));
             }
             catch (bcos::ledger::mpt::MPTInvariantViolation const& e)
             {
                 // The historical walk lost its state-trie root (or an internal node): with
-                // pruning enabled that is the retention window, not corruption — and the
+                // pruning enabled that is the retention window, not corruption -- and the
                 // window-boundary race (root resolves at request time, a concurrent commit
                 // deletes the rows before the walk) makes it reachable on a healthy node.
                 // Distinct error code so the RPC layer answers -32004, the same shape the five
-                // direct historical endpoints use, instead of a generic internal error leaking
-                // diagnostic_information to an unauthenticated caller.
-                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::MPTStateUnavailable,
-                             fmt::format("eth_call at block {} failed: state trie node unavailable "
-                                         "(beyond the pruning retention window or missing): {}",
-                                 blockNumber, boost::diagnostic_information(e))),
-                    nullptr);
+                // direct historical endpoints use. The diagnostic stays in the log: it names
+                // source files and lines, and this message reaches an unauthenticated caller.
+                BASELINE_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("eth_call historical state unavailable")
+                    << LOG_KV("blockNumber", blockNumber)
+                    << LOG_KV("diagnostic", boost::diagnostic_information(e));
+                error = BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::MPTStateUnavailable,
+                    fmt::format("eth_call at block {} failed: state trie node unavailable "
+                                "(beyond the pruning retention window or missing): {}",
+                        blockNumber, e.what()));
             }
             catch (std::exception const& e)
             {
-                // Same rule as the MPT branch above: the diagnostic (throwing function, source
-                // file, line) is logged at the node and never put into a message an
-                // unauthenticated caller receives.
-                BCOS_LOG(WARNING) << LOG_BADGE("BASELINE_SCHEDULER") << LOG_DESC("eth_call failed")
-                                  << LOG_KV("blockNumber", blockNumber)
-                                  << LOG_KV("diagnostic", boost::diagnostic_information(e));
-                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
-                             fmt::format("eth_call at block {} failed: {}", blockNumber, e.what())),
-                    nullptr);
+                // Same rule as the MPT branch above: the diagnostic is logged at the node and
+                // never put into a message an unauthenticated caller receives.
+                BASELINE_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("eth_call failed") << LOG_KV("blockNumber", blockNumber)
+                    << LOG_KV("diagnostic", boost::diagnostic_information(e));
+                error = BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
+                    fmt::format("eth_call at block {} failed: {}", blockNumber, e.what()));
             }
             catch (...)
             {
-                BCOS_LOG(WARNING) << LOG_BADGE("BASELINE_SCHEDULER")
-                                  << LOG_DESC("eth_call failed with a non-std exception")
-                                  << LOG_KV("blockNumber", blockNumber);
-                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
-                             fmt::format("eth_call at block {} failed", blockNumber)),
-                    nullptr);
+                BASELINE_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("eth_call failed with a non-std exception")
+                    << LOG_KV("blockNumber", blockNumber);
+                error = BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
+                    fmt::format("eth_call at block {} failed", blockNumber));
             }
+            callback(std::move(error), std::move(receipt));
         }(self, std::move(transaction), blockNumber, std::move(callback)));
     });
 }
