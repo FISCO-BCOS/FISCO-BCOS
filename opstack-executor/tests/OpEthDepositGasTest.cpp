@@ -25,7 +25,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
-#include <evmone/evmone.h>
+#include <evmc/evmc.hpp>
 #include <boost/test/unit_test.hpp>
 
 #include <cstdint>

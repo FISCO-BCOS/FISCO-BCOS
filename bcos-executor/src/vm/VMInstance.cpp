@@ -72,10 +72,20 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
                 .release_raw());
     }
 
-    // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
-    // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION). Cached analysis is still used.
-    // NOTE(perf): this is the correctness-first path for now; benchmark-backed pooling can be
-    // considered only after evmone reset/reuse guarantees are validated.
+    // Fresh VM per execute. NOT because reuse is unsafe: evmone 0.21 pools ExecutionState inside
+    // the VM, and sequential reuse on ONE thread is clean -- including the deep / out-of-gas /
+    // revert frame shapes that leave the pool non-trivial
+    // (ethereum-executor/tests/TestEvmoneVmReuse.cpp pins that against a fresh VM). What is unsafe
+    // is two threads *concurrently* inside one VM: get_execution_state resizes an unsynchronised
+    // vector and each slot recalls the host context of the frame that reset it, so the second
+    // entry corrupts the first (observed as EVMC_BAD_JUMP_DESTINATION among other failures).
+    // This path is reachable from arbitrary scheduler threads and takes no guarantee that only one
+    // of them is inside at a time, so it keeps a VM of its own per execute. The Ethereum/OP lanes
+    // do hold that guarantee -- see EvmoneVm.h, which owns the per-thread instance and states the
+    // condition -- and reuse there instead. One policy, two sites that satisfy it differently.
+    // Cached analysis is still used.
+    // NOTE(perf): moving this path to the shared instance is a benchmark-backed change, not a
+    // correctness one.
     evmc::VM evm{evmc_create_evmone()};
     auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
     evmoneVm->hash_fn = evm_hash_fn;

@@ -116,10 +116,6 @@ public:
       : m_receiptFactory(receiptFactory), m_blockHashLookup(std::move(blockHashLookup))
     {}
 
-    /// Access the EVM instance (needed for system_call functions).
-    /// Per-thread; see threadLocalEvmoneVm(). Valid only during a call on this thread.
-    evmc::VM& vm() { return threadLocalEvmoneVm(); }
-
     /// Execute a single Ethereum transaction.
     ///
     /// Convenience entry point that drives the three lifecycle phases in

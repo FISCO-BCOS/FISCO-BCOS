@@ -41,7 +41,8 @@ add_test(NAME test-ethereum-authorization-list COMMAND test-ethereum-authorizati
 # `thread_local` back to a shared instance makes DifferentThreadsGetDifferentVms fail.
 add_executable(test-ethereum-evmone-vm
     TestMain.cpp
-    TestEvmoneVmPerThread.cpp)
+    TestEvmoneVmPerThread.cpp
+    TestEvmoneVmReuse.cpp)
 target_include_directories(test-ethereum-evmone-vm PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(test-ethereum-evmone-vm PRIVATE
     ethereum-executor evmone::evmone Boost::unit_test_framework)

@@ -1052,8 +1052,8 @@ private:
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<OpRecentBlockHashes<ViewType>> hashes;
-            co_await preBlockOpEthSteps(view, header, spec, rawTxBytes, deposits, executor.vm(),
-                sharedError, hashes, hashErr, daFootprintGasScalar);
+            co_await preBlockOpEthSteps(view, header, spec, rawTxBytes, deposits, sharedError,
+                hashes, hashErr, daFootprintGasScalar);
 
             // Fee params load on the first normal tx. blockGasLeft is narrowed from gasLimit.
             // BLOCKHASH answers come from the per-block OpRecentBlockHashes (op-geth GetHashFn

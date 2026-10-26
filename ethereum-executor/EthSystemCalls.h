@@ -44,6 +44,7 @@
 #include "EthStorageErrorGuard.h"
 #include "EthereumHost.h"
 #include "EthereumState.h"
+#include "EvmoneVm.h"
 #include "bcos-task/Task.h"
 #include <array>
 #include <evmc/evmc.hpp>
@@ -154,7 +155,7 @@ inline constexpr std::array REQUESTS_SYSTEM_CONTRACTS{
 /// pass its own policy when its system-call wiring requires it.
 template <class Storage, class Policy = EthL1Policy>
 evmc::Result executeSystemCall(EthereumState<Storage>& state, EthBlockInfo const& block,
-    evmc_revision rev, evmc::VM& vm, address const& addr, bytes_view code, bytes_view input,
+    evmc_revision rev, address const& addr, bytes_view code, bytes_view input,
     Policy const& policy = Policy{})
 {
     // Every field is listed (the tree builds with -Werror
@@ -178,6 +179,11 @@ evmc::Result executeSystemCall(EthereumState<Storage>& state, EthBlockInfo const
         .code_size = 0,
     };
 
+    // Taken here, in the same synchronous span as the execute() below: a system call is a
+    // coroutine, and a reference taken before an earlier co_await would be bound on one thread
+    // and used on whichever thread resumed it. See EvmoneVm.h.
+    auto& vm = threadLocalEvmoneVm();
+
     // System-call mode: no transaction context (zero origin, zero prices).
     EthereumHost<Storage, Policy> host{rev, vm, state, block, /*blockHashLookup=*/{},
         /*txContext=*/std::nullopt, EthCallParams{}, /*chainId=*/0, policy};
@@ -197,7 +203,7 @@ evmc::Result executeSystemCall(EthereumState<Storage>& state, EthBlockInfo const
 /// @param storageErrorSlot shared swallowed-read recorder (null = legacy
 ///        fail-safe reads); the caller checks it at the block boundary.
 template <class Storage, class Policy = EthL1Policy>
-task::Task<std::optional<std::string>> systemCallBlockStart(Storage& view, evmc::VM& vm,
+task::Task<std::optional<std::string>> systemCallBlockStart(Storage& view,
     EthBlockInfo const& block, evmc::bytes32 const& parentBlockHash, evmc_revision rev,
     Policy const& policy = Policy{},
     std::shared_ptr<EthStorageErrorSlot> storageErrorSlot = nullptr)
@@ -223,7 +229,7 @@ task::Task<std::optional<std::string>> systemCallBlockStart(Storage& view, evmc:
                                       parentBlockHash :
                                       block.parent_beacon_block_root;
             const auto res = eth_system_calls_detail::executeSystemCall<Storage, Policy>(
-                state, block, rev, vm, contract.addr, code, input, policy);
+                state, block, rev, contract.addr, code, input, policy);
             if (res.status_code != EVMC_SUCCESS)
             {
                 co_return "block-start system call (EIP-4788/2935) failed: system contract "
@@ -256,7 +262,7 @@ struct EthBlockEndSystemCallsResult
 /// failure means divergent local state.
 /// Call only when the block's revision >= EVMC_PRAGUE.
 template <class Storage, class Policy = EthL1Policy>
-task::Task<EthBlockEndSystemCallsResult> systemCallBlockEnd(Storage& view, evmc::VM& vm,
+task::Task<EthBlockEndSystemCallsResult> systemCallBlockEnd(Storage& view,
     EthBlockInfo const& block, evmc_revision rev, Policy const& policy = Policy{},
     std::shared_ptr<EthStorageErrorSlot> storageErrorSlot = nullptr)
 {
@@ -280,7 +286,7 @@ task::Task<EthBlockEndSystemCallsResult> systemCallBlockEnd(Storage& view, evmc:
             }
 
             const auto res = eth_system_calls_detail::executeSystemCall<Storage, Policy>(
-                state, block, rev, vm, contract.addr, code, {}, policy);
+                state, block, rev, contract.addr, code, {}, policy);
             if (res.status_code != EVMC_SUCCESS)
             {
                 result.error = "block-end system call (EIP-7002/7251) failed: execution reverted";

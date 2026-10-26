@@ -103,11 +103,11 @@ inline evmc::bytes32 toEvmcBytes32(bcos::h256 const& hash)
 /// @param storageErrorSlot the block's shared swallowed-read recorder
 ///        (EthStorageErrorGuard.h); null keeps the legacy fail-safe reads.
 template <class Storage>
-task::Task<std::optional<std::string>> applyBlockStartSystemCalls(Storage& view, evmc::VM& vm,
+task::Task<std::optional<std::string>> applyBlockStartSystemCalls(Storage& view,
     protocol::EthBlockHeaderData const& ethHeader, evmc_revision rev,
     std::shared_ptr<executor_v1::eth::EthStorageErrorSlot> storageErrorSlot = nullptr)
 {
-    co_return co_await executor_v1::eth::systemCallBlockStart(view, vm,
+    co_return co_await executor_v1::eth::systemCallBlockStart(view,
         eth_system_calls_detail::blockInfoForSystemCalls(ethHeader),
         eth_system_calls_detail::toEvmcBytes32(ethHeader.parentInfo.blockHash), rev,
         executor_v1::eth::EthL1Policy{}, std::move(storageErrorSlot));
@@ -127,11 +127,11 @@ struct BlockEndSystemCallsResult
 /// @param storageErrorSlot the block's shared swallowed-read recorder
 ///        (EthStorageErrorGuard.h); null keeps the legacy fail-safe reads.
 template <class Storage>
-task::Task<BlockEndSystemCallsResult> applyBlockEndSystemCalls(Storage& view, evmc::VM& vm,
+task::Task<BlockEndSystemCallsResult> applyBlockEndSystemCalls(Storage& view,
     protocol::EthBlockHeaderData const& ethHeader, evmc_revision rev,
     std::shared_ptr<executor_v1::eth::EthStorageErrorSlot> storageErrorSlot = nullptr)
 {
-    auto result = co_await executor_v1::eth::systemCallBlockEnd(view, vm,
+    auto result = co_await executor_v1::eth::systemCallBlockEnd(view,
         eth_system_calls_detail::blockInfoForSystemCalls(ethHeader), rev,
         executor_v1::eth::EthL1Policy{}, std::move(storageErrorSlot));
     co_return BlockEndSystemCallsResult{std::move(result.error), std::move(result.requests)};

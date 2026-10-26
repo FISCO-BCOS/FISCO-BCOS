@@ -612,7 +612,7 @@ public:
         if (blockRevision >= EVMC_CANCUN)
         {
             if (auto error = co_await applyBlockStartSystemCalls(
-                    view, m_executor.get().vm(), ethHeader, blockRevision, storageErrorSlot);
+                    view, ethHeader, blockRevision, storageErrorSlot);
                 error.has_value())
             {
                 co_return co_await fail("EthereumBlockVerifier: " + *error);
@@ -842,8 +842,8 @@ public:
         // receipts (deposit-contract address is per-chain: forkSchedule carries it).
         if (blockRevision >= EVMC_PRAGUE)
         {
-            auto blockEnd = co_await applyBlockEndSystemCalls(
-                view, m_executor.get().vm(), ethHeader, blockRevision, storageErrorSlot);
+            auto blockEnd =
+                co_await applyBlockEndSystemCalls(view, ethHeader, blockRevision, storageErrorSlot);
             if (blockEnd.error.has_value())
             {
                 co_return co_await fail("EthereumBlockVerifier: " + *blockEnd.error);

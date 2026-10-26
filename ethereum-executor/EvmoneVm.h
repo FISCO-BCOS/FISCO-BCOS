@@ -32,6 +32,17 @@
  * drives the EVM -- EthereumTransition.h, EthSystemCalls.h, the OP executor -- can take the VM
  * without depending on an executor class.
  *
+ * Taking it inside the synchronous span is necessary but not by itself sufficient, and the
+ * remaining premise is worth naming because it is what an asynchronous storage would break:
+ * holding the VM across an await is only safe while that await never actually suspends. The read
+ * path the Ethereum lane runs on (EthereumState over the inline and blocking storages) reaches
+ * task::tbb::syncWait (libtask/bcos-task/TBBWait.h), which calls oneapi::tbb::task::suspend only
+ * when the awaited task has not already finished -- and for these storages it always has, so the
+ * span runs to completion on the thread that entered it. A storage whose reads complete on
+ * another task would suspend there, resume on a different TBB worker, and the frame would
+ * continue on a thread that does not own this VM. Reusing the VM is therefore conditional on
+ * that property, not merely on the acquisition site.
+ *
  * Cost: one VM per *live* thread, held until that thread exits, so the total is
  * (TBB worker threads + RPC IO threads) x per-VM footprint. The per-VM footprint is not a
  * constant: the pool's slots are constructed lazily and each live slot retains the

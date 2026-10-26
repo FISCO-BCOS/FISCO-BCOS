@@ -20,8 +20,10 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
 {
     (void)code;  // execute uses pre-analyzed m_analysis
     (void)codeSize;
-    // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
-    // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION).
+    // Fresh VM per execute: safe reuse requires that no two threads are ever inside the VM at the
+    // same time (evmone pools ExecutionState in an unsynchronised vector), which this path -- run
+    // from arbitrary scheduler threads -- does not guarantee. Sequential reuse on one thread is
+    // fine; see EvmoneVm.h and TestEvmoneVmReuse.cpp.
     evmc::VM evm{evmc_create_evmone()};
     auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
     evmoneVm->hash_fn = hostcontext::evm_hash_fn;

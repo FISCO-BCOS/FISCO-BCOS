@@ -84,7 +84,7 @@ template <class Storage>
 template <class Storage, class RawTxRange>
 task::Task<void> preBlockOpEthSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     OpForkSpec const& spec, RawTxRange const& rawTxBytes, std::vector<DepositTx> const& deposits,
-    evmc::VM& vm, std::shared_ptr<OpStorageErrorSlot> const& errorSlot,
+    std::shared_ptr<OpStorageErrorSlot> const& errorSlot,
     std::optional<OpRecentBlockHashes<Storage>>& hashes, std::optional<std::string>& hashErr,
     std::optional<uint16_t>& daFootprintGasScalar)
 {
@@ -121,7 +121,7 @@ task::Task<void> preBlockOpEthSteps(Storage& view, bcos::protocol::BlockHeader c
         OpPolicy const sysPolicy{spec, blk};
         auto const sysErr =
             co_await eth::systemCallBlockStart<OpFaultRecordingStorage<Storage>, OpPolicy>(
-                faultProbe, vm, blk, parentHash, spec.rev, sysPolicy);
+                faultProbe, blk, parentHash, spec.rev, sysPolicy);
         if (sysErr)
         {
             throw bcos::evm::engine::OpStorageError(

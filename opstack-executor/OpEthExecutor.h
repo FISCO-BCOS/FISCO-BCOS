@@ -53,10 +53,8 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>  // safeFromQuantity / fromBigEndian
 #include <bcos-utilities/Exceptions.h>
-#include <ethereum-executor/EthereumExecutor.h>  // threadLocalEvmoneVm
 #include <ethereum-executor/EthereumState.h>
 #include <ethereum-executor/EthereumTransition.h>  // validateTransaction / runTransaction
-#include <evmone/evmone.h>
 #include <opstack-executor/OpCommon.h>         // OpConsensusError / OpStorageError / narrowGasUsed
 #include <opstack-executor/OpEnvelopeCheck.h>  // the four fail-closed envelope checks
 #include <opstack-executor/OpEthBlockExecute.h>    // buildOpEthBlockInfo / OpEthBlockError
@@ -67,6 +65,7 @@
 #include <opstack-executor/OpStorageErrorGuard.h>  // OpStorageErrorSlot / OpFaultRecordingStorage
 #include <charconv>
 #include <cstdint>
+#include <evmc/evmc.hpp>  // evmc::bytes_view / evmc_address in the envelope helpers
 #include <functional>
 #include <limits>
 #include <memory>
@@ -231,10 +230,6 @@ public:
     {
         return m_errorSlot;
     }
-
-    /// Access the EVM instance (needed for system_call functions).
-    /// Per-thread; see threadLocalEvmoneVm(). Valid only during a call on this thread.
-    evmc::VM& vm() { return bcos::executor_v1::eth::threadLocalEvmoneVm(); }
 
     // ---- TransactionExecutor concept: ExecuteContext with prepare/execute/finish ----
     using BlockContext = OpEthBlockContext;

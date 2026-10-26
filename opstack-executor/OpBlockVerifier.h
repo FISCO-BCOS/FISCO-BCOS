@@ -504,8 +504,8 @@ public:
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<OpRecentBlockHashes<ViewType>> hashes;
-            co_await preBlockOpEthSteps(view, *header, spec, rawTxBytes, deposits, executor.vm(),
-                sharedError, hashes, hashErr, daFootprintGasScalar);
+            co_await preBlockOpEthSteps(view, *header, spec, rawTxBytes, deposits, sharedError,
+                hashes, hashErr, daFootprintGasScalar);
 
             OpEthBlockContext ctx{.fee = {},
                 .blockGasLeft =
