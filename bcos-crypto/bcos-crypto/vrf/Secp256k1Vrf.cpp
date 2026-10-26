@@ -20,6 +20,7 @@
 #include "bcos-crypto/hash/Sha256.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-crypto/utilities/ByteBufferUtils.h"
+#include <openssl/crypto.h>
 #include <secp256k1.h>
 #include <array>
 #include <cstring>
@@ -37,6 +38,13 @@ constexpr std::array<std::uint8_t, 32> GROUP_ORDER{0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xBF, 0xD2, 0x5E, 0x8C, 0xD0, 0x36, 0x41, 0x41};
 
 using ScalarBE = std::array<std::uint8_t, 32>;
+
+// std::array cleansed with OPENSSL_cleanse on destruction, for secret-bearing temporaries
+template <size_t N>
+struct CleansedBytes : std::array<std::uint8_t, N>
+{
+    ~CleansedBytes() { OPENSSL_cleanse(this->data(), N); }
+};
 
 bool isZero(const ScalarBE& _scalar)
 {
@@ -162,14 +170,22 @@ bcos::bytes bcos::crypto::secp256k1VrfProve(bytesConstRef _secretKey, bytesConst
     // independent of k and verification accepts any valid (c, s), so no consensus-visible
     // value changes.
     auto inputHash = sha256Hash(_input);
-    auto nonceInput = bytesConcat({_secretKey, inputHash.ref()});
-    ScalarBE k;
-    std::memcpy(k.data(), sha256Hash(refOf(nonceInput)).data(), k.size());
+    // the pre-image holds the raw secret: keep it (and k) in stack storage cleansed on
+    // every return path; the 65th byte is the resample counter slot
+    CleansedBytes<65> noncePreImage;
+    std::memcpy(noncePreImage.data(), _secretKey.data(), 32);
+    std::memcpy(noncePreImage.data() + 32, inputHash.data(), 32);
+    CleansedBytes<32> k;
+    size_t preImageLen = 64;
+    std::memcpy(
+        k.data(), sha256Hash(bytesConstRef(noncePreImage.data(), preImageLen)).data(), k.size());
     // resample with an appended counter on the vanishingly unlikely invalid scalar
     for (std::uint8_t counter = 0; !isValidSecretScalar(k.data()); ++counter)
     {
-        auto retryInput = bytesConcat({refOf(nonceInput), bytesConstRef(&counter, 1)});
-        std::memcpy(k.data(), sha256Hash(refOf(retryInput)).data(), k.size());
+        noncePreImage[64] = counter;
+        preImageLen = 65;
+        std::memcpy(k.data(), sha256Hash(bytesConstRef(noncePreImage.data(), preImageLen)).data(),
+            k.size());
     }
     secp256k1_pubkey pointK;
     if (secp256k1_ec_pubkey_create(secp256k1Context(), &pointK, k.data()) == 0) [[unlikely]]

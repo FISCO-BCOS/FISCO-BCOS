@@ -405,6 +405,22 @@ BOOST_AUTO_TEST_CASE(testSM2VerifyShortSignature)
     BOOST_CHECK(!signatureCrypto->verify(keyPair->publicKey(), hashData, bytesConstRef{}));
 }
 
+// ed25519Verify must reject a short signature before constructing the fixed
+// ED25519_SIGNATURE_LEN view, which would otherwise read past the caller's buffer (under
+// ASan any residual overread would abort the test binary)
+BOOST_AUTO_TEST_CASE(testEd25519VerifyShortSignature)
+{
+    auto signatureCrypto = std::make_shared<Ed25519Crypto>();
+    auto keyPair = signatureCrypto->generateKeyPair();
+    auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
+    auto signature = signatureCrypto->sign(*keyPair, hashData, false);
+    BOOST_REQUIRE_EQUAL(signature->size(), ED25519_SIGNATURE_LEN);
+
+    BOOST_CHECK(!signatureCrypto->verify(keyPair->publicKey(), hashData,
+        bytesConstRef(signature->data(), ED25519_SIGNATURE_LEN - 1)));
+    BOOST_CHECK(!signatureCrypto->verify(keyPair->publicKey(), hashData, bytesConstRef{}));
+}
+
 
 BOOST_AUTO_TEST_CASE(testED25519SignAndVerify)
 {

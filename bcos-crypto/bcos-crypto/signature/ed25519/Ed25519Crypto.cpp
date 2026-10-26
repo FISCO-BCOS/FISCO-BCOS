@@ -104,6 +104,12 @@ bool bcos::crypto::ed25519Verify(
     {
         return false;
     }
+    // reject short signatures while the length is still known: the fixed-length view below
+    // would otherwise read past the caller's buffer
+    if (_signatureData.size() < ED25519_SIGNATURE_LEN)
+    {
+        return false;
+    }
     auto signatureWithoutPub = bytesConstRef(_signatureData.data(), ED25519_SIGNATURE_LEN);
     return EVP_DigestVerify(ctx.get(), signatureWithoutPub.data(), signatureWithoutPub.size(),
                _messageHash.data(), HashType::SIZE) == 1;

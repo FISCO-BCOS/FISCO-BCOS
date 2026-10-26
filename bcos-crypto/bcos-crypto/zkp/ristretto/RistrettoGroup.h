@@ -218,7 +218,10 @@ struct RistrettoMsmTerm
     RistrettoPointBytes point;
 };
 
-// naive multiscalar multiplication (verify-path performance is non-critical)
+// naive multiscalar multiplication: one variable-base scalarmult per term, measured at
+// 1.85-2.08x the batched dalek implementation it replaced (~380-466 us per sum/product
+// verify). Deferred because ZkpPrecompiled has only ever charged memory gas; batching and
+// the gas-schedule question are tracked by #5735.
 inline RistrettoPointBytes ristrettoMultiscalarMul(const std::vector<RistrettoMsmTerm>& _terms)
 {
     RistrettoPointBytes accumulator = RISTRETTO_IDENTITY;
