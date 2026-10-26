@@ -139,46 +139,8 @@ constexpr inline struct SyncWait
 /// executeSinglePass`'s mergeLastStorage is exactly that: it merges into the in-memory mutable
 /// layer and returns, so the plain wait is both correct and cheaper.
 ///
-/// The third case is code on a plain thread (an RPC IO thread driving eth_call) that has to
-/// *become* a TBB task before it can wait on the EVM's state reads: `runInCallArena` below.
-
-/// The arena the read-only call round trips run in.
-///
-/// Shared, so wrapping a call does not put arena construction on the hot path. Default
-/// concurrency: this is a context, not a throttle.
-inline oneapi::tbb::task_arena& callArena()
-{
-    static oneapi::tbb::task_arena arena;
-    return arena;
-}
-
-/// Hand @p body to callArena() as a TBB task, without waiting for it.
-///
-/// `task_arena::enqueue` wraps the body in an `enqueue_task`, which *is* a TBB task, so
-/// `task::tbb::syncWait` inside it has something to suspend. (An `execute` body would not:
-/// `current_task_ptr()` is null there, and `execute` also blocks the caller until the body
-/// finishes, which is the opposite of what an RPC IO thread wants.)
-///
-/// The caller returns as soon as the task is enqueued: enqueue is a hand-off, and the body runs
-/// later on an arena worker. That asynchrony is the point, but it also means the owner of the
-/// body must outlive it -- the caller's lifetime is not extended by this call. BaselineScheduler
-/// therefore counts its in-flight bodies and waits for the count to drain before it is destroyed.
-///
-/// @p body must return void: enqueue has nowhere to put a value, so a body with a result would
-/// lose it silently. The constraint below turns that into a compile error.
-///
-/// The body is boxed in a shared_ptr before being handed over because TBB stores an enqueue
-/// functor as `const F` and calls it through that const object, so the body would otherwise have
-/// to be const-invocable. A body that moves out of its captures -- an eth_call moving a
-/// transaction and a callback into the coroutine it starts -- is not, and cannot reasonably be
-/// made so; behind the pointer the body keeps its non-const operator().
-template <class Body>
-    requires std::invocable<Body&> && std::is_void_v<std::invoke_result_t<Body&>> &&
-             std::constructible_from<std::decay_t<Body>, Body&&>
-void runInCallArena(Body&& body)
-{
-    auto holder = std::make_shared<std::decay_t<Body>>(std::forward<Body>(body));
-    callArena().enqueue([holder] { (*holder)(); });
-}
-
+/// The third case -- code on a plain thread (an RPC IO thread driving eth_call) that has to
+/// *become* a TBB task -- needs no helper here: `tbb::task_group::run` from that thread already
+/// spawns the body as a TBB task with a task context (so syncWait's suspend is legal) and does
+/// not execute it on the caller. BaselineScheduler uses its own group for exactly that.
 }  // namespace bcos::task::tbb

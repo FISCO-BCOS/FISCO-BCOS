@@ -156,6 +156,9 @@ private:
         ~endCallBodyOnExit() { m_self->endCallBody(); }
     };
 
+    /// The body handed to m_asyncGroup, boxed because task_group holds it as `const F`.
+    using CallBody = std::function<void()>;
+
     void waitForCallBodies()
     {
         std::unique_lock lock(m_inflightCallBodiesMutex);

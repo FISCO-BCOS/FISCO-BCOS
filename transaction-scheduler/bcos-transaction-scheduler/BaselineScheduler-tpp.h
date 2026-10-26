@@ -800,14 +800,23 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
     // (the serial scheduler runs it in a parallel_pipeline filter), but call()/callAtBlock()
     // arrive straight from an RPC IO thread, which must neither suspend nor be blocked.
     //
-    // runInCallArena turns that thread into a TBB task without blocking it: enqueue into a
-    // shared arena spawns the body (so syncWait has a task to suspend) and returns. The arena
-    // does not own the body's lifetime, though -- nothing in it knows about this scheduler --
-    // so every body is counted and ~BaselineScheduler waits for the count to drain. Without
-    // that, a body still queued when the scheduler is destroyed would call into freed memory.
+    // m_asyncGroup::run is what turns that thread into a TBB task without blocking it: run
+    // spawns the body (oneTBB reports a task context inside it, so syncWait's suspend is legal)
+    // and returns to the caller. Measured, not assumed: a body enqueued this way from a plain
+    // std::thread has current_context() != nullptr and does not execute on the caller.
+    //
+    // Lifetime is NOT left to task_group::wait(), though. wait() is specified to return when the
+    // group's tasks complete, and a task parked in task::suspend is not documented to count as
+    // incomplete -- so a body suspended on a storage read could still be holding `this` when the
+    // destructor's wait() returns. The in-flight counter below is therefore explicit, and
+    // ~BaselineScheduler drains it first.
     beginCallBody();
-    task::tbb::runInCallArena([self = this, transaction = std::move(transaction),
-                                  callback = std::move(callback)]() mutable {
+    // Boxed before submission: task_group stores the functor as `const F` and invokes it through
+    // that const object, so a body that moves its captures out (this one moves the transaction
+    // and the callback into the coroutine it starts) could not be called. Behind the pointer the
+    // body keeps its non-const operator().
+    auto body = std::make_shared<CallBody>([self = this, transaction = std::move(transaction),
+                                               callback = std::move(callback)]() mutable {
         endCallBodyOnExit guard{self};
         task::wait([](BaselineScheduler* scheduler, protocol::Transaction::Ptr transaction,
                        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
@@ -838,6 +847,7 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             callback(std::move(error), std::move(receipt));
         }(self, std::move(transaction), std::move(callback)));
     });
+    m_asyncGroup.run([body = std::move(body)] { (*body)(); });
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
@@ -863,10 +873,11 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
 {
     // Same contract as call(): the historical path also runs the EVM and also arrives on an RPC
     // IO thread, so it goes through the same group for the same two reasons -- a TBB task for
-    // syncWait to suspend, and a body the destructor drains.
+    // syncWait to suspend, and a body counted so the destructor can drain it.
     beginCallBody();
-    task::tbb::runInCallArena([self = this, transaction = std::move(transaction), blockNumber,
-                                  callback = std::move(callback)]() mutable {
+    auto body = std::make_shared<CallBody>([self = this, transaction = std::move(transaction),
+                                               blockNumber,
+                                               callback = std::move(callback)]() mutable {
         endCallBodyOnExit guard{self};
         task::wait([](BaselineScheduler* scheduler, protocol::Transaction::Ptr transaction,
                        protocol::BlockNumber blockNumber,
@@ -971,6 +982,7 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             callback(std::move(error), std::move(receipt));
         }(self, std::move(transaction), blockNumber, std::move(callback)));
     });
+    m_asyncGroup.run([body = std::move(body)] { (*body)(); });
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
