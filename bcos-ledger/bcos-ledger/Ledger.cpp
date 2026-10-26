@@ -55,6 +55,7 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Table.h>
 #include <bcos-task/Wait.h>
+#include <bcos-task/WhenAll.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/LogStream.h>
@@ -204,63 +205,73 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             });
         return;
     }
+    // The writes below run inside one detached coroutine: rows 1-6 and the total-count rows fan
+    // out through task::whenAll (replacing the historical TOTAL_CALLBACK atomic-counter
+    // protocol), and the total-count read sits between them as a co_await. Everything is passed
+    // by value: task::wait does not wait, so the coroutine frame must own all it touches.
+    task::wait(
+        [](decltype(*this)& self, bcos::storage::StorageInterface::Ptr storage,
+            bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block,
+            std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+            std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
+            -> task::Task<void> {
+            std::string primaryKey;
+            try
+            {
+                primaryKey = co_await self.prewriteBlockImpl(std::move(storage),
+                    std::move(blockTxs), std::move(block), writeTxsAndReceipts,
+                    std::move(blockHashOverride), writeNonces);
+            }
+            catch (bcos::Error& e)
+            {
+                LEDGER_LOG(ERROR) << "PrewriteBlock error" << boost::diagnostic_information(e);
+                callback("",
+                    BCOS_ERROR_WITH_PREV_PTR(
+                        LedgerError::CollectAsyncCallbackError, "PrewriteBlock error", e));
+                co_return;
+            }
+            catch (std::exception& e)
+            {
+                LEDGER_LOG(ERROR) << "PrewriteBlock error" << boost::diagnostic_information(e);
+                callback("",
+                    BCOS_ERROR_WITH_PREV_PTR(
+                        LedgerError::CollectAsyncCallbackError, "PrewriteBlock error", e));
+                co_return;
+            }
+            // Invoked outside the try so a throwing consumer callback cannot be caught above
+            // and re-invoked with an error.
+            callback(std::move(primaryKey), nullptr);
+        }(*this, std::move(storage), std::move(_blockTxs), std::move(block), std::move(callback),
+            writeTxsAndReceipts, std::move(blockHashOverride), writeNonces));
+}
+
+task::Task<std::string> Ledger::prewriteBlockImpl(bcos::storage::StorageInterface::Ptr storage,
+    bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block,
+    bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+    bool writeNonces)
+{
     auto header = block->blockHeader();
     // Short-circuit ternary (NOT value_or): value_or would evaluate header->hash()
     // unconditionally, which throws for OP headers that rely on the override.
     const auto blockHash = blockHashOverride ? *blockHashOverride : header->hash();
-
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
-
-    size_t TOTAL_CALLBACK = 8;
-    if (writeTxsAndReceipts)
-    {  // 9 storage callbacks and write hash=>tx
-        TOTAL_CALLBACK = 9;
-    }
-    if (!writeNonces)
-    {  // skip the nonce write callback when nonces are not persisted
-        TOTAL_CALLBACK -= 1;
-    }
-    auto primiaryKey =
+    auto primaryKey =
         bcos::storage::toDBKey(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash));
-    auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(TOTAL_CALLBACK),
-                              failed = std::make_shared<bool>(false),
-                              callback = std::move(callback), primiaryKey = std::move(primiaryKey)](
-                              Error::UniquePtr&& error, size_t count = 1) {
-        *total -= count;
-        if (error)
-        {
-            LEDGER_LOG(ERROR) << "Prewrite block error!" << boost::diagnostic_information(*error);
-            *failed = true;
-        }
-
-        if (*total == 0)
-        {
-            // all finished
-            if (*failed)
-            {
-                LEDGER_LOG(ERROR) << "PrewriteBlock error";
-                callback("",
-                    BCOS_ERROR_PTR(LedgerError::CollectAsyncCallbackError, "PrewriteBlock error"));
-                return;
-            }
-
-            callback(primiaryKey, nullptr);
-        }
-    };
 
     // Rows 1-6 (number→hash, hash→number, number→header, optional nonces, current number,
     // number→tx-metadata) come from the shared data-pure builder
-    // (LedgerMethods.h::buildPrewriteBlockRows); only the fan-out and the total-counter
-    // rows below stay here.
+    // (LedgerMethods.h::buildPrewriteBlockRows) and fan out concurrently. whenAll settles only
+    // after every row write completes, so the totals below are still read-modify-written after
+    // all metadata writes, and the first failure (in row order) aborts the prewrite.
     auto prewriteMeta =
-        ledger::buildPrewriteBlockRows(block, _blockTxs, *m_blockFactory, blockHash, writeNonces);
+        ledger::buildPrewriteBlockRows(block, blockTxs, *m_blockFactory, blockHash, writeNonces);
+    std::vector<task::Task<void>> rowWrites;
+    rowWrites.reserve(prewriteMeta.rows.size());
     for (auto& [key, entry] : prewriteMeta.rows)
     {
-        auto [table, rowKey] = executor_v1::StateKeyView{key}.get();
-        storage->asyncSetRow(table, rowKey, std::move(entry), [setRowCallback](auto&& error) {
-            setRowCallback(std::forward<decltype(error)>(error));
-        });
+        rowWrites.emplace_back(storage2::writeOne(*storage, std::move(key), std::move(entry)));
     }
+    co_await task::whenAll(std::move(rowWrites));
 
     std::atomic_int64_t totalCount = 0;
     std::atomic_int64_t failedCount = 0;
@@ -292,6 +303,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             });
 
         auto start = utcTime();
+        // A receipts write failure is only logged: the historical TOTAL_CALLBACK protocol never
+        // counted the synchronous receipts setRows, so it could not fail the prewrite either.
         auto error = getBlockStorage()->setRows(SYS_HASH_2_RECEIPT, txsHash, receiptsView);
         writeReceiptsTime = static_cast<int64_t>(utcTime() - start);
         if (error)
@@ -301,8 +314,19 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         }
 
         start = utcTime();
-        asyncPreStoreBlockTxs(_blockTxs, block, setRowCallback);
+        // asyncPreStoreBlockTxs is fully synchronous (one setRows under m_mutex): its callback
+        // always fires INLINE before it returns, so capturing storeError by reference is safe.
+        Error::UniquePtr storeError;
+        asyncPreStoreBlockTxs(blockTxs, block, [&storeError](Error::UniquePtr&& callbackError) {
+            storeError = std::move(callbackError);
+        });
         writeTxsTime = static_cast<int64_t>(utcTime() - start);
+        if (storeError)
+        {
+            LEDGER_LOG(ERROR) << "Prewrite block error!"
+                              << boost::diagnostic_information(*storeError);
+            BOOST_THROW_EXCEPTION(*storeError);
+        }
     }
     else
     {
@@ -320,46 +344,41 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                       << LOG_KV("number", blockNumberStr) << LOG_KV("totalCount", totalCount)
                       << LOG_KV("failedCount", failedCount);
 
-    // total transaction count. Everything is captured by value: asyncGetTotalTransactionCount
-    // reaches this callback through task::wait, which does not wait, so the callback can run
-    // after this function has returned and its locals are gone.
-    asyncGetTotalTransactionCount(
-        [storage, block, setRowCallback, totalCount = totalCount.load(),
-            failedCount = failedCount.load(), writeReceiptsTime, writeTxsTime](
-            Error::Ptr error, int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
-            if (error)
-            {
-                setRowCallback(std::make_unique<Error>(*error), 2);
-                return;
-            }
-            auto totalTxsCount = total + totalCount;
-            Entry totalEntry;
-            totalEntry.set(boost::lexical_cast<std::string>(totalTxsCount));
-            storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
-                std::move(totalEntry), [setRowCallback](auto&& error) {
-                    setRowCallback(std::forward<decltype(error)>(error));
-                });
-            auto failedTxs = failed + failedCount;
-            if (failedCount != 0)
-            {
-                Entry failedEntry;
-                failedEntry.set(boost::lexical_cast<std::string>(failedTxs));
-                storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
-                    std::move(failedEntry), [setRowCallback](auto&& error) {
-                        setRowCallback(std::forward<decltype(error)>(error));
-                    });
-            }
-            else
-            {
-                setRowCallback({}, true);
-            }
-            LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
-                             << LOG_KV("number", block->blockHeader()->number())
-                             << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
-                             << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount)
-                             << LOG_KV("writeReceiptsMs", writeReceiptsTime)
-                             << LOG_KV("writeTxsMs", writeTxsTime);
-        });
+    // Total transaction count: read-modify-write AFTER all row writes settled. The historical
+    // code read through asyncGetTotalTransactionCount's open-table gate; this storage2-native
+    // read treats a missing SYS_CURRENT_STATE row as 0 instead (the table exists by the time
+    // any prewrite runs — genesis creates it).
+    auto count = co_await ledger::getTransactionCount(*m_stateStorage, fromStorage);
+    auto totalTxsCount = count.total + totalCount.load();
+    auto failedTxs = count.failed + failedCount.load();
+
+    std::vector<task::Task<void>> countWrites;
+    countWrites.reserve(2);
+    Entry totalEntry;
+    totalEntry.set(boost::lexical_cast<std::string>(totalTxsCount));
+    countWrites.emplace_back(
+        storage2::writeOne(*storage,
+            executor_v1::StateKey{SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT},
+            std::move(totalEntry)));
+    if (failedCount != 0)
+    {
+        Entry failedEntry;
+        failedEntry.set(boost::lexical_cast<std::string>(failedTxs));
+        countWrites.emplace_back(
+            storage2::writeOne(*storage,
+                executor_v1::StateKey{SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION},
+                std::move(failedEntry)));
+    }
+    co_await task::whenAll(std::move(countWrites));
+
+    LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
+                     << LOG_KV("number", header->number())
+                     << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
+                     << LOG_KV("incTxs", totalCount.load())
+                     << LOG_KV("incFailedTxs", failedCount.load())
+                     << LOG_KV("writeReceiptsMs", writeReceiptsTime)
+                     << LOG_KV("writeTxsMs", writeTxsTime);
+    co_return primaryKey;
 }
 
 task::Task<std::optional<ledger::StorageState>> Ledger::getStorageState(
@@ -708,74 +727,100 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
     LEDGER_LOG(TRACE) << "GetBatchTxsByHashList request" << LOG_KV("hashes", _txHashList->size())
                       << LOG_KV("withProof", _withProof);
 
-    auto hexList = std::make_shared<std::vector<std::string>>();
-    hexList->reserve(_txHashList->size());
+    task::wait(
+        [](decltype(*this)& self, crypto::HashListPtr txHashList, bool withProof,
+            std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr,
+                std::shared_ptr<std::map<std::string, MerkleProofPtr>>)>
+                callback) -> task::Task<void> {
+            std::pair<bcos::protocol::TransactionsPtr,
+                std::shared_ptr<std::map<std::string, MerkleProofPtr>>>
+                result;
+            try
+            {
+                result = co_await self.getBatchTxsWithProofs(std::move(txHashList), withProof);
+            }
+            catch (bcos::Error& e)
+            {
+                LEDGER_LOG(DEBUG) << "GetBatchTxsByHashList failed: " << e.errorMessage();
+                callback(BCOS_ERROR_WITH_PREV_PTR(
+                             LedgerError::GetStorageError, "GetBatchTxsByHashList error", e),
+                    nullptr, nullptr);
+                co_return;
+            }
+            catch (std::exception& e)
+            {
+                LEDGER_LOG(DEBUG) << "GetBatchTxsByHashList failed: "
+                                  << boost::diagnostic_information(e);
+                callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::CollectAsyncCallbackError,
+                             "Get batch transactions failed with errors!", e),
+                    nullptr, nullptr);
+                co_return;
+            }
+            // Invoked outside the try so a throwing consumer callback cannot be caught above
+            // and re-invoked with an error.
+            callback(nullptr, std::move(result.first), std::move(result.second));
+        }(*this, std::move(_txHashList), _withProof, std::move(_onGetTx)));
+}
 
-    for (auto& it : *_txHashList)
+task::Task<std::pair<bcos::protocol::TransactionsPtr,
+    std::shared_ptr<std::map<std::string, MerkleProofPtr>>>>
+Ledger::getBatchTxsWithProofs(crypto::HashListPtr txHashList, bool withProof)
+{
+    auto hexList = std::make_shared<std::vector<std::string>>();
+    hexList->reserve(txHashList->size());
+    for (auto& it : *txHashList)
     {
-        std::string hex(it.begin(), it.end());
-        hexList->emplace_back(std::move(hex));
+        hexList->emplace_back(it.begin(), it.end());
     }
 
-    asyncBatchGetTransactions(
-        hexList, [this, callback = std::move(_onGetTx), _txHashList, _withProof](
-                     Error::Ptr&& error, std::vector<protocol::Transaction::Ptr>&& transactions) {
-            if (error)
-            {
-                LEDGER_LOG(DEBUG) << "GetBatchTxsByHashList failed: " << error->errorMessage();
-                callback(BCOS_ERROR_WITH_PREV_PTR(
-                             LedgerError::GetStorageError, "GetBatchTxsByHashList error", *error),
-                    nullptr, nullptr);
-                return;
-            }
+    auto transactions = co_await batchGetTransactions(hexList);
+    bcos::protocol::TransactionsPtr results =
+        std::make_shared<bcos::protocol::Transactions>(std::move(transactions));
 
-            bcos::protocol::TransactionsPtr results =
-                std::make_shared<bcos::protocol::Transactions>(std::move(transactions));
+    if (!withProof)
+    {
+        LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
+                          << LOG_KV("txHashListSize", txHashList->size())
+                          << LOG_KV("withProof", withProof);
+        co_return {std::move(results), nullptr};
+    }
 
-            if (_withProof)
-            {
-                auto con_proofMap =
-                    std::make_shared<tbb::concurrent_unordered_map<std::string, MerkleProofPtr>>();
-                auto count = std::make_shared<std::atomic_uint64_t>(0);
-                auto counter = [_txList = results, _txHashList, count, con_proofMap,
-                                   callback = callback]() {
-                    count->fetch_add(1);
-                    if (count->load() == _txHashList->size())
-                    {
-                        auto proofMap = std::make_shared<std::map<std::string, MerkleProofPtr>>(
-                            con_proofMap->begin(), con_proofMap->end());
-                        LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
-                                          << LOG_KV("txHashListSize", _txHashList->size())
-                                          << LOG_KV("proofMapSize", proofMap->size());
-                        callback(nullptr, _txList, proofMap);
-                    }
-                };
+    // One proof coroutine per hash, fanned out concurrently. A failed proof degrades to a
+    // missing map entry (the historical per-proof callback swallowed the error and counted on),
+    // it never aborts the batch — so the whenAll children catch their own errors.
+    auto proofOrNull = [](Ledger& self, crypto::HashType txHash) -> task::Task<MerkleProofPtr> {
+        try
+        {
+            co_return co_await self.getTxProof(txHash);
+        }
+        catch (std::exception& e)
+        {
+            LEDGER_LOG(DEBUG) << LOG_BADGE("GetBatchTxsByHashList") << LOG_DESC("getTxProof failed")
+                              << LOG_KV("txHash", txHash.hex())
+                              << boost::diagnostic_information(e);
+            co_return nullptr;
+        }
+    };
+    std::vector<task::Task<MerkleProofPtr>> proofTasks;
+    proofTasks.reserve(txHashList->size());
+    for (auto& txHash : *txHashList)
+    {
+        proofTasks.emplace_back(proofOrNull(*this, txHash));
+    }
+    auto proofs = co_await task::whenAll(std::move(proofTasks));
 
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
-                    [this, _txHashList, counter, con_proofMap](
-                        const tbb::blocked_range<size_t>& range) {
-                        for (size_t i = range.begin(); i < range.end(); ++i)
-                        {
-                            auto txHash = _txHashList->at(i);
-                            getTxProof(txHash, [con_proofMap, txHash, counter](
-                                                   Error::Ptr _error, MerkleProofPtr _proof) {
-                                if (!_error && _proof)
-                                {
-                                    con_proofMap->insert(std::make_pair(txHash.hex(), _proof));
-                                }
-                                counter();
-                            });
-                        }
-                    });
-            }
-            else
-            {
-                LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
-                                  << LOG_KV("txHashListSize", _txHashList->size())
-                                  << LOG_KV("withProof", _withProof);
-                callback(nullptr, results, nullptr);
-            }
-        });
+    auto proofMap = std::make_shared<std::map<std::string, MerkleProofPtr>>();
+    for (size_t i = 0; i < proofs.size(); ++i)
+    {
+        if (proofs[i])
+        {
+            proofMap->emplace((*txHashList)[i].hex(), std::move(proofs[i]));
+        }
+    }
+    LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
+                      << LOG_KV("txHashListSize", txHashList->size())
+                      << LOG_KV("proofMapSize", proofMap->size());
+    co_return {std::move(results), std::move(proofMap)};
 }
 
 void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txHash,
@@ -1150,8 +1195,8 @@ Error::Ptr Ledger::checkEntryValid(Error::UniquePtr&& error,
 
 // Callback-style adapter over ledger::getBlockTransactionHashStrings, keeping the error
 // contract of the deleted Ledger::asyncGetBlockTransactionHashes (bcos::Error code
-// preserved; other exceptions → CollectAsyncCallbackError). Used by getTxProof /
-// getReceiptProof.
+// preserved; other exceptions → CollectAsyncCallbackError). Used by getReceiptProof
+// (getTxProof is a coroutine now and awaits the CPO directly).
 static void asyncGetBlockTransactionHashStrings(bcos::storage::StorageInterface& storage,
     bcos::protocol::BlockFactory& blockFactory, bcos::protocol::BlockNumber blockNumber,
     std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback)
@@ -1188,8 +1233,8 @@ static void asyncGetBlockTransactionHashStrings(bcos::storage::StorageInterface&
     }(storage, blockFactory, blockNumber, std::move(callback)));
 }
 
-void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
-    std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback)
+task::Task<std::vector<protocol::Transaction::Ptr>> Ledger::batchGetTransactions(
+    std::shared_ptr<std::vector<std::string>> hashes)
 {
     std::vector<std::string_view> hashesView;
     hashesView.reserve(hashes->size());
@@ -1198,56 +1243,54 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
         hashesView.push_back(hash);
     }
 
+    // OneShot (not a hand-rolled awaitable) so an INLINE completion — legacy storages invoke
+    // the callback before asyncGetRows returns — takes the no-suspend fast path instead of
+    // resuming a not-yet-parked frame. One batch call, not a per-key readSome loop.
+    auto done = std::make_shared<
+        task::OneShot<Error::UniquePtr, std::vector<std::optional<Entry>>>>();
     getBlockStorage()->asyncGetRows(SYS_HASH_2_TX, hashesView,
-        [this, hashes, callback](auto&& error, std::vector<std::optional<Entry>>&& entries) {
-            if (error)
-            {
-                LEDGER_LOG(DEBUG) << "Batch get transaction failed "
-                                  << boost::diagnostic_information(*error);
-                callback(BCOS_ERROR_WITH_PREV_PTR(
-                             LedgerError::GetStorageError, "Batch get transaction failed ", *error),
-                    std::vector<protocol::Transaction::Ptr>());
-
-                return;
-            }
-
-            std::vector<protocol::Transaction::Ptr> transactions;
-            size_t i = 0;
-            for (auto& entry : entries)
-            {
-                if (!entry.has_value())
-                {
-                    LEDGER_LOG(TRACE)
-                        << "Get transaction failed: " << LOG_KV("txHash", toHex((*hashes)[i]));
-                }
-                else
-                {
-                    auto field = entry->get();
-                    auto transaction = m_blockFactory->transactionFactory()->createTransaction(
-                        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false,
-                        false);
-                    transactions.push_back(std::move(transaction));
-                }
-
-                ++i;
-            }
-            if (transactions.size() != hashes->size())
-            {
-                LEDGER_LOG(DEBUG)
-                    << "Batch get transaction failed, transactions size not match hashesSize"
-                    << LOG_KV("txsSize", transactions.size())
-                    << LOG_KV("hashesSize", hashes->size());
-                callback(BCOS_ERROR_PTR(LedgerError::CollectAsyncCallbackError,
-                             "Batch get transaction failed, transactions size not match "
-                             "hashesSize, txsSize: " +
-                                 std::to_string(transactions.size()) +
-                                 ", hashesSize: " + std::to_string(hashes->size())),
-                    std::move(transactions));
-                return;
-            }
-
-            callback(nullptr, std::move(transactions));
+        [done](Error::UniquePtr error, std::vector<std::optional<Entry>> entries) mutable {
+            done->complete(std::move(error), std::move(entries));
         });
+    auto [error, entries] = co_await *done;
+    if (error)
+    {
+        LEDGER_LOG(DEBUG) << "Batch get transaction failed "
+                          << boost::diagnostic_information(*error);
+        BOOST_THROW_EXCEPTION(BCOS_ERROR_WITH_PREV(
+            LedgerError::GetStorageError, "Batch get transaction failed ", *error));
+    }
+
+    std::vector<protocol::Transaction::Ptr> transactions;
+    size_t i = 0;
+    for (auto& entry : entries)
+    {
+        if (!entry.has_value())
+        {
+            LEDGER_LOG(TRACE) << "Get transaction failed: " << LOG_KV("txHash", toHex((*hashes)[i]));
+        }
+        else
+        {
+            auto field = entry->get();
+            auto transaction = m_blockFactory->transactionFactory()->createTransaction(
+                bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false, false);
+            transactions.push_back(std::move(transaction));
+        }
+
+        ++i;
+    }
+    if (transactions.size() != hashes->size())
+    {
+        LEDGER_LOG(DEBUG) << "Batch get transaction failed, transactions size not match hashesSize"
+                          << LOG_KV("txsSize", transactions.size())
+                          << LOG_KV("hashesSize", hashes->size());
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::CollectAsyncCallbackError,
+            "Batch get transaction failed, transactions size not match hashesSize, txsSize: " +
+                std::to_string(transactions.size()) +
+                ", hashesSize: " + std::to_string(hashes->size())));
+    }
+
+    co_return transactions;
 }
 
 void Ledger::asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> hashes,
@@ -1340,69 +1383,61 @@ static std::shared_ptr<std::vector<h256>> getMerkleTreeFromCache(int64_t blockNu
     return merkleTree;
 }
 
-void Ledger::getTxProof(
-    const HashType& _txHash, std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof)
+task::Task<MerkleProofPtr> Ledger::getTxProof(const crypto::HashType& txHash)
 {
-    // txHash->receipt receipt->number number->txHash
-    asyncGetTransactionReceiptByHash(_txHash, false,
-        [this, _txHash, _onGetProof = std::move(_onGetProof)](
-            Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, const MerkleProofPtr&) {
-            if (_error || !_receipt)
-            {
-                LEDGER_LOG(DEBUG) << LOG_BADGE("getTxProof")
-                                  << LOG_DESC("getReceiptByTxHash from storage failed")
-                                  << LOG_KV("txHash", _txHash.hex());
-                _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
-                return;
-            }
-            auto blockNumber = _receipt->blockNumber();
-            asyncGetBlockTransactionHashStrings(*m_stateStorage, *m_blockFactory, blockNumber,
-                [this, _onGetProof, _txHash = std::move(_txHash), blockNumber](
-                    Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
-                    if (_error || _hashList.empty())
-                    {
-                        LEDGER_LOG(DEBUG)
-                            << LOG_BADGE("getTxProof")
-                            << LOG_DESC("asyncGetBlockTransactionHashes from storage failed")
-                            << LOG_KV("txHash", _txHash.hex());
-                        _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
-                        return;
-                    }
-                    asyncBatchGetTransactions(std::make_shared<std::vector<std::string>>(_hashList),
-                        [this, cryptoSuite = m_blockFactory->cryptoSuite(), _onGetProof,
-                            _txHash = std::move(_txHash), blockNumber](
-                            Error::Ptr&& _error, std::vector<Transaction::Ptr>&& _txList) {
-                            if (_error || _txList.empty())
-                            {
-                                LEDGER_LOG(DEBUG)
-                                    << LOG_BADGE("getTxProof") << LOG_DESC("getTxs callback failed")
-                                    << LOG_KV("code", _error->errorCode())
-                                    << LOG_KV("msg", _error->errorMessage());
-                                _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
-                                return;
-                            }
-                            auto merkleProofPtr = std::make_shared<MerkleProof>();
-                            bcos::crypto::merkle::Merkle merkle(cryptoSuite->hashImpl()->hasher());
-                            auto hashesRange =
-                                _txList |
-                                ::ranges::views::transform([](const Transaction::Ptr& transaction) {
-                                    return transaction->hash();
-                                });
+    // txHash -> receipt -> blockNumber -> block tx hashes -> txs -> merkle proof
+    auto receiptEntry = co_await storage2::readOne(*getBlockStorage(),
+        executor_v1::StateKeyView{SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)});
+    if (!receiptEntry)
+    {
+        LEDGER_LOG(DEBUG) << LOG_BADGE("getTxProof")
+                          << LOG_DESC("getReceiptByTxHash from storage failed")
+                          << LOG_KV("txHash", txHash.hex());
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(
+            LedgerError::GetStorageError, "getTxProof: receipt of the transaction not found"));
+    }
+    auto value = receiptEntry->get();
+    auto receipt = m_blockFactory->receiptFactory()->createReceipt(
+        bcos::bytesConstRef((bcos::byte*)value.data(), value.size()));
+    auto blockNumber = receipt->blockNumber();
 
-                            auto merkleTree =
-                                getMerkleTreeFromCache(blockNumber, m_txProofMerkleCache,
-                                    m_txMerkleMtx, "getTxProof", merkle, hashesRange);
-                            merkle.generateMerkleProof(
-                                hashesRange, *merkleTree, _txHash, *merkleProofPtr);
+    // Raw-byte-string hash list, fed back below as SYS_HASH_2_TX row keys.
+    auto hashList = co_await ledger::getBlockTransactionHashStrings(
+        *m_stateStorage, blockNumber, *m_blockFactory);
+    if (hashList.empty())
+    {
+        LEDGER_LOG(DEBUG) << LOG_BADGE("getTxProof")
+                          << LOG_DESC("GetBlockTransactionHashes from storage failed")
+                          << LOG_KV("txHash", txHash.hex());
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(LedgerError::GetStorageError, "getTxProof: empty block transaction hashes"));
+    }
 
-                            LEDGER_LOG(TRACE)
-                                << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
-                                << LOG_KV("txHash", _txHash.hex());
+    auto transactions = co_await batchGetTransactions(
+        std::make_shared<std::vector<std::string>>(std::move(hashList)));
+    if (transactions.empty())
+    {
+        LEDGER_LOG(DEBUG) << LOG_BADGE("getTxProof") << LOG_DESC("getTxs failed")
+                          << LOG_KV("txHash", txHash.hex());
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(LedgerError::GetStorageError, "getTxProof: empty block transactions"));
+    }
 
-                            _onGetProof(nullptr, std::move(merkleProofPtr));
-                        });
-                });
-        });
+    auto merkleProofPtr = std::make_shared<MerkleProof>();
+    bcos::crypto::merkle::Merkle merkle(m_blockFactory->cryptoSuite()->hashImpl()->hasher());
+    auto hashesRange = transactions |
+                       ::ranges::views::transform([](const Transaction::Ptr& transaction) {
+                           return transaction->hash();
+                       });
+
+    auto merkleTree = getMerkleTreeFromCache(
+        blockNumber, m_txProofMerkleCache, m_txMerkleMtx, "getTxProof", merkle, hashesRange);
+    merkle.generateMerkleProof(hashesRange, *merkleTree, txHash, *merkleProofPtr);
+
+    LEDGER_LOG(TRACE) << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
+                      << LOG_KV("txHash", txHash.hex());
+
+    co_return merkleProofPtr;
 }
 
 void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
