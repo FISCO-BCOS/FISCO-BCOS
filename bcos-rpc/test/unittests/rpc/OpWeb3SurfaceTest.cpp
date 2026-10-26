@@ -505,6 +505,9 @@ BOOST_AUTO_TEST_CASE(BlobBaseFeeFollowsTheForkSchedule)
     // hash() call throws EmptyBlockHeaderHash.
     auto const excess = 4000U * protocol::BLOB_GAS_PER_BLOB;  // large enough that the
     // fraction changes the answer (fakeExponential floors, so a small excess rounds to 1)
+    // The Ethereum lane: this case is about resolving the EIP-7840 schedule from the fork
+    // ladder. The OP lane answers the documented constant instead (see the feeHistory case).
+    setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
     auto const headNumber = m_ledger->blockNumber();
     auto const headSeconds = uint64_t{2'000'000'000};  // a fixed instant, in seconds
     header(headNumber)->setExcessBlobGas(excess);
@@ -554,10 +557,16 @@ BOOST_AUTO_TEST_CASE(BlobBaseFeeFollowsTheForkSchedule)
 // smoke test runs in.
 BOOST_AUTO_TEST_CASE(EthLaneFeeHistoryBlobSeriesMatchesBlobBaseFee)
 {
-    auto const excess = 4000U * protocol::BLOB_GAS_PER_BLOB;
+    // This excess puts the fee an order of magnitude above 1 wei without saturating: too small
+    // and both entries floor to the same integer, too large and fakeExponential saturates at the
+    // u256 maximum, and either way the negative control below would pass vacuously.
+    auto const excess = 60U * protocol::BLOB_GAS_PER_BLOB;
     auto const headNumber = m_ledger->blockNumber();
     header(headNumber)->setExcessBlobGas(excess);
-    header(headNumber)->setBlobGasUsed(protocol::BLOB_GAS_PER_BLOB);
+    // Above target (Cancun: target 3, max 6 blobs), so the next excess grows. A parent that
+    // used exactly one blob would instead SHRINK the excess -- the direction depends on
+    // blobGasUsed vs target, which is the whole reason the parent's blobGasUsed must be read.
+    header(headNumber)->setBlobGasUsed(6 * protocol::BLOB_GAS_PER_BLOB);
     header(headNumber)->setTimestamp(static_cast<int64_t>(2'000'000'000) * 1000);
     // The next-block base-fee projection needs a gas target; the default fixture header has none.
     header(headNumber)->setGasLimit(30'000'000);
@@ -574,7 +583,24 @@ BOOST_AUTO_TEST_CASE(EthLaneFeeHistoryBlobSeriesMatchesBlobBaseFee)
     auto const expected = toQuantity(protocol::fakeExponential(
         u256{1}, u256{excess}, u256{protocol::CANCUN_BLOB_SCHEDULE.baseFeeUpdateFraction}));
     BOOST_CHECK_EQUAL(series[0U].asString(), expected);
-    BOOST_CHECK_EQUAL(series[1U].asString(), expected);
+    // The trailing entry is the NEXT block's fee, and EIP-4844 derives that from the parent's
+    // excess AND blobGasUsed -- this parent carried more than the target, so the next block is
+    // priced strictly higher. Asserting series[1] == series[0] (which this used to do) pinned
+    // the bug: it reported the parent's fee as the next block's.
+    auto const nextExcess = protocol::computeNextExcessBlobGas(
+        [&] {
+            protocol::EthBlockHeaderData parent{};
+            parent.baseFee = header(headNumber)->baseFee();
+            parent.blobGasUsed = header(headNumber)->blobGasUsed();
+            parent.excessBlobGas = header(headNumber)->excessBlobGas();
+            return parent;
+        }(),
+        protocol::toGasSchedule(protocol::CANCUN_BLOB_SCHEDULE), /*osakaActive=*/false);
+    BOOST_CHECK_GT(nextExcess, u256{excess});
+    BOOST_CHECK_EQUAL(
+        series[1U].asString(), toQuantity(protocol::fakeExponential(u256{1}, nextExcess,
+                                   u256{protocol::CANCUN_BLOB_SCHEDULE.baseFeeUpdateFraction})));
+    BOOST_CHECK(series[1U].asString() != series[0U].asString());
 
     // The whole point: one artifact, one blob base fee. eth_blobBaseFee reads the head's excess
     // through the same fraction resolver, so the two must agree exactly.
@@ -591,6 +617,14 @@ BOOST_AUTO_TEST_CASE(EthLaneFeeHistoryBlobSeriesMatchesBlobBaseFee)
     auto const opSeries = opHistory["result"]["baseFeePerBlobGas"];
     BOOST_CHECK_EQUAL(opSeries[0U].asString(), "0x1");
     BOOST_CHECK_EQUAL(opHistory["result"]["blobGasUsedRatio"][0U].asDouble(), 0.0);
+
+    // eth_blobBaseFee on the OP lane answers the same documented projection (1 when the header
+    // carries excessBlobGas), from the header rather than from a schedule this lane does not
+    // have. Before this it resolved the Ethereum schedule, which is not wired on v3, and so
+    // answered null on a lane where op-geth answers 1.
+    auto const opDirect = call("eth_blobBaseFee");
+    BOOST_REQUIRE_MESSAGE(opDirect.isMember("result"), printJson(opDirect));
+    BOOST_CHECK_EQUAL(opDirect["result"].asString(), opSeries[0U].asString());
 }
 
 // A bare 32-byte block hash in a block-tag position resolves to that block's number (geth's

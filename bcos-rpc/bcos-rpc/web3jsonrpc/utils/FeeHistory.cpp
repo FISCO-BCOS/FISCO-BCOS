@@ -115,9 +115,10 @@ u256 bcos::rpc::nextEthBaseFee(protocol::BlockHeader const& parent)
     if (!parent.baseFee().has_value())
         return u256{c_initialBaseFee};
     // A parent with no gas limit has no fee history either (genesis of a chain that has not
-    // produced a payload, or a ledger whose header is not fully populated). The OP core rejects
-    // gasLimit / elasticity == 0 as invalid encoding; geth answers InitialBaseFee for the same
-    // "no fee data yet" case, so do that instead of failing the request.
+    // produced a payload, or a ledger whose header is not fully populated). There is no geth
+    // equivalent for this branch -- geth always has a gas limit to divide by. The choice here is
+    // to answer InitialBaseFee, the same "no fee data yet" value as the branch above, rather
+    // than fail an eth_feeHistory request on a header with no gas limit.
     if (parent.gasLimit() == 0)
         return u256{c_initialBaseFee};
     return engine::calcOpBaseFeeFromFields(parent.gasLimit(), parent.gasUsed(), *parent.baseFee(),
@@ -154,7 +155,9 @@ uint64_t bcos::rpc::blobBaseFeeUpdateFraction(
 task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& ledger,
     protocol::BlockNumber newest, protocol::BlockNumber head, std::uint64_t blockCount,
     std::vector<double> const& percentiles, bool isOpStackLane,
-    protocol::BlobForkTimes const& blobForks)
+    protocol::BlobForkTimes const& blobForks,
+    std::optional<protocol::BlobScheduleConfig> const& stampedSchedule,
+    std::optional<evmc_revision> rev)
 {
     Json::Value result(Json::objectValue);
     result["oldestBlock"] = "0x0";
@@ -200,8 +203,12 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
             // Ethereum lane: the same EIP-4844 pricing eth_blobBaseFee answers, from the same
             // fraction resolver, so one artifact cannot have two different blob base fees.
             auto const timestampSeconds = static_cast<uint64_t>(last->timestamp() / 1000);
+            // The same triple eth_blobBaseFee passes: the stamped EIP-7840 schedule, the fork
+            // ladder, and the block's revision. Passing nullopt here (as this used to) made the
+            // "one artifact never has two blob base fees" claim conditional on the two
+            // producers happening to agree.
             auto const fraction =
-                blobBaseFeeUpdateFraction(std::nullopt, blobForks, std::nullopt, timestampSeconds);
+                blobBaseFeeUpdateFraction(stampedSchedule, blobForks, rev, timestampSeconds);
             if (fraction != 0 && last->excessBlobGas().has_value())
             {
                 blobFees.append(toQuantity(
@@ -257,11 +264,42 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
     }
     // op-geth always emits the blob series, on both lanes; how each entry is priced depends on
     // the lane (see the per-block branch above).
-    // The next block's blob base fee is a function of the parent's excess only, so its entry
-    // equals the parent's. Read that before the array is moved out below.
-    auto const nextBlobFee =
-        isOpStackLane ? Json::Value(last->excessBlobGas() ? "0x1" : "0x0") :
-                        (blobFees.empty() ? Json::Value("0x0") : blobFees[blobFees.size() - 1]);
+    //
+    // The trailing entry is the NEXT block's blob base fee, and it is NOT the parent's: EIP-4844
+    // derives the next excess from the parent's excess AND the parent's blobGasUsed, so a parent
+    // that carried blobs prices the next block above itself. Reusing the parent's value (as this
+    // did) reported a fee the next block will not charge. Compute the excess with the same rule
+    // the header verifier applies (EthPoSHeaderValidation.h) and price it with the fraction in
+    // effect at the next block.
+    Json::Value nextBlobFee("0x0");
+    if (!isOpStackLane && last != nullptr)
+    {
+        // The next block's timestamp is unknown here; the ladder is monotone, so the earliest
+        // possible next timestamp picks the schedule the real next block will use unless a fork
+        // activates in the gap between them.
+        auto const nextTimestampSeconds = static_cast<uint64_t>(last->timestamp() / 1000) + 1;
+        auto const nextFraction =
+            blobBaseFeeUpdateFraction(stampedSchedule, blobForks, rev, nextTimestampSeconds);
+        if (nextFraction != 0 && last->excessBlobGas().has_value())
+        {
+            // Only the three fields the EIP-4844/7918 recomputation reads are populated.
+            protocol::EthBlockHeaderData parent{};
+            parent.baseFee = last->baseFee();
+            parent.blobGasUsed = last->blobGasUsed();
+            parent.excessBlobGas = last->excessBlobGas();
+            auto const osakaActive = rev.has_value() && *rev >= EVMC_OSAKA;
+            auto const nextExcess = protocol::computeNextExcessBlobGas(parent,
+                protocol::toGasSchedule(
+                    protocol::blobScheduleForTimestamp(blobForks, nextTimestampSeconds)),
+                osakaActive);
+            nextBlobFee =
+                toQuantity(protocol::fakeExponential(u256{1}, nextExcess, u256{nextFraction}));
+        }
+    }
+    else if (isOpStackLane)
+    {
+        nextBlobFee = Json::Value(last->excessBlobGas() ? "0x1" : "0x0");
+    }
     result["baseFeePerBlobGas"] = std::move(blobFees);
     result["baseFeePerBlobGas"].append(nextBlobFee);
     result["blobGasUsedRatio"] = std::move(blobRatios);

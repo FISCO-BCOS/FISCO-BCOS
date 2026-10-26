@@ -89,8 +89,15 @@ uint64_t blobBaseFeeUpdateFraction(std::optional<protocol::BlobScheduleConfig> c
 /// lane, the standard EIP-1559 rule for the Ethereum lane. It also selects the blob series: the
 /// OP lane carries no blobs at all (constant 1 / 0.0, matching MaxBlobGasPerBlock = 0), while
 /// the Ethereum lane prices them through excessBlobGas exactly like eth_blobBaseFee does.
+/// @param stampedSchedule the EIP-7840 schedule stamped on the chain
+/// (ledgerConfig->blobSchedule()).
+/// @param rev the block revision (ledgerConfig->evmcRevision()): the last-resort fraction source,
+///        and what tells whether Osaka's EIP-7918 update rule is active. Both are the sources
+///        eth_blobBaseFee passes, so the two producers resolve from an identical triple.
 task::Task<Json::Value> buildOpFeeHistory(ledger::LedgerInterface& ledger,
     protocol::BlockNumber newest, protocol::BlockNumber head, std::uint64_t blockCount,
     std::vector<double> const& percentiles, bool isOpStackLane,
-    protocol::BlobForkTimes const& blobForks);
+    protocol::BlobForkTimes const& blobForks,
+    std::optional<protocol::BlobScheduleConfig> const& stampedSchedule = std::nullopt,
+    std::optional<evmc_revision> rev = std::nullopt);
 }  // namespace bcos::rpc

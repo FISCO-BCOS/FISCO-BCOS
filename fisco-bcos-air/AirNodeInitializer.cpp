@@ -146,6 +146,15 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
             .pragueTime = forks.pragueTime,
             .bpo1Time = forks.bpo1Time,
             .bpo2Time = forks.bpo2Time});
+        // Log what the RPC will answer from. [fork_timestamps] is node-local *input*, but it is
+        // part of the genesis pin (generateGenesisData), so a node whose ladder differs from the
+        // chain's cannot start or join in the first place; the value an operator reads here is
+        // how to confirm that without decoding config.genesis.
+        INITIALIZER_LOG(INFO) << LOG_BADGE("eth_blobBaseFee")
+                              << LOG_DESC("blob fork schedule wired")
+                              << LOG_KV("cancun", forks.cancunTime)
+                              << LOG_KV("prague", forks.pragueTime)
+                              << LOG_KV("bpo1", forks.bpo1Time) << LOG_KV("bpo2", forks.bpo2Time);
     }
 
     // The DebugSelfProduce driver and every node serving the Engine API route

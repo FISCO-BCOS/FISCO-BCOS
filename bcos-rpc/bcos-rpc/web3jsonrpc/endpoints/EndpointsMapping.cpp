@@ -139,6 +139,8 @@ void EndpointsMapping::addEthHandlers()
     // Ethereum chain has no batcher to serve a DA snapshot to.
     m_handlers[methodString(EthMethod::txpool_status)] = &Endpoints::txpoolStatus;
     m_handlers[methodString(EthMethod::txpool_content)] = &Endpoints::txpoolContent;
+    // Served on every lane, including the legacy FISCO one: EIP-1186 proofs are answered from
+    // whatever state trie the block has, so there is no lane claim to make here.
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
     // clang-format on
 }
