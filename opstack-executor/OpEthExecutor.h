@@ -282,6 +282,10 @@ public:
         bcos::bytes m_synthesizedEnvelope;  // call path only; backs envelopeView()
         typename RollableStorage::Savepoint m_savepoint = 0;
         protocol::TransactionReceipt::Ptr m_receipt;  // set by execute()
+        /// The estimation run for this dry call, null for real execution. Same contract as the
+        /// Ethereum lane's: owned by this context (the transaction's coroutine frame, not a
+        /// thread), published through m_callParams, and reported on the receipt by finish().
+        std::unique_ptr<bcos::protocol::gas::CallGasSession> m_gasSession;
 
         ExecuteContext(OpEthExecutor& exec, Storage& st, protocol::BlockHeader const& bh,
             protocol::Transaction const& tx, int cid, ledger::LedgerConfig const& cfg, bool c,
@@ -409,6 +413,10 @@ public:
 
             if (call)
             {
+                // Allocated only for a dry run: real block execution pays nothing. Published
+                // before the EVM runs, on whatever thread that turns out to be.
+                m_gasSession = std::make_unique<bcos::protocol::gas::CallGasSession>();
+                m_callParams.gasSession = m_gasSession.get();
                 // CallSimulationView equivalent: the simulated sender reports
                 // uint256::max() balance so validate and the OP 512-bit cost cap
                 // both run (and pass) for an unfunded sender. get_or_insert first
@@ -616,6 +624,7 @@ public:
             m_receipt->setCumulativeGasUsed(bcos::evm::engine::detail::decimalCumulative(
                 static_cast<uint64_t>(m_ctx->cumulativeGasUsed)));
             m_ctx->blockGasLeft -= gasUsed;
+            eth::attachGasEstimate(m_receipt.get(), m_gasSession.get());
             co_return m_receipt;
         }
     };

@@ -1318,7 +1318,7 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
     co_await call(request, response, nullptr, false);
 }
 task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response, u256* gasUsed,
-    bool isEstimate, u256* probeBudget)
+    bool isEstimate, u256* probeBudget, std::optional<int64_t>* gasEstimate)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: data(DATA)
@@ -1467,6 +1467,7 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
         Error::Ptr m_error;
         Json::Value& m_response;
         u256* m_gasUsed;
+        std::optional<int64_t>* m_gasEstimate;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
@@ -1499,6 +1500,13 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
                     {
                         *m_gasUsed = result->gasUsed();
                     }
+                    // The executor computes the estimate on whichever thread it ran the EVM on
+                    // and hands it back on this receipt, so no thread-local state has to line
+                    // up here. Absent for a real execution or a run that never reached the EVM.
+                    if (m_gasEstimate)
+                    {
+                        *m_gasEstimate = result->gasEstimate();
+                    }
                 }
 
                 handle.resume();
@@ -1524,7 +1532,8 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
         .m_historicalBlock = isLatest ? std::nullopt : std::make_optional(blockNumber),
         .m_error = {},
         .m_response = response,
-        .m_gasUsed = gasUsed};
+        .m_gasUsed = gasUsed,
+        .m_gasEstimate = gasEstimate};
     try
     {
         co_await awaitable;
@@ -1567,17 +1576,16 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
 
     u256 gasUsed;
     Json::Value callResponse;
-
-    // One simulation run, then the per-frame recursion. The accounting brackets every frame in
+    // The executor reports the per-frame estimate on the receipt. It brackets every frame in
     // EthereumHost::call and takes the caller's remaining gas at each call site from evmone, so
-    // the run yields each frame's minimum entry budget rather than only the gas consumed:
+    // one simulation yields each frame's minimum entry budget rather than only the gas consumed:
     // EIP-150 forwards just 63/64 per level, so consumption is a lower bound on the budget and
     // the gap is not recoverable from the total (intrinsic gas is never forwarded, and depth is
     // a maximum over the whole trace, not a per-site fact).
-    protocol::gas::CallGasEstimationScope gasEstimate;
+    std::optional<int64_t> gasEstimate;
     u256 probeBudget{0};
-    co_await call(
-        request, callResponse, std::addressof(gasUsed), true, std::addressof(probeBudget));
+    co_await call(request, callResponse, std::addressof(gasUsed), true, std::addressof(probeBudget),
+        std::addressof(gasEstimate));
 
     if (callResponse.isMember("error"))
     {
@@ -1585,13 +1593,13 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         co_return;
     }
 
-    // `gasLimit()` is max(intrinsic + the root frame's requirement, the EIP-7623 floor): what a
+    // The value is max(intrinsic + the root frame's requirement, the EIP-7623 floor): what a
     // transaction needs. The per-frame requirement cannot exceed the probe's budget, but the
     // floor can -- it is computed from calldata alone and knows nothing about the simulation --
     // so clamp the answer to the budget the probe actually ran with. That budget is what this
     // node accepted, so the answer always passes its own admission check and never claims more
     // than the evidence covers.
-    auto estimated = gasEstimate.gasLimit();
+    auto estimated = gasEstimate;
     if (estimated.has_value() && probeBudget > 0 && bcos::u256FitsUint64(probeBudget) &&
         *estimated > static_cast<int64_t>(probeBudget))
     {
@@ -1599,25 +1607,11 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     }
     if (!estimated.has_value())
     {
-        // The frame accounting is not attributable to this request: the executor ran on another
-        // thread, or another estimate took over this thread's session while this one was
-        // suspended. Fall back to the measurement rather than inventing a number -- that is the
-        // old behaviour, and it is a floor, never an over-estimate of the requirement.
-        //
-        // Logged once at WARNING so an operator learns the tighter accounting is not in effect
-        // on this deployment, then at DEBUG: eth_estimateGas is unauthenticated and this path
-        // can be hit on every request, which would make the WARNING a log-flooding primitive.
-        static std::atomic<bool> s_reportedOnce{false};
-        if (!s_reportedOnce.exchange(true, std::memory_order_relaxed))
-        {
-            WEB3_LOG(WARNING)
-                << LOG_DESC(
-                       "eth_estimateGas: frame accounting unavailable, falling back to the "
-                       "measured "
-                       "gasUsed (this line is logged once; per-request detail is at DEBUG)")
-                << LOG_KV("gasUsed", gasUsed.str());
-        }
-        WEB3_LOG(DEBUG) << LOG_DESC("eth_estimateGas: fallback to measured gasUsed")
+        // The executor reported no estimate: the transaction was rejected before the EVM ran it,
+        // or the executor is one that does not compute the accounting. Fall back to the
+        // measurement rather than inventing a number -- that is the old behaviour, and it is a
+        // floor, never an over-estimate of the requirement.
+        WEB3_LOG(DEBUG) << LOG_DESC("eth_estimateGas: no per-frame estimate, reporting gasUsed")
                         << LOG_KV("gasUsed", gasUsed.str());
         Json::Value result = toQuantity(gasUsed);
         buildJsonContent(result, response);

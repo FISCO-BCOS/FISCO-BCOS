@@ -112,8 +112,11 @@ private:
     /// @param probeBudget when non-null, set to the gas limit the probe transaction was
     ///        actually run with, so a caller can bound a derived answer by the budget that
     ///        succeeded rather than re-deriving the cap.
+    /// @param gasEstimate when non-null, set to the per-frame estimate the executor reported on
+    ///        the receipt (absent when the run never reached the EVM). It arrives on the value
+    ///        channel, so it is correct no matter which thread executed the transaction.
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate,
-        u256* probeBudget = nullptr);
+        u256* probeBudget = nullptr, std::optional<int64_t>* gasEstimate = nullptr);
 };
 
 }  // namespace bcos::rpc

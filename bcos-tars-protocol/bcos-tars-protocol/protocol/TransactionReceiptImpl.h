@@ -90,8 +90,15 @@ public:
     void setMessage(std::string message) override;
     size_t size() const override;
 
+    /// eth_estimateGas's result for this dry run. Held outside the tars struct on purpose: it is
+    /// a transient number, never encoded, and encoding it would put a non-consensus value on the
+    /// wire. See TransactionReceipt::gasEstimate().
+    std::optional<int64_t> gasEstimate() const override { return m_gasEstimate; }
+    void setGasEstimate(int64_t gasEstimate) override { m_gasEstimate = gasEstimate; }
+
 private:
     std::function<bcostars::TransactionReceipt*()> m_inner;
     mutable std::vector<bcos::protocol::LogEntry> m_logEntries;
+    std::optional<int64_t> m_gasEstimate;
 };
 }  // namespace bcostars::protocol

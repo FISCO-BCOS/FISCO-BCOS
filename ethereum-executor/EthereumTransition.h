@@ -41,6 +41,22 @@
 
 namespace bcos::executor_v1::eth
 {
+/// Publish a dry run's estimate on the receipt it returns.
+///
+/// The estimate is computed on whichever thread the EVM actually ran on, and read by the caller
+/// (an RPC coroutine) on whichever thread resumed it; the receipt is the value channel both ends
+/// already share, so the number travels with the result instead of through thread-local state.
+/// No-op when there is no session (real block execution) or no receipt, and a session that never
+/// reached the EVM reports nothing.
+inline void attachGasEstimate(
+    protocol::TransactionReceipt* _receipt, protocol::gas::CallGasSession const* _session) noexcept
+{
+    if (_receipt == nullptr || _session == nullptr)
+        return;
+    if (auto const limit = _session->gasLimit(); limit.has_value())
+        _receipt->setGasEstimate(*limit);
+}
+
 using evm::ErrorCode;
 using evm::make_error_code;
 
@@ -330,8 +346,9 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
 
     const auto execution_gas_limit = gasLimit - intrinsic_cost;
     // eth_estimateGas reports intrinsic + the root frame's requirement, so the split has to be
-    // published here, where it is decided. No-op unless an estimate armed the accounting.
-    protocol::gas::recordIntrinsicGas(intrinsic_cost, min_cost);
+    // published here, where it is decided. No-op unless this run carries an estimation session.
+    if (callParams.gasSession != nullptr)
+        callParams.gasSession->intrinsicCost(intrinsic_cost, min_cost);
     return EthTxProperties{execution_gas_limit, min_cost};
 }
 

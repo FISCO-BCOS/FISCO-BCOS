@@ -92,6 +92,18 @@ public:
     virtual void setMessage(std::string message) = 0;
     virtual size_t size() const = 0;
 
+    /// eth_estimateGas's per-frame minimum gas limit, when the executor computed one for this
+    /// execution; nullopt for everything else (real execution, or a simulation that never reached
+    /// the EVM). Deliberately NOT part of the encoded receipt: it is a transient result of one dry
+    /// run, not a property of the transaction, so it is kept out of the wire struct.
+    ///
+    /// These are defaulted rather than pure so that an implementation which has nothing to report
+    /// -- a mock, a receipt rebuilt from storage, a payment-channel receipt -- keeps compiling and
+    /// correctly answers "no estimate". The value channel is the point: the EVM runs on whichever
+    /// thread the scheduler chose, and the receipt is what already crosses back to the caller.
+    virtual std::optional<int64_t> gasEstimate() const { return std::nullopt; }
+    virtual void setGasEstimate(int64_t /*gasEstimate*/) {}
+
     // Fields after block execution
     // cumulativeGasUsed is stored as a DECIMAL string (not 0x-hex) on the OP Stack path:
     // eth_getTransactionReceipt reads it via safeCastToU256 (boost::lexical_cast, decimal),

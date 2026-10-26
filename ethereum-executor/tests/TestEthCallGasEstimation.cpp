@@ -46,12 +46,13 @@ int64_t bruteForceInverse(int64_t required)
 
 /// Report a call site the way EthereumHost does: via the allowance the child was granted.
 /// `callerRemaining` is what the caller really had at the site, so the inversion inside
-/// recordChildAllowance must land within a gas of it.
-void siteWithCallerRemaining(int32_t childDepth, int64_t callerRemaining, bool hasValue = false)
+/// childAllowance must land within a gas of it.
+void siteWithCallerRemaining(
+    CallGasSession& session, int32_t childDepth, int64_t callerRemaining, bool hasValue = false)
 {
     // allowance = f(callerRemaining) (+ stipend), i.e. what evmone hands the child.
     auto allowance = forwardable(callerRemaining) + (hasValue ? c_sstoreSentryGas : 0);
-    recordChildAllowance(childDepth, allowance, hasValue);
+    session.childAllowance(childDepth, allowance, hasValue);
 }
 }  // namespace
 
@@ -80,65 +81,65 @@ BOOST_AUTO_TEST_CASE(MinimumBudgetToForwardIsExactInverse)
 /// A frame with no children needs exactly what it consumed.
 BOOST_AUTO_TEST_CASE(LeafFrameRequiresWhatItUsed)
 {
-    CallGasEstimationScope scope;
-    recordFrameEnter(0, 100'000);
-    recordFrameExit(0, 21'000);
-    BOOST_REQUIRE(scope.executionBudget().has_value());
-    BOOST_CHECK_EQUAL(*scope.executionBudget(), 79'000);
+    CallGasSession session;
+    session.frameEnter(0, 100'000);
+    session.frameExit(0, 21'000);
+    BOOST_REQUIRE(session.executionBudget().has_value());
+    BOOST_CHECK_EQUAL(*session.executionBudget(), 79'000);
 }
 
 /// A call site demands prefix + h(child requirement): the caller must be able to *forward* the
 /// child's budget after already spending the prefix, and forwarding loses 1/64.
 BOOST_AUTO_TEST_CASE(CallSiteRequirementAddsTheInversePenalty)
 {
-    CallGasEstimationScope scope;
-    recordFrameEnter(0, 100'000);
-    siteWithCallerRemaining(1, 1'000);  // prefix ~= 99'000
-    recordFrameEnter(1, 600);           // the child's entry, inside f(1000) == 985
-    recordFrameExit(1, 0);              // the child used 600
-    recordFrameExit(0, 99'900);         // the parent used 100 of its own
+    CallGasSession session;
+    session.frameEnter(0, 100'000);
+    siteWithCallerRemaining(session, 1, 1'000);  // prefix ~= 99'000
+    session.frameEnter(1, 600);                  // the child's entry, inside f(1000) == 985
+    session.frameExit(1, 0);                     // the child used 600
+    session.frameExit(0, 99'900);                // the parent used 100 of its own
 
     // 99'000 + h(600), not 99'000 + 600: the parent must hold enough that 63/64 of the
     // remainder still covers the child.
-    BOOST_REQUIRE(scope.executionBudget().has_value());
-    BOOST_CHECK_EQUAL(*scope.executionBudget(), 99'000 + minimumBudgetToForward(600));
-    BOOST_CHECK_GT(*scope.executionBudget(), 100);  // and not merely the parent's own usage
+    BOOST_REQUIRE(session.executionBudget().has_value());
+    BOOST_CHECK_EQUAL(*session.executionBudget(), 99'000 + minimumBudgetToForward(600));
+    BOOST_CHECK_GT(*session.executionBudget(), 100);  // and not merely the parent's own usage
 }
 
 /// Call sites take the maximum, never the sum: gas the frame keeps after a child returns is
 /// still spendable at the next one.
 BOOST_AUTO_TEST_CASE(CallSiteRequirementsAreMaxedNotSummed)
 {
-    CallGasEstimationScope scope;
-    recordFrameEnter(0, 10'000);
-    siteWithCallerRemaining(1, 8'000);  // prefix ~= 2'000
-    recordFrameEnter(1, 1'000);
-    recordFrameExit(1, 500);            // child 1 needed 500
-    siteWithCallerRemaining(1, 7'000);  // prefix ~= 3'000
-    recordFrameEnter(1, 1'000);
-    recordFrameExit(1, 900);    // child 2 needed 100
-    recordFrameExit(0, 7'000);  // the parent used 3'000
+    CallGasSession session;
+    session.frameEnter(0, 10'000);
+    siteWithCallerRemaining(session, 1, 8'000);  // prefix ~= 2'000
+    session.frameEnter(1, 1'000);
+    session.frameExit(1, 500);                   // child 1 needed 500
+    siteWithCallerRemaining(session, 1, 7'000);  // prefix ~= 3'000
+    session.frameEnter(1, 1'000);
+    session.frameExit(1, 900);    // child 2 needed 100
+    session.frameExit(0, 7'000);  // the parent used 3'000
 
     auto const first = 2'000 + minimumBudgetToForward(500);
     auto const second = 3'000 + minimumBudgetToForward(100);
-    BOOST_REQUIRE(scope.executionBudget().has_value());
-    BOOST_CHECK_EQUAL(*scope.executionBudget(), std::max({first, second, int64_t{3'000}}));
-    BOOST_CHECK_LT(*scope.executionBudget(), first + second);
+    BOOST_REQUIRE(session.executionBudget().has_value());
+    BOOST_CHECK_EQUAL(*session.executionBudget(), std::max({first, second, int64_t{3'000}}));
+    BOOST_CHECK_LT(*session.executionBudget(), first + second);
 }
 
 /// `used` is a floor on the requirement, not the answer: it covers the frame's own work after
 /// its last child returns.
 BOOST_AUTO_TEST_CASE(UsedGasCoversTheTailAfterTheLastChild)
 {
-    CallGasEstimationScope scope;
-    recordFrameEnter(0, 20'000);
-    siteWithCallerRemaining(1, 19'000);  // prefix ~= 1'000
-    recordFrameEnter(1, 100);
-    recordFrameExit(1, 0);      // child needed 100, so the site demands ~1'102
-    recordFrameExit(0, 1'000);  // but the parent itself burned 18'900 more afterwards
+    CallGasSession session;
+    session.frameEnter(0, 20'000);
+    siteWithCallerRemaining(session, 1, 19'000);  // prefix ~= 1'000
+    session.frameEnter(1, 100);
+    session.frameExit(1, 0);      // child needed 100, so the site demands ~1'102
+    session.frameExit(0, 1'000);  // but the parent itself burned 18'900 more afterwards
 
-    BOOST_REQUIRE(scope.executionBudget().has_value());
-    BOOST_CHECK_EQUAL(*scope.executionBudget(), 19'000);
+    BOOST_REQUIRE(session.executionBudget().has_value());
+    BOOST_CHECK_EQUAL(*session.executionBudget(), 19'000);
 }
 
 /// A call that failed before entering a frame reports a call site but produces no child. Its
@@ -146,30 +147,30 @@ BOOST_AUTO_TEST_CASE(UsedGasCoversTheTailAfterTheLastChild)
 /// requirement.
 BOOST_AUTO_TEST_CASE(UnconsumedCallSiteIsDiscarded)
 {
-    CallGasEstimationScope scope;
-    recordFrameEnter(0, 1'000);
-    siteWithCallerRemaining(1, 500);  // light failure: no child frame follows
-    siteWithCallerRemaining(1, 400);  // prefix ~= 600, the one that must be used
-    recordFrameEnter(1, 300);
-    recordFrameExit(1, 100);  // the child needed 200
-    recordFrameExit(0, 300);  // the parent used 700
+    CallGasSession session;
+    session.frameEnter(0, 1'000);
+    siteWithCallerRemaining(session, 1, 500);  // light failure: no child frame follows
+    siteWithCallerRemaining(session, 1, 400);  // prefix ~= 600, the one that must be used
+    session.frameEnter(1, 300);
+    session.frameExit(1, 100);  // the child needed 200
+    session.frameExit(0, 300);  // the parent used 700
 
-    BOOST_REQUIRE(scope.executionBudget().has_value());
-    BOOST_CHECK_EQUAL(*scope.executionBudget(), 600 + minimumBudgetToForward(200));
+    BOOST_REQUIRE(session.executionBudget().has_value());
+    BOOST_CHECK_EQUAL(*session.executionBudget(), 600 + minimumBudgetToForward(200));
 }
 
 /// Intrinsic gas is charged before the root frame, so the reported gas limit is the sum. It is
 /// never forwarded through a CALL and therefore must not be scaled.
 BOOST_AUTO_TEST_CASE(GasLimitAddsIntrinsicToTheExecutionBudget)
 {
-    CallGasEstimationScope scope;
-    recordIntrinsicGas(21'000, 21'000);
-    recordFrameEnter(0, 50'000);
-    recordFrameExit(0, 10'000);
+    CallGasSession session;
+    session.intrinsicCost(21'000, 21'000);
+    session.frameEnter(0, 50'000);
+    session.frameExit(0, 10'000);
 
-    BOOST_REQUIRE(scope.gasLimit().has_value());
-    BOOST_CHECK_EQUAL(*scope.executionBudget(), 40'000);
-    BOOST_CHECK_EQUAL(*scope.gasLimit(), 21'000 + 40'000);
+    BOOST_REQUIRE(session.gasLimit().has_value());
+    BOOST_CHECK_EQUAL(*session.executionBudget(), 40'000);
+    BOOST_CHECK_EQUAL(*session.gasLimit(), 21'000 + 40'000);
 }
 
 /// EIP-7623: a calldata-heavy transaction must be given max(intrinsic, 21000 + 10 * tokens)
@@ -182,14 +183,14 @@ BOOST_AUTO_TEST_CASE(GasLimitAppliesTheEip7623Floor)
     constexpr int64_t intrinsic = 21'000 + 320 * 16;  // 26'120
     constexpr int64_t minCost = 21'000 + 320 * 10;    // 24'200
 
-    CallGasEstimationScope scope;
-    recordIntrinsicGas(intrinsic, minCost);
-    recordFrameEnter(0, 50'000);
-    recordFrameExit(0, 49'900);  // 100 gas of execution
+    CallGasSession session;
+    session.intrinsicCost(intrinsic, minCost);
+    session.frameEnter(0, 50'000);
+    session.frameExit(0, 49'900);  // 100 gas of execution
 
-    BOOST_REQUIRE(scope.gasLimit().has_value());
-    BOOST_CHECK_EQUAL(*scope.executionBudget(), 100);
-    BOOST_CHECK_EQUAL(*scope.gasLimit(), std::max(intrinsic + 100, minCost));
+    BOOST_REQUIRE(session.gasLimit().has_value());
+    BOOST_CHECK_EQUAL(*session.executionBudget(), 100);
+    BOOST_CHECK_EQUAL(*session.gasLimit(), std::max(intrinsic + 100, minCost));
 }
 
 /// The floor binds on its own when execution is cheaper than the calldata: a call that returns
@@ -199,64 +200,52 @@ BOOST_AUTO_TEST_CASE(Eip7623FloorBindsAboveTheExecutionSum)
     constexpr int64_t intrinsic = 100'000;
     constexpr int64_t minCost = 120'000;
 
-    CallGasEstimationScope scope;
-    recordIntrinsicGas(intrinsic, minCost);
-    recordFrameEnter(0, 1'000);
-    recordFrameExit(0, 900);
+    CallGasSession session;
+    session.intrinsicCost(intrinsic, minCost);
+    session.frameEnter(0, 1'000);
+    session.frameExit(0, 900);
 
-    BOOST_REQUIRE(scope.gasLimit().has_value());
-    BOOST_CHECK_EQUAL(*scope.gasLimit(), 120'000);
+    BOOST_REQUIRE(session.gasLimit().has_value());
+    BOOST_CHECK_EQUAL(*session.gasLimit(), 120'000);
 }
 
-/// Nothing is recorded unless a scope is armed, so the production execution path pays only a
-/// thread-local flag check.
-BOOST_AUTO_TEST_CASE(DisarmedSessionRecordsNothing)
+/// A session that never saw a frame reports nothing rather than 0: eth_estimateGas must be able
+/// to tell "no requirement computed" from "the requirement is zero gas", and only the former may
+/// fall back to the measured gasUsed.
+BOOST_AUTO_TEST_CASE(SessionWithoutExecutionReportsNothing)
 {
-    recordFrameEnter(0, 1'000);
-    siteWithCallerRemaining(1, 900);
-    recordFrameExit(0, 100);
-    BOOST_CHECK(!g_callGasSession.rootRequired.has_value());
-    BOOST_CHECK(!g_callGasSession.armed);
+    CallGasSession session;
+    BOOST_CHECK(!session.gasLimit().has_value());
+    BOOST_CHECK(!session.executionBudget().has_value());
+
+    // An intrinsic split alone is not a requirement either: the floor without a budget says
+    // nothing about what execution needs.
+    session.intrinsicCost(21'000, 24'200);
+    BOOST_CHECK(!session.gasLimit().has_value());
 }
 
-/// A scope only reads and clears the session it armed. A coroutine can arm on one thread and be
-/// destroyed on another (the scheduler resumes it wherever it likes), and the resumed thread's
-/// session may belong to a different, still-running estimate; clearing that one would silently
-/// turn its answer into the fallback -- or expose another run's frames.
-BOOST_AUTO_TEST_CASE(ScopeOnlyTouchesTheSessionItArmed)
+/// Two runs never share state, because each owns its session. This is the property that used to
+/// need a generation counter: the accounting lives on the transaction's coroutine frame, so a
+/// second estimate on the same thread -- or on another thread entirely -- cannot read or clear
+/// the first one's frames.
+BOOST_AUTO_TEST_CASE(SessionsAreIndependent)
 {
-    CallGasEstimationScope outer;
-    recordFrameEnter(0, 10'000);
-    recordFrameExit(0, 1'000);
-    BOOST_CHECK_EQUAL(*outer.executionBudget(), 9'000);
+    CallGasSession first;
+    first.frameEnter(0, 10'000);
+    first.frameExit(0, 1'000);
+    BOOST_REQUIRE_EQUAL(*first.executionBudget(), 9'000);
 
-    // Another estimate arms over this thread, as a second coroutine on the same thread would.
-    CallGasEstimationScope inner;
-    recordFrameEnter(0, 5'000);
-    recordFrameExit(0, 1'000);
+    CallGasSession second;
+    second.frameEnter(0, 5'000);
+    second.frameExit(0, 1'000);
 
-    // The outer scope no longer owns this thread's session: it must report "no accounting"
-    // rather than the inner run's 4'000, and its destructor must leave the inner run intact.
-    BOOST_CHECK(!outer.ownsCurrentThreadSession());
-    BOOST_CHECK(!outer.executionBudget().has_value());
-    BOOST_CHECK_EQUAL(*inner.executionBudget(), 4'000);
-}
+    BOOST_CHECK_EQUAL(*first.executionBudget(), 9'000);  // untouched by the second run
+    BOOST_CHECK_EQUAL(*second.executionBudget(), 4'000);
 
-/// After a scope ends its result is no longer readable, and a later run cannot see the previous
-/// run's frames.
-BOOST_AUTO_TEST_CASE(ScopeResetsBetweenRuns)
-{
-    {
-        CallGasEstimationScope first;
-        recordFrameEnter(0, 1'000);
-        recordFrameExit(0, 0);
-        BOOST_CHECK_EQUAL(*first.executionBudget(), 1'000);
-    }
-    CallGasEstimationScope second;
-    BOOST_CHECK(!second.executionBudget().has_value());
-    recordFrameEnter(0, 500);
-    recordFrameExit(0, 200);
-    BOOST_CHECK_EQUAL(*second.executionBudget(), 300);
+    // A later run on the first session's object would overwrite its root, not accumulate.
+    first.frameEnter(0, 500);
+    first.frameExit(0, 200);
+    BOOST_CHECK_EQUAL(*first.executionBudget(), 300);
 }
 
 /// EIP-2200's sentry is a remaining-gas floor, not a cost: an SSTORE fails when the frame has
@@ -265,15 +254,15 @@ BOOST_AUTO_TEST_CASE(ScopeResetsBetweenRuns)
 /// requirement.
 BOOST_AUTO_TEST_CASE(StorageWriteAddsTheSentryHeadroom)
 {
-    CallGasEstimationScope withoutWrite;
-    recordFrameEnter(0, 50'000);
-    recordFrameExit(0, 10'000);  // used 40'000
+    CallGasSession withoutWrite;
+    withoutWrite.frameEnter(0, 50'000);
+    withoutWrite.frameExit(0, 10'000);  // used 40'000
     BOOST_CHECK_EQUAL(*withoutWrite.executionBudget(), 40'000);
 
-    CallGasEstimationScope withWrite;
-    recordFrameEnter(0, 50'000);
-    recordStorageWrite();
-    recordFrameExit(0, 10'000);
+    CallGasSession withWrite;
+    withWrite.frameEnter(0, 50'000);
+    withWrite.storageWrite();
+    withWrite.frameExit(0, 10'000);
     BOOST_CHECK_EQUAL(*withWrite.executionBudget(), 40'000 + c_sstoreSentryGas + 1);
 }
 
@@ -281,17 +270,17 @@ BOOST_AUTO_TEST_CASE(StorageWriteAddsTheSentryHeadroom)
 /// it -- i.e. it goes through h() on the way up, not around it.
 BOOST_AUTO_TEST_CASE(StorageWriteSurplusPropagatesThroughTheInverseRule)
 {
-    CallGasEstimationScope scope;
-    recordFrameEnter(0, 100'000);
-    siteWithCallerRemaining(1, 4'000);  // prefix ~= 96'000
-    recordFrameEnter(1, 3'000);
-    recordStorageWrite();
-    recordFrameExit(1, 1'000);  // child used 2'000, plus the sentry
-    recordFrameExit(0, 99'000);
+    CallGasSession session;
+    session.frameEnter(0, 100'000);
+    siteWithCallerRemaining(session, 1, 4'000);  // prefix ~= 96'000
+    session.frameEnter(1, 3'000);
+    session.storageWrite();
+    session.frameExit(1, 1'000);  // child used 2'000, plus the sentry
+    session.frameExit(0, 99'000);
 
     auto const childRequirement = 2'000 + c_sstoreSentryGas + 1;
-    BOOST_REQUIRE(scope.executionBudget().has_value());
-    BOOST_CHECK_EQUAL(*scope.executionBudget(),
+    BOOST_REQUIRE(session.executionBudget().has_value());
+    BOOST_CHECK_EQUAL(*session.executionBudget(),
         std::max<int64_t>(1'000, 96'000 + minimumBudgetToForward(childRequirement)));
 }
 

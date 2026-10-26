@@ -240,6 +240,12 @@ public:
         // finish(), with no state written for it.
         std::optional<std::error_code> m_validationError;
         protocol::TransactionReceipt::Ptr m_receipt;
+        /// The estimation run for this dry call, or null for real execution. Owned here -- on the
+        /// coroutine frame of this transaction, not on a thread -- and published to the recording
+        /// sites through m_callParams. finish() reads it and puts the answer on the receipt, so a
+        /// simulation that ran on another thread still reports to the thread that asked. See
+        /// EthCallGasEstimation.h.
+        std::unique_ptr<protocol::gas::CallGasSession> m_gasSession;
 
         ExecuteContext(EthereumExecutor& exec, Storage& st, protocol::BlockHeader const& bh,
             protocol::Transaction const& tx, int cid, ledger::LedgerConfig const& cfg, bool c,
@@ -298,6 +304,7 @@ public:
             m_callParams = {};
             m_validationError.reset();
             m_receipt.reset();
+            m_gasSession.reset();
             if (call)
             {
                 // Dry-run (eth_call / eth_estimateGas): normalize to Ethereum
@@ -319,6 +326,10 @@ public:
                     m_callParams.gasLimit = gasCap;
                 }
                 m_callParams.free = true;
+                // Allocated only for a dry run, so real block execution (call == false) pays
+                // nothing at all. Published before the EVM runs, on whatever thread that is.
+                m_gasSession = std::make_unique<protocol::gas::CallGasSession>();
+                m_callParams.gasSession = m_gasSession.get();
                 m_blockInfo.base_fee = 0;
                 // blob_base_fee is intentionally NOT zeroed for the dry run:
                 // geth's eth_call still enforces the blob-fee cap
@@ -504,6 +515,7 @@ public:
                 co_return validationErrorReceipt(*m_validationError,
                     executor.get().m_receiptFactory, blockHeader.get().number());
             }
+            attachGasEstimate(m_receipt.get(), m_gasSession.get());
             co_return m_receipt;
         }
     };

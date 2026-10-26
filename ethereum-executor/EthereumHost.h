@@ -87,6 +87,11 @@ struct EthCallParams
     /// priority term is capped at max-baseFee, so the floor raises the
     /// effective price to exactly baseFee, never above.
     std::optional<uint256> maxGasPriceFloor;
+    /// The estimation run to record into, or null for anything that is not an estimate. The
+    /// session belongs to the executor's ExecuteContext -- to the coroutine frame of the
+    /// transaction being simulated -- so this pointer stays valid on whichever thread the EVM
+    /// runs on. See EthCallGasEstimation.h.
+    protocol::gas::CallGasSession* gasSession = nullptr;
 };
 
 /// The sender of a bcos Transaction (raw 20 bytes).
@@ -326,7 +331,8 @@ evmc_storage_status EthereumHost<Storage, Policy>::set_storage(
 {
     // evmone calls this once per SSTORE, after the EIP-2200 sentry check; marking the frame is
     // how the estimator learns that this frame needs the extra 2301 of headroom.
-    protocol::gas::recordStorageWrite();
+    if (m_callParams.gasSession != nullptr)
+        m_callParams.gasSession->storageWrite();
 
     // Follow EVMC documentation https://evmc.ethereum.org/storagestatus.html#autotoc_md3
     // and EIP-2200 specification https://eips.ethereum.org/EIPS/eip-2200.
@@ -657,25 +663,27 @@ evmc::Result EthereumHost<Storage, Policy>::call(const evmc_message& orig_msg) n
     // CALL/CREATE arrives with depth + 1 -- so this is the one place that sees both ends of
     // every frame. eth_estimateGas reconstructs each frame's minimum budget from exactly this
     // bracket plus the gas each child was granted; both are plain EVMC host data, so no change
-    // to evmone is involved. Outside an estimate the two calls are a thread-local flag check.
-    if (protocol::gas::g_callGasSession.armed && orig_msg.depth > 0) [[unlikely]]
+    // to evmone is involved. Outside an estimate gasSession is null and the calls are skipped.
+    auto* const gasSession = m_callParams.gasSession;
+    if (gasSession != nullptr && orig_msg.depth > 0) [[unlikely]]
     {
-        // A stipend is added for CALL and CALLCODE only. DELEGATECALL and CALLCODE-with-value
-        // both carry a non-zero msg.value, but only those two kinds get the +2300, so gating on
-        // the value alone subtracts a stipend that was never added.
+        // A stipend is added for CALL and CALLCODE only. DELEGATECALL also carries a non-zero
+        // msg.value but never receives the +2300, so gating on the value alone would subtract a
+        // stipend that was never added.
         auto const kindGetsStipend = orig_msg.kind == EVMC_CALL || orig_msg.kind == EVMC_CALLCODE;
         auto const hasValue = std::any_of(std::begin(orig_msg.value.bytes),
             std::end(orig_msg.value.bytes), [](uint8_t b) { return b != 0; });
-        protocol::gas::recordChildAllowance(
-            orig_msg.depth, orig_msg.gas, kindGetsStipend && hasValue);
+        gasSession->childAllowance(orig_msg.depth, orig_msg.gas, kindGetsStipend && hasValue);
     }
-    protocol::gas::recordFrameEnter(orig_msg.depth, orig_msg.gas);
+    if (gasSession != nullptr)
+        gasSession->frameEnter(orig_msg.depth, orig_msg.gas);
 
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
     {
         // Light exception: the frame is entered and left without running any code.
-        protocol::gas::recordFrameExit(orig_msg.depth, orig_msg.gas);
+        if (gasSession != nullptr)
+            gasSession->frameExit(orig_msg.depth, orig_msg.gas);
         return evmc::Result{EVMC_FAILURE, orig_msg.gas};
     }
 
@@ -699,7 +707,8 @@ evmc::Result EthereumHost<Storage, Policy>::call(const evmc_message& orig_msg) n
             m_state.touch(addr_03);
     }
 
-    protocol::gas::recordFrameExit(orig_msg.depth, result.gas_left);
+    if (gasSession != nullptr)
+        gasSession->frameExit(orig_msg.depth, result.gas_left);
     return result;
 }
 

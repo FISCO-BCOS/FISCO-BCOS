@@ -1025,9 +1025,52 @@ BOOST_AUTO_TEST_CASE(callDryRunSkipsNonceAndGasValidation)
             view, blockHeader, *tx, 0, ledgerConfig, /*call=*/true);
 
         BOOST_CHECK_EQUAL(receipt->status(), 0);
+        // The dry run must report the per-frame estimate on the receipt. This is the channel that
+        // replaces the old thread_local: the executor may run on any thread, so the number has to
+        // travel back as a value. A plain value transfer enters one frame and consumes well under
+        // its limit, so the requirement is intrinsic plus that frame's consumption -- present and
+        // at least the intrinsic cost.
+        auto const estimate = receipt->gasEstimate();
+        BOOST_REQUIRE_MESSAGE(estimate.has_value(),
+            "call=true produced no gas estimate on the receipt; the accounting never reached the "
+            "recording sites");
+        BOOST_CHECK_GE(*estimate, int64_t{21'000});
         // The dry-run executed the value transfer on the throwaway view.
         auto balance = co_await EEReadBalance(view, recipient);
         BOOST_CHECK_EQUAL(balance, u256(100));
+    }());
+}
+
+/// The estimate is a result of a *dry run*: real block execution must not pay for it, and its
+/// receipts must not claim one (they are committed values).
+BOOST_AUTO_TEST_CASE(realExecutionCarriesNoGasEstimate)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto sender = EEMakeAddress(72);
+        auto recipient = EEMakeAddress(92);
+        co_await EEFundAccount(backendStorage, sender, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient, 0);
+
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.setNumber(1);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        ledger::LedgerConfig ledgerConfig;
+        ledgerConfig.setEVMCRevision(EVMC_OSAKA);
+
+        auto toHexStr = bcos::toHexStringWithPrefix(
+            bcos::bytes(std::begin(recipient.bytes), std::end(recipient.bytes)));
+        auto tx = transactionFactory.createTransaction(1 /* V1 */, toHexStr, {}, "" /*nonce*/,
+            1000 /*blockLimit*/, "0x1" /*chainId*/, "" /*groupId*/, 0 /*importTime*/, {} /*abi*/,
+            EEQuantity(100) /*value*/, "0x0" /*gasPrice*/, 0 /*gasLimit*/);
+        tx->forceSender(bcos::bytes(std::begin(sender.bytes), std::end(sender.bytes)));
+        tx->calculateHash(*cryptoSuite->hashImpl());
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        auto receipt = co_await executor->executeTransaction(
+            view, blockHeader, *tx, 0, ledgerConfig, /*call=*/false);
+        BOOST_CHECK(!receipt->gasEstimate().has_value());
     }());
 }
 
