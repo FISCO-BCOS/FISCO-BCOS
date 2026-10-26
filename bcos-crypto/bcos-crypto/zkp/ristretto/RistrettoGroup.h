@@ -130,7 +130,7 @@ inline RistrettoPointBytes ristrettoScalarmultBase(const RistrettoScalarBytes& _
 inline RistrettoPointBytes ristrettoFromHash(const std::uint8_t* _hash64)
 {
     detail::ensureSodiumInit();
-    RistrettoPointBytes result;
+    RistrettoPointBytes result = RISTRETTO_IDENTITY;
     crypto_core_ristretto255_from_hash(result.data(), _hash64);
     return result;
 }

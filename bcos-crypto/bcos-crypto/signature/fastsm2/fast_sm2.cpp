@@ -330,6 +330,14 @@ int8_t bcos::crypto::fast_sm2_derive_public_key(
             << "sm2: fast_sm2_derive_public_key: error of EC_POINT_point2bin for publicKey";
         goto done;
     }
+    // the destination side of the length contract: COutputBuffer carries a length,
+    // so honour it before writing 64 bytes
+    if (output_public_key->len < (size_t)c_PUBLICKEY_LEN)
+    {
+        CRYPTO_LOG(WARNING) << LOG_DESC("sm2: fast_sm2_derive_public_key: output buffer too small")
+                            << LOG_KV("len", output_public_key->len);
+        goto done;
+    }
     // remove the prefix 04
     memcpy(output_public_key->data, publicKey + 1, c_PUBLICKEY_LEN);
     ret = WEDPR_SUCCESS;
@@ -362,6 +370,14 @@ int8_t bcos::crypto::fast_sm2_gen_key_pair(
     COutputBuffer* output_public_key, COutputBuffer* output_private_key)
 {
     int8_t ret = WEDPR_ERROR;
+    // BN_bn2binpad and the derive call below write fixed 32/64-byte outputs; honour the
+    // lengths the COutputBuffers carry before touching them
+    if (output_public_key->len < (size_t)c_PUBLICKEY_LEN ||
+        output_private_key->len < (size_t)c_PRIVATEKEY_LEN)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_gen_key_pair: output buffer too small";
+        return ret;
+    }
     EC_KEY* sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
     if (sm2Key == NULL)
     {
