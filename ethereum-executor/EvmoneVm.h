@@ -51,6 +51,24 @@
  * deployment rather than the empty-pool figure. Callers cannot influence which thread serves
  * them, but eth_call is unauthenticated, so how large a thread's high-water mark grows is
  * caller-influenced.
+ *
+ * Measured on the 3.18.0 tree (x86-64, evmone 0.21):
+ *   - one pooled slot costs 36.5 KiB even when idle: a 32 KiB stack (StackSpace is heap
+ *     allocated, 1024 x 32 B), the 4 KiB initial Memory buffer, and 432 B of ExecutionState;
+ *   - a frame that grows memory to 1 MiB leaves +1092 KiB resident after it returns;
+ *   - a depth-64 chain leaves +38.2 KiB per frame (2484 KiB for 65 slots), i.e. the fixed
+ *     stack dominates until contracts use memory.
+ * Slots are indexed by call depth, so a thread keeps one per depth it has ever reached (EVM
+ * cap: 1024), and each keeps its largest memory ever.
+ *
+ * Threads: [thread_pool] tbb_thread_count (default 0 = all cores, N) plus the shared IO pool
+ * (default N + 1), so at most 2N + 1 threads can hold a VM -- 33 on a 16-core node.
+ *   - benign: depth <= 10, a few KiB of memory per frame -> ~0.5 MiB per thread, ~17 MiB total;
+ *   - one crafted eth_call under the 50M op-geth rpc.gascap that spreads ~49M gas of memory
+ *     expansion over a 1024-deep self-call chain retains ~136 MiB per thread (272 MiB with the
+ *     capacity doubling), ~8.8 GiB for the node. The peak is not new -- the pre-reuse code paid
+ *     the same transiently -- but it is now sticky per thread instead of returning to the
+ *     allocator, and multiplied by however many threads have served such a call.
  */
 #pragma once
 
