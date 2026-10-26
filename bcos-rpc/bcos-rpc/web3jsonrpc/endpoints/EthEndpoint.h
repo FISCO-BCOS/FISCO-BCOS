@@ -109,7 +109,11 @@ private:
     };
     ForkchoiceContext forkchoiceContext() const;
 
-    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
+    /// @param probeBudget when non-null, set to the gas limit the probe transaction was
+    ///        actually run with, so a caller can bound a derived answer by the budget that
+    ///        succeeded rather than re-deriving the cap.
+    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate,
+        u256* probeBudget = nullptr);
 };
 
 }  // namespace bcos::rpc

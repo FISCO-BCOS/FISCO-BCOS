@@ -656,16 +656,19 @@ evmc::Result EthereumHost<Storage, Policy>::call(const evmc_message& orig_msg) n
     // Every frame enters here -- depth 0 is the transaction's own call and each nested
     // CALL/CREATE arrives with depth + 1 -- so this is the one place that sees both ends of
     // every frame. eth_estimateGas reconstructs each frame's minimum budget from exactly this
-    // bracket plus the per-call-site prefix evmone reports; it is a no-op otherwise.
-    // Every frame enters here -- depth 0 is the transaction's own call and each nested
-    // CALL/CREATE arrives with depth + 1 -- so this is the one place that sees both ends of
-    // every frame. eth_estimateGas reconstructs each frame's minimum budget from exactly this
     // bracket plus the gas each child was granted; both are plain EVMC host data, so no change
     // to evmone is involved. Outside an estimate the two calls are a thread-local flag check.
     if (protocol::gas::g_callGasSession.armed && orig_msg.depth > 0) [[unlikely]]
-        protocol::gas::recordChildAllowance(orig_msg.depth, orig_msg.gas,
-            std::any_of(std::begin(orig_msg.value.bytes), std::end(orig_msg.value.bytes),
-                [](uint8_t b) { return b != 0; }));
+    {
+        // A stipend is added for CALL and CALLCODE only. DELEGATECALL and CALLCODE-with-value
+        // both carry a non-zero msg.value, but only those two kinds get the +2300, so gating on
+        // the value alone subtracts a stipend that was never added.
+        auto const kindGetsStipend = orig_msg.kind == EVMC_CALL || orig_msg.kind == EVMC_CALLCODE;
+        auto const hasValue = std::any_of(std::begin(orig_msg.value.bytes),
+            std::end(orig_msg.value.bytes), [](uint8_t b) { return b != 0; });
+        protocol::gas::recordChildAllowance(
+            orig_msg.depth, orig_msg.gas, kindGetsStipend && hasValue);
+    }
     protocol::gas::recordFrameEnter(orig_msg.depth, orig_msg.gas);
 
     const auto msg = prepare_message(orig_msg);

@@ -163,13 +163,49 @@ BOOST_AUTO_TEST_CASE(UnconsumedCallSiteIsDiscarded)
 BOOST_AUTO_TEST_CASE(GasLimitAddsIntrinsicToTheExecutionBudget)
 {
     CallGasEstimationScope scope;
-    recordIntrinsicGas(21'000);
+    recordIntrinsicGas(21'000, 21'000);
     recordFrameEnter(0, 50'000);
     recordFrameExit(0, 10'000);
 
     BOOST_REQUIRE(scope.gasLimit().has_value());
     BOOST_CHECK_EQUAL(*scope.executionBudget(), 40'000);
     BOOST_CHECK_EQUAL(*scope.gasLimit(), 21'000 + 40'000);
+}
+
+/// EIP-7623: a calldata-heavy transaction must be given max(intrinsic, 21000 + 10 * tokens)
+/// before the EVM runs, and admission checks that floor. Execution cost says nothing about it,
+/// so the estimate has to carry it or the answer is rejected by this node's own validator.
+BOOST_AUTO_TEST_CASE(GasLimitAppliesTheEip7623Floor)
+{
+    // A cheap call with 10 KiB of calldata: 21000 + 10 * 320 = 24'200 tokens-gas, well above
+    // the 21'000 + a few hundred execution gas a plain transfer-like call consumes.
+    constexpr int64_t intrinsic = 21'000 + 320 * 16;  // 26'120
+    constexpr int64_t minCost = 21'000 + 320 * 10;    // 24'200
+
+    CallGasEstimationScope scope;
+    recordIntrinsicGas(intrinsic, minCost);
+    recordFrameEnter(0, 50'000);
+    recordFrameExit(0, 49'900);  // 100 gas of execution
+
+    BOOST_REQUIRE(scope.gasLimit().has_value());
+    BOOST_CHECK_EQUAL(*scope.executionBudget(), 100);
+    BOOST_CHECK_EQUAL(*scope.gasLimit(), std::max(intrinsic + 100, minCost));
+}
+
+/// The floor binds on its own when execution is cheaper than the calldata: a call that returns
+/// immediately still needs min_cost, and reporting less is the regression this pins.
+BOOST_AUTO_TEST_CASE(Eip7623FloorBindsAboveTheExecutionSum)
+{
+    constexpr int64_t intrinsic = 100'000;
+    constexpr int64_t minCost = 120'000;
+
+    CallGasEstimationScope scope;
+    recordIntrinsicGas(intrinsic, minCost);
+    recordFrameEnter(0, 1'000);
+    recordFrameExit(0, 900);
+
+    BOOST_REQUIRE(scope.gasLimit().has_value());
+    BOOST_CHECK_EQUAL(*scope.gasLimit(), 120'000);
 }
 
 /// Nothing is recorded unless a scope is armed, so the production execution path pays only a
@@ -181,6 +217,29 @@ BOOST_AUTO_TEST_CASE(DisarmedSessionRecordsNothing)
     recordFrameExit(0, 100);
     BOOST_CHECK(!g_callGasSession.rootRequired.has_value());
     BOOST_CHECK(!g_callGasSession.armed);
+}
+
+/// A scope only reads and clears the session it armed. A coroutine can arm on one thread and be
+/// destroyed on another (the scheduler resumes it wherever it likes), and the resumed thread's
+/// session may belong to a different, still-running estimate; clearing that one would silently
+/// turn its answer into the fallback -- or expose another run's frames.
+BOOST_AUTO_TEST_CASE(ScopeOnlyTouchesTheSessionItArmed)
+{
+    CallGasEstimationScope outer;
+    recordFrameEnter(0, 10'000);
+    recordFrameExit(0, 1'000);
+    BOOST_CHECK_EQUAL(*outer.executionBudget(), 9'000);
+
+    // Another estimate arms over this thread, as a second coroutine on the same thread would.
+    CallGasEstimationScope inner;
+    recordFrameEnter(0, 5'000);
+    recordFrameExit(0, 1'000);
+
+    // The outer scope no longer owns this thread's session: it must report "no accounting"
+    // rather than the inner run's 4'000, and its destructor must leave the inner run intact.
+    BOOST_CHECK(!outer.ownsCurrentThreadSession());
+    BOOST_CHECK(!outer.executionBudget().has_value());
+    BOOST_CHECK_EQUAL(*inner.executionBudget(), 4'000);
 }
 
 /// After a scope ends its result is no longer readable, and a later run cannot see the previous

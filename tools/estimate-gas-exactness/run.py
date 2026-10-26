@@ -107,7 +107,13 @@ def compile_harness(contracts_dir, workdir):
         return json.load(f)["bytecode"]["object"]
 
 
-def send(rpc_url, key, to, data, gas_limit):
+def compile_artifact(workdir, name):
+    artifact = os.path.join(workdir, "out", "GasHarness.sol", name + ".json")
+    with open(artifact) as f:
+        return json.load(f)["bytecode"]["object"]
+
+
+def send(rpc_url, key, to, data, gas_limit, value=0):
     """Send one legacy transaction and return (status, gasUsed)."""
     cmd = [
         "cast", "send",
@@ -116,8 +122,10 @@ def send(rpc_url, key, to, data, gas_limit):
         "--legacy",
         "--gas-price", GAS_PRICE,
         "--gas-limit", str(gas_limit),
-        to, data,
     ]
+    if value:
+        cmd += ["--value", str(value)]
+    cmd += [to, data]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     if proc.returncode != 0:
         raise RuntimeError((proc.stderr or proc.stdout).strip()[:300])
@@ -131,21 +139,21 @@ def send(rpc_url, key, to, data, gas_limit):
     return status, gas_used
 
 
-def succeeds(rpc_url, key, to, data, gas_limit):
-    status, _ = send(rpc_url, key, to, data, gas_limit)
+def succeeds(rpc_url, key, to, data, gas_limit, value=0):
+    status, _ = send(rpc_url, key, to, data, gas_limit, value)
     return status == 1
 
 
 
 
-def true_minimum(rpc_url, key, to, data, upper, lower_hint=0):
+def true_minimum(rpc_url, key, to, data, upper, lower_hint=0, value=0):
     """Least gasLimit that still succeeds, by exponential-then-binary search below @p upper."""
     # upper is known to succeed; walk down until something fails.
     lo = max(lower_hint, 21000)
     step = max(upper // 8, 1000)
     while lo < upper:
         probe = max(upper - step, lo)
-        if succeeds(rpc_url, key, to, data, probe):
+        if succeeds(rpc_url, key, to, data, probe, value):
             upper = probe
             step *= 2
         else:
@@ -153,11 +161,23 @@ def true_minimum(rpc_url, key, to, data, upper, lower_hint=0):
             break
     while upper - lo > 1:
         mid = (lo + upper) // 2
-        if succeeds(rpc_url, key, to, data, mid):
+        if succeeds(rpc_url, key, to, data, mid, value):
             upper = mid
         else:
             lo = mid
     return upper
+
+
+def swallow_calldata(payload_bytes):
+    """Calldata for swallow(bytes) with a payload of `payload_bytes` bytes of 0xab."""
+    payload = "ab" * payload_bytes
+    out = subprocess.run(
+        ["cast", "calldata", "swallow(bytes)", "0x" + payload],
+        capture_output=True, text=True, timeout=60,
+    )
+    if out.returncode != 0:
+        die(f"cast calldata failed: {out.stderr.strip()}")
+    return out.stdout.strip()
 
 
 CASES = [
@@ -175,6 +195,10 @@ CASES = [
     ("fan3/no-store", "fan", [3, 60, 0]),
     ("fan3/store-every", "fan", [3, 60, 1]),
     ("rec3/two-slots", "twoSlots", [3, 60]),
+    # EIP-7623 floor: 8 KiB of calldata, ~26k of intrinsic, almost no execution. Without the
+    # floor in the answer the estimate lands below max(intrinsic, min_cost) and this case is
+    # UNDER -- the defect this case exists to catch.
+    ("calldata-heavy/floor", "swallow", [("bytes", 8192)]),
 ]
 
 SIGS = {
@@ -185,6 +209,8 @@ SIGS = {
 
 
 def encode(fn, args):
+    if fn == "swallow":
+        return swallow_calldata(args[0][1])
     out = subprocess.run(
         ["cast", "calldata", SIGS[fn], *[str(a) for a in args]],
         capture_output=True, text=True, timeout=60,
@@ -241,10 +267,43 @@ def main():
                 harness = out.stdout.strip().split()[-1]
             if not harness:
                 die("deploy produced no contract address")
-        print(f"[info] sender={sender} harness={harness}\n", flush=True)
+        # The DELEGATECALL case needs its own target: a payable proxy that delegatecalls into
+        # the harness, so the inner frame carries msg.value without the 2300 stipend.
+        print("[deploy] deploying DelegateProxy ...", flush=True)
+        proxy_bytecode = compile_artifact(workdir, "DelegateProxy")
+        ctor_args = harness[2:].rjust(64, "0")
+        proc = subprocess.run(
+            ["cast", "send", "--rpc-url", args.rpc, "--private-key", args.key,
+             "--legacy", "--gas-price", GAS_PRICE, "--gas-limit", "3000000",
+             "--json", "--create", proxy_bytecode + ctor_args],
+            capture_output=True, text=True, timeout=300,
+        )
+        if proc.returncode != 0:
+            die(f"proxy deploy failed: {(proc.stderr or proc.stdout).strip()[:400]}")
+        proxy_tx = json.loads(proc.stdout)["transactionHash"]
+        proxy_receipt = rpc.result("eth_getTransactionReceipt", [proxy_tx])
+        proxy = proxy_receipt.get("contractAddress")
+        if not proxy or proxy == "0x0000000000000000000000000000000000000000":
+            nonce = int(rpc.result("eth_getTransactionByHash", [proxy_tx])["nonce"], 16)
+            proxy = subprocess.run(
+                ["cast", "compute-address", "--nonce", str(nonce), sender],
+                capture_output=True, text=True, timeout=60,
+            ).stdout.strip().split()[-1]
+        # Seed the delegated slot: the proxy's slot 0 is empty, so the first write is 0 -> 1
+        # (SET) and every later one is 1 -> 1 (cheap). Without this the estimate would see a
+        # SET and the transaction that follows a cheap write.
+        proxy_call = subprocess.run(
+            ["cast", "calldata", "run()"], capture_output=True, text=True, timeout=60
+        ).stdout.strip()
+        send(args.rpc, args.key, proxy, proxy_call, 500000)
+
+        print(f"[info] sender={sender} harness={harness} proxy={proxy}\n", flush=True)
 
         rows = []
-        for label, fn, fn_args in CASES:
+        all_cases = [(label, fn, fn_args, harness, 0) for label, fn, fn_args in CASES]
+        # A value transfer on the outer call: DELEGATECALL inherits msg.value but no stipend.
+        all_cases.append(("delegatecall/value", "run", [], proxy, 1))
+        for label, fn, fn_args, harness, value in all_cases:
             data = encode(fn, fn_args)
             eg, err = rpc.estimate_gas(sender, harness, data)
             if eg is None:
@@ -253,18 +312,20 @@ def main():
                 continue
 
             # The property, directly: EG must run, EG-1 must not.
-            ok_at_eg = succeeds(args.rpc, args.key, harness, data, eg)
+            ok_at_eg = succeeds(args.rpc, args.key, harness, data, eg, value)
             if not ok_at_eg:
                 # A limit this node accepted but the EVM cannot execute: the caller's
                 # transaction would die. Never acceptable.
                 verdict, delta = "UNDER", None
             else:
-                status_1, _ = send(args.rpc, args.key, harness, data, eg - 1)
+                status_1, _ = send(args.rpc, args.key, harness, data, eg - 1, value)
                 if status_1 == 1:
                     # EG-1 also runs: safe, but not the minimum.
                     verdict, delta = "OVER", None
                     if not args.no_search:
-                        delta = eg - true_minimum(args.rpc, args.key, harness, data, eg - 1)
+                        delta = eg - true_minimum(
+                            args.rpc, args.key, harness, data, eg - 1, value=value
+                        )
                 else:
                     # EG-1 failed. Note the failed transaction need not consume its whole
                     # limit: a child that runs out of gas makes the parent's

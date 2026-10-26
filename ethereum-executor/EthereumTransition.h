@@ -331,7 +331,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     const auto execution_gas_limit = gasLimit - intrinsic_cost;
     // eth_estimateGas reports intrinsic + the root frame's requirement, so the split has to be
     // published here, where it is decided. No-op unless an estimate armed the accounting.
-    protocol::gas::recordIntrinsicGas(intrinsic_cost);
+    protocol::gas::recordIntrinsicGas(intrinsic_cost, min_cost);
     return EthTxProperties{execution_gas_limit, min_cost};
 }
 

@@ -80,8 +80,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <optional>
+#include <thread>
 
 namespace bcos::protocol::gas
 {
@@ -118,17 +120,34 @@ struct CallFrame
 struct CallGasSession
 {
     bool armed = false;
+    /// Identity of the run that armed this thread's session. A CallGasEstimationScope only ever
+    /// clears a session carrying its own generation, so a scope that is destroyed on a different
+    /// thread -- or while another estimate has since armed the same thread -- cannot wipe that
+    /// run's state. Without it the destructor cleared whatever session happened to be in the
+    /// resuming thread's TLS, which could belong to a concurrent estimate.
+    uint64_t generation = 0;
     std::array<CallFrame, c_maxCallFrames> frames{};
     /// Frame currently executing (the innermost one), so a host callback with no depth
     /// argument of its own -- set_storage -- can be attributed. -1 when no frame runs.
     int32_t currentDepth = -1;
     /// Intrinsic (calldata + base) cost of the transaction, charged before the root frame.
     int64_t intrinsicGas = 0;
+    /// EIP-7623 floor: the least gas the transaction must be given, floor(21000 + 10 * tokens).
+    /// Independent of what execution consumes, so it has to be reported separately -- the
+    /// admission check rejects anything below max(intrinsic, min_cost) before the EVM runs.
+    int64_t minCost = 0;
     /// Root frame's required budget; absent when the run never reached the EVM.
     std::optional<int64_t> rootRequired;
 };
 
 inline thread_local CallGasSession g_callGasSession;
+
+/// Source of session generations. Relaxed is enough: the value only has to distinguish runs.
+inline uint64_t nextCallGasGeneration() noexcept
+{
+    static std::atomic<uint64_t> counter{0};
+    return counter.fetch_add(1, std::memory_order_relaxed) + 1;
+}
 
 /// Bracket a frame. Both must be called for every frame the host enters, including the root.
 inline void recordFrameEnter(int32_t depth, int64_t gas) noexcept
@@ -205,58 +224,96 @@ inline void recordFrameExit(int32_t depth, int64_t gasLeft) noexcept
     parent.pending = false;
 }
 
-/// The transaction's intrinsic cost, reported where gasLimit is split into intrinsic + execution.
-inline void recordIntrinsicGas(int64_t intrinsic) noexcept
+/// The transaction's intrinsic cost and EIP-7623 floor, reported where gasLimit is split into
+/// intrinsic + execution.
+inline void recordIntrinsicGas(int64_t intrinsic, int64_t minCost) noexcept
 {
     if (g_callGasSession.armed)
+    {
         g_callGasSession.intrinsicGas = intrinsic;
+        g_callGasSession.minCost = minCost;
+    }
 }
 
 /// Arms the accounting for one call and exposes its result. Not reentrant.
 class CallGasEstimationScope
 {
 public:
-    CallGasEstimationScope()
+    CallGasEstimationScope() : m_generation(nextCallGasGeneration())
     {
         auto& session = g_callGasSession;
         session.armed = true;
+        session.generation = m_generation;
         session.currentDepth = -1;
         session.intrinsicGas = 0;
+        session.minCost = 0;
         session.rootRequired.reset();
-        session.frames = {};
+        // frames is deliberately NOT cleared: recordFrameEnter overwrites the frame it enters
+        // and no code reads a frame that was not entered by this run, so zeroing 1025 x 40 B
+        // (32 KB) of thread-local storage on every estimate buys nothing.
     }
 
     ~CallGasEstimationScope() noexcept
     {
-        // Clear the result as well as the flag: a later run on this thread must not be able to
-        // read this run's frames or budget.
+        // Only disarm the session this scope armed, on the thread that armed it. A coroutine
+        // that armed on one thread and is destroyed on another must not clear the resumed
+        // thread's session: that session may belong to a different, still-running estimate, and
+        // clearing it would turn its answer into the "no accounting" fallback or -- worse --
+        // leave stale frames visible to it.
         auto& session = g_callGasSession;
+        if (session.generation != m_generation)
+            return;
         session.armed = false;
         session.currentDepth = -1;
         session.intrinsicGas = 0;
+        session.minCost = 0;
         session.rootRequired.reset();
     }
 
     CallGasEstimationScope(const CallGasEstimationScope&) = delete;
     CallGasEstimationScope& operator=(const CallGasEstimationScope&) = delete;
 
+    /// Whether this scope's session is still the one on the current thread, i.e. whether the
+    /// accounting can be attributed to this run at all. False when the coroutine resumed on a
+    /// different thread than it armed on, or when a later scope took over this thread.
+    [[nodiscard]] bool ownsCurrentThreadSession() const noexcept
+    {
+        auto const& session = g_callGasSession;
+        return session.armed && session.generation == m_generation;
+    }
+
     /// The root frame's minimum entry budget, or nullopt if the run never executed a frame
     /// (for instance when the executor ran on another thread).
     [[nodiscard]] std::optional<int64_t> executionBudget() const noexcept
     {
+        if (!ownsCurrentThreadSession())
+            return std::nullopt;
         return g_callGasSession.rootRequired;
     }
 
-    [[nodiscard]] int64_t intrinsicGas() const noexcept { return g_callGasSession.intrinsicGas; }
+    [[nodiscard]] int64_t intrinsicGas() const noexcept
+    {
+        return ownsCurrentThreadSession() ? g_callGasSession.intrinsicGas : 0;
+    }
 
-    /// Total transaction gas limit a caller needs: intrinsic plus the execution budget.
+    [[nodiscard]] int64_t minCost() const noexcept
+    {
+        return ownsCurrentThreadSession() ? g_callGasSession.minCost : 0;
+    }
+
+    /// Least transaction gas limit a caller needs: intrinsic plus the execution budget, but
+    /// never below the EIP-7623 floor -- a calldata-heavy call can need more gas than its
+    /// execution consumes, and admission checks max(intrinsic, min_cost) before the EVM runs.
     [[nodiscard]] std::optional<int64_t> gasLimit() const noexcept
     {
         auto const budget = executionBudget();
         if (!budget.has_value())
             return std::nullopt;
-        return intrinsicGas() + *budget;
+        return std::max(intrinsicGas() + *budget, minCost());
     }
+
+private:
+    uint64_t m_generation;
 };
 
 }  // namespace bcos::protocol::gas

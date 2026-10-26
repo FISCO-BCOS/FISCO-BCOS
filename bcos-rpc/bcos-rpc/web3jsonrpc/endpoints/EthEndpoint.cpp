@@ -62,6 +62,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -1316,8 +1317,8 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
 {
     co_await call(request, response, nullptr, false);
 }
-task::Task<void> EthEndpoint::call(
-    const Json::Value& request, Json::Value& response, u256* gasUsed, bool isEstimate)
+task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response, u256* gasUsed,
+    bool isEstimate, u256* probeBudget)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: data(DATA)
@@ -1449,6 +1450,13 @@ task::Task<void> EthEndpoint::call(
     }
     auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
         std::move(pendingNonce), chainBlockGasLimit);
+    if (probeBudget)
+    {
+        // The budget the probe is actually about to run with. An estimate derived from this run
+        // must not exceed it: the probe succeeded at that budget, so anything larger is not
+        // backed by evidence and may exceed this node's admission caps.
+        *probeBudget = tx->gasLimit();
+    }
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
@@ -1567,7 +1575,9 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     // the gap is not recoverable from the total (intrinsic gas is never forwarded, and depth is
     // a maximum over the whole trace, not a per-site fact).
     protocol::gas::CallGasEstimationScope gasEstimate;
-    co_await call(request, callResponse, std::addressof(gasUsed), true);
+    u256 probeBudget{0};
+    co_await call(
+        request, callResponse, std::addressof(gasUsed), true, std::addressof(probeBudget));
 
     if (callResponse.isMember("error"))
     {
@@ -1575,19 +1585,40 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         co_return;
     }
 
-    // `gasLimit()` is intrinsic + the root frame's requirement, which is what a transaction
-    // needs. It is bounded by construction: the probe succeeded at the gas it was given, so the
-    // requirement can never exceed that budget, and the answer therefore always passes this
-    // node's own admission check.
-    auto const estimated = gasEstimate.gasLimit();
+    // `gasLimit()` is max(intrinsic + the root frame's requirement, the EIP-7623 floor): what a
+    // transaction needs. The per-frame requirement cannot exceed the probe's budget, but the
+    // floor can -- it is computed from calldata alone and knows nothing about the simulation --
+    // so clamp the answer to the budget the probe actually ran with. That budget is what this
+    // node accepted, so the answer always passes its own admission check and never claims more
+    // than the evidence covers.
+    auto estimated = gasEstimate.gasLimit();
+    if (estimated.has_value() && probeBudget > 0 && bcos::u256FitsUint64(probeBudget) &&
+        *estimated > static_cast<int64_t>(probeBudget))
+    {
+        estimated = static_cast<int64_t>(probeBudget);
+    }
     if (!estimated.has_value())
     {
-        // The frame accounting never saw the EVM -- the executor ran on another thread. Fall
-        // back to the measurement rather than inventing a number; that is the old behaviour and
-        // is a floor, never an over-estimate of the requirement.
-        WEB3_LOG(WARNING)
-            << LOG_DESC("eth_estimateGas: no frame accounting, reporting the measured gasUsed")
-            << LOG_KV("gasUsed", gasUsed.str());
+        // The frame accounting is not attributable to this request: the executor ran on another
+        // thread, or another estimate took over this thread's session while this one was
+        // suspended. Fall back to the measurement rather than inventing a number -- that is the
+        // old behaviour, and it is a floor, never an over-estimate of the requirement.
+        //
+        // Logged once at WARNING so an operator learns the tighter accounting is not in effect
+        // on this deployment, then at DEBUG: eth_estimateGas is unauthenticated and this path
+        // can be hit on every request, which would make the WARNING a log-flooding primitive.
+        static std::atomic<bool> s_reportedOnce{false};
+        if (!s_reportedOnce.exchange(true, std::memory_order_relaxed))
+        {
+            WEB3_LOG(WARNING)
+                << LOG_DESC(
+                       "eth_estimateGas: frame accounting unavailable, falling back to the "
+                       "measured "
+                       "gasUsed (this line is logged once; per-request detail is at DEBUG)")
+                << LOG_KV("gasUsed", gasUsed.str());
+        }
+        WEB3_LOG(DEBUG) << LOG_DESC("eth_estimateGas: fallback to measured gasUsed")
+                        << LOG_KV("gasUsed", gasUsed.str());
         Json::Value result = toQuantity(gasUsed);
         buildJsonContent(result, response);
         co_return;

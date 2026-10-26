@@ -152,42 +152,60 @@ $$
 
 ## 7. Host / evmone 接入注意事项
 
-仅依赖 `host.call` 接收到的子调用 Gas 和返回的 `gas_left`，通常不足以计算父帧的 $P_i$。
+计算父帧的 $P_i$ 需要两个量：父帧入口 Gas，以及扣完调用费用、尚未转发 Gas 时的父帧剩余 Gas。
 
-需要在 evmone 内部对应位置增加追踪，或提供等价信息，取得：
+二者都能从 `host.call` 拿到：进入一帧时的 `evmc_message::gas` 就是该帧的入口 Gas，
+evmone 在 `host.call` 入口把子帧的 `evmc_message::gas`（即转发额度）交出来，
+第 5 节的递推只需要这两者，所以 `EthereumHost::call` 在进入/退出每一帧时直接记录即可，
+**不需要**在 evmone 内部增加追踪。第 4 节的 $h(r)$ 是 `f(L) = L - L/64` 的精确逆，
+因此由转发额度反推的父帧剩余 Gas 偏大不超过 1 gas，方向恒为**高估**。
 
-- 父帧入口 Gas；
-- 扣完调用费用、尚未转发 Gas 时的父帧剩余 Gas。
-
-不要根据子调用的转发 Gas 反推父帧剩余 Gas，尤其是在存在显式转发上限时。
+由转发额度反推而非直接读取父帧剩余 Gas，前提是转发额度等于 $f(\text{父帧剩余})$。
+调用点写了显式上限 `call{gas: k}` 时这个前提不成立，但偏差方向仍是前缀变大（高估），
+不会低估，因此安全但可能不精确 —— 第 9 节记录了这一点。
 
 另外：
 
 - 父帧的 `entryGas - gasLeft` 已包含后代消耗，不能再重复累加后代的总消耗；
-- `used` 必须是执行期间、交易退款结算前的实际消耗，不能直接用交易回执的最终计费 `gasUsed` 替代。
+- `used` 必须是执行期间、交易退款结算前的实际消耗，不能直接用交易回执的最终计费 `gasUsed` 替代；
+- 结论还必须在 EIP-7623 的 `min_cost` 之上取最大值：`min_cost = 21000 + 10 * tokens`
+  只由 calldata 决定，与执行消耗无关，漏掉它会让 calldata 重的交易拿到一个本节点准入
+  就会拒绝的 gasLimit。
 
 ## 8. 从入口预算到交易 Gas limit
 
 递推得到的根帧 `required` 是入口合约的执行预算，不是完整交易的 Gas limit。
 
-在仅考虑固有费用与执行预算的模型下：
+实际发布的答案是：
 
 $$
 G_{\text{limit,min}}
 =
-G_{\text{intrinsic}}+r_{\text{root}}
+\min\Big(\max\big(G_{\text{intrinsic}}+r_{\text{root}},\; G_{\text{min\_cost}}\big),\; G_{\text{probe}}\Big)
 $$
 
-完整实现还需处理适用的交易级最低 Gas 要求、Gas 上限和其他协议规则。交易结束时的退款不能用于降低执行期间必须具备的预算。
+- $G_{\text{min\_cost}}$ 是 EIP-7623 的下限 $21000 + 10 \cdot \text{tokens}$，只由 calldata 决定。
+  准入检查在 EVM 运行之前就比较 $\max(G_{\text{intrinsic}}, G_{\text{min\_cost}})$，所以缺少
+  这一项时，calldata 重的交易会拿到一个本节点自己就会拒绝的 gasLimit。
+- $G_{\text{probe}}$ 是这次模拟实际使用的 gasLimit。$r_{\text{root}}$ 不会超过它（模拟就是
+  在这个预算下成功的），但 $G_{\text{min\_cost}}$ 由 calldata 直接算出、与模拟无关，可能超过它，
+  因此需要按探针预算钳制 —— 这样答案一定落在本节点已接受的预算之内。
+
+交易结束时的退款不能用于降低执行期间必须具备的预算。
 
 ## 9. 尚需单独处理的情况
 
-以下情况超出上述基础递推公式：
+已在本实现中处理（偏差方向一致为高估，因此安全）：
+
+- 带 value 的调用 stipend：`CALL` / `CALLCODE` 且 `msg.value != 0` 时，从转发额度里扣回 2300。
+  只按 value 判断会把 `DELEGATECALL` 也算成带 stipend（它继承 value 但拿不到 stipend），
+  从而高估一个 stipend。
+- `SSTORE` 剩余 Gas 门槛（EIP-2200 sentry）：写过存储的帧在消耗之上加 2301。
+- 显式 `call{gas: k}`：重建出的前缀只会变大，仍是高估。
+
+仍未建模：
 
 - `gasleft()` 等导致执行路径或消耗随预算变化；
-- 显式 `call{gas: k}` 或动态计算的转发限制；
-- 带 value 的调用 stipend；
-- `SSTORE` 等特殊剩余 Gas 门槛；
 - 子调用异常耗尽预算，或父帧依赖子调用失败继续执行；
 - 合约创建等需要额外建模的执行和结算规则。
 

@@ -76,11 +76,42 @@ contract GasHarness {
         return acc ^ abi.decode(ret, (uint256));
     }
 
+    /// Calldata-heavy and execution-cheap: `payload` is only measured, never touched. The
+    /// EIP-7623 floor (21000 + 10 * tokens) therefore dominates while execution stays flat --
+    /// the case eth_estimateGas dropped before the floor was added to its answer, which made it
+    /// return a gas limit this node's own admission check rejects.
+    function swallow(bytes calldata payload) public pure returns (uint256) {
+        return payload.length;
+    }
+
+    /// Target of the DELEGATECALL case below. Writes an idempotent value, so the estimate and
+    /// the transaction that follows see the same SSTORE cost.
+    function touchSink() public payable returns (uint256) {
+        sink = 1;
+        return 1;
+    }
+
     /// Fixed amount of computation that does not depend on the gas budget, so adjusting the
     /// budget cannot change the trace (the premise the estimate relies on).
     function burn(uint256 rounds) internal pure returns (uint256 acc) {
         for (uint256 i = 0; i < rounds; ++i) {
             acc = uint256(keccak256(abi.encode(acc, i)));
         }
+    }
+}
+
+/// DELEGATECALL carries the caller's msg.value but never receives the 2300 stipend that CALL
+/// adds for a value transfer. The estimator used to infer "value-bearing, subtract a stipend"
+/// from msg.value alone, which over-estimated this frame by the stipend.
+contract DelegateProxy {
+    address private immutable m_target;
+
+    constructor(address target_) {
+        m_target = target_;
+    }
+
+    function run() public payable returns (bool ok) {
+        (ok, ) = m_target.delegatecall(abi.encodeWithSelector(GasHarness.touchSink.selector));
+        require(ok, "delegatecall failed");
     }
 }
