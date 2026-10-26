@@ -12,18 +12,18 @@
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/gateway/ProGatewayNodeManager.h"
 #include "bcos-gateway/libamop/AirTopicManager.h"
-#include "bcos-network/ASIOInterface.h"
-#include "bcos-network/Common.h"
-#include "bcos-network/Host.h"
-#include "bcos-gateway/libp2p/PeerBlackWhitelist.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PIdentity.h"
-#include "bcos-network/Session.h"
+#include "bcos-gateway/libp2p/PeerBlackWhitelist.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Common.h"
+#include "bcos-network/Host.h"
+#include "bcos-network/Session.h"
 #include "bcos-tars-protocol/protocol/GroupInfoCodecImpl.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
@@ -685,8 +685,8 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
                                   "GatewayFactory: IOServicePool must be provided from outside!"));
     }
     auto ioServicePool = m_ioServicePool;
-    auto asioInterface =
-        std::make_shared<bcos::network::ASIOInterface>(ioServicePool, _config->listenIP(), _config->listenPort());
+    auto asioInterface = std::make_shared<bcos::network::ASIOInterface>(
+        ioServicePool, _config->listenIP(), _config->listenPort());
     asioInterface->setSrvContext(std::move(srvCtx));
     asioInterface->setClientContext(std::move(clientCtx));
 
@@ -707,10 +707,10 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     auto peerIdentity = std::make_shared<P2PPeerIdentity>(
         _config->hashImpl(), m_sslContextPubHandler, m_sslContextPubHandlerWithoutExtInfo);
     // init peer black/white list
-    peerIdentity->setPeerBlacklist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Blacklist,
-        _config->peerBlacklist(), _config->enableBlacklist()));
-    peerIdentity->setPeerWhitelist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Whitelist,
-        _config->peerWhitelist(), _config->enableWhitelist()));
+    peerIdentity->setPeerBlacklist(PeerBlackWhitelist(
+        PeerBlackWhitelist::Type::Blacklist, _config->peerBlacklist(), _config->enableBlacklist()));
+    peerIdentity->setPeerWhitelist(PeerBlackWhitelist(
+        PeerBlackWhitelist::Type::Whitelist, _config->peerWhitelist(), _config->enableWhitelist()));
     host->setPeerIdentity(peerIdentity);
     host->setEnableSslVerify(_config->enableSSLVerify());
     // FIB-184: apply the configured inbound-session caps (no longer hardcoded in Host)
@@ -723,9 +723,9 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // init Service (the optional router module is enabled by passing a RouterTableFactory)
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = std::make_shared<Service>(selfInfo,
-        enableRIPProtocol ? std::shared_ptr<RouterTableFactory>(
-                                std::make_shared<RouterTableFactoryImpl>()) :
-                            nullptr,
+        enableRIPProtocol ?
+            std::shared_ptr<RouterTableFactory>(std::make_shared<RouterTableFactoryImpl>()) :
+            nullptr,
         enableRIPProtocol ? ioServicePool->getIOService().get() : nullptr);
 
     service->setHost(host);
@@ -829,7 +829,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         service->registerDisconnectHandler(
             [gatewayNodeManagerWeakPtr, serviceWeakPtr = std::weak_ptr<Service>(service)](
                 bcos::network::NetworkException e, P2PSession::Ptr p2pSession) {
-                if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::DuplicateSession ||
+                if (bcos::network::errorCodeOf(e) ==
+                        bcos::network::P2PExceptionType::DuplicateSession ||
                     bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::Success)
                 {
                     return;
@@ -903,31 +904,31 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                     return {};
                 });
 
-            service->setOnMessageHandler([gatewayRateLimiterWeakPtr](
-                                             Session::Ptr _session, const Message& _message)
-                                             -> std::optional<bcos::Error> {
-                auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
-                if (!gatewayRateLimiter)
-                {
-                    return std::nullopt;
-                }
+            service->setOnMessageHandler(
+                [gatewayRateLimiterWeakPtr](
+                    Session::Ptr _session, const Message& _message) -> std::optional<bcos::Error> {
+                    auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+                    if (!gatewayRateLimiter)
+                    {
+                        return std::nullopt;
+                    }
 
-                auto endpoint = _session->nodeIPEndpoint().address();
-                auto packetType = _message.packetType();
-                auto msgLength = _message.length();
+                    auto endpoint = _session->nodeIPEndpoint().address();
+                    auto packetType = _message.packetType();
+                    auto msgLength = _message.length();
 
-                auto result =
-                    gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
-                // The whole buildError(...) call must be parenthesised, exactly as in the
-                // checkOutGoing branch above. Without the parentheses the comma inside the argument
-                // list binds as the comma OPERATOR, so the true branch collapses to
-                // make_optional(result.value()) — the overload check fails, and the rejection
-                // reason is lost. The trailing `return std::nullopt;` this replaces was
-                // unreachable.
-                return result ? std::make_optional(bcos::Error::buildError(
-                                    "", bcos::network::InQPSOverflow, result.value())) :
-                                std::nullopt;
-            });
+                    auto result =
+                        gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
+                    // The whole buildError(...) call must be parenthesised, exactly as in the
+                    // checkOutGoing branch above. Without the parentheses the comma inside the
+                    // argument list binds as the comma OPERATOR, so the true branch collapses to
+                    // make_optional(result.value()) — the overload check fails, and the rejection
+                    // reason is lost. The trailing `return std::nullopt;` this replaces was
+                    // unreachable.
+                    return result ? std::make_optional(bcos::Error::buildError(
+                                        "", bcos::network::InQPSOverflow, result.value())) :
+                                    std::nullopt;
+                });
         }
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");
@@ -1028,19 +1029,19 @@ void GatewayFactory::registerAMOPHandlers(
     GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("registerAMOPHandlers");
     auto weakTopicManager = std::weak_ptr<TopicManager>(topicManager);
     // register disconnect handler
-    service->registerDisconnectHandler(
-        [weakTopicManager](bcos::network::NetworkException e, P2PSession::Ptr p2pSession) {
-            if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::DuplicateSession ||
-                bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::Success)
-            {
-                return;
-            }
-            auto topicMgr = weakTopicManager.lock();
-            if (topicMgr && p2pSession)
-            {
-                topicMgr->onDisconnect(p2pSession->p2pID());
-            }
-        });
+    service->registerDisconnectHandler([weakTopicManager](bcos::network::NetworkException e,
+                                           P2PSession::Ptr p2pSession) {
+        if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::DuplicateSession ||
+            bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::Success)
+        {
+            return;
+        }
+        auto topicMgr = weakTopicManager.lock();
+        if (topicMgr && p2pSession)
+        {
+            topicMgr->onDisconnect(p2pSession->p2pID());
+        }
+    });
 
     service->registerUnreachableHandler([weakTopicManager](std::string const& _unreachableNode) {
         auto topicMgr = weakTopicManager.lock();

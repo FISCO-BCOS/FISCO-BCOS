@@ -32,8 +32,7 @@ using namespace bcos;
 using namespace bcos::amop;
 using namespace bcos::gateway;
 
-TopicManager::TopicManager(
-    std::string const& _rpcServiceName, bcos::gateway::Service::Ptr _network)
+TopicManager::TopicManager(std::string const& _rpcServiceName, bcos::gateway::Service::Ptr _network)
   : m_rpcServiceName(_rpcServiceName), m_network(_network)
 {}
 

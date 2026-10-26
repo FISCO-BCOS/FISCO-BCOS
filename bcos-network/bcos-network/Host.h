@@ -4,9 +4,9 @@
  */
 #pragma once
 
-#include "bcos-network/Endpoint.h"
 #include "bcos-network/ASIOInterface.h"
 #include "bcos-network/Common.h"
+#include "bcos-network/Endpoint.h"
 #include "bcos-network/PeerIdentity.h"
 #include "bcos-network/Session.h"
 #include "bcos-network/Socket.h"
@@ -217,8 +217,8 @@ public:
         m_run = false;
         // Wake any parked acceptSession() consumer: no more inbound connections will be
         // delivered. Queued-but-unclaimed accepted sessions stay drainable ahead of the error.
-        m_acceptChannel.close(
-            std::make_exception_ptr(makeNetworkException(P2PExceptionType::Disconnect, "HostStopped")));
+        m_acceptChannel.close(std::make_exception_ptr(
+            makeNetworkException(P2PExceptionType::Disconnect, "HostStopped")));
         // Cancel the acceptor so the accept loop's pending async_accept completes with
         // operation_aborted: acceptLoop's coroutine frame holds a strong reference to this Host,
         // and only the completed accept lets the loop observe m_run == false and exit, releasing
@@ -233,10 +233,9 @@ public:
                 // arguments is unspecified, so moving asioInterface into the lambda first would
                 // leave a null shared_ptr for the acceptor() call
                 auto executor = asioInterface->acceptor()->get_executor();
-                boost::asio::post(executor,
-                    [asioInterface = std::move(asioInterface)]() {
-                        asioInterface->cancelAcceptor();
-                    });
+                boost::asio::post(executor, [asioInterface = std::move(asioInterface)]() {
+                    asioInterface->cancelAcceptor();
+                });
             }
             catch (...)
             {
@@ -247,9 +246,9 @@ public:
                 // m_run == false and exit. With no inbound connection, a Host whose cancel was
                 // lost here stays alive until stop() is retried. The bounded wait below is what
                 // makes this diagnosable instead of silent.
-                HOST_LOG(WARNING)
-                    << LOG_DESC("cancel acceptor on stop failed")
-                    << LOG_KV("what", boost::current_exception_diagnostic_information());
+                HOST_LOG(WARNING) << LOG_DESC("cancel acceptor on stop failed")
+                                  << LOG_KV(
+                                         "what", boost::current_exception_diagnostic_information());
             }
         }
         // Bounded wait for the accept loop to exit (see the latch contract on
@@ -268,17 +267,17 @@ public:
                 if (m_acceptLoopExit.get_future().wait_for(std::chrono::seconds(10)) !=
                     std::future_status::ready)
                 {
-                    HOST_LOG(ERROR)
-                        << LOG_DESC("accept loop did not exit within 10s of stop(); "
-                                    "the posted cancel was likely lost and this Host "
-                                    "(ASIOInterface, acceptor) may leak");
+                    HOST_LOG(ERROR) << LOG_DESC(
+                        "accept loop did not exit within 10s of stop(); "
+                        "the posted cancel was likely lost and this Host "
+                        "(ASIOInterface, acceptor) may leak");
                 }
             }
             catch (...)
             {
-                HOST_LOG(WARNING)
-                    << LOG_DESC("accept loop exit wait failed")
-                    << LOG_KV("what", boost::current_exception_diagnostic_information());
+                HOST_LOG(WARNING) << LOG_DESC("accept loop exit wait failed")
+                                  << LOG_KV(
+                                         "what", boost::current_exception_diagnostic_information());
             }
         }
     }
@@ -358,7 +357,10 @@ public:
     // The identity seam (bcos-network/PeerIdentity.h): certificate → node-identity extraction and
     // admission policy, injected by the factory (the gateway uses libp2p::P2PPeerIdentity)
     // before start(). Fail-closed: a handshake with no identity wired in is rejected.
-    void setPeerIdentity(std::shared_ptr<PeerIdentity> _identity) { m_identity = std::move(_identity); }
+    void setPeerIdentity(std::shared_ptr<PeerIdentity> _identity)
+    {
+        m_identity = std::move(_identity);
+    }
 
     const std::shared_ptr<ASIOInterface>& asioInterface() const { return m_asioInterface; }
     std::shared_ptr<BasicSessionFactory<DecoderT, SocketT>> sessionFactory() const
@@ -689,8 +691,8 @@ protected:
     /// RLPxHandshake to obtain informations(client version, caps, etc),start peer
     /// session and start accepting procedure repeatedly
     /// @param peerIdentity: the opaque identity token filled during the TLS handshake
-    void handshakeServer(const boost::system::error_code& error,
-        IdentityToken peerIdentity, std::shared_ptr<SocketT> socket)
+    void handshakeServer(const boost::system::error_code& error, IdentityToken peerIdentity,
+        std::shared_ptr<SocketT> socket)
     {
         if (error)
         {
@@ -803,11 +805,9 @@ protected:
                 return std::make_tuple(makeNetworkException(ConnectError, "Session cap reached"),
                     IdentityToken{}, std::shared_ptr<SessionType>());
             }
-            return std::make_tuple(
-                NetworkException{}, std::move(peerIdentity), std::move(session));
+            return std::make_tuple(NetworkException{}, std::move(peerIdentity), std::move(session));
         }
-        return std::make_tuple(
-            NetworkException{}, IdentityToken{}, std::shared_ptr<SessionType>());
+        return std::make_tuple(NetworkException{}, IdentityToken{}, std::shared_ptr<SessionType>());
     }
 
     void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint)
@@ -900,8 +900,8 @@ private:
                     // is not delayed — and never logged at ERROR.
                     if (ec && ec != boost::asio::error::operation_aborted)
                     {
-                        HOST_LOG(ERROR) << LOG_DESC("accept failed")
-                                        << LOG_KV("message", ec.message());
+                        HOST_LOG(ERROR)
+                            << LOG_DESC("accept failed") << LOG_KV("message", ec.message());
                         iterationFailed = true;
                     }
                     socket->close();
@@ -973,8 +973,8 @@ private:
                 // continue
                 iterationFailed = true;
                 HOST_LOG(ERROR) << LOG_DESC("accept iteration exception")
-                                << LOG_KV("what",
-                                       boost::current_exception_diagnostic_information());
+                                << LOG_KV(
+                                       "what", boost::current_exception_diagnostic_information());
             }
             // Give a failed iteration a suspension point before retrying. Two failure shapes land
             // here: a throw (newSocket() allocation — the canonical cause is fd exhaustion —,
@@ -1006,9 +1006,9 @@ private:
                 try
                 {
                     // The timer MUST stay on the acceptor's own executor — hence the explicit
-                    // io_context argument: co_await resumes the loop on the timer's thread, and only
-                    // the acceptor's single io_context thread serializes the next while (m_run)
-                    // re-check and async_accept re-arm against the cancelAcceptor() that
+                    // io_context argument: co_await resumes the loop on the timer's thread, and
+                    // only the acceptor's single io_context thread serializes the next while
+                    // (m_run) re-check and async_accept re-arm against the cancelAcceptor() that
                     // Host::stop() posts to that same context (see the long note above).
                     co_await task::awaitableSleep(
                         m_asioInterface->acceptorIoContext(), ACCEPT_RETRY_INTERVAL_MS);

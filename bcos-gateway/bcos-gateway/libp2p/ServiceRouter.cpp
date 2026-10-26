@@ -88,7 +88,8 @@ void Service::initRouter(
 }
 
 // receive routerTable from peers
-void Service::onReceivePeersRouterTable(std::shared_ptr<P2PSession> _session, const Message& _message)
+void Service::onReceivePeersRouterTable(
+    std::shared_ptr<P2PSession> _session, const Message& _message)
 {
     auto routerTable = m_router->routerTableFactory->createRouterTable(_message.payload());
 
@@ -146,7 +147,8 @@ void Service::joinRouterTable(
 }
 
 // receive routerTable request from peer
-void Service::onReceiveRouterTableRequest(std::shared_ptr<P2PSession> _session, const Message& _message)
+void Service::onReceiveRouterTableRequest(
+    std::shared_ptr<P2PSession> _session, const Message& _message)
 {
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceiveRouterTableRequest")
                        << LOG_KV("peer", _session->printP2pID())
@@ -173,10 +175,11 @@ void Service::onReceiveRouterTableRequest(std::shared_ptr<P2PSession> _session, 
         }
         catch (bcos::network::NetworkException const& e)
         {
-            SERVICE2_LOG(INFO)
-                << LOG_DESC("onReceiveRouterTableRequest send RouterTableResponse failed")
-                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", bcos::network::errorCodeOf(e))
-                << LOG_KV("msg", e.what());
+            SERVICE2_LOG(INFO) << LOG_DESC(
+                                      "onReceiveRouterTableRequest send RouterTableResponse failed")
+                               << LOG_KV("nodeid", printShortP2pID(_nodeID))
+                               << LOG_KV("code", bcos::network::errorCodeOf(e))
+                               << LOG_KV("msg", e.what());
         }
     }(self, GatewayMessageType::RouterTableResponse, dstP2PNodeID, std::move(*routerTableData)));
 }
@@ -193,14 +196,14 @@ void Service::broadcastRouterSeq()
     // send). The router table should only be exchanged between neighbours and propagated
     // hop-by-hop, so broadcast to the directly connected sessions only (not all reachable nodes).
     // All state is passed as coroutine parameters so it is copied into the frame and stays alive.
-    task::wait([](std::shared_ptr<Service> _self, bcos::bytes _payload) mutable
-                   -> task::Task<void> {
-        auto message = std::make_shared<Message>();
-        message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
-        message->setPayload(std::move(_payload));
-        co_await _self->broadcastMessageToNeighbors(
-            message, ::ranges::views::single(message->payload()), bcos::network::Options{});
-    }(self, std::move(payload)));
+    task::wait(
+        [](std::shared_ptr<Service> _self, bcos::bytes _payload) mutable -> task::Task<void> {
+            auto message = std::make_shared<Message>();
+            message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
+            message->setPayload(std::move(_payload));
+            co_await _self->broadcastMessageToNeighbors(
+                message, ::ranges::views::single(message->payload()), bcos::network::Options{});
+        }(self, std::move(payload)));
 }
 
 void Service::markRouterSeqChanged()
@@ -247,8 +250,8 @@ void Service::onReceiveRouterSeq(std::shared_ptr<P2PSession> _session, const Mes
     auto self = shared_from_this();
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // (empty) payload rides as a view; an unreachable peer is an expected, recoverable state.
-    task::wait([](std::shared_ptr<Service> _self, uint16_t _type, bcos::network::P2pID _nodeID)
-                   -> task::Task<void> {
+    task::wait([](std::shared_ptr<Service> _self, uint16_t _type,
+                   bcos::network::P2pID _nodeID) -> task::Task<void> {
         Message message;
         message.setPacketType(_type);
         message.setSeq(_self->newSeq());
@@ -261,7 +264,8 @@ void Service::onReceiveRouterSeq(std::shared_ptr<P2PSession> _session, const Mes
         {
             SERVICE2_LOG(INFO) << LOG_DESC("onReceiveRouterSeq send RouterTableRequest failed")
                                << LOG_KV("nodeid", printShortP2pID(_nodeID))
-                               << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
+                               << LOG_KV("code", bcos::network::errorCodeOf(e))
+                               << LOG_KV("msg", e.what());
         }
     }(self, GatewayMessageType::RouterTableRequest, dstP2PNodeID));
 }

@@ -96,7 +96,7 @@ struct AuthKeys
 // caller wires in blocking or coroutine-backed transports.
 struct IoChannel
 {
-    std::function<void(bytesConstRef)> sendAll;   // write all bytes, throw on failure
+    std::function<void(bytesConstRef)> sendAll;    // write all bytes, throw on failure
     std::function<bcos::bytes(size_t)> recvFixed;  // read exactly N bytes, throw on failure/timeout
 };
 

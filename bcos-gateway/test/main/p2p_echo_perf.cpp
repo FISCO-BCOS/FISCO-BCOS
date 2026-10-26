@@ -19,8 +19,8 @@
  */
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-gateway/GatewayFactory.h"
-#include "bcos-network/Common.h"
 #include "bcos-gateway/libp2p/Message.h"
+#include "bcos-network/Common.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLogInitializer.h"
@@ -97,8 +97,7 @@ int main(int argc, const char** argv)
             // Register the echo handler for the p2p echo message type. It is a COROUTINE handler
             // now, so the reply is co_awaited in the handler itself — no detached task and no
             // payload copy (the old void handler had to task::wait a frame per request).
-            service->subscribeHandler(
-                packageType,
+            service->subscribeHandler(packageType,
                 [reporter](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
                     auto& message = inbound.message;
                     // update rate stat
@@ -182,11 +181,13 @@ int main(int argc, const char** argv)
                     try
                     {
                         co_await _service->sendMessageByNodeID(_p2pID, _message,
-                            ::ranges::views::single(_message.payload()), bcos::network::Options{0, true});
+                            ::ranges::views::single(_message.payload()),
+                            bcos::network::Options{0, true});
                     }
                     catch (bcos::network::NetworkException const& e)
                     {
-                        std::cerr << "\t[Client] recv exception, error code: " << bcos::network::errorCodeOf(e)
+                        std::cerr << "\t[Client] recv exception, error code: "
+                                  << bcos::network::errorCodeOf(e)
                                   << " ,error message: " << e.what() << std::endl;
                     }
                 }(service, p2pID, message));

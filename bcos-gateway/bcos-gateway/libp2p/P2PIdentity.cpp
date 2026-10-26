@@ -23,10 +23,10 @@
 
 #include "bcos-gateway/libp2p/P2PIdentity.h"
 #include "bcos-gateway/libp2p/Common.h"
+#include <openssl/x509.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <openssl/x509.h>
 #include <utility>
 #include <vector>
 
@@ -72,7 +72,8 @@ std::shared_ptr<P2PInfo> P2PPeerIdentity::p2pInfoOf(bcos::network::IdentityToken
     return std::static_pointer_cast<P2PInfo>(token);
 }
 
-bcos::network::PeerIdentity::Verdict P2PPeerIdentity::verifyPeer(X509* cert, bcos::network::IdentityToken const& identitySlot)
+bcos::network::PeerIdentity::Verdict P2PPeerIdentity::verifyPeer(
+    X509* cert, bcos::network::IdentityToken const& identitySlot)
 {
     auto peerInfo = p2pInfoOf(identitySlot);
     if (!peerInfo)

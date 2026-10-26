@@ -89,8 +89,8 @@ public:
 
     static uint32_t readLength(const byte* _data)
     {
-        return (uint32_t(_data[0]) << 24) | (uint32_t(_data[1]) << 16) |
-               (uint32_t(_data[2]) << 8) | uint32_t(_data[3]);
+        return (uint32_t(_data[0]) << 24) | (uint32_t(_data[1]) << 16) | (uint32_t(_data[2]) << 8) |
+               uint32_t(_data[3]);
     }
 
     static void writeLength(byte* _data, uint32_t _length)
@@ -108,7 +108,8 @@ inline bytes buildTestFrame(bytes const& _payload)
     bytes frame;
     frame.resize(TestFrameDecoder::FRAME_HEADER_SIZE + _payload.size());
     TestFrameDecoder::writeLength(frame.data(), static_cast<uint32_t>(frame.size()));
-    std::copy(_payload.begin(), _payload.end(), frame.begin() + TestFrameDecoder::FRAME_HEADER_SIZE);
+    std::copy(
+        _payload.begin(), _payload.end(), frame.begin() + TestFrameDecoder::FRAME_HEADER_SIZE);
     return frame;
 }
 
@@ -182,8 +183,7 @@ private:
         // byte-for-byte after reassembly.
         auto packet = std::make_shared<std::vector<uint8_t>>(
             TestFrameDecoder::FRAME_HEADER_SIZE + _payloadSize, uint8_t(0xff));
-        TestFrameDecoder::writeLength(
-            packet->data(), static_cast<uint32_t>(packet->size()));
+        TestFrameDecoder::writeLength(packet->data(), static_cast<uint32_t>(packet->size()));
         return packet;
     }
 

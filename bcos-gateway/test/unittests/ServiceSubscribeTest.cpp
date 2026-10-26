@@ -27,9 +27,9 @@
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <chrono>
-#include <thread>
 #include <memory>
 #include <string>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -65,8 +65,8 @@ Service::Ptr makeService()
 
 // Deliver one message of the given type through the pump's dispatch entry point, exactly as
 // receiveLoop does after decode.
-void deliver(Service& service, P2PSession::Ptr const& p2pSession, uint16_t packetType,
-    std::string payload)
+void deliver(
+    Service& service, P2PSession::Ptr const& p2pSession, uint16_t packetType, std::string payload)
 {
     Message message;
     message.setPacketType(packetType);
@@ -96,8 +96,8 @@ BOOST_AUTO_TEST_CASE(subscribedChannelReceivesDispatchedMessage)
 
     auto inbound = task::syncWait(channel->recv());
     BOOST_CHECK_EQUAL(inbound.session, peer);
-    BOOST_CHECK_EQUAL(std::string(inbound.message.payload().begin(), inbound.message.payload().end()),
-        "hello");
+    BOOST_CHECK_EQUAL(
+        std::string(inbound.message.payload().begin(), inbound.message.payload().end()), "hello");
 }
 
 // The handler-pump path: subscribeHandler() runs a coroutine handler per inbound message, in
@@ -109,9 +109,11 @@ BOOST_AUTO_TEST_CASE(handlerPumpReceivesDispatchedMessagesInOrder)
     auto peer = std::make_shared<FakeSubscribeSession>("peerB");
 
     std::vector<std::string> received;
-    service->subscribeHandler(TYPE_B,
+    service->subscribeHandler(
+        TYPE_B,
         [&received](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
-            received.emplace_back(inbound.message.payload().begin(), inbound.message.payload().end());
+            received.emplace_back(
+                inbound.message.payload().begin(), inbound.message.payload().end());
             co_return true;
         },
         /*capacity=*/8);
@@ -138,7 +140,8 @@ BOOST_AUTO_TEST_CASE(handlerCanStopItsPump)
     auto peer = std::make_shared<FakeSubscribeSession>("peerC");
 
     int calls = 0;
-    service->subscribeHandler(TYPE_B,
+    service->subscribeHandler(
+        TYPE_B,
         [&calls](bcos::gateway::InboundMessage&&) -> task::Task<bool> {
             ++calls;
             co_return false;  // stop after the first message
@@ -169,8 +172,8 @@ BOOST_AUTO_TEST_CASE(fullChannelDropsOnlyThatMessageAndServiceSurvives)
     deliver(*service, peer, TYPE_A, "third");   // still full: same
 
     auto inbound = task::syncWait(channel->recv());
-    BOOST_CHECK_EQUAL(std::string(inbound.message.payload().begin(), inbound.message.payload().end()),
-        "first");
+    BOOST_CHECK_EQUAL(
+        std::string(inbound.message.payload().begin(), inbound.message.payload().end()), "first");
     // both overflow messages were dropped; the queue is now empty
     BOOST_CHECK_EQUAL(channel->size(), 0);
 }

@@ -63,8 +63,7 @@ TopicManager::Ptr AMOPImpl::topicManager()
 AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     bcos::amop::AMOPMessageFactory::Ptr _messageFactory, AMOPRequestFactory::Ptr _requestFactory,
     Service::Ptr _network, bcos::network::P2pID const& _p2pNodeID,
-    boost::asio::io_context& _ioContext,
-    bcos::IOServicePool::Ptr _ioServicePool)
+    boost::asio::io_context& _ioContext, bcos::IOServicePool::Ptr _ioServicePool)
   : m_topicManager(_topicManager),
     m_messageFactory(_messageFactory),
     m_requestFactory(_requestFactory),
@@ -153,7 +152,8 @@ void AMOPImpl::onReceiveTopicSeqMessage(bcos::network::P2pID const& _nodeID, AMO
                 AMOP_LOG(WARNING) << LOG_BADGE("onReceiveTopicSeqMessage")
                                   << LOG_DESC("send RequestTopic failed")
                                   << LOG_KV("nodeID", printShortP2pID(_nodeID))
-                                  << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
+                                  << LOG_KV("code", bcos::network::errorCodeOf(e))
+                                  << LOG_KV("msg", e.what());
             }
         }(network, GatewayMessageType::AMOPMessageType, _nodeID, std::move(buffer)));
     }
@@ -182,7 +182,8 @@ bcos::bytes AMOPImpl::buildAndEncodeMessage(uint32_t _type, bcos::bytesConstRef 
 }
 
 // receive topic response and update the local topicManager
-void AMOPImpl::onReceiveResponseTopicMessage(bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
+void AMOPImpl::onReceiveResponseTopicMessage(
+    bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
 {
     try
     {
@@ -203,7 +204,8 @@ void AMOPImpl::onReceiveResponseTopicMessage(bcos::network::P2pID const& _nodeID
 }
 
 // response topic message to the given node
-void AMOPImpl::onReceiveRequestTopicMessage(bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
+void AMOPImpl::onReceiveRequestTopicMessage(
+    bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
 {
     (void)_msg;
     try
@@ -237,7 +239,8 @@ void AMOPImpl::onReceiveRequestTopicMessage(bcos::network::P2pID const& _nodeID,
                 AMOP_LOG(WARNING) << LOG_BADGE("onReceiveRequestTopicMessage")
                                   << LOG_DESC("send ResponseTopic failed")
                                   << LOG_KV("dstNode", printShortP2pID(_nodeID))
-                                  << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
+                                  << LOG_KV("code", bcos::network::errorCodeOf(e))
+                                  << LOG_KV("msg", e.what());
             }
         }(network, GatewayMessageType::AMOPMessageType, _nodeID, std::move(buffer)));
     }
@@ -309,7 +312,8 @@ bcos::task::Task<std::tuple<bytesPointer, int16_t>> AMOPImpl::onReceiveAMOPMessa
 }
 
 // receive the AMOP broadcast message from given node
-void AMOPImpl::onReceiveAMOPBroadcastMessage(bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
+void AMOPImpl::onReceiveAMOPBroadcastMessage(
+    bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
 {
     // AMOPRequest
     auto request = m_requestFactory->buildRequest(_msg->data());
@@ -500,7 +504,8 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
             AMOP_LOG(DEBUG) << LOG_BADGE("sendMessageByTopic")
                             << LOG_DESC("send failed, retry next node")
                             << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
-                            << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
+                            << LOG_KV("code", bcos::network::errorCodeOf(e))
+                            << LOG_KV("msg", e.what());
         }
         catch (std::exception const& e)
         {

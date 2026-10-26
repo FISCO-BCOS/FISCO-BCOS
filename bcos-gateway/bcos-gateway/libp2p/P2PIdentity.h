@@ -26,8 +26,8 @@
 
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
-#include "bcos-network/PeerIdentity.h"
 #include "bcos-gateway/libp2p/PeerBlackWhitelist.h"
+#include "bcos-network/PeerIdentity.h"
 #include <openssl/x509v3.h>
 #include <memory>
 #include <set>

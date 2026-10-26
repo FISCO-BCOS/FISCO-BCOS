@@ -732,8 +732,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeOwned_compressedFallsBack)
     Message message;
     BOOST_REQUIRE_GT(message.decodeOwned(std::move(frame), 0), 0);
     // the COMPRESS flag is reset after decompression, the payload matches the original
-    BOOST_CHECK(
-        (message.ext() & bcos::protocol::MessageExtFieldFlag::COMPRESS) == 0);
+    BOOST_CHECK((message.ext() & bcos::protocol::MessageExtFieldFlag::COMPRESS) == 0);
     BOOST_REQUIRE_EQUAL(message.payload().size(), payload.size());
     BOOST_CHECK(std::equal(message.payload().begin(), message.payload().end(), payload.begin()));
     // fallback: the payload is materialized outside the owned frame storage

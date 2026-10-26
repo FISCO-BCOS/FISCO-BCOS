@@ -78,8 +78,7 @@ public:
     // maxBytes == 0 disables the byte budget; sizeOf defaults to 1-per-item (pure count cap).
     Channel(Poster poster, std::size_t maxCount, std::size_t maxBytes = 0,
         std::function<std::size_t(const T&)> sizeOf = nullptr)
-      : m_state(std::make_shared<State>(
-            std::move(poster), maxCount, maxBytes, std::move(sizeOf)))
+      : m_state(std::make_shared<State>(std::move(poster), maxCount, maxBytes, std::move(sizeOf)))
     {}
 
     Channel(const Channel&) = delete;
@@ -175,10 +174,7 @@ public:
     // returns false, and values already queued stay drainable ahead of the error — cancellation
     // never loses work that was already accepted. Calling cancel() twice, or after a close(), is
     // a no-op.
-    void cancel(std::exception_ptr error)
-    {
-        close(std::move(error));
-    }
+    void cancel(std::exception_ptr error) { close(std::move(error)); }
 
     std::size_t size() const
     {

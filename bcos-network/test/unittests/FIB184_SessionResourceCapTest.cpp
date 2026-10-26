@@ -61,7 +61,8 @@ BOOST_AUTO_TEST_CASE(ForcedSmallRecvBufferIsHonored)
     auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
-    auto session = std::make_shared<Session_FIB184>(fakeSocket, *fakeHost, /*size*/ 2, /*forceSize*/ true);
+    auto session =
+        std::make_shared<Session_FIB184>(fakeSocket, *fakeHost, /*size*/ 2, /*forceSize*/ true);
     BOOST_CHECK_EQUAL(session->recvBuffer().recvBufferSize(), 2u);
     // grow ceiling is still the 512KB minimum
     BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session_FIB184::MIN_SESSION_RECV_BUFFER_SIZE);
@@ -102,8 +103,8 @@ BOOST_AUTO_TEST_CASE(ProductionLargeRecvBufferDoesNotPreallocate)
 
     constexpr size_t k64MB =
         64UL * 1024 * 1024;  // == 2 * MAX_MESSAGE_LENGTH, the production ceiling
-    auto session =
-        std::make_shared<Session_FIB184>(fakeSocket, *fakeHost, /*ceiling*/ k64MB, /*forceSize*/ false);
+    auto session = std::make_shared<Session_FIB184>(
+        fakeSocket, *fakeHost, /*ceiling*/ k64MB, /*forceSize*/ false);
 
     // initial allocation is the lazy 16KB, NOT the 64MB ceiling
     BOOST_CHECK_EQUAL(

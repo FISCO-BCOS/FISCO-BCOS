@@ -55,8 +55,9 @@ void sendMessage(NodeIPEndpoint const& _endPoint, std::shared_ptr<Message> _msg,
                 std::shared_ptr<Message>) {
                 if (errorCodeOf(_e))
                 {
-                    BCOS_LOG(WARNING) << LOG_DESC("asyncSendMessage network error")
-                                      << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
+                    BCOS_LOG(WARNING)
+                        << LOG_DESC("asyncSendMessage network error")
+                        << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
                     return;
                 }
                 BCOS_LOG(INFO) << LOG_DESC("receiveResponse, timecost:") << (utcTime() - startT)

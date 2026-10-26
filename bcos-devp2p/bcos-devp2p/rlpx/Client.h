@@ -89,10 +89,7 @@ public:
     EstablishedSession accept();
 
     // The port this server listens on (valid once constructed).
-    uint16_t port() const
-    {
-        return m_asio->acceptor()->local_endpoint().port();
-    }
+    uint16_t port() const { return m_asio->acceptor()->local_endpoint().port(); }
 
 private:
     EccKeyPair m_keyPair;

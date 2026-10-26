@@ -22,9 +22,9 @@
  */
 #pragma once
 
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-network/Common.h"
 #include "bcos-network/FrameMeta.h"
-#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include <boost/asio/steady_timer.hpp>
 #include <array>
 #include <memory>
@@ -44,7 +44,8 @@ struct PendingResponse
 {
     using Ptr = std::shared_ptr<PendingResponse>;
 
-    std::function<void(bcos::network::NetworkException, std::optional<bcos::network::FrameMeta>)> callback;
+    std::function<void(bcos::network::NetworkException, std::optional<bcos::network::FrameMeta>)>
+        callback;
     std::optional<boost::asio::steady_timer> timeoutHandler;
     // The session the request went OUT on. The matching response may arrive on a different
     // session (routed), but the request fails when its outbound session dies — the disconnect

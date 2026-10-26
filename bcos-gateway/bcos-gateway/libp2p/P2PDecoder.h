@@ -23,10 +23,10 @@
 
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/Common.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-network/FrameMeta.h"
 #include "bcos-network/Host.h"
 #include "bcos-network/Session.h"
-#include "bcos-gateway/libp2p/Message.h"
 #include <boost/asio/detail/socket_ops.hpp>
 
 namespace bcos::gateway
@@ -54,8 +54,8 @@ public:
         const byte* data = buffer.data();
         uint32_t length =
             boost::asio::detail::socket_ops::network_to_host_long(*((const uint32_t*)data));
-        if (length < Message::MESSAGE_HEADER_LENGTH ||
-            std::cmp_greater(length, MAX_MESSAGE_LENGTH)) [[unlikely]]
+        if (length < Message::MESSAGE_HEADER_LENGTH || std::cmp_greater(length, MAX_MESSAGE_LENGTH))
+            [[unlikely]]
         {
             meta.status = bcos::network::FrameMeta::Status::ProtocolError;
             return meta;

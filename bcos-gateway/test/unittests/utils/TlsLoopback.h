@@ -109,7 +109,8 @@ inline std::shared_ptr<bcos::network::Socket> makeTlsSessionSocket(
     std::shared_ptr<boost::asio::io_context> io, boost::asio::ssl::context& clientCtx,
     boost::asio::ip::tcp::socket clientSocket)
 {
-    auto socket = std::make_shared<bcos::network::Socket>(std::move(io), &clientCtx, NodeIPEndpoint());
+    auto socket =
+        std::make_shared<bcos::network::Socket>(std::move(io), &clientCtx, NodeIPEndpoint());
     socket->ref() = std::move(clientSocket);
     std::promise<boost::system::error_code> handshakeDone;
     auto future = handshakeDone.get_future();

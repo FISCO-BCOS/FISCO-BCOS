@@ -85,10 +85,7 @@ struct FrameMeta
 
     /// The decoded frame's plaintext as a view into `frame` — valid for BOTH paths and the single
     /// access contract for consumers. Never wider than `frame`, regardless of wireConsumed.
-    bytesConstRef frameData() const
-    {
-        return {frame.data() + frameOffset, frameSize};
-    }
+    bytesConstRef frameData() const { return {frame.data() + frameOffset, frameSize}; }
 };
 
 /// A stream decoder: splits a TCP byte stream into frames. Stateless formats use an empty
@@ -102,7 +99,8 @@ struct FrameMeta
 /// `frame` with frameOffset == 0 (copy path) or with takeBuffer = true. It MUST NOT use
 /// wireConsumed to index `frame` — see the two-byte-counts note above.
 template <typename D>
-concept FrameDecoder = std::default_initializable<D> && requires(D& decoder, const bytesConstRef& buffer) {
-    { decoder.tryDecode(buffer) } -> std::same_as<FrameMeta>;
-};
+concept FrameDecoder =
+    std::default_initializable<D> && requires(D& decoder, const bytesConstRef& buffer) {
+        { decoder.tryDecode(buffer) } -> std::same_as<FrameMeta>;
+    };
 }  // namespace bcos::network

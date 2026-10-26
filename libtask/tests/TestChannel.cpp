@@ -109,8 +109,8 @@ BOOST_AUTO_TEST_CASE(pushFailsWhenFull)
 
 BOOST_AUTO_TEST_CASE(byteBudgetIsHonoured)
 {
-    Channel<std::string> channel(inlinePoster(), 16, /*maxBytes=*/10,
-        [](const std::string& value) { return value.size(); });
+    Channel<std::string> channel(
+        inlinePoster(), 16, /*maxBytes=*/10, [](const std::string& value) { return value.size(); });
     BOOST_CHECK(channel.push("123456"));
     BOOST_CHECK(!channel.push("12345"));  // 6 + 5 > 10
     BOOST_CHECK(channel.push("1234"));    // 6 + 4 == 10
@@ -134,8 +134,7 @@ BOOST_AUTO_TEST_CASE(queuedValuesDrainAfterClose)
             }
         }
         catch (const std::exception&)
-        {
-        }
+        {}
         co_return values;
     }(channel));
 
@@ -165,8 +164,8 @@ BOOST_AUTO_TEST_CASE(parkedProducerWokenByConsumerDrain)
         BOOST_CHECK(ch.push(3));
     }(channel, writable));
     auto future = writable.get_future();
-    BOOST_CHECK(!future.valid() || future.wait_for(std::chrono::milliseconds(0)) !=
-                                     std::future_status::ready);
+    BOOST_CHECK(!future.valid() ||
+                future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready);
 
     // Draining one slot frees exactly the space the producer is waiting for; the wake arrives
     // through the (inline) poster.
@@ -177,8 +176,8 @@ BOOST_AUTO_TEST_CASE(parkedProducerWokenByConsumerDrain)
 
 BOOST_AUTO_TEST_CASE(parkedProducerWokenOnlyWhenItsBytesFit)
 {
-    Channel<std::string> channel(inlinePoster(), 16, /*maxBytes=*/10,
-        [](const std::string& value) { return value.size(); });
+    Channel<std::string> channel(
+        inlinePoster(), 16, /*maxBytes=*/10, [](const std::string& value) { return value.size(); });
     BOOST_CHECK(channel.push("12345"));
     BOOST_CHECK(channel.push("12345"));  // 10/10 bytes queued
 
@@ -236,8 +235,8 @@ BOOST_AUTO_TEST_CASE(waitWritableFailsFastWhenCountCapIsZero)
 
 BOOST_AUTO_TEST_CASE(waitWritableFailsFastWhenPushExceedsWholeBudget)
 {
-    Channel<std::string> channel(inlinePoster(), 16, /*maxBytes=*/10,
-        [](const std::string& value) { return value.size(); });
+    Channel<std::string> channel(
+        inlinePoster(), 16, /*maxBytes=*/10, [](const std::string& value) { return value.size(); });
     // An item bigger than the whole byte budget can never fit, however much is drained.
     BOOST_CHECK(!syncWait(channel.waitWritable(11)));
     // The channel stays usable for pushes that do fit.
@@ -317,9 +316,8 @@ BOOST_AUTO_TEST_CASE(destroyedParkedProducerUnregistersBeforePop)
     Channel<int> channel(inlinePoster(), 1);
     BOOST_CHECK(channel.push(1));  // full
     {
-        auto producer = [](Channel<int>& ch) -> Task<void> {
-            (void)co_await ch.waitWritable();
-        }(channel);
+        auto producer = [](Channel<int>& ch) -> Task<void> { (void)co_await ch.waitWritable(); }(
+                                                 channel);
         producer.start();  // parks: no space
     }  // frame destroyed while parked in waitWritable()
     // Draining must not write into or resume the dead producer frame.
@@ -332,7 +330,7 @@ BOOST_AUTO_TEST_CASE(channelCanBeDestroyedWhileConsumerParked)
 {
     auto channel = std::make_unique<Channel<int>>(inlinePoster(), 16);
     auto pump = [](Channel<int>& ch) -> Task<void> { (void)co_await ch.recv(); }(*channel);
-    pump.start();  // parked in recv()
+    pump.start();                           // parked in recv()
     BOOST_CHECK_EQUAL(channel->size(), 0);  // nothing queued: the consumer is parked
     // The channel goes away first: the shared state is kept alive by the parked awaitable,
     // and destroying the parked frame afterwards unregisters without touching the channel.

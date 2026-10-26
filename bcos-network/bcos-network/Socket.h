@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include "bcos-network/Endpoint.h"
 #include "bcos-network/Common.h"
+#include "bcos-network/Endpoint.h"
 #include "bcos-utilities/BoostLog.h"
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>

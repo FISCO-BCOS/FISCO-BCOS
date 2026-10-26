@@ -22,8 +22,8 @@
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libamop/TopicManager.h"
 #include "bcos-gateway/libp2p/Message.h"
-#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/Timer.h"
 #include <bcos-task/Task.h>

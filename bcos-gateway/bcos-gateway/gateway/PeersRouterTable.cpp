@@ -62,7 +62,8 @@ std::set<bcos::network::P2pID> PeersRouterTable::queryP2pIDs(
     return it2->second;
 }
 
-std::set<bcos::network::P2pID> PeersRouterTable::queryP2pIDsByGroupID(const std::string& _groupID) const
+std::set<bcos::network::P2pID> PeersRouterTable::queryP2pIDsByGroupID(
+    const std::string& _groupID) const
 {
     std::set<bcos::network::P2pID> p2pNodeIDList;
     ReadGuard l(x_groupNodeList);
@@ -177,7 +178,8 @@ void PeersRouterTable::removeP2PIDFromGroupNodeList(const bcos::network::P2pID& 
     m_p2pID2GroupNodes.erase(revIt);
 }
 
-void PeersRouterTable::updatePeerNodeList(bcos::network::P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status)
+void PeersRouterTable::updatePeerNodeList(
+    bcos::network::P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status)
 {
     WriteGuard l(x_peersStatus);
     m_peersStatus[_p2pNodeID] = _status;
@@ -242,7 +244,8 @@ GatewayStatus::Ptr PeersRouterTable::gatewayInfo(std::string const& _uuid)
     return nullptr;
 }
 
-void PeersRouterTable::updateGatewayInfo(bcos::network::P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status)
+void PeersRouterTable::updateGatewayInfo(
+    bcos::network::P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status)
 {
     GatewayStatus::Ptr gatewayStatus;
     auto [it, inserted] = m_gatewayInfos.emplace(_status->uuid(), GatewayStatus::Ptr{});

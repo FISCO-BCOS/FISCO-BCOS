@@ -12,8 +12,8 @@
 #include "bcos-network/Socket.h"
 #include "bcos-task/Channel.h"
 #include "bcos-task/Deadline.h"
-#include "bcos-task/Task.h"
 #include "bcos-task/OneShot.h"
+#include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Timer.h"
@@ -26,8 +26,6 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/heap/priority_queue.hpp>
 #include <boost/throw_exception.hpp>
-#include <range/v3/range/concepts.hpp>
-#include <range/v3/view/all.hpp>
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -37,6 +35,8 @@
 #include <iterator>
 #include <memory>
 #include <mutex>
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/view/all.hpp>
 #include <utility>
 #include <vector>
 
@@ -174,8 +174,9 @@ public:
         // and let the read loop grow the buffer up to m_maxRecvBufferSize on demand, so only
         // sessions that actually carry large messages pay for a large buffer. _forceSize keeps
         // the exact size for tests that assert a specific small buffer.
-        m_recvBuffer(_forceSize ? _recvBufferSize :
-                                  std::min<size_t>(_recvBufferSize, INITIAL_SESSION_RECV_BUFFER_SIZE)),
+        m_recvBuffer(_forceSize ?
+                         _recvBufferSize :
+                         std::min<size_t>(_recvBufferSize, INITIAL_SESSION_RECV_BUFFER_SIZE)),
         m_server(server),
         m_socket(std::move(socket)),
         // The poster runs consumer wake-ups on the shared IO pool while the host is alive and
@@ -393,10 +394,7 @@ public:
     // exactly when the session object is destroyed, which Host uses to release a session-cap
     // slot (the guard's destructor decrements the Host counters). Kept opaque so bcos-network
     // does not depend on the accounting type.
-    void setLifetimeGuard(std::shared_ptr<void> _guard)
-    {
-        m_lifetimeGuard = std::move(_guard);
-    }
+    void setLifetimeGuard(std::shared_ptr<void> _guard) { m_lifetimeGuard = std::move(_guard); }
 
     uint32_t maxReadDataSize() const { return m_maxReadDataSize; }
     void setMaxReadDataSize(uint32_t _maxReadDataSize) { m_maxReadDataSize = _maxReadDataSize; }
@@ -440,7 +438,8 @@ public:
      * @param _maxSendDataSize
      * @return bool
      */
-    bool tryPopSomeEncodedMsgs(std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize)  // NOLINT
+    bool tryPopSomeEncodedMsgs(
+        std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize)  // NOLINT
     {
         // Desc: Try to send multi packets one time to improve the efficiency of sending data. Stop
         // batching once the configured byte budget (p2p.session_max_send_data_size) is exhausted;
@@ -691,8 +690,8 @@ private:
                 std::shared_ptr<task::Deadline> readDeadline;
                 if (m_readTimeoutMs > 0)
                 {
-                    readDeadline = std::make_shared<task::Deadline>(
-                        m_socket->ioService(), m_readTimeoutMs);
+                    readDeadline =
+                        std::make_shared<task::Deadline>(m_socket->ioService(), m_readTimeoutMs);
                     readDeadline->arm([socket = m_socket](boost::system::error_code) {
                         boost::system::error_code cancelEc;
                         // NOLINTNEXTLINE(bugprone-unused-return-value)
@@ -701,9 +700,8 @@ private:
                 }
 
                 auto [ec, bytesTransferred] =
-                    co_await m_server.get().asioInterface()
-                        ->template awaitableReadSome<ReadPolicy>(
-                            m_socket, boost::asio::buffer(writeBuffer.data(), readSize));
+                    co_await m_server.get().asioInterface()->template awaitableReadSome<ReadPolicy>(
+                        m_socket, boost::asio::buffer(writeBuffer.data(), readSize));
 
                 if (readDeadline)
                 {
@@ -798,11 +796,13 @@ private:
                                 // must lie inside it. The two counts are not interchangeable (RLPx
                                 // consumes more wire bytes than it yields plaintext), so this
                                 // cannot be folded into the check above.
-                                if (meta.frameOffset + meta.frameSize > meta.frame.size()) [[unlikely]]
+                                if (meta.frameOffset + meta.frameSize > meta.frame.size())
+                                    [[unlikely]]
                                 {
                                     SESSION_LOG(ERROR)
                                         << LOG_BADGE("readLoop")
-                                        << LOG_DESC("take-buffer plaintext does not fit its storage")
+                                        << LOG_DESC(
+                                               "take-buffer plaintext does not fit its storage")
                                         << LOG_KV("frameSize", meta.frameSize)
                                         << LOG_KV("frameOffset", meta.frameOffset)
                                         << LOG_KV("storageSize", meta.frame.size());
@@ -856,8 +856,7 @@ private:
                             {
                                 SESSION_LOG(ERROR)
                                     << LOG_BADGE("readLoop")
-                                    << LOG_DESC(
-                                           "the message size exceeded the allow maximum value")
+                                    << LOG_DESC("the message size exceeded the allow maximum value")
                                     << LOG_KV("msgSize", length)
                                     << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
 
@@ -922,9 +921,9 @@ private:
                     }
                     catch (...)
                     {
-                        SESSION_LOG(ERROR) << LOG_DESC("Decode frame exception")
-                                           << LOG_KV("message",
-                                                  boost::current_exception_diagnostic_information());
+                        SESSION_LOG(ERROR)
+                            << LOG_DESC("Decode frame exception")
+                            << LOG_KV("message", boost::current_exception_diagnostic_information());
                         m_recvChannel.close(std::make_exception_ptr(
                             makeNetworkException(P2PExceptionType::ProtocolError,
                                 "ProtocolError(decode frame exception)")));
@@ -1074,8 +1073,7 @@ private:
             // and a batch destroyed with its callbacks unfired would pin every awaiting sender
             // forever
             SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint())
-                               << LOG_KV("what",
-                                      boost::current_exception_diagnostic_information());
+                               << LOG_KV("what", boost::current_exception_diagnostic_information());
             failBatch(payloads);
             drop(TCPError);
         }
@@ -1168,17 +1166,15 @@ private:
                     /// shutdown timer error
                     if (error && error != boost::asio::error::operation_aborted)
                     {
-                        SESSION_LOG(WARNING)
-                            << "[drop] shutdown timer failed"
-                            << LOG_KV("failedValue", error.value())
-                            << LOG_KV("message", error.message());
+                        SESSION_LOG(WARNING) << "[drop] shutdown timer failed"
+                                             << LOG_KV("failedValue", error.value())
+                                             << LOG_KV("message", error.message());
                     }
                     /// force to shutdown when timeout
                     if (socket->ref().is_open())
                     {
-                        SESSION_LOG(WARNING)
-                            << "[drop] timeout, force close the socket"
-                            << LOG_KV("remote endpoint", socket->remoteEndpoint());
+                        SESSION_LOG(WARNING) << "[drop] timeout, force close the socket"
+                                             << LOG_KV("remote endpoint", socket->remoteEndpoint());
                         socket->close();
                     }
                 });
@@ -1190,16 +1186,14 @@ private:
                         if (error)
                         {
                             SESSION_LOG(INFO)
-                                << "[drop] shutdown failed "
-                                << LOG_KV("failedValue", error.value())
+                                << "[drop] shutdown failed " << LOG_KV("failedValue", error.value())
                                 << LOG_KV("message", error.message());
                         }
                         /// force to close the socket
                         if (socket->ref().is_open())
                         {
-                            SESSION_LOG(WARNING)
-                                << LOG_DESC("force to shutdown session")
-                                << LOG_KV("endpoint", socket->nodeIPEndpoint());
+                            SESSION_LOG(WARNING) << LOG_DESC("force to shutdown session")
+                                                 << LOG_KV("endpoint", socket->nodeIPEndpoint());
                             socket->close();
                         }
                     });
@@ -1263,9 +1257,9 @@ public:
                     // the loop's own catches make this unreachable in practice; if the frame
                     // allocation itself threw, release the flag and settle the queue
                     self->m_writingInFlight.store(false);
-                    SESSION_LOG(ERROR) << LOG_DESC("write loop launch failed")
-                                       << LOG_KV("what",
-                                              boost::current_exception_diagnostic_information());
+                    SESSION_LOG(ERROR)
+                        << LOG_DESC("write loop launch failed")
+                        << LOG_KV("what", boost::current_exception_diagnostic_information());
                     self->drop(TCPError);
                 }
             });
@@ -1320,8 +1314,9 @@ public:
         }
     }
 
-    std::reference_wrapper<Host<DecoderT, SocketT>> m_server;  ///< The host that owns us. Never null.
-    std::shared_ptr<SocketT> m_socket;                ///< Socket of peer's connection.
+    std::reference_wrapper<Host<DecoderT, SocketT>> m_server;  ///< The host that owns us. Never
+                                                               ///< null.
+    std::shared_ptr<SocketT> m_socket;                         ///< Socket of peer's connection.
 
     // Single-flight flag guarding the write path: write() CASes it to true to claim the writer
     // role (exactly one writeLoop runs at a time); writeLoop's exit guard clears it and re-arms

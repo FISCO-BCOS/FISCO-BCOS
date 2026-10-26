@@ -70,8 +70,9 @@ public:
     // virtual is called for each session; a probe thread tries to take x_sessions EXCLUSIVELY: it
     // fails iff the broadcasting thread still holds it. No throw needed -- broadcastMessageToAll
     // touches no host; we just probe the lock state and stop.
-    task::Task<std::optional<Message>> sendMessageByNodeID(bcos::network::P2pID /*nodeID*/, Message& /*header*/,
-        ::ranges::any_view<bytesConstRef> /*payloads*/, bcos::network::Options /*options*/) override
+    task::Task<std::optional<Message>> sendMessageByNodeID(bcos::network::P2pID /*nodeID*/,
+        Message& /*header*/, ::ranges::any_view<bytesConstRef> /*payloads*/,
+        bcos::network::Options /*options*/) override
     {
         bool acquiredExclusive = false;
         std::thread probe([this, &acquiredExclusive]() {

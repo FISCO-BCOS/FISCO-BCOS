@@ -4,10 +4,10 @@
  */
 
 #include "bcos-gateway/libp2p/P2PSession.h"
-#include "bcos-network/ASIOInterface.h"
-#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/Common.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/Service.h"
+#include "bcos-network/ASIOInterface.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-task/Wait.h>
 #include <range/v3/view/empty.hpp>

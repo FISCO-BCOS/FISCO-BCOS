@@ -91,10 +91,10 @@ public:
                 meta.frameSize = static_cast<uint32_t>(total);
                 return meta;
             }
-            meta.frame = m_cipher->decryptFrame(
-                bytesConstRef(
-                    _buffer.data() + FramingCipher::headerSize(), total - FramingCipher::headerSize()),
-                m_framePayloadSize);
+            meta.frame =
+                m_cipher->decryptFrame(bytesConstRef(_buffer.data() + FramingCipher::headerSize(),
+                                           total - FramingCipher::headerSize()),
+                    m_framePayloadSize);
             m_headerParsed = false;
             meta.status = bcos::network::FrameMeta::Status::Frame;
             // Two counts, deliberately: advance by the wire frame, hand the consumer the plaintext.

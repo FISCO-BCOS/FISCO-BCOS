@@ -130,8 +130,7 @@ public:
             {
                 auto pending = std::move(m_pendingReads.front());
                 m_pendingReads.pop_front();
-                fireRead(
-                    std::move(pending.completion), boost::asio::error::operation_aborted, 0);
+                fireRead(std::move(pending.completion), boost::asio::error::operation_aborted, 0);
             }
         });
     }

@@ -72,8 +72,7 @@ BOOST_AUTO_TEST_CASE(EmptyDstNodeIDsIsDropped)
 
     auto gateway = std::make_shared<FakeGatewayFIB183>();
     // Must not crash / must not dereference the null GatewayNodeManager.
-    BOOST_CHECK_NO_THROW(
-        gateway->callOnReceiveP2PMessage(nullptr, std::move(msg)));
+    BOOST_CHECK_NO_THROW(gateway->callOnReceiveP2PMessage(nullptr, std::move(msg)));
 }
 
 // Sanity check: confirm that a message decoded straight off the wire can legitimately

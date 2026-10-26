@@ -26,8 +26,8 @@
 
 namespace bcos::devp2p::rlpx
 {
-Session::Session(NetHostPtr _host, NetSessionPtr _netSession, FramingCipher _egressCipher,
-    bool _ownsHost)
+Session::Session(
+    NetHostPtr _host, NetSessionPtr _netSession, FramingCipher _egressCipher, bool _ownsHost)
   : m_host(std::move(_host)),
     m_ownsHost(_ownsHost),
     m_netSession(std::move(_netSession)),
@@ -101,7 +101,8 @@ bcos::codec::rlp::RlpResult<Message> Session::recvMessage()
     catch (bcos::network::NetworkException const& e)
     {
         // Peer disconnect / local drop closed the recv channel.
-        throw std::runtime_error(std::string("Session::recvMessage: connection closed: ") + e.what());
+        throw std::runtime_error(
+            std::string("Session::recvMessage: connection closed: ") + e.what());
     }
     if (meta.status == bcos::network::FrameMeta::Status::Timeout)
     {

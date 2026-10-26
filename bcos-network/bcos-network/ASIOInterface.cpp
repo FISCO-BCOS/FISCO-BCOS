@@ -14,8 +14,8 @@ namespace bi = ba::ip;
 using namespace bcos;
 using namespace bcos::network;
 
-ASIOInterface::ASIOInterface(IOServicePool::Ptr _ioServicePool, std::string listenHost,
-    uint16_t listenPort, bool listen)
+ASIOInterface::ASIOInterface(
+    IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort, bool listen)
   : m_ioServicePool(std::move(_ioServicePool)),
     // ONE pool lookup shared by the acceptor, the resolver and acceptorIoContext(): the pool
     // round-robins, so a second getIOService() call would bind a different context.

@@ -23,17 +23,17 @@
  * @date 2023-02-23
  */
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-network/ASIOInterface.h"
-#include "bcos-network/Host.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include "unittests/utils/TlsLoopback.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
-#include "unittests/utils/TlsLoopback.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -63,7 +63,8 @@ public:
     using ReadCompletion = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO()
-      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
+      : bcos::network::ASIOInterface(
+            std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
     {}
     ~FakeASIO() noexcept {};
@@ -75,8 +76,9 @@ public:
     struct ReadPolicy
     {
         template <typename SocketT>
-        static void invoke(bcos::network::ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
-            ba::mutable_buffer /*buffers*/, ReadCompletion completion)
+        static void invoke(bcos::network::ASIOInterface* asio,
+            const std::shared_ptr<SocketT>& /*socket*/, ba::mutable_buffer /*buffers*/,
+            ReadCompletion completion)
         {
             static_cast<FakeASIO*>(asio)->parkRead(std::move(completion));
         }
@@ -139,7 +141,8 @@ class FakeHost : public bcos::network::Host<P2PDecoder, SocketT>
 public:
     FakeHost(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface,
         std::shared_ptr<bcos::network::BasicSessionFactory<P2PDecoder, SocketT>> _sessionFactory)
-      : bcos::network::Host<P2PDecoder, SocketT>(std::move(_asioInterface), std::move(_sessionFactory))
+      : bcos::network::Host<P2PDecoder, SocketT>(
+            std::move(_asioInterface), std::move(_sessionFactory))
     {
         this->m_run = true;
     }
@@ -154,7 +157,8 @@ inline std::shared_ptr<bcos::network::Socket> makeLoopbackSocket(
     std::shared_ptr<ba::io_context> _ioContext, ba::ssl::context& _sslContext,
     bi::tcp::socket _socket)
 {
-    auto socket = std::make_shared<bcos::network::Socket>(std::move(_ioContext), &_sslContext, NodeIPEndpoint());
+    auto socket = std::make_shared<bcos::network::Socket>(
+        std::move(_ioContext), &_sslContext, NodeIPEndpoint());
     socket->ref() = std::move(_socket);
     return socket;
 }
@@ -197,8 +201,8 @@ BOOST_AUTO_TEST_CASE(sendMessageOutboundRateLimit)
         auto service = std::make_shared<Service>(selfInfo);
         service->setBeforeMessageHandler(
             [](Session&, const Message&, uint32_t) -> std::optional<bcos::Error> {
-                return bcos::Error::buildError(
-                    "", bcos::network::P2PExceptionType::OutBWOverflow, "outgoing bandwidth overflow");
+                return bcos::Error::buildError("", bcos::network::P2PExceptionType::OutBWOverflow,
+                    "outgoing bandwidth overflow");
             });
 
         auto p2pSession = std::make_shared<P2PSession>();
@@ -208,9 +212,9 @@ BOOST_AUTO_TEST_CASE(sendMessageOutboundRateLimit)
         Message message;
         message.setSeq(1);
         bytes payload{1, 2, 3, 4};
-        BOOST_CHECK_THROW(
-            task::syncWait(p2pSession->fastSendP2PMessage(
-                message, ::ranges::views::single(bcos::ref(std::as_const(payload))), bcos::network::Options{})),
+        BOOST_CHECK_THROW(task::syncWait(p2pSession->fastSendP2PMessage(message,
+                              ::ranges::views::single(bcos::ref(std::as_const(payload))),
+                              bcos::network::Options{})),
             bcos::network::NetworkException);
 
         session->disconnect(bcos::network::DisconnectReason::DisconnectRequested);
@@ -330,8 +334,8 @@ BOOST_AUTO_TEST_CASE(sendMessageCompression)
         bytes payload(2000, 'x');
         auto originalExt = message.ext();
 
-        task::syncWait(p2pSession->fastSendP2PMessage(
-            message, ::ranges::views::single(bcos::ref(std::as_const(payload))), bcos::network::Options{}));
+        task::syncWait(p2pSession->fastSendP2PMessage(message,
+            ::ranges::views::single(bcos::ref(std::as_const(payload))), bcos::network::Options{}));
 
         // fastSendP2PMessage never mutates the caller's message — the COMPRESS flag only rides on
         // the wire header, so the caller's ext is untouched.
@@ -490,7 +494,8 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     // The FakeHosts must outlive the sessions (Session holds a reference_wrapper<Host>).
     std::vector<std::shared_ptr<FakeHost<bcos::network::Socket>>> hosts;
     std::vector<std::shared_ptr<Session>> sessions;
-    auto makePeerSession = [&](ba::ip::tcp::socket _client, bcos::network::P2pID _nodeID, uint32_t _version) {
+    auto makePeerSession = [&](ba::ip::tcp::socket _client, bcos::network::P2pID _nodeID,
+                               uint32_t _version) {
         auto host = std::make_shared<FakeHost<bcos::network::Socket>>(fakeAsio, nullptr);
         hosts.push_back(host);
         auto session = std::make_shared<Session>(
@@ -528,8 +533,8 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     message->setSrcP2PNodeID("srcNodeID");
     message->setDstP2PNodeID("dstNodeID");
     bytes payload(32, 'a');
-    task::syncWait(service->broadcastMessageToNeighbors(
-        message, ::ranges::views::single(bcos::ref(std::as_const(payload))), bcos::network::Options{}));
+    task::syncWait(service->broadcastMessageToNeighbors(message,
+        ::ranges::views::single(bcos::ref(std::as_const(payload))), bcos::network::Options{}));
 
     // Session::write() posts the write-loop launch to the socket's io thread, so the broadcast
     // returning only means each per-peer payload is QUEUED (the fan-out tasks are fire-and-

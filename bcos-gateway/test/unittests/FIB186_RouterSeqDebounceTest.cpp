@@ -38,13 +38,13 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-network/ASIOInterface.h"
-#include "bcos-network/Host.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "unittests/utils/TlsLoopback.h"
@@ -81,7 +81,8 @@ public:
     using ReadCompletion = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_Debounce()
-      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Debounce"), "0.0.0.0", 0),
+      : bcos::network::ASIOInterface(
+            std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Debounce"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Debounce"))
     {}
     ~FakeASIO_Debounce() noexcept {};
@@ -89,8 +90,9 @@ public:
     struct ReadPolicy
     {
         template <typename SocketT>
-        static void invoke(bcos::network::ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
-            ba::mutable_buffer buffers, ReadCompletion completion)
+        static void invoke(bcos::network::ASIOInterface* asio,
+            const std::shared_ptr<SocketT>& /*socket*/, ba::mutable_buffer buffers,
+            ReadCompletion completion)
         {
             static_cast<FakeASIO_Debounce*>(asio)->parkRead(buffers, std::move(completion));
         }
@@ -148,7 +150,8 @@ class FakeHost_Debounce : public bcos::network::Host<P2PDecoder, SocketT>
 public:
     FakeHost_Debounce(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface,
         std::shared_ptr<bcos::network::BasicSessionFactory<P2PDecoder, SocketT>> _sessionFactory)
-      : bcos::network::Host<P2PDecoder, SocketT>(std::move(_asioInterface), std::move(_sessionFactory))
+      : bcos::network::Host<P2PDecoder, SocketT>(
+            std::move(_asioInterface), std::move(_sessionFactory))
     {
         this->m_run = true;
     }
@@ -346,8 +349,8 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
         Message message;
         message.setPacketType(GatewayMessageType::RouterTableResponse);
         message.setPayload(std::move(tableData));
-        service->onReceivePeersRouterTable(std::make_shared<FakeSessionVB>(senderID),
-            std::move(message));
+        service->onReceivePeersRouterTable(
+            std::make_shared<FakeSessionVB>(senderID), std::move(message));
     }
 
     BOOST_REQUIRE_MESSAGE(service->isReachable("peer-0"),

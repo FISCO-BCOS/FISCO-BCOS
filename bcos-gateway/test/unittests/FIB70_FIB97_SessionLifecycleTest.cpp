@@ -23,26 +23,26 @@
  * @date 2026-04-07
  */
 
-#include "bcos-network/ASIOInterface.h"
-#include "bcos-network/Host.h"
-#include "bcos-network/Socket.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include <bcos-task/Wait.h>
-#include <bcos-utilities/IOServicePool.h>
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
+#include "bcos-network/Socket.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "unittests/utils/TlsLoopback.h"
-#include <queue>
-#include <thread>
+#include <bcos-task/Wait.h>
+#include <bcos-utilities/IOServicePool.h>
+#include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <future>
-#include <optional>
-#include <tuple>
 #include <list>
+#include <optional>
+#include <queue>
 #include <range/v3/view/single.hpp>
-#include <boost/test/unit_test.hpp>
+#include <thread>
+#include <tuple>
 
 using namespace bcos;
 using namespace gateway;
@@ -59,7 +59,8 @@ public:
     using ReadCompletion = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_FIB()
-      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
+      : bcos::network::ASIOInterface(
+            std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"))
     {}
     ~FakeASIO_FIB() noexcept {}
@@ -70,8 +71,9 @@ public:
     struct ReadPolicy
     {
         template <typename SocketT>
-        static void invoke(bcos::network::ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
-            ba::mutable_buffer /*buffers*/, ReadCompletion completion)
+        static void invoke(bcos::network::ASIOInterface* asio,
+            const std::shared_ptr<SocketT>& /*socket*/, ba::mutable_buffer /*buffers*/,
+            ReadCompletion completion)
         {
             static_cast<FakeASIO_FIB*>(asio)->parkRead(std::move(completion));
         }
@@ -134,7 +136,8 @@ class FakeHost_FIB : public bcos::network::Host<P2PDecoder, SocketT>
 public:
     FakeHost_FIB(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface,
         std::shared_ptr<bcos::network::BasicSessionFactory<P2PDecoder, SocketT>> _sessionFactory)
-      : bcos::network::Host<P2PDecoder, SocketT>(std::move(_asioInterface), std::move(_sessionFactory))
+      : bcos::network::Host<P2PDecoder, SocketT>(
+            std::move(_asioInterface), std::move(_sessionFactory))
     {
         this->m_run = true;
     }
@@ -157,7 +160,8 @@ BOOST_AUTO_TEST_CASE(DisconnectFlushesOnlyOwnPendingResponses)
     ba::ssl::context sslContext(ba::ssl::context::tlsv12);
     auto makeSession = [&]() {
         return std::make_shared<Session>(
-            std::make_shared<bcos::network::Socket>(io, &sslContext, NodeIPEndpoint()), *host, 16, true);
+            std::make_shared<bcos::network::Socket>(io, &sslContext, NodeIPEndpoint()), *host, 16,
+            true);
     };
     auto sessionA = makeSession();
     auto sessionB = makeSession();
@@ -173,7 +177,8 @@ BOOST_AUTO_TEST_CASE(DisconnectFlushesOnlyOwnPendingResponses)
     std::atomic<int> firedA{0};
     std::atomic<int> firedB{0};
     auto pendingA = std::make_shared<PendingResponse>();
-    pendingA->callback = [&firedA](bcos::network::NetworkException e, std::optional<bcos::network::FrameMeta>) {
+    pendingA->callback = [&firedA](bcos::network::NetworkException e,
+                             std::optional<bcos::network::FrameMeta>) {
         if (bcos::network::errorCodeOf(e) != 0)
         {
             ++firedA;
@@ -181,7 +186,8 @@ BOOST_AUTO_TEST_CASE(DisconnectFlushesOnlyOwnPendingResponses)
     };
     pendingA->owner = sessionA;
     auto pendingB = std::make_shared<PendingResponse>();
-    pendingB->callback = [&firedB](bcos::network::NetworkException e, std::optional<bcos::network::FrameMeta>) {
+    pendingB->callback = [&firedB](bcos::network::NetworkException e,
+                             std::optional<bcos::network::FrameMeta>) {
         if (bcos::network::errorCodeOf(e) != 0)
         {
             ++firedB;
@@ -191,8 +197,9 @@ BOOST_AUTO_TEST_CASE(DisconnectFlushesOnlyOwnPendingResponses)
     BOOST_REQUIRE(service->registerPendingResponse(seqA, pendingA));
     BOOST_REQUIRE(service->registerPendingResponse(seqB, pendingB));
 
-    service->failPendingResponsesOf(sessionA,
-        bcos::network::makeNetworkException(bcos::network::P2PExceptionType::NetworkTimeout, "NetworkTimeout"));
+    service->failPendingResponsesOf(
+        sessionA, bcos::network::makeNetworkException(
+                      bcos::network::P2PExceptionType::NetworkTimeout, "NetworkTimeout"));
 
     // session A's waiter is failed with an error; session B's is left untouched
     BOOST_CHECK_EQUAL(firedA, 1);
@@ -214,7 +221,8 @@ BOOST_AUTO_TEST_CASE(ResponseTimeoutSettlesWaiterExactlyOnce)
     std::atomic<int> fired{0};
     std::atomic<int64_t> errorCode{0};
     auto pending = std::make_shared<PendingResponse>();
-    pending->callback = [&fired, &errorCode](bcos::network::NetworkException e, std::optional<bcos::network::FrameMeta> meta) {
+    pending->callback = [&fired, &errorCode](bcos::network::NetworkException e,
+                            std::optional<bcos::network::FrameMeta> meta) {
         errorCode.store(bcos::network::errorCodeOf(e));
         BOOST_CHECK(!meta);
         ++fired;

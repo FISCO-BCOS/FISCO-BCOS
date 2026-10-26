@@ -158,7 +158,8 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
     BOOST_REQUIRE_MESSAGE(
         disconnectResult.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
         "the parked recvMessage() was never woken -- drop() did not close the recv channel");
-    BOOST_CHECK_EQUAL(disconnectResult.get(), static_cast<int64_t>(bcos::network::P2PExceptionType::Disconnect));
+    BOOST_CHECK_EQUAL(
+        disconnectResult.get(), static_cast<int64_t>(bcos::network::P2PExceptionType::Disconnect));
 
     BOOST_CHECK_MESSAGE(weakSession.expired(),
         "FIB-184: once the outstanding read and the deferred teardown complete, the Session must "
@@ -220,7 +221,8 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
         disconnectResult.wait_for(std::chrono::seconds(0)) == std::future_status::ready,
         "the parked recvMessage() was not woken inline -- with the network down the channel "
         "poster must run the wake synchronously inside drop()");
-    BOOST_CHECK_EQUAL(disconnectResult.get(), static_cast<int64_t>(bcos::network::P2PExceptionType::Disconnect));
+    BOOST_CHECK_EQUAL(
+        disconnectResult.get(), static_cast<int64_t>(bcos::network::P2PExceptionType::Disconnect));
 
     // Drain the shutdown handlers closeSocket() queued (they hold the socket, not the session) so
     // the fake io_context tears down cleanly.

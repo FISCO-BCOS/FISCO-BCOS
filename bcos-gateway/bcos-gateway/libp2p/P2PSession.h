@@ -5,14 +5,14 @@
 
 #pragma once
 
-#include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
-#include "bcos-network/Common.h"
+#include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
+#include "bcos-network/Common.h"
 #include <boost/asio/steady_timer.hpp>
-#include <range/v3/range/concepts.hpp>
 #include <memory>
+#include <range/v3/range/concepts.hpp>
 #include <utility>
 
 

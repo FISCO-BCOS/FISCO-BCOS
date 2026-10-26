@@ -111,8 +111,8 @@ BOOST_AUTO_TEST_CASE(serverAcceptsSequentialClients)
             }
             catch (std::exception const& e)
             {
-                BOOST_ERROR(std::string("server: accept #") + std::to_string(i) + " failed: " +
-                            e.what());
+                BOOST_ERROR(
+                    std::string("server: accept #") + std::to_string(i) + " failed: " + e.what());
                 return;
             }
         }
@@ -120,8 +120,8 @@ BOOST_AUTO_TEST_CASE(serverAcceptsSequentialClients)
 
     for (int i = 0; i < kClients; ++i)
     {
-        rlpx::RlpxClient client(clientKeys[static_cast<std::size_t>(i)],
-            clientConfig(port, serverPublicKey));
+        rlpx::RlpxClient client(
+            clientKeys[static_cast<std::size_t>(i)], clientConfig(port, serverPublicKey));
         try
         {
             auto established = client.connect();
@@ -162,8 +162,9 @@ BOOST_AUTO_TEST_CASE(pureClientDoesNotListen)
 
     // And a client Host built on the non-listening interface neither runs an accept loop nor
     // exposes a port: start() must be a no-op for it rather than spawning acceptLoop.
-    auto plainSocketHost = std::make_shared<
-        bcos::network::Host<RlpxFrameDecoder, bcos::network::PlainSocket>>(asio, nullptr);
+    auto plainSocketHost =
+        std::make_shared<bcos::network::Host<RlpxFrameDecoder, bcos::network::PlainSocket>>(
+            asio, nullptr);
     plainSocketHost->setListen(false);
     plainSocketHost->start();
     BOOST_CHECK(plainSocketHost->haveNetwork());

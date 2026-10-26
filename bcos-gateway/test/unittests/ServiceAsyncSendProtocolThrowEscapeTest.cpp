@@ -32,13 +32,13 @@
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-network/ASIOInterface.h"
-#include "bcos-network/Host.h"
-#include "bcos-network/Socket.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
+#include "bcos-network/Socket.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -118,9 +118,8 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
     client.connect(acceptor.local_endpoint(), connectError);
     BOOST_REQUIRE(!connectError);
 
-    auto testHost = std::make_shared<TestHost>(
-        std::make_shared<bcos::network::ASIOInterface>(
-            std::make_shared<bcos::IOServicePool>(1, "sendProtocolTest"), "0.0.0.0", 0));
+    auto testHost = std::make_shared<TestHost>(std::make_shared<bcos::network::ASIOInterface>(
+        std::make_shared<bcos::IOServicePool>(1, "sendProtocolTest"), "0.0.0.0", 0));
     // Service::newSeq() is the Service-local seq allocator (correlation lives in libp2p now)
     service->setHost(testHost);
 
@@ -180,9 +179,8 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
         auto p2pSession = std::make_shared<P2PSession>();
         p2pSession->setSession(session);
         p2pSession->setService(service);
-        p2pSession->setProtocolInfo(
-            bcos::protocol::g_BCOSConfig.protocolInfo(
-                bcos::protocol::ProtocolModuleID::GatewayService));
+        p2pSession->setProtocolInfo(bcos::protocol::g_BCOSConfig.protocolInfo(
+            bcos::protocol::ProtocolModuleID::GatewayService));
 
         // Pre-fix: the handshake rejection escapes task::wait and propagates out of sendProtocol
         // (synchronously aborting onConnect's registration tail). Post-fix: caught inside the

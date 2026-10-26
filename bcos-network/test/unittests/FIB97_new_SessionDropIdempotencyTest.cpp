@@ -140,7 +140,8 @@ BOOST_AUTO_TEST_CASE(drop_many_threads_stress)
     threads.reserve(kThreads);
     for (int i = 0; i < kThreads; ++i)
     {
-        threads.emplace_back([&] { bundle.session->drop(bcos::network::DisconnectReason::TCPError); });
+        threads.emplace_back(
+            [&] { bundle.session->drop(bcos::network::DisconnectReason::TCPError); });
     }
     for (auto& t : threads)
     {

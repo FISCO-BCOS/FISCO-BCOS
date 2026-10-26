@@ -61,16 +61,15 @@ int main(int argc, char** argv)
 
 
     // A coroutine handler: the reply is co_awaited in the handler (no detached task, no copy).
-    service->subscribeHandler(999,
-        [](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
-            auto startT = utcTime();
-            inbound.message.setRespPacket();
-            co_await inbound.session->fastSendP2PMessage(inbound.message,
-                ::ranges::views::single(inbound.message.payload()), bcos::network::Options());
-            BCOS_LOG(INFO) << LOG_DESC("sendResponse") << LOG_KV("timeCost", (utcTime() - startT))
-                           << LOG_KV("msgSize", (inbound.message.payload().size()));
-            co_return true;
-        });
+    service->subscribeHandler(999, [](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
+        auto startT = utcTime();
+        inbound.message.setRespPacket();
+        co_await inbound.session->fastSendP2PMessage(inbound.message,
+            ::ranges::views::single(inbound.message.payload()), bcos::network::Options());
+        BCOS_LOG(INFO) << LOG_DESC("sendResponse") << LOG_KV("timeCost", (utcTime() - startT))
+                       << LOG_KV("msgSize", (inbound.message.payload().size()));
+        co_return true;
+    });
     while (true)
     {
         // TEST_SERVER_LOG(INFO, MODULE_NAME) << LOG_BADGE(" [Main] ===>>>> ");

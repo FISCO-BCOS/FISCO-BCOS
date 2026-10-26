@@ -72,9 +72,9 @@ uint32_t GatewayNodeManager::statusSeq()
     return m_statusSeq;
 }
 
-GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, bcos::network::P2pID const& _nodeID,
-    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface,
-    boost::asio::io_context& _ioContext)
+GatewayNodeManager::GatewayNodeManager(std::string const& _uuid,
+    bcos::network::P2pID const& _nodeID, std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory,
+    Service::Ptr _p2pInterface, boost::asio::io_context& _ioContext)
   : GatewayNodeManager(_uuid, _keyFactory, _p2pInterface)
 {
     m_uuid = _uuid;
@@ -202,8 +202,8 @@ void GatewayNodeManager::onReceiveStatusSeq(P2PSession::Ptr _session, const Mess
         {
             NODE_MANAGER_LOG(INFO)
                 << LOG_DESC("onReceiveStatusSeq send RequestNodeStatus failed")
-                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", bcos::network::errorCodeOf(e))
-                << LOG_KV("msg", e.what());
+                << LOG_KV("nodeid", printShortP2pID(_nodeID))
+                << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
         }
     }(p2pInterface, GatewayMessageType::RequestNodeStatus, from));
 }
@@ -289,8 +289,8 @@ void GatewayNodeManager::onRequestNodeStatus(P2PSession::Ptr _session, const Mes
         {
             NODE_MANAGER_LOG(INFO)
                 << LOG_DESC("onRequestNodeStatus send ResponseNodeStatus failed")
-                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", bcos::network::errorCodeOf(e))
-                << LOG_KV("msg", e.what());
+                << LOG_KV("nodeid", printShortP2pID(_nodeID))
+                << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
         }
     }(p2pInterface, GatewayMessageType::ResponseNodeStatus, from, std::move(*nodeStatusData)));
 }

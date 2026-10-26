@@ -19,9 +19,9 @@
  * @date 2026-09-21
  */
 
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libp2p/Message.h"
-#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/detail/socket_ops.hpp>
 #include <boost/test/unit_test.hpp>
@@ -210,8 +210,8 @@ BOOST_AUTO_TEST_CASE(peekResponseFrameInfoBoundsAndVariants)
     BOOST_CHECK(v0Info->dstP2PNodeID.empty());
 
     // non-response V2 frame: peek stops at the ext flag and never walks the extended header
-    auto v2Plain = buildFrame((uint16_t)bcos::protocol::ProtocolVersion::V2, 2, 0, bytes(4, 'q'),
-        "srcNode", "dstNode");
+    auto v2Plain = buildFrame(
+        (uint16_t)bcos::protocol::ProtocolVersion::V2, 2, 0, bytes(4, 'q'), "srcNode", "dstNode");
     auto v2Info = Message::peekResponseFrameInfo(ref(v2Plain));
     BOOST_REQUIRE(v2Info.has_value());
     BOOST_CHECK(!v2Info->isResp);
@@ -231,8 +231,9 @@ BOOST_AUTO_TEST_CASE(largeFrameRequestsTakeBuffer)
     BOOST_CHECK_EQUAL(meta.wireConsumed, frame.size());
 
     // just below the threshold: the copy path, frameData() exposes exactly the frame
-    auto smallFrame = buildFrame(
-        0, 10, 0, bytes(bcos::network::FRAME_TAKE_BUFFER_THRESHOLD - Message::MESSAGE_HEADER_LENGTH - 1, 's'));
+    auto smallFrame = buildFrame(0, 10, 0,
+        bytes(
+            bcos::network::FRAME_TAKE_BUFFER_THRESHOLD - Message::MESSAGE_HEADER_LENGTH - 1, 's'));
     auto smallMeta = decoder.tryDecode(ref(smallFrame));
     BOOST_REQUIRE(smallMeta.status == bcos::network::FrameMeta::Status::Frame);
     BOOST_CHECK(!smallMeta.takeBuffer);

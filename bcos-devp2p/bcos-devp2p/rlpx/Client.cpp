@@ -32,8 +32,8 @@
 #include <boost/asio/post.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <atomic>
-#include <chrono>
 #include <cctype>
+#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -67,10 +67,9 @@ bcos::IOServicePool::Ptr ioPool()
 NetHostPtr makeHost(std::shared_ptr<bcos::network::ASIOInterface> _asio)
 {
     constexpr uint32_t kAllowMaxMsgSize = MessageCodec::kMaxFrameSize + 64 * 1024;
-    auto factory =
-        std::make_shared<bcos::network::BasicSessionFactory<RlpxFrameDecoder,
-            bcos::network::PlainSocket>>(
-            2 * kAllowMaxMsgSize, kAllowMaxMsgSize, 64 * 1024, 1024 * 1024);
+    auto factory = std::make_shared<
+        bcos::network::BasicSessionFactory<RlpxFrameDecoder, bcos::network::PlainSocket>>(
+        2 * kAllowMaxMsgSize, kAllowMaxMsgSize, 64 * 1024, 1024 * 1024);
     return std::make_shared<NetHost>(std::move(_asio), std::move(factory));
 }
 
@@ -352,8 +351,8 @@ EstablishedSession RlpxClient::connect()
     host->setConnectTimeout(kConnectTimeoutMs);
     host->start();
 
-    auto [error, token, netSession] = task::syncWait(
-        host->connect(bcos::network::NodeIPEndpoint(m_config.host, m_config.port)));
+    auto [error, token, netSession] =
+        task::syncWait(host->connect(bcos::network::NodeIPEndpoint(m_config.host, m_config.port)));
     if (!netSession)
     {
         host->stop();

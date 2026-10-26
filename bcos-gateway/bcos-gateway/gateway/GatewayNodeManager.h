@@ -22,10 +22,10 @@
 #include "LocalRouterTable.h"
 #include "PeersRouterTable.h"
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
-#include "bcos-network/Common.h"
-#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
+#include "bcos-network/Common.h"
 #include "bcos-utilities/Timer.h"
 #include <oneapi/tbb/concurrent_hash_map.h>
 

@@ -77,7 +77,8 @@ public:
     // fakes never go through newSocket (their Hosts never run acceptLoop/connect), so this
     // template is only instantiated for real socket types.
     template <typename SocketT = Socket>
-    std::shared_ptr<SocketT> newSocket(bool _server, NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint())
+    std::shared_ptr<SocketT> newSocket(
+        bool _server, NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint())
     {
         return std::make_shared<SocketT>(m_ioServicePool->getIOService(),
             _server ? srvContext() : clientContext(), std::move(nodeIPEndpoint));
@@ -139,9 +140,8 @@ public:
         const std::shared_ptr<SocketT>& socket, boost::asio::mutable_buffer buffers)
     {
         return task::makeFireAwaitable<boost::system::error_code, std::size_t>(
-            [this, socket, buffers](auto handler) {
-                ReadPolicy::invoke(this, socket, buffers, std::move(handler));
-            },
+            [this, socket, buffers](
+                auto handler) { ReadPolicy::invoke(this, socket, buffers, std::move(handler)); },
             boost::asio::error::operation_aborted);
     }
 
@@ -149,9 +149,8 @@ public:
     auto awaitableAccept(const std::shared_ptr<SocketT>& socket)
     {
         return task::makeFireAwaitable<boost::system::error_code>(
-            [this, socket](auto handler) {
-                m_acceptor->async_accept(socket->ref(), std::move(handler));
-            },
+            [this, socket](
+                auto handler) { m_acceptor->async_accept(socket->ref(), std::move(handler)); },
             boost::asio::error::operation_aborted);
     }
 
@@ -164,8 +163,8 @@ public:
     }
 
     template <typename SocketT>
-    static auto awaitableHandshake(const std::shared_ptr<SocketT>& socket,
-        ba::ssl::stream_base::handshake_type type)
+    static auto awaitableHandshake(
+        const std::shared_ptr<SocketT>& socket, ba::ssl::stream_base::handshake_type type)
     {
         return task::makeFireAwaitable<boost::system::error_code>(
             [socket, type](auto handler) {
@@ -181,9 +180,10 @@ public:
                     // (type stays unused on this compile-time branch; the TLS instantiation
                     // above passes it to async_handshake.)
                     static_cast<void>(type);
-                    boost::asio::post(socket->ioService(), [handler = std::move(handler)]() mutable {
-                        handler(boost::system::error_code{});
-                    });
+                    boost::asio::post(
+                        socket->ioService(), [handler = std::move(handler)]() mutable {
+                            handler(boost::system::error_code{});
+                        });
                 }
             },
             boost::asio::error::operation_aborted);
@@ -204,8 +204,8 @@ public:
                 auto& ioService = socket->ioService();
                 if (socket->isConnected())
                 {
-                    boost::asio::post(ioService,
-                        [socket, &buffers, handler = std::move(handler)]() mutable {
+                    boost::asio::post(
+                        ioService, [socket, &buffers, handler = std::move(handler)]() mutable {
                             ba::async_write(socket->stream(), buffers, std::move(handler));
                         });
                 }
@@ -234,8 +234,8 @@ public:
                 auto& ioService = socket->ioService();
                 if (socket->isConnected())
                 {
-                    boost::asio::post(ioService,
-                        [socket, buffers, handler = std::move(handler)]() mutable {
+                    boost::asio::post(
+                        ioService, [socket, buffers, handler = std::move(handler)]() mutable {
                             ba::async_read(socket->stream(), buffers, std::move(handler));
                         });
                 }

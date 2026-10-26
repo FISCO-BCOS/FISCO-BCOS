@@ -233,8 +233,8 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
             GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
                                << LOG_DESC("network callback")
                                << LOG_KV("dstP2P", printShortP2pID(p2pID))
-                               << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("moduleID", _moduleID)
-                               << LOG_KV("message", e.what());
+                               << LOG_KV("code", bcos::network::errorCodeOf(e))
+                               << LOG_KV("moduleID", _moduleID) << LOG_KV("message", e.what());
             // try another gateway
         }
         catch (std::exception const& e)
@@ -289,8 +289,8 @@ bcos::task::Task<Error::Ptr> Gateway::notifyGroupInfo(bcos::group::GroupInfo::Pt
     co_return nullptr;
 }
 
-task::Task<bcos::Error::Ptr> Gateway::dispatchToFrontService(const std::string& _groupID,
-    NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, Message _msg)
+task::Task<bcos::Error::Ptr> Gateway::dispatchToFrontService(
+    const std::string& _groupID, NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, Message _msg)
 {
     auto frontService =
         m_gatewayNodeManager->localRouterTable()->getFrontService(_groupID, _dstNodeID);
@@ -306,8 +306,8 @@ task::Task<bcos::Error::Ptr> Gateway::dispatchToFrontService(const std::string& 
             "unable to find front service dispatch message to "
             "groupID:" +
                 _groupID + " ,nodeID:" + _dstNodeID->hex());
-        GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveP2PMessage callback") << LOG_KV("groupID", _groupID)
-                           << LOG_KV("srcNodeID", _srcNodeID->hex())
+        GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveP2PMessage callback")
+                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
                            << LOG_KV("dstNodeID", _dstNodeID->hex())
                            << LOG_KV("code", errorPtr->errorCode())
                            << LOG_KV("msg", errorPtr->errorMessage());
@@ -333,16 +333,16 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
     // deferred dispatch keeps its own copy of the payload (the old shape moved it into a detached
     // task). See dispatchToFrontService for the awaitable entry point.
     auto self = std::static_pointer_cast<Gateway>(shared_from_this());
-    task::wait([](std::shared_ptr<Gateway> _self, std::string _groupID, NodeIDPtr _srcNodeID,
-                   NodeIDPtr _dstNodeID, Message _msg,
-                   ErrorRespFunc _errorRespFunc) -> task::Task<void> {
-        auto error = co_await _self->dispatchToFrontService(
-            _groupID, _srcNodeID, _dstNodeID, std::move(_msg));
-        if (_errorRespFunc)
-        {
-            _errorRespFunc(std::move(error));
-        }
-    }(self, _groupID, _srcNodeID, _dstNodeID, std::move(_msg), std::move(_errorRespFunc)));
+    task::wait(
+        [](std::shared_ptr<Gateway> _self, std::string _groupID, NodeIDPtr _srcNodeID,
+            NodeIDPtr _dstNodeID, Message _msg, ErrorRespFunc _errorRespFunc) -> task::Task<void> {
+            auto error = co_await _self->dispatchToFrontService(
+                _groupID, _srcNodeID, _dstNodeID, std::move(_msg));
+            if (_errorRespFunc)
+            {
+                _errorRespFunc(std::move(error));
+            }
+        }(self, _groupID, _srcNodeID, _dstNodeID, std::move(_msg), std::move(_errorRespFunc)));
 }
 
 task::Task<void> Gateway::onReceiveP2PMessage(P2PSession::Ptr _session, Message _msg)
@@ -387,8 +387,8 @@ task::Task<void> Gateway::onReceiveP2PMessage(P2PSession::Ptr _session, Message 
         if (result.has_value())
         {
             auto errorCode = std::to_string((int)protocol::CommonError::GatewayQPSOverFlow);
-            // co_await: the rejection goes out on this frame. The bytes are moved into the response,
-            // so the std::string above only has to live across the argument conversion.
+            // co_await: the rejection goes out on this frame. The bytes are moved into the
+            // response, so the std::string above only has to live across the argument conversion.
             co_await m_p2pInterface->sendRespMessageBySession(
                 bcos::bytes(errorCode.begin(), errorCode.end()), _msg.seq(), _msg.srcP2PNodeID(),
                 _session);
@@ -417,8 +417,8 @@ task::Task<void> Gateway::onReceiveP2PMessage(P2PSession::Ptr _session, Message 
     // Await the front-service dispatch, then the reply, both on this frame. `_msg` is owned here
     // for the whole dispatch, so the payload view stays valid and the response can be sent straight
     // from it (the old shape detached a task, which forced a payload copy).
-    auto error = co_await dispatchToFrontService(
-        groupID, srcNodeIDPtr, dstNodeIDPtr, std::move(_msg));
+    auto error =
+        co_await dispatchToFrontService(groupID, srcNodeIDPtr, dstNodeIDPtr, std::move(_msg));
     if (error)
     {
         GATEWAY_LOG(TRACE) << LOG_BADGE("onReceiveP2PMessage") << "callback failed"
@@ -436,7 +436,6 @@ task::Task<void> Gateway::onReceiveP2PMessage(P2PSession::Ptr _session, Message 
 
 void Gateway::onReceiveBroadcastMessage(P2PSession::Ptr _session, Message _msg)
 {
-
     const auto& options = _msg.options();
     auto payload = _msg.payload();
 

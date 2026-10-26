@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "bcos-utilities/Error.h"
 #include "bcos-network/Endpoint.h"
+#include "bcos-utilities/Error.h"
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/LogStream.h>
 #include <boost/asio/ip/tcp.hpp>
@@ -110,7 +110,10 @@ inline NetworkException makeNetworkException(int64_t errorCode, std::string msg)
     return 0;
 }
 
-inline bool operator!(NetworkException const& e) { return errorCodeOf(e) == 0; }
+inline bool operator!(NetworkException const& e)
+{
+    return errorCodeOf(e) == 0;
+}
 
 inline Error::Ptr toError(NetworkException const& e)
 {

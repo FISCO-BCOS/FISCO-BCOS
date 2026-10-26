@@ -43,10 +43,10 @@
 #include <chrono>
 #include <cstdint>
 #include <future>
+#include <list>
 #include <mutex>
 #include <optional>
 #include <queue>
-#include <list>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
 #include <thread>
@@ -193,7 +193,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
             catch (...)
             {}
         }(session, totalPacketNum, recvPacketCnt, recvBufferSize, lastReadTime, decodeFailures,
-            consumerDone));
+                                                      consumerDone));
 
         session->startWithPolicy<TestAsioInterface::ReadPolicy>();
 
@@ -215,8 +215,8 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                       << " packets" << std::endl;
             retryTimes++;
         }
-        BOOST_CHECK(consumerFinished.wait_for(std::chrono::milliseconds(0)) ==
-                    std::future_status::ready);
+        BOOST_CHECK(
+            consumerFinished.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
 
         BOOST_CHECK_EQUAL(recvPacketCnt, totalPacketNum);
         BOOST_CHECK_EQUAL(decodeFailures, 0);
@@ -346,8 +346,8 @@ BOOST_AUTO_TEST_CASE(recvQueueFullParksReadLoopInsteadOfDropping)
         {
             retryTimes++;
         }
-        BOOST_REQUIRE(consumerFinished.wait_for(std::chrono::milliseconds(0)) ==
-                      std::future_status::ready);
+        BOOST_REQUIRE(
+            consumerFinished.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
 
         // Delivery resumed out of the park and nothing was lost: every frame arrived and the
         // session is still alive after the whole stall.
@@ -501,9 +501,8 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
         auto fakeHost = std::make_shared<TestHost<PlainSocket>>(fakeAsio, nullptr);
         auto sessionSocket = std::make_shared<PlainSocket>(io, nullptr, NodeIPEndpoint());
         sessionSocket->ref() = std::move(client);
-        auto session =
-            std::make_shared<BasicSession<TestFrameDecoder, PlainSocket>>(
-                sessionSocket, *fakeHost, 2, true);
+        auto session = std::make_shared<BasicSession<TestFrameDecoder, PlainSocket>>(
+            sessionSocket, *fakeHost, 2, true);
         session->startWithPolicy<TestAsioInterface::ReadPolicy>();
 
         std::vector<std::thread> senders;
@@ -526,10 +525,9 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
                     bytes payload(payloadLen, static_cast<uint8_t>('a' + t));
                     try
                     {
-                        task::syncWait(session->sendMessage(
-                            ::ranges::views::concat(
-                                ::ranges::views::single(bcos::ref(headerBuffer)),
-                                ::ranges::views::single(bcos::ref(std::as_const(payload))))));
+                        task::syncWait(session->sendMessage(::ranges::views::concat(
+                            ::ranges::views::single(bcos::ref(headerBuffer)),
+                            ::ranges::views::single(bcos::ref(std::as_const(payload))))));
                     }
                     catch (std::exception const&)
                     {
@@ -918,14 +916,14 @@ BOOST_AUTO_TEST_CASE(largeFrameTakesReceiveBuffer)
         fakeAsio->asyncAppendRecvPacket(stream);
 
         size_t retryTimes = 0;
-        while (receivedFuture.wait_for(std::chrono::milliseconds(10)) !=
-                   std::future_status::ready &&
-               retryTimes < 500)
+        while (
+            receivedFuture.wait_for(std::chrono::milliseconds(10)) != std::future_status::ready &&
+            retryTimes < 500)
         {
             ++retryTimes;
         }
-        BOOST_CHECK(receivedFuture.wait_for(std::chrono::milliseconds(0)) ==
-                    std::future_status::ready);
+        BOOST_CHECK(
+            receivedFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
 
         // Teardown (same as doReadTest): unwind the parked read. Pull mode has no handler to
         // swap out — the consumer has normally exited already; on the shortfall path the drop
@@ -1042,4 +1040,3 @@ BOOST_AUTO_TEST_CASE(overheadDecoderPlaintextViewStaysInBounds)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-
