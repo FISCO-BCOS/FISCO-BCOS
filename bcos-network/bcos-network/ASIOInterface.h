@@ -124,24 +124,31 @@ public:
     // Production read-initiation policy: directly dispatches async_read_some on the socket's
     // stream() (TLS for Socket, plaintext for PlainSocket). Nested in ASIOInterface for
     // symmetry with the other socket operations; tests provide their own policy with the same
-    // invoke() signature.
+    // invoke() signature. `cancelSlot` gives the caller per-OPERATION cancellation (the session
+    // read timeout emits on it): unlike basic_socket::cancel(), cancelling through the slot
+    // aborts ONLY this read and leaves a concurrent async_write on the same socket running.
+    // A default-constructed (empty) slot binds nothing and behaves like the unbound call; test
+    // policies that park the completion instead of arming a real operation may ignore it.
     struct DefaultReadPolicy
     {
         template <typename SocketT>
         static void invoke(ASIOInterface* /*self*/, const std::shared_ptr<SocketT>& socket,
-            boost::asio::mutable_buffer buffers, ReadSomeHandler completion)
+            boost::asio::mutable_buffer buffers, ReadSomeHandler completion,
+            boost::asio::cancellation_slot cancelSlot)
         {
-            socket->stream().async_read_some(buffers, std::move(completion));
+            socket->stream().async_read_some(
+                buffers, boost::asio::bind_cancellation_slot(cancelSlot, std::move(completion)));
         }
     };
 
     template <typename ReadPolicy = DefaultReadPolicy, typename SocketT>
-    auto awaitableReadSome(
-        const std::shared_ptr<SocketT>& socket, boost::asio::mutable_buffer buffers)
+    auto awaitableReadSome(const std::shared_ptr<SocketT>& socket,
+        boost::asio::mutable_buffer buffers, boost::asio::cancellation_slot cancelSlot = {})
     {
         return task::makeFireAwaitable<boost::system::error_code, std::size_t>(
-            [this, socket, buffers](
-                auto handler) { ReadPolicy::invoke(this, socket, buffers, std::move(handler)); },
+            [this, socket, buffers, cancelSlot](auto handler) {
+                ReadPolicy::invoke(this, socket, buffers, std::move(handler), cancelSlot);
+            },
             boost::asio::error::operation_aborted);
     }
 

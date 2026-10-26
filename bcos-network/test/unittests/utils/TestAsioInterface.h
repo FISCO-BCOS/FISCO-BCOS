@@ -74,8 +74,11 @@ public:
         template <typename SocketT>
         static void invoke(bcos::network::ASIOInterface* asio,
             const std::shared_ptr<SocketT>& /*socket*/, ba::mutable_buffer buffers,
-            ReadCompletion completion)
+            ReadCompletion completion, boost::asio::cancellation_slot /*cancelSlot*/)
         {
+            // The cancellation slot is ignored: this fake parks the completion instead of
+            // arming a real socket operation, and the harness completes/aborts parked reads
+            // explicitly. No test arms a read timeout against the fake.
             static_cast<TestAsioInterface*>(asio)->parkRead(buffers, std::move(completion));
         }
     };

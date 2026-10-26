@@ -627,6 +627,292 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
     BOOST_CHECK_EQUAL(seenSeqs.size(), totalMsgs);
 }
 
+BOOST_AUTO_TEST_CASE(readTimeoutDoesNotAbortInflightWrite)
+{
+    // Regression for the read-timeout cancellation scope: the deadline must cancel ONLY the
+    // pending read (per-operation cancellation slot), not the whole socket. The old handler
+    // called socket->ref().cancel(), which also aborted a concurrent in-flight async_write;
+    // writeLoop treats a write error as fatal and dropped the session — a healthy idle-peer
+    // timeout became a spurious disconnect (devp2p runs exactly this shape: a 15s read timeout
+    // plus gossip writes issued from unrelated threads). Here a large write is kept in flight
+    // across a read-timeout boundary: the write must complete intact and the session must stay
+    // alive, with the timeout surfaced to the consumer as Timeout frames.
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
+
+    auto io = std::make_shared<ba::io_context>();
+    boost::asio::executor_work_guard<ba::io_context::executor_type> workGuard(io->get_executor());
+    std::thread ioThread([io] { io->run(); });
+
+    ba::ip::tcp::acceptor acceptor(*io, ba::ip::tcp::endpoint(ba::ip::tcp::v4(), 0));
+    auto listenEndpoint = acceptor.local_endpoint();
+
+    // 16MB: far beyond the loopback send buffers, so the async_write is still pending when the
+    // 200ms read-timeout deadline fires (the peer deliberately does not read until afterwards).
+    const size_t frameHeaderLen = TestFrameDecoder::FRAME_HEADER_SIZE;
+    const size_t frameSize = frameHeaderLen + 16 * 1024 * 1024;
+
+    std::atomic<bool> peerError{false};
+    std::atomic<size_t> peerReceived{0};
+    std::atomic<bool> peerDone{false};
+    std::atomic<bool> releasePeer{false};
+    std::thread peerThread([&] {
+        ba::ip::tcp::socket peer(*io);
+        boost::system::error_code ec;
+        acceptor.accept(peer, ec);
+        if (ec)
+        {
+            peerError = true;
+            return;
+        }
+        // Stay silent (nothing for the session to read) and keep the write blocked past the
+        // timeout boundary.
+        std::this_thread::sleep_for(std::chrono::milliseconds(800));
+        std::vector<uint8_t> buf(64 * 1024);
+        size_t total = 0;
+        while (total < frameSize)
+        {
+            std::size_t n = peer.read_some(ba::buffer(buf), ec);
+            if (ec)
+            {
+                peerError = true;
+                break;
+            }
+            total += n;
+        }
+        peerReceived = total;
+        peerDone = true;
+        // Hold the connection open until the test's assertions are done: closing here would
+        // deliver an EOF to the read loop and drop the session before the checks run.
+        while (!releasePeer.load(std::memory_order_relaxed))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+    });
+
+    ba::ip::tcp::socket client(*io);
+    boost::system::error_code connectError;
+    client.connect(listenEndpoint, connectError);
+    BOOST_REQUIRE(!connectError);
+
+    {
+        auto fakeHost = std::make_shared<TestHost<PlainSocket>>(fakeAsio, nullptr);
+        auto sessionSocket = std::make_shared<PlainSocket>(io, nullptr, NodeIPEndpoint());
+        sessionSocket->ref() = std::move(client);
+        auto session = std::make_shared<BasicSession<TestFrameDecoder, PlainSocket>>(
+            sessionSocket, *fakeHost, 2, true);
+        session->setReadTimeoutMs(200);
+        // DefaultReadPolicy: the read loop arms a REAL async_read_some on the loopback socket,
+        // so the deadline's cancellation actually goes through the socket.
+        session->start();
+
+        // Consumer: the read side sees silence, so Timeout frames must arrive WITHOUT the
+        // channel closing (a close here means the session was dropped — the old failure mode).
+        std::atomic<size_t> timeoutFrames{0};
+        std::atomic<bool> consumerDropped{false};
+        std::atomic<bool> stopConsumer{false};
+        std::promise<void> consumerDone;
+        auto consumerFinished = consumerDone.get_future();
+        task::wait(
+            [](BasicSession<TestFrameDecoder, PlainSocket>::Ptr _session,
+                std::atomic<size_t>& _timeoutFrames, std::atomic<bool>& _consumerDropped,
+                std::atomic<bool>& _stopConsumer, std::promise<void>& _done) -> task::Task<void> {
+                // Fulfil the promise on every exit path (see doReadTest's DoneGuard rationale).
+                struct DoneGuard
+                {
+                    std::promise<void>& m_done;
+                    ~DoneGuard()
+                    {
+                        try
+                        {
+                            m_done.set_value();
+                        }
+                        catch (...)
+                        {}
+                    }
+                } const guard{_done};
+                try
+                {
+                    while (!_stopConsumer.load(std::memory_order_relaxed))
+                    {
+                        auto meta = co_await _session->recvMessage();
+                        if (meta.status == FrameMeta::Status::Timeout)
+                        {
+                            ++_timeoutFrames;
+                        }
+                    }
+                }
+                catch (bcos::network::NetworkException const&)
+                {
+                    if (!_stopConsumer.load(std::memory_order_relaxed))
+                    {
+                        _consumerDropped = true;
+                    }
+                }
+                catch (...)
+                {}
+            }(session, timeoutFrames, consumerDropped, stopConsumer, consumerDone));
+
+        // Issue the large write shortly before the first deadline fires.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        bytes frame(frameSize, 0xff);
+        TestFrameDecoder::writeLength(frame.data(), static_cast<uint32_t>(frameSize));
+        bool sent = task::syncWait(
+            session->sendMessage(::ranges::views::single(bcos::ref(std::as_const(frame)))));
+        BOOST_CHECK(sent);
+
+        // The peer starts draining at ~800ms; wait for the whole frame to arrive intact.
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+        while (!peerDone.load() && !peerError.load() && std::chrono::steady_clock::now() < deadline)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        BOOST_CHECK(!peerError.load());
+        BOOST_CHECK_EQUAL(peerReceived.load(), frameSize);
+
+        // The deadline fired while the write was in flight: timeouts were delivered, the write
+        // completed, and neither the session nor the consumer went down.
+        BOOST_CHECK_GT(timeoutFrames.load(), 0);
+        BOOST_CHECK(session->active());
+        BOOST_CHECK(!consumerDropped.load());
+
+        stopConsumer = true;
+        session->disconnect(bcos::network::DisconnectReason::DisconnectRequested);
+        releasePeer = true;
+        if (consumerFinished.wait_for(std::chrono::seconds(10)) != std::future_status::ready)
+        {
+            BOOST_FAIL("consumer coroutine did not exit");
+        }
+    }
+
+    releasePeer = true;
+    peerThread.join();
+    workGuard.reset();
+    {
+        boost::system::error_code ec;
+        acceptor.close(ec);
+    }
+    io->stop();
+    ioThread.join();
+}
+
+namespace
+{
+// A decoder that violates the FrameDecoder contract: it reports more wire-consumed bytes than
+// the buffer holds. The read loop's copy path must treat that as fatal (drop), exactly like the
+// take-buffer branch — ignoring onRead()'s false return used to re-decode the identical bytes
+// and push copies of the same frame forever.
+class OverconsumeDecoder
+{
+public:
+    FrameMeta tryDecode(const bytesConstRef& buffer)
+    {
+        FrameMeta meta;
+        if (buffer.size() < TestFrameDecoder::FRAME_HEADER_SIZE)
+        {
+            return meta;  // NeedMoreData
+        }
+        meta.status = FrameMeta::Status::Frame;
+        meta.wireConsumed = buffer.size() + 1;  // contract violation: beyond the available bytes
+        meta.frameSize = TestFrameDecoder::FRAME_HEADER_SIZE;
+        meta.frame = bytes(buffer.data(), buffer.data() + TestFrameDecoder::FRAME_HEADER_SIZE);
+        return meta;
+    }
+};
+
+template <typename SocketT>
+class OverconsumeHost : public bcos::network::Host<OverconsumeDecoder, SocketT>
+{
+public:
+    OverconsumeHost(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface,
+        std::shared_ptr<bcos::network::BasicSessionFactory<OverconsumeDecoder, SocketT>>
+            _sessionFactory)
+      : bcos::network::Host<OverconsumeDecoder, SocketT>(
+            std::move(_asioInterface), std::move(_sessionFactory))
+    {
+        this->m_run = true;
+    }
+};
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(decoderOverconsumptionDropsSession)
+{
+    // Regression: a decoder whose wireConsumed exceeds the buffered bytes must drop the session
+    // on the copy path (onRead returns false without advancing). Before the fix the loop pushed
+    // the same frame over and over; the consumer below must therefore see the channel CLOSE
+    // before any frame is delivered.
+    auto fakeSocket = std::make_shared<TestSessionSocket>(/*connected*/ true, /*runIo*/ true);
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
+
+    using OverconsumeSession = BasicSession<OverconsumeDecoder, TestSessionSocket>;
+    {
+        auto fakeHost = std::make_shared<OverconsumeHost<TestSessionSocket>>(fakeAsio, nullptr);
+        auto session = std::make_shared<OverconsumeSession>(fakeSocket, *fakeHost, 16, true);
+
+        std::atomic<bool> gotFrame{false};
+        std::atomic<bool> channelClosed{false};
+        std::promise<void> consumerDone;
+        auto consumerFinished = consumerDone.get_future();
+        task::wait(
+            [](OverconsumeSession::Ptr _session, std::atomic<bool>& _gotFrame,
+                std::atomic<bool>& _channelClosed, std::promise<void>& _done) -> task::Task<void> {
+                struct DoneGuard
+                {
+                    std::promise<void>& m_done;
+                    ~DoneGuard()
+                    {
+                        try
+                        {
+                            m_done.set_value();
+                        }
+                        catch (...)
+                        {}
+                    }
+                } const guard{_done};
+                try
+                {
+                    auto meta = co_await _session->recvMessage();
+                    (void)meta;
+                    _gotFrame = true;  // the buggy frame must never be delivered
+                }
+                catch (bcos::network::NetworkException const&)
+                {
+                    _channelClosed = true;  // the drop closed the channel under the consumer
+                }
+                catch (...)
+                {}
+            }(session, gotFrame, channelClosed, consumerDone));
+
+        session->startWithPolicy<TestAsioInterface::ReadPolicy>();
+        fakeAsio->asyncAppendRecvPacket(
+            std::make_shared<std::vector<uint8_t>>(buildTestFrame(bytes(8, 0xff))));
+
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (
+            consumerFinished.wait_for(std::chrono::milliseconds(10)) != std::future_status::ready &&
+            std::chrono::steady_clock::now() < deadline)
+        {
+        }
+        BOOST_REQUIRE(
+            consumerFinished.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
+        BOOST_CHECK(channelClosed.load());
+        BOOST_CHECK(!gotFrame.load());
+        BOOST_CHECK(!session->active());
+
+        // Teardown, same pattern as doReadTest.
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
+        session->setSocket(nullptr);
+    }
+
+    fakeSocket->close();
+}
+
 BOOST_AUTO_TEST_CASE(asioCompletionHandshakeSynchronousInvocation)
 {
     // Regression: an initiate that INVOKES the completion synchronously (before returning) must

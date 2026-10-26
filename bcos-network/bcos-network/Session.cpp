@@ -90,10 +90,11 @@ std::size_t bcos::network::SessionRecvBuffer::takeStorage(bytes& out, std::size_
     const std::size_t tail = m_writePos - wireEnd;
 
     out = std::move(m_recvBuffer);
-    // The reseeded buffer needs to hold only the tail; the next large frame grows it again
-    // through the usual NeedMoreData path. A small floor keeps the value-initialized memset
-    // of the fresh allocation cheaper than the frame copy this path avoids.
-    m_recvBufferSize = std::max(tail, TAKE_STORAGE_FLOOR);
+    // Reseed at the SAME (grown) size, not at a small floor: a take happens only once the buffer
+    // has grown to hold a large frame, and a small reseed would make the NEXT large frame
+    // re-enter the NeedMoreData grow path — a fresh allocate plus a zero-fill of 2*length per
+    // frame, the cost this path exists to avoid. Keeping the size keeps the allocation
+    // one-per-take instead of grow-from-scratch per frame.
     m_recvBuffer.resize(m_recvBufferSize);
     if (tail > 0)
     {
@@ -103,6 +104,11 @@ std::size_t bcos::network::SessionRecvBuffer::takeStorage(bytes& out, std::size_
     // keeps the whole plaintext: for every current decoder the plaintext begins at the wire
     // frame's first byte and is no longer than it (RlpxFrameDecoder's plaintext is shorter).
     out.resize(wireEnd);
+    // The consumer retains this storage (Message::decodeOwned / the RLPx facade) while the recv
+    // channel charges only meta.frameSize against its byte budget: release the surplus capacity
+    // (the buffer had grown to ~2x the frame) so the heap a full queue pins matches what the
+    // channel accounts for.
+    out.shrink_to_fit();
     m_readPos = 0;
     m_writePos = tail;
     return frameStart;

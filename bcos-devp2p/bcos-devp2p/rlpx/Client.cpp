@@ -70,7 +70,14 @@ NetHostPtr makeHost(std::shared_ptr<bcos::network::ASIOInterface> _asio)
     auto factory = std::make_shared<
         bcos::network::BasicSessionFactory<RlpxFrameDecoder, bcos::network::PlainSocket>>(
         2 * kAllowMaxMsgSize, kAllowMaxMsgSize, 64 * 1024, 1024 * 1024);
-    return std::make_shared<NetHost>(std::move(_asio), std::move(factory));
+    // The Host's accept loop must agree with the acceptor, so derive it from the interface: a
+    // pure client (ASIOInterface built with listen = false) has no acceptor and must run no
+    // accept loop — RlpxClient never calls acceptSession(), so accepted connections would queue
+    // undrained for the connection's lifetime.
+    const bool listen = _asio->listening();
+    auto host = std::make_shared<NetHost>(std::move(_asio), std::move(factory));
+    host->setListen(listen);
+    return host;
 }
 
 // Handshake-phase read-full with a total deadline (the session read loop is
@@ -344,9 +351,11 @@ RlpxClient::RlpxClient(EccKeyPair _keyPair, PeerConfig _config)
 
 EstablishedSession RlpxClient::connect()
 {
-    // Port 0: pure client — the acceptor binds an ephemeral port and the
-    // accept loop idles harmlessly.
-    auto asio = std::make_shared<bcos::network::ASIOInterface>(ioPool(), "0.0.0.0", 0);
+    // Pure client: listen = false, so no acceptor is created at all. An outbound sync
+    // connection must not expose an unauthenticated listening socket — PlainSocket sessions
+    // have no PeerIdentity gate, and nothing here drains accepted sessions.
+    auto asio = std::make_shared<bcos::network::ASIOInterface>(
+        ioPool(), "0.0.0.0", 0, /* listen = */ false);
     auto host = makeHost(asio);
     host->setConnectTimeout(kConnectTimeoutMs);
     host->start();

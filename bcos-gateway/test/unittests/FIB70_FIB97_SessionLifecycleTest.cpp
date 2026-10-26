@@ -73,7 +73,7 @@ public:
         template <typename SocketT>
         static void invoke(bcos::network::ASIOInterface* asio,
             const std::shared_ptr<SocketT>& /*socket*/, ba::mutable_buffer /*buffers*/,
-            ReadCompletion completion)
+            ReadCompletion completion, boost::asio::cancellation_slot /*cancelSlot*/)
         {
             static_cast<FakeASIO_FIB*>(asio)->parkRead(std::move(completion));
         }

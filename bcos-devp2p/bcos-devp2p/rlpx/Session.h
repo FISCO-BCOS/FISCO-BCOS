@@ -72,6 +72,13 @@ public:
     // True when this session owns (and therefore stops) the Host. See the class comment.
     bool ownsHost() const { return m_ownsHost; }
 
+    // Test/diagnostic introspection: whether this session's Host holds a listening socket.
+    // A pure client (RlpxClient) must never listen — see RlpxClient::connect().
+    bool hostListening() const
+    {
+        return m_host && m_host->asioInterface() && m_host->asioInterface()->listening();
+    }
+
     void enableCompression() { m_codec.enableCompression(); }
 
     // Explicit teardown (drop the connection, stop the host). Idempotent; the

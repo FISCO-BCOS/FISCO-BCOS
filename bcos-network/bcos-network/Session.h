@@ -91,10 +91,6 @@ public:
     bcos::bytesRef asWriteBuffer();
 
 private:
-    /// Minimum size of the fresh buffer reseeded by takeStorage — must be nonzero so the next
-    /// read has somewhere to land; kept small since the NeedMoreData grow path re-expands it.
-    constexpr static std::size_t TAKE_STORAGE_FLOOR = 4 * 1024;
-
     // 0         readPos    writePos       m_recvBufferSize
     // |___________|__________|____________|
     //
@@ -426,10 +422,12 @@ public:
 
     // Read timeout (FrameMeta::Status::Timeout delivery). 0 = disabled (default): the read loop
     // blocks in awaitableReadSome indefinitely. When > 0, a read with no bytes arriving within
-    // m_readTimeoutMs is cancelled and surfaced to the consumer as a FrameMeta{Status::Timeout}
-    // frame (empty frame, consumed = 0) WITHOUT dropping the session — the consumer decides what
-    // a stalled read means. Set before start()/startWithPolicy(); the read loop reads the value
-    // each iteration, so later changes take effect on the next read.
+    // m_readTimeoutMs is cancelled — through the per-operation cancellation slot, so an in-flight
+    // write on the same socket is NOT touched — and surfaced to the consumer as a
+    // FrameMeta{Status::Timeout} frame (empty frame, consumed = 0) WITHOUT dropping the session —
+    // the consumer decides what a stalled read means. Set before start()/startWithPolicy(): the
+    // loop latches the value when it first arms its deadline, so later changes take effect only
+    // as an enable/disable toggle, not as a new timeout value.
     void setReadTimeoutMs(uint32_t _readTimeoutMs) { m_readTimeoutMs = _readTimeoutMs; }
     /**
      * @brief The packets that can be sent are obtained based on the configured policy
@@ -664,6 +662,24 @@ private:
         auto self = this->shared_from_this();
         try
         {
+            // Read timeout (setReadTimeoutMs, 0 = disabled): ONE Deadline and ONE cancellation
+            // signal per loop, re-armed per read iteration — arm() re-arms the same timer, so a
+            // fresh make_shared per iteration would just pay a control-block allocation plus a
+            // timer create/destroy per read chunk. disarm() must happen while the iteration's
+            // result is still in hand so an already-queued expiry cannot cancel the NEXT
+            // iteration's read; Deadline's generation guard closes that race. Deadline's flags
+            // live behind shared_ptr (a queued expiry handler outlives this frame position) and
+            // are atomic so a caller may disarm from another thread; on this path everything
+            // runs on the socket's io thread.
+            // The handler emits on the cancellation signal bound to THIS iteration's
+            // async_read_some (awaitableReadSome's cancelSlot): per-OPERATION cancellation.
+            // socket->ref().cancel() would also abort a concurrent in-flight async_write, and
+            // the write path treats a write error as fatal (writeLoop drops the session) — that
+            // turned a healthy idle-peer read timeout into a spurious disconnect. The signal is
+            // behind shared_ptr because a queued expiry handler can outlive this frame position;
+            // emit() on a signal with no registered operation is a no-op.
+            std::shared_ptr<task::Deadline> readDeadline;
+            std::shared_ptr<boost::asio::cancellation_signal> readCancelSignal;
             while (m_active && m_server.get().haveNetwork())
             {
                 if (!m_socket->isConnected())
@@ -678,30 +694,26 @@ private:
                     (writeBuffer.size() > m_maxReadDataSize ? m_maxReadDataSize :
                                                               writeBuffer.size());
 
-                // Read timeout (setReadTimeoutMs, 0 = disabled): task::Deadline owns the timer plus
-                // the late-expiry guard that used to be two hand-rolled shared_ptr<bool> flags
-                // here — arm() re-arms it per iteration, and disarm() must happen while this
-                // iteration's result is still in hand so an already-queued expiry cannot cancel the
-                // NEXT iteration's read. Deadline's flags live behind shared_ptr (a queued expiry
-                // handler outlives this frame position) and are atomic so a caller may disarm from
-                // another thread; on this path everything runs on the socket's io thread.
-                // The handler runs on the socket's io thread and cancels the pending read, which
-                // wakes the co_await below with operation_aborted.
-                std::shared_ptr<task::Deadline> readDeadline;
+                // The deadline and its cancellation signal are hoisted above the loop (see the
+                // comment there); the value in effect is the one read at the first arm.
                 if (m_readTimeoutMs > 0)
                 {
-                    readDeadline =
-                        std::make_shared<task::Deadline>(m_socket->ioService(), m_readTimeoutMs);
-                    readDeadline->arm([socket = m_socket](boost::system::error_code) {
-                        boost::system::error_code cancelEc;
-                        // NOLINTNEXTLINE(bugprone-unused-return-value)
-                        socket->ref().cancel(cancelEc);
+                    if (!readDeadline) [[unlikely]]
+                    {
+                        readDeadline = std::make_shared<task::Deadline>(
+                            m_socket->ioService(), m_readTimeoutMs);
+                        readCancelSignal = std::make_shared<boost::asio::cancellation_signal>();
+                    }
+                    readDeadline->arm([readCancelSignal](boost::system::error_code) {
+                        readCancelSignal->emit(boost::asio::cancellation_type::all);
                     });
                 }
 
                 auto [ec, bytesTransferred] =
                     co_await m_server.get().asioInterface()->template awaitableReadSome<ReadPolicy>(
-                        m_socket, boost::asio::buffer(writeBuffer.data(), readSize));
+                        m_socket, boost::asio::buffer(writeBuffer.data(), readSize),
+                        readCancelSignal ? readCancelSignal->slot() :
+                                           boost::asio::cancellation_slot{});
 
                 if (readDeadline)
                 {
@@ -812,7 +824,24 @@ private:
                             }
                             else
                             {
-                                recvBuffer.onRead(meta.wireConsumed);
+                                // The same decoder-contract invariant the take-buffer branch
+                                // validates above: wireConsumed must not exceed the bytes the
+                                // buffer holds. onRead returns false WITHOUT advancing on a
+                                // violation — ignoring it here would re-decode the identical
+                                // bytes and push the same frame forever. The FrameDecoder concept
+                                // states the contract but cannot check it, and a downstream
+                                // decoder is code this project's CI never compiles: fail loud,
+                                // exactly like the take-buffer branch.
+                                if (!recvBuffer.onRead(meta.wireConsumed)) [[unlikely]]
+                                {
+                                    SESSION_LOG(ERROR)
+                                        << LOG_BADGE("readLoop")
+                                        << LOG_DESC("decoder-consumed bytes exceed the read buffer")
+                                        << LOG_KV("wireConsumed", meta.wireConsumed)
+                                        << LOG_KV("available", recvBuffer.dataSize());
+                                    drop(TCPError);
+                                    co_return;
+                                }
                             }
                             // Pull-mode delivery with backpressure: when the recv queue has no
                             // room for this frame the consumer is slower than the peer, so park

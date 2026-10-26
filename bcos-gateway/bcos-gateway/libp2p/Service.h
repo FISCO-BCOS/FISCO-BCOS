@@ -384,7 +384,10 @@ protected:
         m_beforeMessageHandler;
     std::function<std::optional<bcos::Error>(Session::Ptr, const Message&)> m_onMessageHandler;
 
-    bool m_enableCompress = false;
+    // Compression moved here from Session, whose m_enableCompress defaulted to true; keep that
+    // default so a Service built without GatewayFactory (tests, embedders) compresses like
+    // before. GatewayFactory always overrides it from config (enableCompress, default true).
+    bool m_enableCompress = true;
 };
 
 }  // namespace bcos::gateway

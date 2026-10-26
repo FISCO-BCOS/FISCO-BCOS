@@ -170,6 +170,34 @@ BOOST_AUTO_TEST_CASE(pureClientDoesNotListen)
     BOOST_CHECK(plainSocketHost->haveNetwork());
     BOOST_CHECK(!plainSocketHost->listen());
     plainSocketHost->stop();
+
+    // Anchor the claim to the production call site: a REAL RlpxClient connection must hold no
+    // listening socket either — the hand-built fixtures above cover the pieces, this covers the
+    // caller (RlpxClient::connect builds its ASIOInterface with listen = false).
+    {
+        rlpx::EccKeyPair serverKey;
+        rlpx::RlpxServer server(serverKey, 0, serverConfig());
+        uint16_t port = server.port();
+        auto serverPublicKey = serverKey.publicKey();
+
+        std::thread serverThread([&] {
+            try
+            {
+                auto accepted = server.accept();
+                (void)accepted;
+            }
+            catch (std::exception const& e)
+            {
+                BOOST_ERROR(std::string("server: accept failed: ") + e.what());
+            }
+        });
+
+        rlpx::RlpxClient client(rlpx::EccKeyPair{}, clientConfig(port, serverPublicKey));
+        auto established = client.connect();
+        BOOST_CHECK(!established.session.hostListening());
+
+        serverThread.join();
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
