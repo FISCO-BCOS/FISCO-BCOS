@@ -212,6 +212,31 @@ BOOST_AUTO_TEST_CASE(lineIdIncrements)
     BOOST_CHECK_EQUAL(idOf(first) + 1, idOf(second));
 }
 
+BOOST_AUTO_TEST_CASE(threadNameFallsBackToUnnamed)
+{
+    LayoutLogStateGuard guard;
+    auto const previousName = bcos::pthread_getThreadNameRef();
+    bcos::pthread_setThreadName("");
+    auto const line = layoutRender("%ThreadName%|%Message%", LogLevel::INFO, "m");
+    bcos::pthread_setThreadName(previousName);
+    // same substitution as the legacy ThreadName attribute and threadPart()
+    BOOST_CHECK_EQUAL(line, "Unnamed|m");
+}
+
+BOOST_AUTO_TEST_CASE(lineIdStableWithinLine)
+{
+    LayoutLogStateGuard guard;
+    std::string error;
+    auto layout = bcos::log::parseLineLayout("%LineID%|%LineID%", error);
+    BOOST_REQUIRE_MESSAGE(layout != nullptr, error);
+    std::string line;
+    bcos::log::appendLayoutLine(line, *layout, LogLevel::INFO, "x");
+    // one id per rendered line, matching the boost LineID attribute semantics
+    auto const sep = line.find('|');
+    BOOST_REQUIRE(sep != std::string::npos);
+    BOOST_CHECK_EQUAL(line.substr(0, sep), line.substr(sep + 1));
+}
+
 BOOST_AUTO_TEST_CASE(processIdMatchesGetpid)
 {
     LayoutLogStateGuard guard;
@@ -316,6 +341,29 @@ BOOST_AUTO_TEST_CASE(initLogFallsBackOnBadFormat)
         BOOST_REQUIRE_EQUAL(captured.size(), 1u);
         BOOST_CHECK_EQUAL(captured[0].message, "fallbackMarker");
         std::regex const re(R"(^info\|\d{4}-\d{2}-\d{2} .+\|$)");
+        BOOST_CHECK_MESSAGE(std::regex_match(captured[0].prefix, re), captured[0].prefix);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(initLogKeepsMessagelessLayout)
+{
+    LayoutLogStateGuard guard;
+    auto pt = layoutFromIni("[log]\nenable=false\nformat=%Severity%|%TimeStamp%\n");
+    {
+        BoostLogInitializer init;
+        // no %Message%: warned on stderr and at ERROR, but the layout still
+        // installs, matching the boost formatter grammar
+        init.initLog(pt, bcos::FileLogger, "test");
+        auto sink = std::make_shared<LayoutCaptureWriter>();
+        bcos::log::registerLineSink(sink);
+        BCOS_LOG(INFO) << "noContent";
+        bcos::log::unregisterLineSink(sink.get());
+
+        auto const captured = sink->entries();
+        BOOST_REQUIRE_EQUAL(captured.size(), 1u);
+        // the layout consumes (and drops) the message
+        BOOST_CHECK(captured[0].message.empty());
+        std::regex const re(R"(^info\|\d{4}-\d{2}-\d{2} .+$)");
         BOOST_CHECK_MESSAGE(std::regex_match(captured[0].prefix, re), captured[0].prefix);
     }
 }

@@ -77,8 +77,8 @@ public:
 
     std::vector<Segment> segments;
     bool usesTimeStamp = false;  // any TimeStamp segment present (clock read is skipped otherwise)
-    bool usesLineID = false;
-    std::string processID;  // decimal pid, rendered once at parse time
+    bool usesLineID = false;     // any LineID segment present (id is incremented only then)
+    std::string processID;       // decimal pid, rendered once at parse time
 };
 
 // Parses the subset of the legacy boost::log formatter grammar that the

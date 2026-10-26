@@ -37,10 +37,13 @@ target_include_directories(bcos-utilities PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-utilities>)
 if (ONLY_CPP_SDK)
-    target_link_libraries(bcos-utilities PUBLIC Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} ZLIB::ZLIB fmt::fmt)
+    target_link_libraries(bcos-utilities PUBLIC Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} ZLIB::ZLIB)
 else ()
-    target_link_libraries(bcos-utilities PUBLIC bcos-task Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} ZLIB::ZLIB zstd::libzstd_static ittapi fmt::fmt)
+    target_link_libraries(bcos-utilities PUBLIC bcos-task Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} ZLIB::ZLIB zstd::libzstd_static ittapi)
 endif ()
+# fmt is used only inside BoostLog.cpp; the target is exported in
+# fiscobcosTargets, so keep it out of the public interface.
+target_link_libraries(bcos-utilities PRIVATE fmt::fmt)
 
 if(TESTS)
     enable_testing()

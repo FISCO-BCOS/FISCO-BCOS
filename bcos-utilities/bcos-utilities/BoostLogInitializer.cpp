@@ -156,7 +156,10 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     // call, so a repeated initLog never inherits a previous call's layout.
     // A parse failure is reported on stderr unconditionally — it must not be
     // subject to log.level or log.enable — and is repeated at ERROR below so
-    // it also lands in the log file once a sink is registered.
+    // it also lands in the log file once a sink is registered. A layout that
+    // parses but contains no %Message% renders no log content at all; it is
+    // still installed (the boost formatter grammar renders exactly what is
+    // configured), but is reported through the same channel as a warning.
     auto logFormat = _pt.get<std::string>("log.format", "");
     std::string logFormatError;
     std::unique_ptr<bcos::log::LineLayout> lineLayout;
@@ -169,6 +172,26 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
                 "failed to parse log.format (" + logFormatError +
                 "), the built-in log line format is used, configured format = " + logFormat;
             std::fprintf(stderr, "[log] %s\n", logFormatError.c_str());
+        }
+        else
+        {
+            bool rendersMessage = false;
+            for (auto const& segment : lineLayout->segments)
+            {
+                if (segment.field == bcos::log::LineLayout::Field::Message)
+                {
+                    rendersMessage = true;
+                    break;
+                }
+            }
+            if (!rendersMessage)
+            {
+                logFormatError =
+                    "log.format contains no %Message% placeholder, the log message is not "
+                    "rendered, configured format = " +
+                    logFormat;
+                std::fprintf(stderr, "[log] %s\n", logFormatError.c_str());
+            }
         }
     }
     bcos::log::setLineLayout(std::move(lineLayout));

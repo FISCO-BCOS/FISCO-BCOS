@@ -256,7 +256,7 @@ RetiredLayouts& retiredLayouts()
 std::atomic<std::uint64_t> s_lineID{0};
 
 void appendTimeStamp(
-    std::string& _out, std::vector<LineLayout::TimePart> const& _parts, BrokenDownTime _time)
+    std::string& _out, std::vector<LineLayout::TimePart> const& _parts, BrokenDownTime const& _time)
 {
     for (auto const& part : _parts)
     {
@@ -605,6 +605,11 @@ void appendLayoutLine(
 {
     // The clock is read only when the layout actually prints a timestamp.
     auto const time = _layout.usesTimeStamp ? brokenDownNow() : BrokenDownTime{};
+    // The line id is hoisted the same way: one increment per rendered line, so
+    // a layout referencing %LineID% more than once prints the same id on that
+    // line, matching the boost LineID attribute semantics.
+    auto const lineID =
+        _layout.usesLineID ? s_lineID.fetch_add(1, std::memory_order_relaxed) + 1 : 0;
     for (auto const& segment : _layout.segments)
     {
         switch (segment.field)
@@ -619,13 +624,26 @@ void appendLayoutLine(
             appendTimeStamp(_out, segment.timeParts, time);
             break;
         case LineLayout::Field::ThreadName:
-            _out.append(bcos::pthread_getThreadNameRef());
+        {
+            // Same substitution as the legacy ThreadName attribute and the
+            // built-in layout's threadPart(): an empty name (unnamed threads
+            // on macOS, every thread on Windows) renders as "Unnamed".
+            auto const& threadName = bcos::pthread_getThreadNameRef();
+            if (threadName.empty())
+            {
+                _out.append("Unnamed");
+            }
+            else
+            {
+                _out.append(threadName);
+            }
             break;
+        }
         case LineLayout::Field::ThreadID:
             _out.append(threadTidHex());
             break;
         case LineLayout::Field::LineID:
-            appendUnsigned(_out, s_lineID.fetch_add(1, std::memory_order_relaxed) + 1);
+            appendUnsigned(_out, lineID);
             break;
         case LineLayout::Field::ProcessID:
             _out.append(_layout.processID);
