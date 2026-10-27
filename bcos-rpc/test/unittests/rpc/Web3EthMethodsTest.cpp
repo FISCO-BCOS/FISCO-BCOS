@@ -490,15 +490,90 @@ BOOST_AUTO_TEST_CASE(estimateGasCapComesFromTheTipBlockHeaderAtTheEndpoint)
 
 // eth_estimateGas measures once at the ceiling, then walks a 10% ladder from the measurement and
 // bisects whatever is left. Both ends matter: the ladder is what keeps a call that needs only a
-// little more than it consumed cheap (this case settles in three probes), and the bisection is
+// little more than it consumed cheap (this case settles in four probes), and the bisection is
 // what stops a deep call chain from costing dozens.
 BOOST_AUTO_TEST_CASE(estimateGasLaddersThenBisects)
 {
     m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(21'000'000));
 
     auto ladderScheduler = std::make_shared<LadderScheduler>(m_ledger, m_blockFactory);
-    ladderScheduler->measured = u256(20'000);
-    ladderScheduler->required = 23'000;  // needs more than the measurement, far less than the cap
+    // Deliberately above c_intrinsicGasFloor: a measurement below the floor is clamped to it (see
+    // estimateGasClampsTheMeasurementToTheIntrinsicFloor), which would make this case assert the
+    // clamp instead of the ladder.
+    ladderScheduler->measured = u256(100'000);
+    ladderScheduler->required = 115'000;  // 1.15x: what a shallow nested call actually needs
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, ladderScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    Json::Value response;
+    task::syncWait(endpoint->estimateGas(params, response));
+
+    // Ceiling probe, the measurement, then two ladder steps: 100000 -> 110001 (fails, needs
+    // 115000) -> 121002 (succeeds), and the next step would land on 121002 again so the loop
+    // stops rather than re-probing. This is the case a plain bisection gets wrong: it would spend
+    // ~25 probes narrowing to the same gas, on every nested call.
+    auto const& probes = ladderScheduler->gasLimits;
+    BOOST_REQUIRE_EQUAL(probes.size(), 4U);
+    BOOST_CHECK_EQUAL(probes.at(0), u256(21'000'000));
+    BOOST_CHECK_EQUAL(probes.at(1), u256(100'000));
+    BOOST_CHECK_EQUAL(probes.at(2), u256(110'001));  // 100000 + 10000 + 1
+    BOOST_CHECK_EQUAL(probes.at(3), u256(121'002));  // 110001 + 11000 + 1
+    auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
+    BOOST_CHECK_GE(answer, ladderScheduler->required);
+    BOOST_CHECK_EQUAL(probes.back(), u256(answer));
+}
+
+// The measurement is floored at the intrinsic cost before the search starts. A scheduler
+// reporting a gasUsed below it (only reachable through a synthetic ledger) must not produce a
+// candidate below the floor, and the floor -- not the measurement -- becomes the first rung.
+BOOST_AUTO_TEST_CASE(estimateGasClampsTheMeasurementToTheIntrinsicFloor)
+{
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(21'000'000));
+
+    auto ladderScheduler = std::make_shared<LadderScheduler>(m_ledger, m_blockFactory);
+    ladderScheduler->measured = u256(20'000);  // below the 21,000 intrinsic floor
+    ladderScheduler->required = 23'000;
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, ladderScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    Json::Value response;
+    task::syncWait(endpoint->estimateGas(params, response));
+
+    // 20000 is clamped to 21000, so the ladder starts there: 21000 (fails) -> 23101 (succeeds).
+    auto const& probes = ladderScheduler->gasLimits;
+    BOOST_REQUIRE_EQUAL(probes.size(), 3U);
+    BOOST_CHECK_EQUAL(probes.at(0), u256(21'000'000));
+    BOOST_CHECK_EQUAL(probes.at(1), u256(21'000));  // the floor, not the 20,000 measurement
+    BOOST_CHECK_EQUAL(probes.at(2), u256(23'101));  // 21000 + 2100 + 1
+    auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
+    BOOST_CHECK_EQUAL(answer, 23'101U);
+}
+
+// The cheap common case: a call that needs exactly what it consumed settles in two dry runs, and
+// never enters the ladder.
+BOOST_AUTO_TEST_CASE(estimateGasStopsWhenTheMeasurementSuffices)
+{
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(21'000'000));
+
+    auto ladderScheduler = std::make_shared<LadderScheduler>(m_ledger, m_blockFactory);
+    ladderScheduler->measured = u256(100'000);
+    ladderScheduler->required = 100'000;
     auto ledgerService = std::make_shared<rpc::NodeService>(
         m_ledger, ladderScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
     auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
@@ -514,22 +589,10 @@ BOOST_AUTO_TEST_CASE(estimateGasLaddersThenBisects)
     task::syncWait(endpoint->estimateGas(params, response));
 
     auto const& probes = ladderScheduler->gasLimits;
-    BOOST_REQUIRE_GE(probes.size(), 2U);  // the ceiling probe plus at least one retry
-    BOOST_CHECK_EQUAL(probes.front(), u256(21'000'000));  // ceiling first
-    BOOST_CHECK_EQUAL(probes.at(1), u256(21'000));        // then the measured floor
-    // Required is 23,000 against a 20,000 measurement: the ladder probes 22,001 then 24,202 and
-    // stops, so the near case costs four probes in total (ceiling, measurement, two ladder
-    // steps). This is the property that made a plain bisection the wrong choice -- it would need
-    // ~25 probes to land in the same place, on every nested call.
-    BOOST_CHECK_EQUAL(probes.size(), 4U);
-    BOOST_CHECK_EQUAL(probes.at(2), u256(22'001));  // 20000 + 2000 + 1
-    BOOST_CHECK_EQUAL(probes.at(3), u256(24'202));  // 22001 + 2200 + 1
-    // The answer is at least what the call needs, strictly below the ceiling, and a budget a
-    // probe actually ran with.
-    auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
-    BOOST_CHECK_GE(answer, ladderScheduler->required);
-    BOOST_CHECK_LT(answer, 21'000'000U);
-    BOOST_CHECK_EQUAL(probes.back(), u256(answer));
+    BOOST_REQUIRE_EQUAL(probes.size(), 2U);
+    BOOST_CHECK_EQUAL(probes.at(0), u256(21'000'000));
+    BOOST_CHECK_EQUAL(probes.at(1), u256(100'000));
+    BOOST_CHECK_EQUAL(response["result"].asString(), toQuantity(u256(100'000)));
 }
 
 // The far end: a call that needs orders of magnitude more than it consumes must not cost dozens
