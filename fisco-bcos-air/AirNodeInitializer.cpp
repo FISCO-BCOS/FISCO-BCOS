@@ -256,8 +256,9 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
             initializer->globalStateStorageInitializer(), initializer->ioServicePool(),
             initializer->mptCommitObserver(), initializer->ledgerConfigState(),
             initializer->elBlockVerifier(), initializer->clSyncCoordination(),
-            // eth/68 transaction gossip ([ethereum] tx_gossip): the engine mempool and the
-            // same admission validator the RPC entry uses. Either unset keeps gossip off.
+            // The engine mempool (every synced block prunes its executed transactions from
+            // it) and, for eth/68 transaction gossip ([ethereum] tx_gossip), the same
+            // admission validator the RPC entry uses; either unset keeps gossip off.
             &initializer->memPoolInitializer()->memPool(), initializer->memPoolValidator());
         m_ethereumSync->validateConfig();
         // The RPC side of gossip: eth_sendRawTransaction announces each admitted

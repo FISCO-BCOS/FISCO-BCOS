@@ -108,10 +108,11 @@ public:
     // commits through this shared instance instead of constructing its own.
     // _clSync: the CL-driven coordination state shared with the Engine API service
     // (same [engine_rpc] wiring); null keeps the loop fully autonomous.
-    // _gossipMemPool/_gossipValidator: the engine mempool + admission validator for
-    // eth/68 transaction gossip ([ethereum] tx_gossip). Both set starts a
-    // TxGossipService on dedicated sessions alongside the sync loop; either null
-    // (non-EL / OP / engine_rpc-less wiring) keeps gossip off.
+    // _memPool: the engine mempool. Every block this loop commits drops its executed
+    // transactions from it (the same contract as the engine services' commit lanes);
+    // null (non-EL wiring) skips that. With _gossipValidator also set, the pair starts a
+    // TxGossipService for eth/68 transaction gossip ([ethereum] tx_gossip) on dedicated
+    // sessions alongside the sync loop; either null keeps gossip off.
     EthereumSyncInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         bcos::ledger::LedgerInterface::Ptr _ledger, bcos::protocol::BlockFactory::Ptr _blockFactory,
         std::shared_ptr<scheduler_v1::SchedulerSerialImpl> _scheduler,
@@ -122,7 +123,7 @@ public:
         bcos::ledger::LedgerConfigState::Ptr _ledgerConfigState = nullptr,
         std::shared_ptr<Verifier> _sharedVerifier = nullptr,
         std::shared_ptr<engine::engine_common::ClSyncCoordination> _clSync = nullptr,
-        bcos::txpool::MemPoolImpl* _gossipMemPool = nullptr,
+        bcos::txpool::MemPoolImpl* _memPool = nullptr,
         std::shared_ptr<bcos::txvalidator::TxValidator> _gossipValidator = nullptr)
       : m_nodeConfig(std::move(_nodeConfig)),
         m_ledger(std::move(_ledger)),
@@ -135,14 +136,14 @@ public:
         m_ledgerConfigState(std::move(_ledgerConfigState)),
         m_sharedVerifier(std::move(_sharedVerifier)),
         m_clSync(std::move(_clSync)),
-        m_gossipMemPool(_gossipMemPool),
+        m_memPool(_memPool),
         m_gossipValidator(std::move(_gossipValidator))
     {
         // Construct the gossip service eagerly (cheap, no I/O) so AirNodeInitializer can
         // wire the RPC announce hook BEFORE start() spawns anything; the pumps only run
         // after start(). Constructing needs the config flag too: an off switch must read
         // as "no service" to the wiring, not "a service that idles".
-        if (m_gossipMemPool && m_gossipValidator && m_nodeConfig->ethereumTxGossipEnabled())
+        if (m_memPool && m_gossipValidator && m_nodeConfig->ethereumTxGossipEnabled())
         {
             TxGossipService::ValidateFn validate =
                 [validator = m_gossipValidator](
@@ -151,7 +152,7 @@ public:
                     txvalidator::AdmissionContext::PoolAdmission,
                     txvalidator::SignaturePolicy::Required);
             };
-            m_txGossip = std::make_shared<TxGossipService>(*m_gossipMemPool, std::move(validate));
+            m_txGossip = std::make_shared<TxGossipService>(*m_memPool, std::move(validate));
         }
     }
 
@@ -1144,6 +1145,16 @@ private:
                                     m_ledgerConfigState->set(
                                         task::syncWait(ledger::getLedgerConfig(*m_ledger)));
                                 }
+                                // Same contract for the pool: the committed block's
+                                // transactions leave it, or a syncing node's per-sender
+                                // count and pending-cost budget keep charging senders for
+                                // transactions the chain already executed.
+                                if (m_memPool)
+                                {
+                                    auto committed =
+                                        m_globalStateStorageInitializer->storage().fork();
+                                    m_memPool->remove(committed);
+                                }
                                 prevHeader = block.header;
                                 lastDownloadedHash = block.hash;
                                 INITIALIZER_LOG(INFO)
@@ -1383,7 +1394,7 @@ private:
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     std::shared_ptr<Verifier> m_sharedVerifier;
     std::shared_ptr<engine::engine_common::ClSyncCoordination> m_clSync;
-    bcos::txpool::MemPoolImpl* m_gossipMemPool = nullptr;
+    bcos::txpool::MemPoolImpl* m_memPool = nullptr;
     std::shared_ptr<bcos::txvalidator::TxValidator> m_gossipValidator;
     std::shared_ptr<TxGossipService> m_txGossip;
 

@@ -36,6 +36,10 @@ DERIVE_BCOS_EXCEPTION(InvalidBlobTransaction);
 /// not something to report back as a transaction status.
 DERIVE_BCOS_EXCEPTION(NullTransaction);
 
+/// The pool's nonce form: a "0x" hex (Web3) or decimal (BCOS) string to int64; nullopt when
+/// the string is neither.
+std::optional<int64_t> parseNonce(std::string_view nonce);
+
 struct TransactionData
 {
     protocol::Transaction::Ptr m_transaction;
@@ -74,6 +78,12 @@ struct MemPoolConfig
     /// Milliseconds a transaction may sit in the pool before it is evicted; 0 = never
     /// expires (the L2 default).
     int64_t txLifetimeMs = 0;
+    /// Max pooled transactions per sender, executable and gapped alike; 0 = unlimited (the
+    /// L2 default). A new (sender, nonce) slot past the cap is refused with
+    /// SenderTxLimitExceeded; replacing a held nonce does not count. Stricter than geth,
+    /// which has no per-account cap on executable transactions (AccountSlots 16 is a
+    /// guaranteed minimum under global pressure; AccountQueue 64 bounds gapped ones only).
+    std::size_t maxTxsPerSender = 0;
     /// EIP-4844: max blob versioned hashes one transaction may carry (L1 only).
     std::size_t maxBlobsPerTransaction = 6;
     /// When set (EL mode), the per-transaction blob limit resolves dynamically instead of
@@ -401,6 +411,24 @@ public:
     /// seal could pick the transaction without its sidecar.
     protocol::TransactionStatus tryAdd(protocol::Transaction::Ptr transaction,
         std::optional<engine::BlobTxSidecar> sidecar = std::nullopt);
+
+    /// The most the sender's pooled transactions can cost together (Σ protocol::costAt on
+    /// @p basis, 512-bit), leaving out the one at @p excludeNonce (the slot an incoming transaction
+    /// would replace). The pending balance budget: admission charges a new transaction
+    /// against this on top of its own cost (geth's ValidateTransactionWithState +
+    /// list.totalcost), so a sender cannot pool more than its balance funds.
+    /// Two differences from geth, both on the conservative side: every pooled nonce counts
+    /// (geth sums the executable list only, so a transaction that fills a nonce gap here is
+    /// budgeted against the gapped ones already pooled), and the figure is read before
+    /// tryAdd() takes the lock, so two concurrent submissions from one sender can both pass
+    /// against the same figure and together exceed the budget (the surplus fails at
+    /// execution, as every pooled transaction did before the budget existed); folding the
+    /// check into insertLocked() is a follow-up.
+    /// @p basis is the chain's cost basis (protocol::CostBasis): the full maxCost where gas is
+    /// charged, the value alone on a free-gas chain -- the same basis admission charges the new
+    /// transaction on. No default: the validator decides the basis once, callers forward it.
+    u512 pendingCost(
+        std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis) const;
 
     /// The sidecar of a pooled blob transaction, or nullopt when the transaction is not
     /// pooled or carries none.

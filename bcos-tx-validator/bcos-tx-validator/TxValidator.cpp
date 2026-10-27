@@ -185,6 +185,12 @@ void TxValidator::setRollupCostFn(RollupCostFn rollupCost)
     m_rollupCost = std::make_shared<const RollupCostFn>(std::move(rollupCost));
 }
 
+void TxValidator::setPendingCostFn(PendingCostFn pendingCost)
+{
+    WriteGuard guard(x_lateBound);
+    m_pendingCost = std::make_shared<const PendingCostFn>(std::move(pendingCost));
+}
+
 namespace
 {
 /// What every stage sees: the normalized transaction, its routing key and the validator's own
@@ -245,6 +251,10 @@ struct StateInputs
     /// Asked of the bound RollupCostFn exactly when the set contains Check::L1Cost. nullopt =
     /// no rollup cost on this chain (nothing bound, or the callable declined): it stands down.
     std::optional<u512> const& rollupCost;
+    /// What the sender's pooled transactions already commit it to (PendingCostFn, minus the
+    /// slot this transaction replaces); 0 when nothing is bound. Balance and L1Cost charge the
+    /// transaction on top of it.
+    u512 pendingCost;
 };
 
 /// Inputs of the pool stage. Either checker may be null: see checkBcosPoolNonce and
@@ -587,36 +597,41 @@ TransactionStatus checkInitCodeSize(StateInputs const& in)
     return TransactionStatus::None;
 }
 
-/// What the sender must cover before any rollup cost -- geth's tx.Cost(). Which fee it charges
-/// depends on the lane and on whether this chain charges gas at all:
-///   OP lane                                    -> value + gasLimit * effectiveGasPrice, always
+/// The one place that decides what this chain charges a sender for. Which fee it charges
+/// depends on the lane and on whether the chain charges gas at all:
+///   OP lane                                    -> maxCost, always
 ///   baseFee == 0 (tx_gas_price unset or "0")  -> gas is free; only `value` has to be covered
-///   baseFee > 0                                -> value + gasLimit * effectiveGasPrice
+///   baseFee > 0                                -> maxCost
 /// The free-gas rule mirrors the FISCO one. It differs from evmone, which always charges
 /// max_gas_price * gas_limit + value, because on a free-gas FISCO chain the sender is never
 /// actually debited the fee cap they declared -- charging it at admission would reject
 /// transactions that execute perfectly well. The OP lane has no such chain: its execution runs
 /// the evmone comparison unconditionally (OpExecutionPolicy.h validateTransaction), so a
 /// zero-base-fee OP head must not admit a positive-fee transaction that execution refuses.
-///
-/// 512-bit, deliberately. bcos::u256 carries boost::multiprecision::unchecked, so
-/// gasLimit * gasPrice + value is reduced mod 2^256 with no signal -- with a maxFeePerGas
-/// near 2^256-1 the product comes back small and an unfundable transaction is admitted.
-/// Widening FIRST is what makes this correct: two 256-bit operands multiply into at most 512
-/// bits, so the u512 product cannot wrap even though u512 is itself `unchecked`.
+/// Both the new transaction (gasAndValueCost) and the sender's pooled ones (the PendingCostFn)
+/// are charged on this basis, so the budget never bills a fee the chain does not debit.
+protocol::CostBasis costBasisOf(ChainView const& chain)
+{
+    return (chain.baseFee != 0 || chain.opLane) ? protocol::CostBasis::MaxCost :
+                                                  protocol::CostBasis::ValueOnly;
+}
+
+/// What the sender must cover before any rollup cost -- geth's tx.Cost() on a gas-charging
+/// chain, the value alone on a free-gas one (protocol::costAt). The arithmetic lives in
+/// protocol::maxCost and is 512-bit deliberately: bcos::u256 carries
+/// boost::multiprecision::unchecked, so gasLimit * fee cap + value computed at 256 bits wraps
+/// with no signal and a near-2^256 fee cap would admit an unfundable transaction.
 u512 gasAndValueCost(StateInputs const& in)
 {
-    u512 required{in.tx.value()};
-    if (in.chain.baseFee != 0 || in.chain.opLane)
-    {
-        required += u512{in.tx.gasLimit()} * u512{protocol::effectiveGasPrice(in.tx)};
-    }
-    return required;
+    return protocol::costAt(in.tx, costBasisOf(in.chain));
 }
 
 TransactionStatus checkBalance(StateInputs const& in)
 {
-    if (u512{in.sender.value().balance} < gasAndValueCost(in))
+    // The sender's pooled transactions are paid first (geth's ValidateTransactionWithState
+    // adds list.totalcost): the balance must fund them AND this one, or the pool would hold
+    // transactions the sender cannot pay for when its turn comes.
+    if (u512{in.sender.value().balance} < gasAndValueCost(in) + in.pendingCost)
     {
         return TransactionStatus::InsufficientFunds;
     }
@@ -631,7 +646,7 @@ TransactionStatus checkL1Cost(StateInputs const& in)
     }
     // op-geth ValidateTransactionWithState: balance < tx.Cost() + rollupCost. Both addends are
     // 512-bit already; their sum is below 2^322 (gasLimit is 64-bit), so nothing wraps.
-    if (u512{in.sender.value().balance} < gasAndValueCost(in) + *in.rollupCost)
+    if (u512{in.sender.value().balance} < gasAndValueCost(in) + *in.rollupCost + in.pendingCost)
     {
         return TransactionStatus::InsufficientFunds;
     }
@@ -1022,8 +1037,25 @@ task::Task<TransactionStatus> TxValidator::verify(
         {
             rollupCost = co_await readRollupCost(tx, *chain.config);
         }
-        const StateInputs inputs{
-            .tx = tx, .kind = kind, .chain = chain, .sender = sender, .rollupCost = rollupCost};
+        u512 pendingCost = 0;
+        if ((checks & (Check::Balance | Check::L1Cost)) != Check::None)
+        {
+            std::shared_ptr<const PendingCostFn> pendingCostFn;
+            {
+                ReadGuard guard(x_lateBound);
+                pendingCostFn = m_pendingCost;
+            }
+            if (pendingCostFn)
+            {
+                pendingCost = (*pendingCostFn)(tx.sender(), tx.nonce(), costBasisOf(chain));
+            }
+        }
+        const StateInputs inputs{.tx = tx,
+            .kind = kind,
+            .chain = chain,
+            .sender = sender,
+            .rollupCost = rollupCost,
+            .pendingCost = pendingCost};
         if (auto status = runStage(c_stateRegistry, checks, inputs);
             status != TransactionStatus::None)
         {

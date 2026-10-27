@@ -1615,6 +1615,53 @@ BOOST_FIXTURE_TEST_CASE(sealCapsBlockBlobsAtScheduleMaximum, EL1BFixture)
     BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
 }
 
+// Committing a self-built payload drops its transactions from the pool: the real executor
+// advances the sender's nonce, and newPayload's VALID answer leaves the pool without the
+// transfer the block carried.
+BOOST_FIXTURE_TEST_CASE(selfBuiltCommitDropsExecutedTransactions, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto senderKey = secp.generateKeyPair();
+    auto const sender = el1bEvmcAddress(senderKey->address(nodeA.cryptoSuite->hashImpl()));
+    auto const recipient = el1bEvmcAddress(0x21);
+
+    bcos::rpc::Web3Transaction transfer;
+    transfer.type = bcos::rpc::TransactionType::EIP1559;
+    transfer.chainId = 1;
+    transfer.nonce = 0;
+    transfer.maxPriorityFeePerGas = u256(100000000);
+    transfer.maxFeePerGas = u256(2000000000);
+    transfer.gasLimit = 21000;
+    transfer.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    transfer.value = u256(1);
+    auto raw = el1bSign(transfer, *senderKey);
+    auto const txHash =
+        bcos::rpc::decodeWeb3RawTransaction(bcos::bytesConstRef(raw.data(), raw.size()), hashImpl)
+            ->hash();
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {{sender, u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, raw);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_REQUIRE_EQUAL(data->executionPayload.transactions.size(), 1);
+    // Sealed, but still pooled until the block is committed.
+    BOOST_CHECK(memPool.get(std::vector{txHash}).front());
+
+    NewPayloadRequest request;
+    request.executionPayload = data->executionPayload;
+    request.parentBeaconBlockRoot = data->parentBeaconBlockRoot;
+    auto committed = task::syncWait(service.newPayload(request, 3));
+    BOOST_REQUIRE(committed.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK(!memPool.get(std::vector{txHash}).front());
+}
+
 // The pool fills the block against the header's gasLimit, not a transaction count: with a
 // 42000-gas parent (inherited limit) and three 21000-gas transfers pooled, the built payload
 // carries exactly two and uses the whole limit; the third is left for the next block instead

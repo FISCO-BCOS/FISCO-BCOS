@@ -125,9 +125,14 @@ struct StubMemPool
     {
         removed.insert(removed.end(), hashes.begin(), hashes.end());
     }
+    /// remove(state) calls: one per build and, since the commit lanes prune too, one per
+    /// committed external newPayload.
+    int removeCalls = 0;
     template <class View>
     void remove(View&)
-    {}
+    {
+        ++removeCalls;
+    }
     /// The gas budget the service handed the last seal() (the attributes' gasLimit minus
     /// the forced envelopes' gas), and what that seal emitted.
     int64_t lastSealGasLimit = -1;
@@ -1522,6 +1527,8 @@ BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip)
     BOOST_REQUIRE_EQUAL(static_cast<int>(built.payloadStatus.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_REQUIRE(built.payloadId.has_value());
+    // noTxPool attributes: the build seals nothing from the pool and skips its prune.
+    BOOST_CHECK_EQUAL(pair.memPool.removeCalls, 0);
 
     auto payload = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
     BOOST_REQUIRE(payload);
@@ -1537,6 +1544,9 @@ BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip)
     BOOST_CHECK_EQUAL(static_cast<int>(status.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_REQUIRE(pair.service.lastExecutedHeader());
+    // Committing the built payload prunes the pool: its transactions are executed now and
+    // must stop counting against the sender's pending budget before the next build.
+    BOOST_CHECK_EQUAL(pair.memPool.removeCalls, 1);
 }
 
 BOOST_AUTO_TEST_CASE(op_newpayload_failure_keeps_last_executed_header)
@@ -1766,6 +1776,9 @@ BOOST_AUTO_TEST_CASE(op_newpayload_built_header_commit_failure_falls_through_to_
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_CHECK_EQUAL(delegate->commitCalls, 2);
     BOOST_CHECK_GE(delegate->executeCalls, 1);
+    // The failed built-header commit pruned nothing; the full execute+commit lane (the
+    // verifier's path for blocks it did not build) pruned once after its commit.
+    BOOST_CHECK_EQUAL(pair.memPool.removeCalls, 1);
 }
 
 BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal_error)

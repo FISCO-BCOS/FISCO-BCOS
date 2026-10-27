@@ -182,6 +182,49 @@ BOOST_AUTO_TEST_CASE(insufficientBalanceIsRejected)
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
 }
 
+// The pending balance budget: the sender's pooled transactions are paid before this one, so the
+// balance must cover their cost plus this transaction's. A balance that funds exactly two
+// fixture transactions admits a third only while at most one is pooled.
+BOOST_AUTO_TEST_CASE(pooledCostCountsAgainstTheBalance)
+{
+    AdmitHarness harness;
+    harness.ledgerConfig->setGasPrice({"1", 0});
+    // The fixture transaction: gasLimit 100000 at a 30 gwei fee cap plus value 1.
+    u512 const cost = u512{100000} * u512{30000000000ULL} + 1;
+    harness.account.balance = (cost * 2).convert_to<u256>();
+
+    harness.pendingCost = cost;  // one pooled: this one still fits
+    auto tx = admitTx();
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+    BOOST_CHECK_EQUAL(harness.lastPendingCostSender, std::string(tx->sender()));
+    BOOST_CHECK_EQUAL(harness.lastPendingCostNonce, std::string(tx->nonce()));
+
+    harness.pendingCost = cost * 2;  // two pooled: the third does not
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
+
+    harness.pendingCost.reset();  // nothing bound: committed balance alone, as before
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
+// The pending budget is charged on the chain's cost basis, the one Check::Balance charges the
+// new transaction on: a free-gas chain (no tx_gas_price) asks the pool for values only, so a
+// sender whose balance covers its pooled values is not refused for fee caps the chain never
+// debits; a chain with a base fee asks for the full maxCost.
+BOOST_AUTO_TEST_CASE(pendingBudgetFollowsTheChainsCostBasis)
+{
+    AdmitHarness harness;
+    harness.pendingCost = u512{1};  // one pooled transfer's value on the free-gas chain
+    harness.account.balance = 2;    // funds that value and this transaction's value (1)
+    auto tx = admitTx();
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+    BOOST_REQUIRE(harness.lastPendingCostBasis.has_value());
+    BOOST_CHECK(*harness.lastPendingCostBasis == protocol::CostBasis::ValueOnly);
+
+    harness.ledgerConfig->setGasPrice({"1", 0});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);  // gas is charged now
+    BOOST_CHECK(*harness.lastPendingCostBasis == protocol::CostBasis::MaxCost);
+}
+
 // The overflow regression. gasLimit * effectiveGasPrice + value is computed at 512 bits because
 // bcos::u256 carries boost::multiprecision::unchecked: at 256 bits the product of the fixture's
 // gasLimit and a near-2^256 gas price wraps to a small number and an unfundable transaction is
@@ -569,6 +612,26 @@ BOOST_AUTO_TEST_CASE(blobTransactionIsAdmittedWhenTheChainAllowsIt)
     auto tx = admitTx({.type = rpc::TransactionType::EIP4844,
         .maxFeePerBlobGas = 1,
         .blobVersionedHashes = {h256("0x01" + std::string(62, '0'))}});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
+// Check::Balance charges blob gas at the blob fee cap (geth tx.Cost(), protocol::maxCost): a
+// balance that funds exactly gasLimit x fee cap + value refuses the one-blob transaction, and
+// one blob's gas more (BLOB_GAS_PER_BLOB = 131072 at maxFeePerBlobGas 1) admits it.
+BOOST_AUTO_TEST_CASE(blobGasCountsAgainstTheBalance)
+{
+    AdmitHarness harness;
+    harness.blobPolicy = {.allow = true};
+    harness.ledgerConfig->setGasPrice({"1", 0});
+    u512 const executionCost = u512{100000} * u512{30000000000ULL} + 1;
+    auto tx = admitTx({.type = rpc::TransactionType::EIP4844,
+        .maxFeePerBlobGas = 1,
+        .blobVersionedHashes = {h256("0x01" + std::string(62, '0'))}});
+
+    harness.account.balance = executionCost.convert_to<u256>();
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
+
+    harness.account.balance = (executionCost + u512{131072}).convert_to<u256>();
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
 }
 

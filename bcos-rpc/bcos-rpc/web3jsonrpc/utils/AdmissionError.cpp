@@ -81,6 +81,7 @@ constexpr auto c_table = std::to_array<Entry>({
     {TS::EmptyAuthorizationList, Web3DefaultError, "EIP-7702 transaction with empty auth list"},
     {TS::NonceHasMaxValue, Web3DefaultError, "nonce has max value"},
     {TS::FeeCapLessThanBaseFee, Web3DefaultError, "max fee per gas less than block base fee"},
+    {TS::SenderTxLimitExceeded, Web3DefaultError, "account limit exceeded"},
 });
 static_assert(std::ranges::adjacent_find(c_table, std::ranges::greater_equal{}, &Entry::status) ==
                   c_table.end(),

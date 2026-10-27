@@ -359,6 +359,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             memPoolConfig.capacity = m_nodeConfig->ethereumMempoolCapacity();
             memPoolConfig.txLifetimeMs =
                 m_nodeConfig->ethereumMempoolTxLifetimeMinutes() * 60 * 1000;
+            memPoolConfig.maxTxsPerSender = m_nodeConfig->ethereumMempoolMaxTxsPerSender();
             memPoolConfig.blobForks =
                 bcos::protocol::BlobForkTimes{.cancunTime = forkSchedule.cancunTime,
                     .pragueTime = forkSchedule.pragueTime,
@@ -1094,6 +1095,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             &bcos::txpool::isSystemTransaction, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
             blobPolicy, evmcRevisionSchedule);
         m_memPoolValidator->setScheduler(m_scheduler);
+        // The balance must fund the sender's already-pooled transactions as well as the new
+        // one (MemPoolImpl::pendingCost): without it a sender can pool more than it can pay
+        // for and the surplus fails at execution instead of at the door.
+        m_memPoolValidator->setPendingCostFn(
+            [memPoolInitializer = m_memPoolInitializer](
+                std::string_view sender, std::string_view nonce, bcos::protocol::CostBasis basis) {
+                return memPoolInitializer->memPool().pendingCost(sender, nonce, basis);
+            });
         // OP lane: the balance also covers the rollup cost (Check::L1Cost). Only this validator
         // gets the callable: the txpool's cannot serve an OP chain (the OP gate above refuses
         // every driver but Engine and DebugFollowDevp2p) and the follow driver builds no

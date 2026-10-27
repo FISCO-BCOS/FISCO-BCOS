@@ -1024,6 +1024,13 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
         m_ledgerConfigState->set(std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
     }
+    // The block's transactions are executed now: drop them from the pool so the sender's
+    // per-sender count and pending-cost budget stop charging for them before the next
+    // build (which would prune them itself).
+    {
+        auto committed = m_globalStateStorage.fork();
+        m_memPool.remove(committed);
+    }
 
     co_return engine_common::makeStatus(
         PayloadValidationStatus::Valid, cached->executionPayload.blockHash, std::nullopt);
@@ -1135,6 +1142,14 @@ task::Task<PayloadStatus> EthEngineService<MemPoolType, GlobalStateStorageType, 
             auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
             m_ledgerConfigState->set(
                 std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
+        }
+        // ...and drops the block's transactions from the pool. Only buildPayload pruned
+        // before, so on a node that never builds (an EL whose CL rarely elects it, a pure
+        // RPC node) executed transactions stayed pooled until expiry, and the pool's
+        // per-sender count and pending-cost budget kept charging the sender for them.
+        {
+            auto committed = m_globalStateStorage.fork();
+            m_memPool.remove(committed);
         }
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);

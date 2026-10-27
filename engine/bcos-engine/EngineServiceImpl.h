@@ -833,6 +833,12 @@ private:
                 [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
             std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
         }
+        // The block's transactions are executed now: drop them from the pool so the sender's
+        // pending-cost budget stops charging for them before the next build prunes.
+        {
+            auto committed = m_globalStateStorage.get().fork();
+            m_memPool.get().remove(committed);
+        }
 
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);

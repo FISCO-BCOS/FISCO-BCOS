@@ -714,6 +714,13 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
                 });
             if (!commitError)
             {
+                // The block's transactions are executed now: drop them from the pool so
+                // the sender's pending-cost budget stops charging for them before the
+                // next build (which would prune them itself).
+                {
+                    auto committed = m_globalStateStorage.fork();
+                    m_memPool.remove(committed);
+                }
                 std::lock_guard lock(m_lastExecutedHeaderMutex);
                 m_lastExecutedHeader = builtHeader;
                 co_return makeStatus(
@@ -903,6 +910,13 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     if (commitError)
     {
         co_return mapDelegateError(*commitError, latestValidHash);
+    }
+    // The committed block's transactions leave the pool here as they do after a build:
+    // a verifier node never builds, and without this its pool would keep charging the
+    // sender (pending-cost budget) for transactions the sequencer already executed.
+    {
+        auto committed = m_globalStateStorage.fork();
+        m_memPool.remove(committed);
     }
 
     {

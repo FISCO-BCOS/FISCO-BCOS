@@ -28,6 +28,7 @@
 #include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/lexical_cast.hpp>
@@ -286,6 +287,27 @@ struct ExternalPayloadFixture
     }
 };
 
+/// A pool-shaped transaction (sender bytes + nonce) for the prune assertions: the pool keys
+/// on Transaction::sender()/nonce(), nothing here is executed.
+class PoolTestTransactionImpl : public bcostars::protocol::TransactionImpl
+{
+public:
+    void markClean() { setTainted(false); }
+};
+
+protocol::Transaction::Ptr makePoolTx(std::string_view senderBytes, int64_t nonce)
+{
+    auto tx = std::make_shared<PoolTestTransactionImpl>();
+    tx->mutableInner().data.gasLimit = 21000;
+    tx->setNonce(std::to_string(nonce));
+    tx->forceSender(bytes(senderBytes.begin(), senderBytes.end()));
+    crypto::Keccak256 hasher;
+    tx->calculateHash(hasher);
+    tx->markClean();
+    tx->setImportTime(nonce + 1);
+    return tx;
+}
+
 WithdrawalV1 makeWithdrawal(uint64_t index, uint64_t validator, uint64_t amount)
 {
     return WithdrawalV1{.index = index,
@@ -506,6 +528,32 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadVerifierInvalidMapsToInvalid, ExternalPay
     BOOST_REQUIRE(status.validationError.has_value());
     BOOST_CHECK_EQUAL(*status.validationError, "stateRoot mismatch");
     BOOST_CHECK_EQUAL(mockVerifier->calls, 1);
+}
+
+// A committed external payload drops the sender's executed transactions from the pool: the
+// post-commit state says nonce 1, so the pooled nonce 0 goes and nonce 1 stays. Only the
+// build lane pruned before; an EL that never builds kept every executed transaction pooled
+// (and charged against the sender's per-sender cap and pending budget) until expiry.
+BOOST_FIXTURE_TEST_CASE(externalPayloadCommitDropsExecutedTransactions, ExternalPayloadFixture)
+{
+    seedHead();
+    std::string sender("ssssssssssssssssssss", 20);
+    auto executed = makePoolTx(sender, 0);
+    auto pending = makePoolTx(sender, 1);
+    memPool.add(std::vector{executed, pending});
+    // The mock verifier commits no state; the block's effect on the account is written
+    // here as the post-commit state the prune must read.
+    storageFixture.setNonce(sender, "1");
+
+    auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1);
+    // The mock answers the fixture default era for the V2 payload; the prune runs after Valid.
+    auto status = task::syncWait(service.newPayload(request, 2));
+    BOOST_REQUIRE(status.status == PayloadValidationStatus::Valid);
+
+    auto fetched = memPool.get(std::vector{executed->hash(), pending->hash()});
+    BOOST_REQUIRE_EQUAL(fetched.size(), 2);
+    BOOST_CHECK(!fetched[0]);
+    BOOST_CHECK(fetched[1]);
 }
 
 BOOST_FIXTURE_TEST_CASE(externalPayloadVerifierStaleMapsToSyncing, ExternalPayloadFixture)
