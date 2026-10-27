@@ -26,7 +26,7 @@ namespace bcos::task
 template <typename Ref, typename Val = void, typename Alloc = void>
 using Generator = std::generator<Ref, Val, Alloc>;
 using std::ranges::elements_of;
-}
+}  // namespace bcos::task
 #else
 #include <concepts>
 #include <coroutine>
@@ -42,14 +42,14 @@ using std::ranges::elements_of;
 #include <vector>
 namespace bcos::task
 {
-template <std::ranges::range Range, typename Alloc = std::allocator<std::byte>>
+template <std::ranges::range Range, typename Alloc = std::allocator<std::byte> >
 struct elements_of
 {
     [[no_unique_address]] Range range;
     [[no_unique_address]] Alloc allocator = Alloc();
 };
 
-template <typename Range, typename Alloc = std::allocator<std::byte>>
+template <typename Range, typename Alloc = std::allocator<std::byte> >
 elements_of(Range&&, Alloc = Alloc()) -> elements_of<Range&&, Alloc>;
 
 namespace detail
@@ -57,7 +57,7 @@ namespace detail
 template <typename Yielded>
 struct GeneratorState
 {
-    std::vector<std::coroutine_handle<>> coroutines;
+    std::vector<std::coroutine_handle<> > coroutines;
     std::add_pointer_t<Yielded> value = nullptr;
 };
 
@@ -68,8 +68,8 @@ class GeneratorAllocator
 {
     struct Block
     {
-        alignas(__STDCPP_DEFAULT_NEW_ALIGNMENT__)
-            std::byte storage[__STDCPP_DEFAULT_NEW_ALIGNMENT__];
+        alignas(
+            __STDCPP_DEFAULT_NEW_ALIGNMENT__) std::byte storage[__STDCPP_DEFAULT_NEW_ALIGNMENT__];
     };
 
     using Deallocator = void (*)(void*, std::size_t) noexcept;
@@ -86,15 +86,14 @@ class GeneratorAllocator
 
     static Deallocator* deallocatorAddress(std::uintptr_t address, std::size_t frameSize) noexcept
     {
-        return reinterpret_cast<Deallocator*>(
-            alignUp(address + frameSize, alignof(Deallocator)));
+        return reinterpret_cast<Deallocator*>(alignUp(address + frameSize, alignof(Deallocator)));
     }
 
     template <typename Alloc>
     static Alloc* allocatorAddress(std::uintptr_t address, std::size_t frameSize) noexcept
     {
-        auto afterDeallocator = reinterpret_cast<std::uintptr_t>(
-                                    deallocatorAddress(address, frameSize)) +
+        auto afterDeallocator =
+            reinterpret_cast<std::uintptr_t>(deallocatorAddress(address, frameSize)) +
             sizeof(Deallocator);
         return reinterpret_cast<Alloc*>(alignUp(afterDeallocator, alignof(Alloc)));
     }
@@ -102,8 +101,8 @@ class GeneratorAllocator
     template <typename Alloc>
     static std::size_t allocationSize(std::size_t frameSize) noexcept
     {
-        return frameSize + alignof(Deallocator) - 1 + sizeof(Deallocator) +
-            alignof(Alloc) - 1 + sizeof(Alloc);
+        return frameSize + alignof(Deallocator) - 1 + sizeof(Deallocator) + alignof(Alloc) - 1 +
+               sizeof(Alloc);
     }
 
     template <typename Alloc>
@@ -162,8 +161,8 @@ public:
     }
 
     template <typename This, typename Alloc, typename... Args>
-    void* operator new(std::size_t size, const This&, std::allocator_arg_t, const Alloc& alloc,
-        const Args&...)
+    void* operator new(
+        std::size_t size, const This&, std::allocator_arg_t, const Alloc& alloc, const Args&...)
         requires(std::is_void_v<Allocator> || std::convertible_to<const Alloc&, Allocator>)
     {
         using Selected = std::conditional_t<std::is_void_v<Allocator>, Alloc, Allocator>;
@@ -179,19 +178,19 @@ public:
 }  // namespace detail
 
 template <typename Ref, typename Value = void, typename Allocator = void>
-class Generator : public std::ranges::view_interface<Generator<Ref, Value, Allocator>>
+class Generator : public std::ranges::view_interface<Generator<Ref, Value, Allocator> >
 {
     using ValueType = std::conditional_t<std::is_void_v<Value>, std::remove_cvref_t<Ref>, Value>;
     using Reference = std::conditional_t<std::is_void_v<Value>, Ref&&, Ref>;
     using RRef = std::conditional_t<std::is_reference_v<Reference>,
         std::remove_reference_t<Reference>&&, Reference>;
 
-    static_assert(std::is_object_v<ValueType> &&
-            std::same_as<ValueType, std::remove_cv_t<ValueType>>,
+    static_assert(
+        std::is_object_v<ValueType> && std::same_as<ValueType, std::remove_cv_t<ValueType> >,
         "Generator value must be a cv-unqualified object type");
-    static_assert(std::is_reference_v<Reference> ||
-            (std::is_object_v<Reference> &&
-                std::same_as<Reference, std::remove_cv_t<Reference>> &&
+    static_assert(
+        std::is_reference_v<Reference> ||
+            (std::is_object_v<Reference> && std::same_as<Reference, std::remove_cv_t<Reference> > &&
                 std::copy_constructible<Reference>),
         "Generator reference must be a reference or a copyable cv-unqualified object type");
     static_assert(std::common_reference_with<Reference&&, ValueType&>);
@@ -259,8 +258,8 @@ public:
             std::is_nothrow_constructible_v<std::remove_cvref_t<yielded>,
                 const std::remove_reference_t<yielded>&>)
             requires(std::is_rvalue_reference_v<yielded> &&
-                std::constructible_from<std::remove_cvref_t<yielded>,
-                    const std::remove_reference_t<yielded>&>)
+                     std::constructible_from<std::remove_cvref_t<yielded>,
+                         const std::remove_reference_t<yielded>&>)
         {
             return copy_awaiter{std::remove_cvref_t<yielded>(value), *m_state};
         }
@@ -269,24 +268,23 @@ public:
             requires std::same_as<typename Generator<R2, V2, A2>::yielded, yielded>
         auto yield_value(elements_of<Generator<R2, V2, A2>&&, Unused> element) noexcept
         {
-            return yield_sequence_awaiter<Generator<R2, V2, A2>>{std::move(element.range)};
+            return yield_sequence_awaiter<Generator<R2, V2, A2> >{std::move(element.range)};
         }
 
         template <typename R2, typename V2, typename A2, typename Unused>
             requires std::same_as<typename Generator<R2, V2, A2>::yielded, yielded>
         auto yield_value(elements_of<Generator<R2, V2, A2>&, Unused> element) noexcept
         {
-            return yield_sequence_awaiter<Generator<R2, V2, A2>>{std::move(element.range)};
+            return yield_sequence_awaiter<Generator<R2, V2, A2> >{std::move(element.range)};
         }
 
         template <std::ranges::input_range Range, typename Alloc>
             requires std::convertible_to<std::ranges::range_reference_t<Range>, yielded>
         auto yield_value(elements_of<Range, Alloc> element)
         {
-            auto nested = [](std::allocator_arg_t, Alloc,
-                              std::ranges::iterator_t<Range> iterator,
-                              std::ranges::sentinel_t<Range> sentinel)
-                -> Generator<yielded, void, Alloc> {
+            auto nested =
+                [](std::allocator_arg_t, Alloc, std::ranges::iterator_t<Range> iterator,
+                    std::ranges::sentinel_t<Range> sentinel) -> Generator<yielded, void, Alloc> {
                 for (; iterator != sentinel; ++iterator)
                 {
                     co_yield static_cast<yielded>(*iterator);
@@ -363,7 +361,7 @@ private:
     {}
 
     std::coroutine_handle<promise_type> m_coroutine;
-    std::unique_ptr<detail::GeneratorState<yielded>> m_active;
+    std::unique_ptr<detail::GeneratorState<yielded> > m_active;
 };
 
 template <typename Ref, typename Value, typename Allocator>
@@ -375,9 +373,7 @@ public:
 
     Iterator(const Iterator&) = delete;
     Iterator& operator=(const Iterator&) = delete;
-    Iterator(Iterator&& other) noexcept
-      : m_coroutine(std::exchange(other.m_coroutine, {}))
-    {}
+    Iterator(Iterator&& other) noexcept : m_coroutine(std::exchange(other.m_coroutine, {})) {}
 
     Iterator& operator=(Iterator&& other) noexcept
     {
@@ -419,8 +415,8 @@ class GeneratorAccess
 {
 public:
     template <typename Ref, typename Value, typename Allocator, typename Yielded>
-    static std::coroutine_handle<> start(Generator<Ref, Value, Allocator>& generator,
-        GeneratorState<Yielded>& state) noexcept
+    static std::coroutine_handle<> start(
+        Generator<Ref, Value, Allocator>& generator, GeneratorState<Yielded>& state) noexcept
     {
         auto coroutine = generator.m_coroutine;
         coroutine.promise().m_state = &state;
@@ -452,10 +448,7 @@ struct Generator<Ref, Value, Allocator>::promise_type::yield_sequence_awaiter
         return detail::GeneratorAccess::start(m_generator, *handle.promise().m_state);
     }
 
-    void await_resume()
-    {
-        detail::GeneratorAccess::rethrow(m_generator);
-    }
+    void await_resume() { detail::GeneratorAccess::rethrow(m_generator); }
 };
 }  // namespace bcos::task
 #endif
