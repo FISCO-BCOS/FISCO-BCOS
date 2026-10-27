@@ -131,9 +131,10 @@ public:
         auto const revision =
             scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0));
         ExternalL1Context context;
-        // Throws UnsupportedFork for a revision this binary cannot map to a header era
-        // — the same loud failure the number-keyed derivation had.
-        context.forkVersion = engine::detail::ethBlockVersionFor(revision);
+        // The build lane derives the header era from this (ethBlockVersionFor) and throws
+        // UnsupportedFork for a revision this binary cannot map — the same loud failure the
+        // number-keyed derivation had.
+        context.revision = revision;
         context.baseFee = devp2p::sync::computeNextBaseFee(parentHeader);
         context.excessBlobGas = devp2p::sync::computeNextExcessBlobGas(parentHeader,
             devp2p::sync::toGasSchedule(protocol::blobScheduleForTimestamp(

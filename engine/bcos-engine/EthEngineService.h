@@ -207,8 +207,9 @@ public:
     /// - updateForkchoice (FCU): instance-gated by m_maxEngineVersion (V1–V3 for
     /// the default-constructed service).
     /// - newPayload: V1–V4 (Isthmus V4 empty-lists shape).
-    /// - getPayload: V1–V5 via the tracker's window (the V2 build answers V1–V2,
-    /// the V3 build answers V1–V5).
+    /// - getPayload: V1–V5 via the tracker's window (the V1 build answers V1–V2, the V2
+    /// build V2, the V3 build V3–V5), and on the L1 lane the one method whose fork window holds the
+    /// payload's revision (requireGetPayloadShape).
     task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
     {
