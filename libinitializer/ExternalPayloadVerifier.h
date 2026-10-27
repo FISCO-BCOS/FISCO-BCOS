@@ -147,11 +147,9 @@ public:
         co_return context;
     }
 
-    std::optional<bcos::protocol::EthBlockVersion> forkVersionAt(
-        int64_t timestampSeconds) const override
+    evmc_revision revisionAt(int64_t timestampSeconds) const override
     {
-        return engine::detail::tryEthBlockVersionFor(
-            scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0)));
+        return scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0));
     }
 
     task::Task<engine::engine_common::ExternalBuildResult> buildL1Block(
