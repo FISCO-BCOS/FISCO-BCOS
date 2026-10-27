@@ -468,6 +468,101 @@ BOOST_AUTO_TEST_CASE(seal_gas_budget_keeps_highest_tips)
     BOOST_CHECK_EQUAL(std::string(out[1]->sender()), senderC);
 }
 
+// Per-sender cap: a third pooled nonce of the same sender is refused, another sender is not,
+// and replacing a held nonce does not count as a new slot.
+BOOST_AUTO_TEST_CASE(per_sender_cap_refuses_the_next_nonce_but_not_a_replacement)
+{
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1, .maxTxsPerSender = 2}};
+    std::string senderA("AAAAAAAAAAAAAAAAAAAA", 20);
+    std::string senderB("BBBBBBBBBBBBBBBBBBBB", 20);
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(senderA, 0, 10, 100)) == protocol::TransactionStatus::None);
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(senderA, 1, 10, 100)) == protocol::TransactionStatus::None);
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(senderA, 2, 10, 100)) ==
+                protocol::TransactionStatus::SenderTxLimitExceeded);
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(senderB, 0, 10, 100)) == protocol::TransactionStatus::None);
+    // add() replaces nonce 1 with a 10%-bumped fee: the slot count stays at 2.
+    pool.add(std::vector{makeFeeTx(senderA, 1, 11, 110)});
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(senderA, 2, 10, 100)) ==
+                protocol::TransactionStatus::SenderTxLimitExceeded);
+}
+
+// Executed transactions leave the per-sender count and the pending budget with remove(state):
+// a sender at the cap, whose first two transactions the chain has executed (account nonce 2),
+// pools the next one again and owes nothing for the executed pair. Every commit lane calls
+// remove(state); before, only the build lane did, so a non-building node kept charging.
+BOOST_AUTO_TEST_CASE(remove_by_state_releases_sender_count_and_pending_cost)
+{
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1, .maxTxsPerSender = 2}};
+    std::string sender("GGGGGGGGGGGGGGGGGGGG", 20);
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(sender, 0, 10, 100)) == protocol::TransactionStatus::None);
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(sender, 1, 10, 100)) == protocol::TransactionStatus::None);
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(sender, 2, 10, 100)) ==
+                protocol::TransactionStatus::SenderTxLimitExceeded);
+    BOOST_CHECK_EQUAL(
+        pool.pendingCost(sender, {}, protocol::CostBasis::MaxCost), u512{kFeeTxGas} * 200);
+
+    FeeMarketStateStorage state{};
+    evmc_address addr{};
+    std::copy_n(sender.begin(), sizeof(addr.bytes), addr.bytes);
+    ledger::account::EVMAccount account(state, addr, ledger::account::nodeAddressTableMode());
+    task::syncWait(account.setNonce("2"));
+    pool.remove(state);
+
+    BOOST_CHECK_EQUAL(pool.pendingCost(sender, {}, protocol::CostBasis::MaxCost), u512{0});
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(sender, 2, 10, 100)) == protocol::TransactionStatus::None);
+    BOOST_CHECK_EQUAL(
+        pool.pendingCost(sender, {}, protocol::CostBasis::MaxCost), u512{kFeeTxGas} * 100);
+}
+
+// pendingCost sums the sender's pooled transactions at their fee caps (gasLimit × cap + value),
+// leaves out the nonce an incoming transaction would replace, and ignores other senders.
+BOOST_AUTO_TEST_CASE(pending_cost_sums_the_sender_at_fee_caps)
+{
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1}};
+    std::string senderA("AAAAAAAAAAAAAAAAAAAA", 20);
+    std::string senderB("BBBBBBBBBBBBBBBBBBBB", 20);
+    pool.add(std::vector{makeFeeTx(senderA, 0, 10, 100), makeFeeTx(senderA, 1, 10, 200),
+        makeFeeTx(senderB, 0, 10, 1000)});
+
+    BOOST_CHECK_EQUAL(
+        pool.pendingCost(senderA, {}, protocol::CostBasis::MaxCost), u512{kFeeTxGas} * (100 + 200));
+    BOOST_CHECK_EQUAL(
+        pool.pendingCost(senderA, "1", protocol::CostBasis::MaxCost), u512{kFeeTxGas} * 100);
+    BOOST_CHECK_EQUAL(
+        pool.pendingCost(senderB, {}, protocol::CostBasis::MaxCost), u512{kFeeTxGas} * 1000);
+    BOOST_CHECK_EQUAL(
+        pool.pendingCost(std::string("CCCCCCCCCCCCCCCCCCCC", 20), {}, protocol::CostBasis::MaxCost),
+        u512{0});
+}
+
+// On the value-only basis (a free-gas chain) the pending budget is the sum of values -- these
+// transfers carry none -- while the default basis charges gasLimit x fee cap.
+BOOST_AUTO_TEST_CASE(pending_cost_honours_the_value_only_basis)
+{
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1}};
+    std::string sender("EEEEEEEEEEEEEEEEEEEE", 20);
+    pool.add(std::vector{makeFeeTx(sender, 0, 10, 100), makeFeeTx(sender, 1, 10, 200)});
+    BOOST_CHECK_EQUAL(
+        pool.pendingCost(sender, {}, protocol::CostBasis::MaxCost), u512{kFeeTxGas} * 300);
+    BOOST_CHECK_EQUAL(pool.pendingCost(sender, {}, protocol::CostBasis::ValueOnly), u512{0});
+}
+
+// A blob transaction's pending cost includes its blob gas at the blob fee cap (geth
+// tx.Cost()): 2 blobs x BLOB_GAS_PER_BLOB x maxFeePerBlobGas on top of gasLimit x fee cap.
+BOOST_AUTO_TEST_CASE(pending_cost_includes_blob_gas_at_the_blob_fee_cap)
+{
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1}};
+    std::string sender("DDDDDDDDDDDDDDDDDDDD", 20);
+    auto tx = std::static_pointer_cast<FeeMarketTransactionImpl>(makeBlobTx(sender, 0, 2));
+    tx->mutableInner().data.gasLimit = 100000;
+    tx->mutableInner().data.maxFeePerGas = toHexU256(u256(7));
+    tx->mutableInner().data.maxFeePerBlobGas = toHexU256(u256(5));
+    tx->markClean();
+    BOOST_CHECK(pool.tryAdd(tx) == protocol::TransactionStatus::None);
+    BOOST_CHECK_EQUAL(pool.pendingCost(sender, {}, protocol::CostBasis::MaxCost),
+        u512{100000} * 7 + u512{2} * u512{protocol::BLOB_GAS_PER_BLOB} * 5);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 // ---------------------------------------------------------------------------

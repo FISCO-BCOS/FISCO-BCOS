@@ -78,12 +78,21 @@ using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 using RollupCostFn = std::function<task::Task<std::optional<u512>>(
     bytesConstRef signedEnvelope, uint64_t gasLimit, ledger::LedgerConfig const& head)>;
 
+/// What the sender's already-pooled transactions can cost at most, leaving out the one at
+/// @p excludeNonce (the slot the incoming transaction would replace), charged on the chain's
+/// cost basis (the same one Check::Balance charges the new transaction on):
+/// MemPoolImpl::pendingCost. Bound by the Engine-driven lanes' initializer; unbound, admission
+/// budgets against the committed balance alone.
+using PendingCostFn = std::function<u512(
+    std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis)>;
+
 /// The one place a transaction is judged admissible, for every ingress of both transaction
 /// pools: JSON-RPC (BCOS and Web3), P2P, and block-proposal verification. The txpool's two
 /// entry points call it -- verifyAndSubmitTransaction for submission and the peer fetch,
 /// enforceSubmitTransaction for proposal verification. The engine-driven mempool (single-node
-/// consensus or the OP engine RPC) has one, EthEndpoint::sendRawTransaction, which calls it and
-/// then reserves the (sender, nonce) with MemPoolImpl::tryAdd.
+/// consensus or the OP engine RPC) has two: EthEndpoint::sendRawTransaction and the eth/68
+/// gossip service (TxGossipService, PoolAdmission); each calls it and then reserves the
+/// (sender, nonce) with MemPoolImpl::tryAdd.
 ///
 /// NOT every way a transaction reaches a block. Two paths do not pass through here, and both
 /// matter to whoever reads the L2 rule below (Check::BcosTxAllowedOnChain):
@@ -139,6 +148,10 @@ public:
 
     /// Bound by the OP lane's initializer after construction. Unbound, Check::L1Cost passes.
     void setRollupCostFn(RollupCostFn rollupCost);
+
+    /// Bound by the mempool lanes' initializer after construction: Check::Balance and
+    /// Check::L1Cost then charge the transaction on top of the sender's pooled cost.
+    void setPendingCostFn(PendingCostFn pendingCost);
 
     /// Run the check set for (kind of @p tx, @p context, @p policy), in c_checkOrder order.
     ///
@@ -203,6 +216,7 @@ private:
     std::weak_ptr<scheduler::SchedulerInterface> m_scheduler;
     /// shared_ptr: a reader copies a pointer under the lock, not the closure.
     std::shared_ptr<const RollupCostFn> m_rollupCost;
+    std::shared_ptr<const PendingCostFn> m_pendingCost;
 };
 
 }  // namespace bcos::txvalidator
