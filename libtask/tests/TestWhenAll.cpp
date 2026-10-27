@@ -17,10 +17,10 @@
  *        deterministic first-in-child-order errors and ordered results.
  * @file TestWhenAll.cpp
  */
-#include "bcos-task/WhenAll.h"
 #include "bcos-task/OneShot.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
+#include "bcos-task/WhenAll.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <chrono>
@@ -215,8 +215,7 @@ BOOST_AUTO_TEST_CASE(FirstErrorInChildOrderWins)
 BOOST_AUTO_TEST_CASE(VariadicMixedVoidAndValues)
 {
     auto counter = std::make_shared<std::atomic<int>>(0);
-    auto result = syncWait(whenAll(
-        []() -> Task<int> { co_return 7; }(),
+    auto result = syncWait(whenAll([]() -> Task<int> { co_return 7; }(),
         [](std::shared_ptr<std::atomic<int>> c) -> Task<void> {
             c->fetch_add(1);
             co_return;
@@ -239,9 +238,9 @@ BOOST_AUTO_TEST_CASE(VariadicRethrowsFirstErrorInChildOrder)
     std::thread worker([&]() {
         try
         {
-            (void)syncWait(whenAll(
-                failInline(std::make_shared<std::atomic<int>>(0), "variadic-first"),
-                gatedValue(gate, 1)));
+            (void)syncWait(
+                whenAll(failInline(std::make_shared<std::atomic<int>>(0), "variadic-first"),
+                    gatedValue(gate, 1)));
         }
         catch (std::runtime_error& e)
         {
@@ -252,6 +251,34 @@ BOOST_AUTO_TEST_CASE(VariadicRethrowsFirstErrorInChildOrder)
     gate->complete();
     worker.join();
     BOOST_CHECK_EQUAL(message, "variadic-first");
+}
+
+BOOST_AUTO_TEST_CASE(VariadicOwnsTemporaryChildrenAcrossStatements)
+{
+    auto all = whenAll(
+        []() -> Task<int> { co_return 11; }(), []() -> Task<std::string> { co_return "owned"; }());
+    auto result = syncWait(std::move(all));
+    BOOST_CHECK_EQUAL(std::get<0>(result), 11);
+    BOOST_CHECK_EQUAL(std::get<1>(result), "owned");
+}
+
+BOOST_AUTO_TEST_CASE(StartedFanOutCompletesAfterAwaiterDestroyed)
+{
+    auto gate0 = std::make_shared<OneShot<>>();
+    auto gate1 = std::make_shared<OneShot<>>();
+    auto counter = std::make_shared<std::atomic<int>>(0);
+    std::vector<Task<void>> tasks;
+    tasks.emplace_back(gatedMark(gate0, counter));
+    tasks.emplace_back(gatedMark(gate1, counter));
+    {
+        auto all = whenAll(std::move(tasks));
+        all.start();
+    }
+    BOOST_CHECK_EQUAL(counter->load(), 0);
+    gate0->complete();
+    BOOST_CHECK_EQUAL(counter->load(), 1);
+    gate1->complete();
+    BOOST_CHECK_EQUAL(counter->load(), 2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

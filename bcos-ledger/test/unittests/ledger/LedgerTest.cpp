@@ -112,6 +112,7 @@ public:
     MockStorage(std::shared_ptr<StorageInterface> prev)
       : storage::StateStorageInterface(prev), StateStorage(prev, false)
     {}
+    void failSetRowsOn(std::string_view tableName) { m_failSetRowsTable.assign(tableName); }
     bcos::Error::Ptr setRows(std::string_view tableName,
         ::ranges::any_view<std::string_view,
             ::ranges::category::random_access | ::ranges::category::sized>
@@ -120,6 +121,10 @@ public:
             ::ranges::category::random_access | ::ranges::category::sized>
             values) override
     {
+        if (tableName == m_failSetRowsTable)
+        {
+            return BCOS_ERROR_PTR(LedgerError::GetStorageError, "injected setRows failure");
+        }
         for (size_t i = 0; i < keys.size(); ++i)
         {
             Entry e;
@@ -188,6 +193,9 @@ public:
         }
         co_return !!entry;
     }
+
+private:
+    std::string m_failSetRowsTable;
 };
 
 class LedgerFixture : public TestPromptFixture
@@ -1269,6 +1277,24 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             p5.set_value(true);
         });
     BOOST_CHECK_EQUAL(f5.get(), true);
+
+    std::promise<bool> p6;
+    auto f6 = p6.get_future();
+    // empty hash list with proof must still invoke the callback
+    m_ledger->asyncGetBatchTxsByHashList(std::make_shared<protocol::HashList>(), true,
+        [&p6](Error::Ptr _error, protocol::TransactionsPtr _txList,
+            std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK(_txList != nullptr);
+            BOOST_CHECK(_proof != nullptr);
+            if (_txList && _proof)
+            {
+                BOOST_CHECK(_txList->empty());
+                BOOST_CHECK(_proof->empty());
+            }
+            p6.set_value(true);
+        });
+    BOOST_CHECK_EQUAL(f6.get(), true);
 }
 
 BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
@@ -1445,6 +1471,34 @@ BOOST_AUTO_TEST_CASE(preStoreTransaction)
     });
     BOOST_CHECK_EQUAL(f3.get(), true);
 #endif
+}
+
+BOOST_AUTO_TEST_CASE(prewriteBlockStopsAfterPreStoreFailure)
+{
+    initFixture();
+    initBlocks(1);
+    auto storage = std::dynamic_pointer_cast<MockStorage>(m_storage);
+    BOOST_REQUIRE(storage != nullptr);
+    storage->failSetRowsOn(SYS_HASH_2_TX);
+
+    std::promise<Error::Ptr> prewritePromise;
+    auto prewriteFuture = prewritePromise.get_future();
+    m_ledger->asyncPrewriteBlock(
+        m_storage, m_fakeTransactions[0], m_fakeBlocks->at(0),
+        [&prewritePromise](
+            std::string, Error::Ptr&& error) { prewritePromise.set_value(std::move(error)); },
+        true, std::nullopt, std::nullopt, true);
+    auto error = prewriteFuture.get();
+    BOOST_REQUIRE(error != nullptr);
+    BOOST_CHECK_EQUAL(error->errorCode(), LedgerError::CollectAsyncCallbackError);
+
+    std::promise<int64_t> totalPromise;
+    m_ledger->asyncGetTotalTransactionCount(
+        [&totalPromise](Error::Ptr countError, int64_t total, int64_t, protocol::BlockNumber) {
+            BOOST_CHECK_EQUAL(countError, nullptr);
+            totalPromise.set_value(total);
+        });
+    BOOST_CHECK_EQUAL(totalPromise.get_future().get(), 0);
 }
 
 BOOST_AUTO_TEST_CASE(preStoreReceipt)

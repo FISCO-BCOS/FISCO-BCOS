@@ -149,7 +149,7 @@ AsyncTask whenAllRunner(Task task, Slot& slot, std::shared_ptr<State> state)
         }
         catch (...)
         {
-            logResumeException("whenAll's consumer threw out of the settle resume");
+            logResumeException("whenAll", "whenAll's consumer threw out of the settle resume");
         }
     }
 }
@@ -218,8 +218,7 @@ task::Task<std::vector<AwaitableReturnType<Task>>> whenAll(std::vector<Task> tas
 // Variadic flavor over heterogeneous tasks: one tuple element per child (void -> std::monostate).
 template <IsAwaitable... Tasks>
     requires(sizeof...(Tasks) > 0)
-task::Task<std::tuple<detail::WhenAllResult<AwaitableReturnType<Tasks>>...>> whenAll(
-    Tasks&&... tasks)
+task::Task<std::tuple<detail::WhenAllResult<AwaitableReturnType<Tasks>>...>> whenAll(Tasks... tasks)
 {
     using State =
         detail::WhenAllState<std::tuple<detail::WhenAllSlot<AwaitableReturnType<Tasks>>...>>;
@@ -229,12 +228,11 @@ task::Task<std::tuple<detail::WhenAllResult<AwaitableReturnType<Tasks>>...>> whe
     }(std::index_sequence_for<Tasks...>{});
     co_await state->done;
     // The first error IN CHILD ORDER wins, regardless of which child settled first.
-    std::apply([](auto&... slot) { ((slot.hasError() ? (slot.rethrow(), 0) : 0), ...); },
-        state->slots);
+    std::apply(
+        [](auto&... slot) { ((slot.hasError() ? (slot.rethrow(), 0) : 0), ...); }, state->slots);
     co_return std::apply(
         [](auto&... slot) {
-            return std::tuple<detail::WhenAllResult<AwaitableReturnType<Tasks>>...>{
-                slot.take()...};
+            return std::tuple<detail::WhenAllResult<AwaitableReturnType<Tasks>>...>{slot.take()...};
         },
         state->slots);
 }
