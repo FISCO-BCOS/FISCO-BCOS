@@ -290,15 +290,20 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     if (!payloadAttributes.noTxPool.value_or(false))
     {
         // The pool fills what the forced transactions leave of the block gas limit: the
-        // attributes' gasLimit (the header field) minus the deposits' gas, which op-geth's
-        // miner debits from the same gasPool before touching the pool. Undecodable forced
-        // envelopes count 0 here; the candidate execution below rejects them.
+        // attributes' gasLimit (the header field) minus the forced envelopes' gas, which
+        // op-geth's state transition debits from the same gasPool before the pool is
+        // touched (preCheck: "gas used by deposits may not be used by other txs"); a
+        // system deposit is skipped here regardless of fork (op-geth's preCheck leaves it
+        // unmetered pre-Regolith and rejects it from Regolith on, so the fork makes no
+        // difference to the budget). Undecodable forced envelopes count 0 here; the
+        // candidate execution below rejects them.
         auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
         int64_t forcedGas = 0;
         for (auto const& env : forcedEnvelopes)
         {
             if (auto tarsTx = engine_common::op::opEnvelopeToTars(
-                    env, hashImpl.hash(env), /*allowDeposit=*/true))
+                    env, hashImpl.hash(env), /*allowDeposit=*/true);
+                tarsTx.has_value() && !tarsTx->isSystemTransaction)
             {
                 forcedGas += tarsTx->data.gasLimit;
             }

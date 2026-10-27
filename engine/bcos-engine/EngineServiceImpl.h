@@ -327,8 +327,9 @@ public:
         if (!payloadAttributes->noTxPool.value_or(false))
         {
             m_memPool.get().remove(view);
-            m_memPool.get().seal(co_await engine_common::legacyBlockGasLimit(view), view,
-                std::back_inserter(sealedTxs));
+            m_memPool.get().seal(co_await engine_common::legacyBlockGasLimit(
+                                     view, *headBlockNumber, *m_blockFactory),
+                view, std::back_inserter(sealedTxs));
         }
 
         // Step 3: Build the payload on the executed view (already mutable above).

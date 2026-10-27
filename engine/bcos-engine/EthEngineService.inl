@@ -282,8 +282,9 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         }
         else
         {
-            m_memPool.seal(co_await engine_common::legacyBlockGasLimit(view), view,
-                std::back_inserter(sealedTxs));
+            m_memPool.seal(co_await engine_common::legacyBlockGasLimit(
+                               view, *headBlockNumber, *m_blockFactory),
+                view, std::back_inserter(sealedTxs));
         }
     }
 

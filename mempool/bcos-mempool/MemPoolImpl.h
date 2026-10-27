@@ -58,6 +58,13 @@ enum class ChainKind : std::uint8_t
     L1,
 };
 
+/// The least gas a sealed transaction spends from the block budget: Ethereum's intrinsic
+/// minimum (21000, TX_BASE_COST). Every admitted Web3 transaction already carries at least
+/// this much, so the floor changes nothing on the L1/OP lanes; it exists for the lanes that
+/// do not meter gas (FISCO transactions may declare gasLimit 0), where a budget that never
+/// decreased would let one seal take the whole pool into one block.
+inline constexpr int64_t c_minSealGas = 21000;
+
 struct MemPoolConfig
 {
     ChainKind chainKind = ChainKind::L2;
@@ -482,7 +489,8 @@ public:
                 nonceIt->nonce() == currentNonce;
                 ++nonceIt)
             {
-                auto const gas = nonceIt->m_transaction->gasLimit();
+                auto const gas =
+                    std::max<int64_t>(nonceIt->m_transaction->gasLimit(), c_minSealGas);
                 if (gas > gasLeft)
                 {
                     break;  // this sender's run ends here; other senders may still fit
@@ -561,7 +569,7 @@ public:
         {
             auto cursor = heap.top();
             heap.pop();
-            auto const gas = cursor.it->m_transaction->gasLimit();
+            auto const gas = std::max<int64_t>(cursor.it->m_transaction->gasLimit(), c_minSealGas);
             if (gas > gasLeft)
             {
                 continue;  // pops the sender: its later nonces cannot follow a skipped head

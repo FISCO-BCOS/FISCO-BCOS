@@ -128,13 +128,27 @@ struct StubMemPool
     template <class View>
     void remove(View&)
     {}
+    /// The gas budget the service handed the last seal() (the attributes' gasLimit minus
+    /// the forced envelopes' gas), and what that seal emitted.
+    int64_t lastSealGasLimit = -1;
+    std::vector<bcos::protocol::Transaction::Ptr> lastSealed;
     template <class View, class OutputIt>
-    void seal(int64_t limit, View&, OutputIt out)
+    void seal(int64_t gasLimit, View&, OutputIt out)
     {
-        auto const n = std::min<int64_t>(limit, static_cast<int64_t>(pool.size()));
-        for (int64_t i = 0; i < n; ++i)
+        lastSealGasLimit = gasLimit;
+        lastSealed.clear();
+        int64_t gasLeft = gasLimit;
+        for (auto const& tx : pool)
         {
-            *out++ = pool[static_cast<std::size_t>(i)];
+            // The helper transactions carry no tars gasLimit (0): an exhausted budget still
+            // seals nothing, as the real pool's loop guard does.
+            if (gasLeft <= 0 || tx->gasLimit() > gasLeft)
+            {
+                break;
+            }
+            gasLeft -= tx->gasLimit();
+            lastSealed.push_back(tx);
+            *out++ = tx;
         }
     }
 };
@@ -1072,6 +1086,52 @@ BOOST_AUTO_TEST_CASE(op_fcu_missing_parent_header_is_invalid)
     BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
     BOOST_CHECK(result.payloadStatus.validationError->find("parent") != std::string::npos);
     BOOST_CHECK(result.payloadStatus.validationError->find("header") != std::string::npos);
+}
+
+// The pool's seal budget is the attributes' gasLimit minus the forced envelopes' gas
+// (op-geth debits deposits from the same gasPool before the pool is touched): with one
+// forced 21000-gas envelope the pool sees gasLimit - 21000, and when the forced envelope
+// alone fills the block the pool sees 0 and seals nothing.
+BOOST_AUTO_TEST_CASE(forcedEnvelopeGasIsDebitedFromTheSealBudget)
+{
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto forced = makeDecodableWeb3Tx(1);
+    auto pooled = makeDecodableWeb3Tx(2);
+    pair.memPool.pool.push_back(pooled.tx);
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.noTxPool = false;
+    attrs.transactions = std::vector<std::string>{forced.rawHex};
+    attrs.gasLimit = 30'000'000;
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    // makeDecodableWeb3Tx signs gasLimit 21000 into the envelope (the service decodes the
+    // envelope, not the helper's tars object, which carries no gasLimit).
+    BOOST_CHECK_EQUAL(pair.memPool.lastSealGasLimit, 30'000'000 - 21000);
+    BOOST_CHECK_EQUAL(pair.memPool.lastSealed.size(), 1);
+    // One build = one candidate execution plus the canonical (verify) execution of the
+    // final block; sealing against the budget leaves no capacity fault, so no culprit
+    // eviction and no third run (the retry loop would add one executeBlock per round).
+    BOOST_CHECK_EQUAL(delegate->executeCalls, 2);
+
+    // The forced envelope alone fills the block: nothing is left for the pool.
+    attrs.gasLimit = 21000;
+    attrs.timestamp += 2000;
+    result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    BOOST_CHECK_EQUAL(pair.memPool.lastSealGasLimit, 0);
+    BOOST_CHECK(pair.memPool.lastSealed.empty());
+    BOOST_CHECK_EQUAL(delegate->executeCalls, 4);  // candidate + canonical, no retry again
 }
 
 static void driveBuildWithCulprit(bool capacityReject)
