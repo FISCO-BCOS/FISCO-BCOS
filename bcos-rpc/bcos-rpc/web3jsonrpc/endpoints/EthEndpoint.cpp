@@ -1961,9 +1961,10 @@ task::Task<Json::Value> EthEndpoint::receiptJson(crypto::HashType const& hash)
         BOOST_THROW_EXCEPTION(
             JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
     }
-    // One block read gives the block hash, the ordered transaction hashes and the receipts. It
-    // replaces the separate getBlockHash read, and it is what lets the block position be derived
-    // from the block instead of trusted from a stored field that history may not have maintained.
+    // The stored rows are not repaired and their position field is not authoritative (it is
+    // producer-dependent: BaselineScheduler writes real indices, the serial driver and a resync
+    // write 0). Deriving from the block gives every node one answer for the same historical
+    // block without rewriting a single stored row.
     auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
         ledger::HEADER | ledger::TRANSACTIONS_HASH | ledger::RECEIPTS);
     if (!block) [[unlikely]]
@@ -1982,6 +1983,9 @@ task::Task<Json::Value> EthEndpoint::receiptJson(crypto::HashType const& hash)
     }
     protocol::applyReceiptBlockPosition(*receipt, *position);
     Json::Value result = Json::objectValue;
+    // A separate read rather than block->blockHeader()->hash(): the header of a block assembled
+    // by the test fixture's ledger is not usable for hashing (it aborts on a pure-virtual call),
+    // and getBlockHash is the contract every ledger implementation satisfies.
     auto const blockHash = co_await ledger::getBlockHash(*ledger, receipt->blockNumber());
     combineReceiptResponse(result, *receipt, *txs->at(0), blockHash);
     co_return result;
@@ -2324,12 +2328,11 @@ task::Task<void> EthEndpoint::getBlockReceipts(const Json::Value& request, Json:
     if (number >= 0 && number <= head)
     {
         result = Json::arrayValue;
-        // One read of the block with its transactions and receipts, instead of receiptJson per
-        // transaction (each of which would reload the block). Positions are derived once here.
         // Two reads for the whole block: the block (hash, ordered transaction hashes, receipts)
-        // and then the transaction bodies in one batch. The per-transaction body is fetched by
-        // hash rather than taken from the block's own transaction view, which is the contract
-        // every ledger implementation here satisfies.
+        // and then the transaction bodies in one batch, instead of receiptJson per transaction
+        // (each of which would reload the block). The per-transaction body is fetched by hash
+        // rather than taken from the block's own transaction view, which is the contract every
+        // ledger implementation here satisfies. Positions are derived once, before the zip.
         auto block = co_await ledger::getBlockData(
             *ledger, number, ledger::HEADER | ledger::TRANSACTIONS_HASH | ledger::RECEIPTS);
         if (!block) [[unlikely]]
