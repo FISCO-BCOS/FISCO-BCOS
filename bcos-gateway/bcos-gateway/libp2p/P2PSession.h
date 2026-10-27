@@ -11,6 +11,7 @@
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-network/Common.h"
 #include <boost/asio/steady_timer.hpp>
+#include <cstdint>
 #include <memory>
 #include <range/v3/range/concepts.hpp>
 #include <utility>
@@ -51,6 +52,10 @@ public:
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const;
 
+    // Unique connection generation used only for cancelling this connection's pending acquisitions.
+    std::uint64_t dispatchOwner() const { return m_dispatchOwner; }
+    void setDispatchOwner(std::uint64_t _owner) { m_dispatchOwner = _owner; }
+
     // Send a P2P message (header + zero-copy payload views); with Options::response, co_await the
     // peer's response. payloads is a plain range (no any_view type erasure) taken by value — views
     // are cheap to copy and a by-value parameter is moved into the coroutine frame. Defined at the
@@ -72,6 +77,7 @@ private:
 
     bcos::protocol::ProtocolInfo::Ptr m_protocolInfo = nullptr;
     mutable bcos::SharedMutex x_protocolInfo;
+    std::uint64_t m_dispatchOwner = 0;
 };
 
 }  // namespace bcos::gateway

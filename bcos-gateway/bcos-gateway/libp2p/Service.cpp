@@ -122,6 +122,7 @@ task::Task<void> Service::acceptPump()
 
 void Service::stop()
 {
+    closeDispatchBudgets();
     if (m_router)
     {
         m_router->routerTimer->stop();
@@ -156,15 +157,52 @@ void Service::stop()
         }
         m_host->stop();
 
-        /// disconnect sessions
-        std::unique_lock lock(x_sessions);
-        for (auto& session : m_sessions)
+        std::vector<P2PSession::Ptr> sessions;
         {
-            session.second->stop(bcos::network::ClientQuit);
+            std::shared_lock lock(x_sessions);
+            sessions.reserve(m_sessions.size());
+            for (auto const& [p2pID, session] : m_sessions)
+            {
+                sessions.push_back(session);
+            }
         }
+        for (auto const& session : sessions)
+        {
+            session->stop(bcos::network::ClientQuit);
+        }
+        {
+            std::unique_lock lock(x_sessions);
+            m_sessions.clear();
+        }
+    }
+}
 
-        /// clear sessions
-        m_sessions.clear();
+void Service::reapIdleDispatchBudgets()
+{
+    std::set<bcos::network::P2pID> activePeers;
+    {
+        std::shared_lock lock(x_sessions);
+        for (auto const& [p2pID, session] : m_sessions)
+        {
+            if (session->active())
+            {
+                activePeers.insert(p2pID);
+            }
+        }
+    }
+    std::lock_guard lock(x_dispatchBudgets);
+    for (auto it = m_peerDispatchBudgets.begin(); it != m_peerDispatchBudgets.end();)
+    {
+        if (!activePeers.contains(it->first))
+        {
+            auto usage = it->second->usage();
+            if (usage.usedCount == 0 && usage.usedBytes == 0 && usage.waiting == 0)
+            {
+                it = m_peerDispatchBudgets.erase(it);
+                continue;
+            }
+        }
+        ++it;
     }
 }
 
@@ -175,6 +213,7 @@ void Service::heartBeat()
         return;
     }
 
+    reapIdleDispatchBudgets();
     // FIB-186 (vector D): snapshot the static-node list under x_nodes and release it BEFORE calling
     // isConnected()/connect(), both of which take x_sessions. Holding x_nodes across an
     // x_sessions acquisition here is the reverse of the order onConnect uses (x_sessions ->
@@ -234,19 +273,79 @@ void Service::heartBeat()
         }(shared_from_this(), it.first));
     }
 
+    DispatchBudget::Usage globalUsage;
+    {
+        std::lock_guard lock(x_dispatchBudgets);
+        if (m_globalDispatchBudget)
+        {
+            globalUsage = m_globalDispatchBudget->usage();
+        }
+    }
+    InboundChannel::Stats inboundStats;
+    {
+        std::lock_guard lock(x_channels);
+        for (auto const& channel : m_channels)
+        {
+            if (!channel)
+            {
+                continue;
+            }
+            auto stats = channel->stats();
+            inboundStats.count += stats.count;
+            inboundStats.bytes += stats.bytes;
+            inboundStats.producerWaiters += stats.producerWaiters;
+            inboundStats.producerParks += stats.producerParks;
+        }
+    }
+
     std::shared_lock sessionLock(x_sessions);
     SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
                       << LOG_KV("connected count", m_sessions.size())
-                      << LOG_KV("readTimeouts", m_readTimeouts.load(std::memory_order_relaxed));
+                      << LOG_KV("readTimeouts", m_readTimeouts.load(std::memory_order_relaxed))
+                      << LOG_KV("globalDispatchBytes", globalUsage.usedBytes)
+                      << LOG_KV("globalDispatchCount", globalUsage.usedCount)
+                      << LOG_KV("globalDispatchWaiting", globalUsage.waiting)
+                      << LOG_KV("globalDispatchParks", globalUsage.parks)
+                      << LOG_KV("globalDispatchParkMs", globalUsage.parkTimeMs)
+                      << LOG_KV("inboundDepth", inboundStats.count)
+                      << LOG_KV("inboundBytes", inboundStats.bytes)
+                      << LOG_KV("inboundProducerWaiters", inboundStats.producerWaiters)
+                      << LOG_KV("inboundProducerParks", inboundStats.producerParks);
+    if (globalUsage.longestWaitMs >= CHECK_INTERVAL)
+    {
+        SERVICE_LOG(WARNING) << METRIC << LOG_DESC("heartBeat") << LOG_KV("scope", "global")
+                             << LOG_KV("dispatchWaitMs", globalUsage.longestWaitMs)
+                             << LOG_KV("dispatchWaiting", globalUsage.waiting)
+                             << LOG_KV("inboundProducerWaiters", inboundStats.producerWaiters);
+    }
     for (auto const& it : m_sessions)
     {
         auto session = it.second;
         auto queueSize = session->session()->writeQueueSize();
-        if (queueSize > 0)
+        DispatchBudget::Usage usage;
+        if (auto budget = findDispatchBudget(session->p2pID()))
+        {
+            usage = budget->usage();
+        }
+        if (usage.longestWaitMs >= CHECK_INTERVAL)
+        {
+            SERVICE_LOG(WARNING) << METRIC << LOG_DESC("heartBeat")
+                                 << LOG_KV("endpoint", session->session()->nodeIPEndpoint())
+                                 << LOG_KV("write queue size", queueSize)
+                                 << LOG_KV("peerDispatchBytes", usage.usedBytes)
+                                 << LOG_KV("peerDispatchCount", usage.usedCount)
+                                 << LOG_KV("peerDispatchWaiting", usage.waiting)
+                                 << LOG_KV("peerDispatchWaitMs", usage.longestWaitMs)
+                                 << LOG_KV("peerDispatchParkMs", usage.parkTimeMs);
+        }
+        else if (queueSize > 0 || usage.waiting > 0)
         {
             SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
                               << LOG_KV("endpoint", session->session()->nodeIPEndpoint())
-                              << LOG_KV("write queue size", queueSize);
+                              << LOG_KV("write queue size", queueSize)
+                              << LOG_KV("peerDispatchBytes", usage.usedBytes)
+                              << LOG_KV("peerDispatchCount", usage.usedCount)
+                              << LOG_KV("peerDispatchWaiting", usage.waiting);
         }
         else
         {
@@ -335,6 +434,15 @@ void Service::onConnect(
         return;
     }
 
+    if (m_dispatchStopped.load())
+    {
+        if (session)
+        {
+            session->disconnect(bcos::network::ClientQuit);
+        }
+        return;
+    }
+
     SERVICE_LOG(DEBUG) << LOG_DESC("onConnect") << LOG_KV("p2pid", printShortP2pID(p2pID))
                        << LOG_KV("endpoint", peer);
 
@@ -351,40 +459,61 @@ void Service::onConnect(
     p2pSession->setP2PInfo(*p2pInfo);
     p2pSession->setService(weak_from_this());
     p2pSession->setProtocolInfo(m_localProtocol);
+    p2pSession->setDispatchOwner(m_nextDispatchOwner++);
+    auto owner = p2pSession->dispatchOwner();
+    session->setDropHandler([weakService = weak_from_this(), p2pID, owner] {
+        if (auto service = weakService.lock())
+        {
+            service->cancelDispatch(p2pID, owner);
+        }
+    });
 
     // Note: the lock must be here, otherwise there will be more than one started sessions,
     // and a session not maintained in m_sessions will be choosed when send messages in some cases
     // which will cause coredump
     bool duplicated = false;
     bool newSession = false;
+    bool stopped = false;
     {
         std::unique_lock lock(x_sessions);
-        auto existedSession = getP2PSessionByNodeIdWithoutLock(p2pID);
-        if (existedSession && existedSession->active())
+        if (m_dispatchStopped.load())
         {
-            SERVICE_LOG(DEBUG) << "Disconnect duplicate peer"
-                               << LOG_KV("p2pid", printShortP2pID(p2pID))
-                               << LOG_KV("endpoint", peer);
-            updateStaticNodes(session->socket(), p2pID);
-            session->disconnect(bcos::network::DuplicatePeer);
-            duplicated = true;
+            stopped = true;
         }
         else
         {
-            p2pSession->start();
-            sendProtocol(p2pSession);
-            updateStaticNodes(session->socket(), p2pID);
-
-            if (existedSession)
+            auto existedSession = getP2PSessionByNodeIdWithoutLock(p2pID);
+            if (existedSession && existedSession->active())
             {
-                m_sessions[p2pID] = p2pSession;
+                SERVICE_LOG(DEBUG)
+                    << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortP2pID(p2pID))
+                    << LOG_KV("endpoint", peer);
+                updateStaticNodes(session->socket(), p2pID);
+                session->disconnect(bcos::network::DuplicatePeer);
+                duplicated = true;
             }
             else
             {
-                m_sessions.insert(std::make_pair(p2pID, p2pSession));
-                newSession = true;
+                p2pSession->start();
+                sendProtocol(p2pSession);
+                updateStaticNodes(session->socket(), p2pID);
+
+                if (existedSession)
+                {
+                    m_sessions[p2pID] = p2pSession;
+                }
+                else
+                {
+                    m_sessions.insert(std::make_pair(p2pID, p2pSession));
+                    newSession = true;
+                }
             }
         }
+    }
+    if (stopped)
+    {
+        session->disconnect(bcos::network::ClientQuit);
+        return;
     }
     if (duplicated)
     {
@@ -394,6 +523,12 @@ void Service::onConnect(
         teardownSession(bcos::network::makeNetworkException(
                             bcos::network::P2PExceptionType::DuplicateSession, "DuplicateSession"),
             p2pSession);
+        return;
+    }
+    std::lock_guard connectStopLock(m_connectStopMutex);
+    if (m_dispatchStopped.load())
+    {
+        p2pSession->stop(bcos::network::ClientQuit);
         return;
     }
     if (newSession)
@@ -669,6 +804,10 @@ std::optional<bcos::Error> Service::onBeforeMessage(
 task::Task<void> Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
     Message message, std::weak_ptr<P2PSession> p2pSessionWeakPtr)
 {
+    if (m_dispatchStopped.load())
+    {
+        co_return;
+    }
     // router path (merged from the former ServiceV2::onMessage): a message whose dstP2PNodeID is
     // another node is forwarded through the router table; on local delivery the short p2pIDs are
     // translated back to the raw ids before the common handling below
@@ -815,17 +954,50 @@ task::Task<void> Service::onMessage(bcos::network::NetworkException e, Session::
         // THE dispatch: push into the channel subscribed for this type; its pump runs the handler.
         // A full channel PARKS this receive pump in waitWritable() instead of dropping the
         // message: the back-pressure propagates through the session's recv queue to the TCP
-        // window, which is what the PR body already claimed. This is safe only because a per-type
-        // handler pump never awaits remote I/O (the PeerToPeerMessage handler hands its dispatch
-        // and response write off to a detached coroutine) — parking here couples every inbound
-        // type of this session to the slowest PUMP, never to the slowest PEER.
+        // window. The per-type handler never awaits a permit or remote I/O, so back-pressure stays
+        // in the originating session and cannot stall other sessions. It does couple packet types
+        // within this session to its own slowest dispatch/write path.
         if (auto channel = inboundChannel(packetType))
         {
-            auto inbound = InboundMessage{std::move(p2pSession), std::move(message)};
+            auto inbound = InboundMessage{std::move(p2pSession), std::move(message), {}};
             // The same measure the channel's sizeOf charges (they must agree). push() leaves the
             // value intact on failure, so losing the wake race costs one more park, never the
             // message.
             const auto bytes = inboundMessageBytes(inbound);
+            if (packetType == gateway::GatewayMessageType::PeerToPeerMessage)
+            {
+                auto peerBudget = dispatchBudgetFor(*inbound.session);
+                auto globalBudget = ensureGlobalDispatchBudget();
+                if (!peerBudget || !globalBudget)
+                {
+                    co_return;
+                }
+                auto owner = std::to_string(inbound.session->dispatchOwner());
+                inbound.dispatchPermit.peer = co_await peerBudget->acquire(bytes, owner);
+                if (!inbound.dispatchPermit.peer)
+                {
+                    if (bytes > peerBudget->maxBytes())
+                    {
+                        SERVICE_LOG(ERROR)
+                            << LOG_DESC("inbound message exceeds the channel byte budget, drop")
+                            << LOG_KV("scope", "peer") << LOG_KV("seq", seq)
+                            << LOG_KV("bytes", bytes);
+                    }
+                    co_return;
+                }
+                inbound.dispatchPermit.global = co_await globalBudget->acquire(bytes, owner);
+                if (!inbound.dispatchPermit.global)
+                {
+                    if (bytes > globalBudget->maxBytes())
+                    {
+                        SERVICE_LOG(ERROR)
+                            << LOG_DESC("inbound message exceeds the channel byte budget, drop")
+                            << LOG_KV("scope", "global") << LOG_KV("seq", seq)
+                            << LOG_KV("bytes", bytes);
+                    }
+                    co_return;
+                }
+            }
             while (!channel->push(inbound))
             {
                 if (!co_await channel->waitWritable(bytes))
@@ -1380,6 +1552,145 @@ void bcos::gateway::Service::setHost(P2PHost::Ptr host)
 {
     m_host = std::move(host);
 }
+void bcos::gateway::Service::setDispatchBudgetConfig(DispatchBudgetConfig _config)
+{
+    if (_config.peerBytes == 0 || _config.peerCount == 0 ||
+        _config.globalBytes / 2 < _config.peerBytes || _config.globalCount <= _config.peerCount)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment("global dispatch budget must be at least 2x peer "
+                                                  "bytes and greater than peer count"));
+    }
+    std::lock_guard lock(x_dispatchBudgets);
+    if (m_globalDispatchBudget)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                "dispatch budget config must be set before the first PeerToPeerMessage"));
+    }
+    m_dispatchConfig = std::move(_config);
+}
+
+bcos::gateway::DispatchBudget::Poster bcos::gateway::Service::makeDispatchPoster()
+{
+    if (m_dispatchConfig.poster)
+    {
+        return m_dispatchConfig.poster;
+    }
+    return [weakService = weak_from_this()](std::function<void()> wake) {
+        auto service = weakService.lock();
+        if (service && service->m_host && service->m_host->haveNetwork())
+        {
+            service->m_host->asioInterface()->post(std::move(wake));
+        }
+        else
+        {
+            wake();
+        }
+    };
+}
+
+bcos::gateway::DispatchBudget::Ptr bcos::gateway::Service::ensureGlobalDispatchBudget()
+{
+    std::lock_guard lock(x_dispatchBudgets);
+    if (m_dispatchStopped)
+    {
+        return nullptr;
+    }
+    if (!m_globalDispatchBudget)
+    {
+        m_globalDispatchBudget = std::make_shared<DispatchBudget>(
+            m_dispatchConfig.globalBytes, m_dispatchConfig.globalCount, makeDispatchPoster());
+    }
+    return m_globalDispatchBudget;
+}
+
+bcos::gateway::DispatchBudget::Ptr bcos::gateway::Service::dispatchBudgetFor(P2PSession& _session)
+{
+    std::lock_guard lock(x_dispatchBudgets);
+    if (m_dispatchStopped)
+    {
+        return nullptr;
+    }
+    if (_session.service().expired())
+    {
+        _session.setService(weak_from_this());
+    }
+    if (_session.dispatchOwner() == 0)
+    {
+        _session.setDispatchOwner(m_nextDispatchOwner++);
+    }
+    auto const& p2pID = _session.p2pID();
+    auto it = m_peerDispatchBudgets.find(p2pID);
+    if (it != m_peerDispatchBudgets.end())
+    {
+        return it->second;
+    }
+    auto budget = std::make_shared<DispatchBudget>(
+        m_dispatchConfig.peerBytes, m_dispatchConfig.peerCount, makeDispatchPoster());
+    m_peerDispatchBudgets.emplace(p2pID, budget);
+    return budget;
+}
+
+bcos::gateway::DispatchBudget::Ptr bcos::gateway::Service::findDispatchBudget(
+    bcos::network::P2pID const& _p2pID) const
+{
+    std::lock_guard lock(x_dispatchBudgets);
+    auto it = m_peerDispatchBudgets.find(_p2pID);
+    return it == m_peerDispatchBudgets.end() ? nullptr : it->second;
+}
+
+void bcos::gateway::Service::cancelDispatch(
+    bcos::network::P2pID const& _p2pID, std::uint64_t _owner)
+{
+    DispatchBudget::Ptr peerBudget;
+    DispatchBudget::Ptr globalBudget;
+    {
+        std::lock_guard lock(x_dispatchBudgets);
+        auto it = m_peerDispatchBudgets.find(_p2pID);
+        if (it != m_peerDispatchBudgets.end())
+        {
+            peerBudget = it->second;
+        }
+        globalBudget = m_globalDispatchBudget;
+    }
+    auto owner = std::to_string(_owner);
+    if (peerBudget)
+    {
+        peerBudget->cancelWaiters(owner);
+    }
+    if (globalBudget)
+    {
+        globalBudget->cancelWaiters(owner);
+    }
+}
+
+void bcos::gateway::Service::closeDispatchBudgets()
+{
+    std::lock_guard connectStopLock(m_connectStopMutex);
+    std::vector<DispatchBudget::Ptr> budgets;
+    {
+        std::lock_guard lock(x_dispatchBudgets);
+        if (m_dispatchStopped)
+        {
+            return;
+        }
+        m_dispatchStopped = true;
+        if (m_globalDispatchBudget)
+        {
+            budgets.push_back(m_globalDispatchBudget);
+        }
+        for (auto const& [p2pID, budget] : m_peerDispatchBudgets)
+        {
+            budgets.push_back(budget);
+        }
+    }
+    for (auto const& budget : budgets)
+    {
+        budget->close();
+    }
+}
+
 void bcos::gateway::Service::setPeerIdentity(std::shared_ptr<P2PPeerIdentity> _peerIdentity)
 {
     m_peerIdentity = std::move(_peerIdentity);

@@ -11,6 +11,7 @@
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-framework/protocol/ProtocolInfoCodec.h"
+#include "bcos-gateway/libp2p/DispatchBudget.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/PendingResponse.h"
@@ -21,6 +22,7 @@
 #include <boost/asio/steady_timer.hpp>
 #include <array>
 #include <atomic>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -42,6 +44,7 @@ struct InboundMessage
 {
     P2PSession::Ptr session;
     Message message;
+    DispatchPermit dispatchPermit;
 };
 using InboundChannel = task::Channel<InboundMessage>;
 
@@ -77,10 +80,10 @@ public:
     virtual void onConnect(
         bcos::network::NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Session::Ptr session);
     virtual void onDisconnect(bcos::network::NetworkException e, P2PSession::Ptr p2pSession);
-    // Coroutine because the per-type inbound channel back-pressures: a full channel parks the
-    // caller (a session's receive pump) in waitWritable() instead of dropping the message, so the
-    // dispatch must be awaitable. The park ends when the type's pump drains space, or with false
-    // once stop() closes the channel or the message can never fit the byte budget.
+    // Coroutine because PeerToPeerMessage first acquires the origin session's peer/global permits,
+    // then a full per-type channel parks this session's receive pump in waitWritable() instead of
+    // dropping the message. Budget or channel waits end on capacity release or teardown; the
+    // node-wide type handler never waits on those permits.
     virtual task::Task<void> onMessage(bcos::network::NetworkException e, Session::Ptr session,
         Message message, std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
@@ -141,6 +144,11 @@ public:
 
     P2PHost::Ptr host();
     virtual void setHost(P2PHost::Ptr host);
+    // Must be set before the first PeerToPeerMessage creates the global budget.
+    void setDispatchBudgetConfig(DispatchBudgetConfig _config);
+    // Cancel one connection generation's pending acquisitions without invalidating existing
+    // permits or the budget shared by later connections of the same p2pID.
+    void cancelDispatch(bcos::network::P2pID const& _p2pID, std::uint64_t _owner);
 
     // The cert black/white lists live in the P2P identity object (libp2p/P2PIdentity.h), not in
     // the generic Host; updatePeerBlacklist/updatePeerWhitelist update them through this pointer.
@@ -349,6 +357,13 @@ private:
     void tryToUpdateRawP2pInfo(P2PInfo const& p2pInfo);
     void tryToUpdateP2pInfo(P2PInfo const& p2pInfo);
 
+    DispatchBudget::Ptr ensureGlobalDispatchBudget();
+    DispatchBudget::Ptr dispatchBudgetFor(P2PSession& _session);
+    DispatchBudget::Ptr findDispatchBudget(bcos::network::P2pID const& _p2pID) const;
+    DispatchBudget::Poster makeDispatchPoster();
+    void closeDispatchBudgets();
+    void reapIdleDispatchBudgets();
+
     struct RouterState;
     std::unique_ptr<RouterState> m_router;
 
@@ -370,6 +385,13 @@ protected:
     // disabled by default). Reported by heartBeat so a silently-stalled peer is visible without
     // turning the per-frame path into a log flood.
     std::atomic<uint64_t> m_readTimeouts{0};
+    DispatchBudgetConfig m_dispatchConfig;
+    DispatchBudget::Ptr m_globalDispatchBudget;
+    std::map<bcos::network::P2pID, DispatchBudget::Ptr> m_peerDispatchBudgets;
+    mutable std::mutex x_dispatchBudgets;
+    mutable std::mutex m_connectStopMutex;
+    std::atomic_bool m_dispatchStopped{false};
+    std::atomic_uint64_t m_nextDispatchOwner{1};
     // cert black/white-list admission lists (owned by the P2P identity object); null in tests
     // that never wire one — updatePeerBlacklist/Whitelist then skip the list update
     std::shared_ptr<P2PPeerIdentity> m_peerIdentity;

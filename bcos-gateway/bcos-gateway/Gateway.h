@@ -32,6 +32,7 @@
 #include "bcos-utilities/LogStream.h"
 #include "filter/ReadOnlyFilter.h"
 #include <cstddef>
+#include <mutex>
 #include <range/v3/range/concepts.hpp>
 
 
@@ -41,18 +42,11 @@ class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gat
 {
 public:
     using Ptr = std::shared_ptr<Gateway>;
-    // A separate in-flight budget with the same per-message admission ceiling as the inbound queue.
-    constexpr static std::size_t DEFAULT_DISPATCH_IN_FLIGHT_BYTES =
-        Service::DEFAULT_INBOUND_QUEUE_BYTES;
-    constexpr static std::size_t DEFAULT_DISPATCH_IN_FLIGHT_COUNT = 1024;
-
     Gateway(GatewayConfig::Ptr _gatewayConfig, Service::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
         std::string _gatewayServiceName = "localGateway",
-        std::size_t _dispatchInFlightBytes = DEFAULT_DISPATCH_IN_FLIGHT_BYTES,
-        std::size_t _dispatchInFlightCount = DEFAULT_DISPATCH_IN_FLIGHT_COUNT,
-        InboundChannel::Poster _dispatchPoster = {});
+        DispatchBudgetConfig _dispatchConfig = {});
     ~Gateway() override;
 
     void start() override;
@@ -150,9 +144,9 @@ protected:
     Gateway() = default;
     // Coroutine: it awaits the response send on every path that replies (rate-limit reject and
     // the front-service completion). A caller that must not wait on remote I/O — the node-wide
-    // per-type inbound pump — detaches it per message via task::wait after acquiring a bounded
-    // dispatch permit (see the constructor); the detached frame owns _msg and the permit for the
-    // whole dispatch, keeping it zero-copy and limiting queued plus outstanding work.
+    // per-type inbound pump — detaches it per message via task::wait without awaiting a permit.
+    // Service acquires the origin session's peer/global permits before queueing; the detached
+    // frame owns _msg and those permits for the whole dispatch.
     virtual task::Task<void> onReceiveP2PMessage(P2PSession::Ptr _session, Message _msg);
 
     /**
@@ -167,8 +161,6 @@ protected:
     bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
 private:
-    class DispatchBudget;
-
     std::string m_gatewayServiceName;
     GatewayConfig::Ptr m_gatewayConfig;
     // p2p service interface
@@ -180,6 +172,11 @@ private:
     // For rate limit
     ratelimiter::GatewayRateLimiter::Ptr m_gatewayRateLimiter;
     std::optional<ReadOnlyFilter> m_readonlyFilter;
-    std::shared_ptr<DispatchBudget> m_dispatchBudget;
+    struct DispatchState
+    {
+        std::mutex mutex;
+        bool stopped = false;
+    };
+    std::shared_ptr<DispatchState> m_dispatchState = std::make_shared<DispatchState>();
 };
 }  // namespace bcos::gateway

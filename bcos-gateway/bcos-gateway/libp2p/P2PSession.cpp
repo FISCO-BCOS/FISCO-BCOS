@@ -102,6 +102,13 @@ void P2PSession::start()
 
 void P2PSession::stop(bcos::network::DisconnectReason reason)
 {
+    if (m_dispatchOwner != 0)
+    {
+        if (auto service = m_service.lock())
+        {
+            service->cancelDispatch(p2pID(), m_dispatchOwner);
+        }
+    }
     if (m_run)
     {
         m_run = false;

@@ -20,6 +20,7 @@
 #include <atomic>
 #include <coroutine>
 #include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <exception>
 #include <functional>
@@ -76,6 +77,14 @@ public:
     // channel and post another wake.
     using Poster = std::function<void(std::function<void()>)>;
     using Ptr = std::shared_ptr<Channel>;
+
+    struct Stats
+    {
+        std::size_t count = 0;
+        std::size_t bytes = 0;
+        std::size_t producerWaiters = 0;
+        std::uint64_t producerParks = 0;
+    };
 
     // maxBytes == 0 disables the byte budget; sizeOf defaults to 1-per-item (pure count cap).
     Channel(Poster poster, std::size_t maxCount, std::size_t maxBytes = 0,
@@ -214,6 +223,13 @@ public:
     {
         std::lock_guard lock(m_state->mutex);
         return m_state->queue.size();
+    }
+
+    Stats stats() const
+    {
+        std::lock_guard lock(m_state->mutex);
+        return Stats{m_state->queue.size(), m_state->queuedBytes, m_state->writableWaiters.size(),
+            m_state->producerParks};
     }
 
     // recv() and waitWritable() return the bare awaitable, not a Task: awaiting one allocates
@@ -358,6 +374,7 @@ private:
         std::exception_ptr closeError;
         std::optional<WaiterSlot> waiter;
         std::deque<WritableWaiterSlot> writableWaiters;
+        std::uint64_t producerParks = 0;
     };
 
     struct RecvAwaitable
@@ -558,6 +575,7 @@ private:
             }
             m_state->writableWaiters.push_back(
                 typename State::WritableWaiterSlot{handle, m_bytes, &m_result});
+            ++m_state->producerParks;
             m_registered = true;
             return true;
         }

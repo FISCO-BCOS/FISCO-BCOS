@@ -314,14 +314,27 @@ BOOST_AUTO_TEST_CASE(parkedProducersWakeInFifoOrder)
     bcos::task::wait(producer(channel, 3, second));
     BOOST_CHECK(firstResult.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready);
     BOOST_CHECK(secondResult.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready);
+    auto stats = channel.stats();
+    BOOST_CHECK_EQUAL(stats.count, 1);
+    BOOST_CHECK_EQUAL(stats.bytes, 1);
+    BOOST_CHECK_EQUAL(stats.producerWaiters, 2);
+    BOOST_CHECK_EQUAL(stats.producerParks, 2);
 
     // Each drain wakes the next FIFO producer. Neither producer is displaced by the other.
     BOOST_CHECK_EQUAL(syncWait(channel.recv()), 1);
     BOOST_CHECK(firstResult.get());
     BOOST_CHECK(secondResult.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready);
+    stats = channel.stats();
+    BOOST_CHECK_EQUAL(stats.producerWaiters, 1);
+    BOOST_CHECK_EQUAL(stats.producerParks, 2);
     BOOST_CHECK_EQUAL(syncWait(channel.recv()), 2);
     BOOST_CHECK(secondResult.get());
     BOOST_CHECK_EQUAL(syncWait(channel.recv()), 3);
+    stats = channel.stats();
+    BOOST_CHECK_EQUAL(stats.count, 0);
+    BOOST_CHECK_EQUAL(stats.bytes, 0);
+    BOOST_CHECK_EQUAL(stats.producerWaiters, 0);
+    BOOST_CHECK_EQUAL(stats.producerParks, 2);
 }
 
 BOOST_AUTO_TEST_CASE(closeWakesAllParkedProducers)

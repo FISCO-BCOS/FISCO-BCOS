@@ -442,6 +442,9 @@ public:
     // loop latches the value when it first arms its deadline, so later changes take effect only
     // as an enable/disable toggle, not as a new timeout value.
     void setReadTimeoutMs(uint32_t _readTimeoutMs) { m_readTimeoutMs = _readTimeoutMs; }
+    // Optional service-layer cancellation hook, set before start(). The first drop() posts it
+    // before write/recv-channel callbacks, so a pump blocked outside recvMessage() is also woken.
+    void setDropHandler(std::function<void()> _handler) { m_dropHandler = std::move(_handler); }
     /**
      * @brief The packets that can be sent are obtained based on the configured policy
      *
@@ -565,6 +568,11 @@ public:
         auto socket = m_socket;
 
         m_active = false;
+
+        if (m_dropHandler)
+        {
+            postCallback(std::move(m_dropHandler), "write callback exception during drop");
+        }
 
         // Fail any queued zero-copy sends: their completion callbacks resume suspended coroutine
         // chains (sendMessage senders). Without this, a session that disappears before the
@@ -1376,6 +1384,7 @@ public:
     // the whole liveness check atomic.
     std::atomic<bool> m_active{false};
 
+    std::function<void()> m_dropHandler;
     // Inbound pull queue: the read loop pushes decoded frames (parking on waitWritable when
     // full, for backpressure); the consumer drains them with recvMessage(). drop() closes it to
     // wake the parked consumer — and a parked read loop — with the teardown error.
