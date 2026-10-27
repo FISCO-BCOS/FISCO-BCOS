@@ -491,6 +491,17 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                               << bcos::errinfo_comment{"Unsupported Engine API version"});
     }
+    if (m_externalPayloadVerifier)
+    {
+        // EL mode: the method must match the payload's fork (-38005) BEFORE any shape rule
+        // runs, geth's NewPayloadV2..V4 order. A real Cancun block carries the blob-gas
+        // pair, so a CL that sends it to newPayloadV2 must get the spec's -38005 rather
+        // than an INVALID that blames the block for its blob fields; likewise V3 for a
+        // Prague block and V4 for a Cancun one.
+        engine_common::requireNewPayloadWindow(
+            version, m_externalPayloadVerifier->revisionAt(
+                         static_cast<int64_t>(request.executionPayload.timestamp / 1000)));
+    }
     // EL mode validates against the vanilla L1 dialect (validateExecutionPayloadL1);
     // the OP/single-node wiring keeps the OP-flavored gate, lifted for blob envelopes
     // only when the chain admits them (executor_version==2).
@@ -595,7 +606,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         // EL mode: a payload this node's forkchoiceUpdated never built belongs to the
         // external lane (CL-pushed L1 blocks, executed+committed via the shared
         // EthereumBlockVerifier). The exclusive tracker lock is released before the
-        // co_await inside newPayloadExternal.
+        // co_await inside newPayloadExternal. The method's fork window was checked at
+        // entry (requireNewPayloadWindow).
         bool builtHere;
         {
             auto guard = m_tracker.lockExclusive();
@@ -674,10 +686,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         co_await ledger::getLedgerConfig(view, missLedgerConfig, parentNumber, *m_blockFactory);
         // The L1 dialect has no evmc_revision row: its era comes from the fork schedule at
         // the payload's timestamp (internal milliseconds).
-        auto const forkVersion = m_externalPayloadVerifier ?
-                                     m_externalPayloadVerifier->forkVersionAt(static_cast<int64_t>(
-                                         request.executionPayload.timestamp / 1000)) :
-                                     detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
+        auto const forkVersion =
+            m_externalPayloadVerifier ?
+                detail::tryEthBlockVersionFor(m_externalPayloadVerifier->revisionAt(
+                    static_cast<int64_t>(request.executionPayload.timestamp / 1000))) :
+                detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
         if (!forkVersion.has_value())
         {
             co_return engine_common::makeStatus(
