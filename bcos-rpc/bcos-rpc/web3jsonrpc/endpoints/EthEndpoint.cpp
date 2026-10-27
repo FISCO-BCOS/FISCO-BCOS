@@ -108,6 +108,18 @@ constexpr uint64_t c_intrinsicGasFloor = 21'000;
 /// would be noise on every request.
 constexpr uint32_t c_estimateGasProbeLogThreshold = 8;
 
+/// How many 10% steps eth_estimateGas is allowed to take before it switches to bisecting.
+///
+/// The two ends of the interval want opposite strategies, so neither alone is right. Close to the
+/// measurement -- the common case, because a shallow nested call needs only a small multiple of
+/// what it consumed -- a 10% ladder lands in two or three probes, where bisecting the whole
+/// interval would spend ~25 narrowing to the same gas. Far from it (a deep call chain, which is
+/// also the most expensive shape to run), the ladder takes 77 steps. So the ladder gets a small
+/// fixed number of steps and whatever is left is bisected: a request costs at most
+/// 2 + this + ceil(log2(ceiling)) probes instead of ~83, and still two when the answer is just
+/// above the measurement.
+constexpr uint32_t c_estimateGasLadderSteps = 8;
+
 /// The human-readable form of the ABI-encoded revert payload the way geth's abi.UnpackRevert
 /// reads it: Error(string) → the string, Panic(uint256) → the Solidity panic description.
 /// nullopt for raw / custom-error / malformed data (the caller then decodes `data` itself).
@@ -1767,28 +1779,57 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         co_return;
     }
 
-    // Find the least budget that executes. The loop rests on one premise, stated as a premise and
-    // not as a fact: within one block state, a budget at or below the ceiling that fails failed
-    // because of the budget -- the dry run is free (no balance check, no base fee), so a larger
-    // budget cannot newly fail anything else. Every probe pins the resolved block number, so the
-    // premise holds across the probes even when the caller passed `latest`; it cannot hold for
-    // state that moves between them, which is why the answer is the least budget this endpoint
-    // *observed* succeeding rather than a guarantee about later blocks.
+    // Find the least budget that executes, in two phases.
     //
-    // [measured, ceiling] is bisected, not walked: `high` is always a budget a probe saw succeed
-    // (it starts at the ceiling, proven above) and `low` a budget a probe saw fail, so the answer
-    // is derived from an execution and the request costs at most 2 + ceil(log2(ceiling)) dry runs
-    // however far the answer is from the measurement. A linear climb would cost dozens on exactly
-    // the deep-call shape that is most expensive to execute.
-    uint64_t low = measured;
-    uint64_t high = ceiling;
-    bool lowFailed = false;  // no probe has run at `low` yet
-    uint32_t probes = 1;     // the ceiling probe above
+    // The cost profile is asymmetric, so one strategy does not fit both ends. A 10% ladder is the
+    // right first move: a nested call usually needs a small multiple of what it consumes (EIP-150
+    // forwards 63/64 per level, so a shalow chain lands just above the measurement), and there the
+    // ladder settles in two or three probes -- 1.1x, 1.21x -- where bisecting the whole interval
+    // would spend ~25 probes narrowing to the same gas. Its weakness is the far end: from the
+    // 21,000 floor to a 30M limit the ladder is 77 steps, on exactly the deep-call shape that is
+    // the most expensive to execute.
+    //
+    // So the ladder gets a fixed number of steps and the remainder is bisected. The near case
+    // keeps its two or three probes; the far case is bounded by
+    // 1 + 1 + LADDER_STEPS + ceil(log2(ceiling)) instead of ~83.
+    //
+    // The loop rests on one premise, stated as a premise and not as a fact: within one block
+    // state, a budget at or below the ceiling that fails failed because of the budget -- the dry
+    // run is free (no balance check, no base fee), so a larger budget cannot newly fail anything
+    // else. Every probe pins the resolved block number, so the premise holds across the probes
+    // even when the caller passed `latest`; it cannot hold for state that moves between them,
+    // which is why the answer is the least budget this endpoint *observed* succeeding rather than
+    // a guarantee about later blocks.
+    uint64_t low = measured;  // highest budget known to fail; starts at the unprobed measurement
+    uint64_t high = ceiling;  // lowest budget known to succeed (the ceiling probe above)
+    bool lowFailed = false;
+    uint32_t probes = 1;  // the ceiling probe above
+    uint32_t ladderSteps = 0;
     while (high - low > 1)
     {
-        // The first iteration probes the measurement itself, which keeps the common case (the
-        // answer is the measurement) at two dry runs; every later one halves the interval.
-        auto const budget = lowFailed ? low + (high - low) / 2 : low;
+        uint64_t budget;
+        if (!lowFailed)
+        {
+            // First probe: the measurement itself, so a call that needs exactly what it consumed
+            // costs two dry runs.
+            budget = low;
+        }
+        else if (ladderSteps < c_estimateGasLadderSteps)
+        {
+            ++ladderSteps;
+            auto const grown = low + low / 10 + 1;  // +1: never stall on a rounding zero
+            if (grown >= high)
+            {
+                // The ladder has reached a budget already known to succeed; that IS the answer,
+                // and probing it again would be a wasted dry run.
+                break;
+            }
+            budget = grown;
+        }
+        else
+        {
+            budget = low + (high - low) / 2;  // remainder: bisect
+        }
         Json::Value attempt = request;
         // Pin the block: re-resolving `latest` per attempt would let the probes straddle blocks,
         // and a failure could then be the state moving rather than the budget.
@@ -1813,13 +1854,13 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     // reaches here with an unproven answer, so there is no "report the ceiling anyway" fallback.
     if (probes > c_estimateGasProbeLogThreshold)
     {
-        WEB3_LOG(INFO) << LOG_DESC("eth_estimateGas: bisected") << LOG_KV("gas", high)
+        WEB3_LOG(INFO) << LOG_DESC("eth_estimateGas: settled") << LOG_KV("gas", high)
                        << LOG_KV("measured", measured) << LOG_KV("ceiling", ceiling)
                        << LOG_KV("probes", probes) << LOG_KV("block", blockNumber);
     }
     else if (c_fileLogLevel == TRACE)
     {
-        WEB3_LOG(TRACE) << LOG_DESC("eth_estimateGas: bisected") << LOG_KV("gas", high)
+        WEB3_LOG(TRACE) << LOG_DESC("eth_estimateGas: settled") << LOG_KV("gas", high)
                         << LOG_KV("measured", measured) << LOG_KV("ceiling", ceiling)
                         << LOG_KV("probes", probes) << LOG_KV("block", blockNumber);
     }

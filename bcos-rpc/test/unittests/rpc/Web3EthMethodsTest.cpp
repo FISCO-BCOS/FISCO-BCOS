@@ -488,10 +488,11 @@ BOOST_AUTO_TEST_CASE(estimateGasCapComesFromTheTipBlockHeaderAtTheEndpoint)
     BOOST_CHECK_EQUAL(recordingScheduler->gasLimits.front(), u256(21'000'000));
 }
 
-// eth_estimateGas measures once at the ceiling and then bisects [measurement, ceiling]: the
-// answer is a budget the node ran the call with and saw succeed, and the probe count is
-// logarithmic in the interval rather than proportional to it.
-BOOST_AUTO_TEST_CASE(estimateGasBisectsFromTheMeasurement)
+// eth_estimateGas measures once at the ceiling, then walks a 10% ladder from the measurement and
+// bisects whatever is left. Both ends matter: the ladder is what keeps a call that needs only a
+// little more than it consumed cheap (this case settles in three probes), and the bisection is
+// what stops a deep call chain from costing dozens.
+BOOST_AUTO_TEST_CASE(estimateGasLaddersThenBisects)
 {
     m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(21'000'000));
 
@@ -516,20 +517,51 @@ BOOST_AUTO_TEST_CASE(estimateGasBisectsFromTheMeasurement)
     BOOST_REQUIRE_GE(probes.size(), 2U);  // the ceiling probe plus at least one retry
     BOOST_CHECK_EQUAL(probes.front(), u256(21'000'000));  // ceiling first
     BOOST_CHECK_EQUAL(probes.at(1), u256(21'000));        // then the measured floor
-    // The upper bound is the property a linear ladder failed. Bisecting [21000, 21000000] takes
-    // at most ceil(log2(21'000'000 - 21'000)) = 25 halvings, so 26 probes including the ceiling
-    // one -- against 83 for a ladder that grew by 10% per step to the same ceiling.
-    BOOST_CHECK_LE(probes.size(), 26U);
-    // The answer is at least what the call needs and strictly below the ceiling, and it is a
-    // budget a probe actually ran with.
+    // Required is 23,000 against a 20,000 measurement: the ladder probes 22,001 then 24,202 and
+    // stops, so the near case costs four probes in total (ceiling, measurement, two ladder
+    // steps). This is the property that made a plain bisection the wrong choice -- it would need
+    // ~25 probes to land in the same place, on every nested call.
+    BOOST_CHECK_EQUAL(probes.size(), 4U);
+    BOOST_CHECK_EQUAL(probes.at(2), u256(22'001));  // 20000 + 2000 + 1
+    BOOST_CHECK_EQUAL(probes.at(3), u256(24'202));  // 22001 + 2200 + 1
+    // The answer is at least what the call needs, strictly below the ceiling, and a budget a
+    // probe actually ran with.
     auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
     BOOST_CHECK_GE(answer, ladderScheduler->required);
     BOOST_CHECK_LT(answer, 21'000'000U);
     BOOST_CHECK_EQUAL(probes.back(), u256(answer));
-    // No budget is probed twice: a duplicate would mean the interval stopped shrinking.
-    auto sorted = probes;
-    std::sort(sorted.begin(), sorted.end());
-    BOOST_CHECK(std::adjacent_find(sorted.begin(), sorted.end()) == sorted.end());
+}
+
+// The far end: a call that needs orders of magnitude more than it consumes must not cost dozens
+// of dry runs. Ladder steps are capped, then the remainder is bisected.
+BOOST_AUTO_TEST_CASE(estimateGasBoundsTheFarEnd)
+{
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(21'000'000));
+
+    auto ladderScheduler = std::make_shared<LadderScheduler>(m_ledger, m_blockFactory);
+    ladderScheduler->measured = u256(21'000);  // a cheap call ...
+    ladderScheduler->required = 12'000'000;    // ... that needs a deep chain's worth of budget
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, ladderScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    Json::Value response;
+    task::syncWait(endpoint->estimateGas(params, response));
+
+    // Ceiling probe + measurement probe + the capped ladder + log2 of what remains. A pure 10%
+    // ladder needs ~70 probes to cross this interval; a pure bisection needs ~25 even for a call
+    // that needs nothing extra. The bound is what keeps both ends cheap.
+    BOOST_CHECK_LE(ladderScheduler->gasLimits.size(), 2U + 8U + 25U);
+    auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
+    BOOST_CHECK_GE(answer, ladderScheduler->required);
+    BOOST_CHECK_LT(answer, 21'000'000U);
 }
 
 // A client sends an EIP-55 mixed-case `from` (ethers/viem default). The account row key is
