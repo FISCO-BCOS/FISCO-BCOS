@@ -741,8 +741,8 @@ struct EL1BForkFixture
                 nodeA.verifier, nodeA.fakeLedger, nodeA.blockFactory, forks,
                 /*chainId=*/1, /*mergeBlock=*/0)),
         service(memPool, nodeA.storage, stubExecutor, stubScheduler, nodeA.blockFactory,
-            /*ledger=*/nullptr, engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+            /*ledger=*/nullptr, static_cast<std::uint32_t>(ApiVersion::V4),
+            /*commitObserver=*/nullptr,
             /*ledgerConfigState=*/nullptr, externalVerifier,
             /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>())
     {}

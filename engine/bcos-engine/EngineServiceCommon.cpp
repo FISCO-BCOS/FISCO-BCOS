@@ -264,6 +264,38 @@ PayloadStatus makeStatus(PayloadValidationStatus status, std::optional<h256> lat
     };
 }
 
+void requireNewPayloadWindow(std::uint32_t requestVersion, evmc_revision revision)
+{
+    bool inWindow = true;
+    switch (static_cast<ApiVersion>(requestVersion))
+    {
+    case ApiVersion::V1:
+        break;  // no window: shanghai.md adds none and geth's NewPayloadV1 checks none
+    case ApiVersion::V2:
+        inWindow = revision < EVMC_CANCUN;  // cancun.md "Update the methods of previous forks"
+        break;
+    case ApiVersion::V3:
+        inWindow = revision == EVMC_CANCUN;  // prague.md retires V3 from Prague on
+        break;
+    case ApiVersion::V4:
+        // prague.md; osaka.md adds no newPayloadV4 rule, so Osaka (and the BPO forks, which
+        // map to EVMC_OSAKA) keep V4 — geth's checkFork(Prague, Osaka, BPO1, BPO2). A closed
+        // set so a future revision does not slip through the old method.
+        inWindow = revision == EVMC_PRAGUE || revision == EVMC_OSAKA;
+        break;
+    case ApiVersion::V5:
+        inWindow = false;  // Amsterdam: not implemented
+        break;
+    }
+    if (!inWindow)
+    {
+        BOOST_THROW_EXCEPTION(
+            UnsupportedFork{} << bcos::errinfo_comment{
+                "newPayloadV" + std::to_string(requestVersion) +
+                ": the payload's timestamp falls in a fork outside this method's window"});
+    }
+}
+
 void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,
     std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion,
     std::optional<evmc_revision> l1Revision)
