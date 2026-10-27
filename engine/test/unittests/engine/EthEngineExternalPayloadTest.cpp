@@ -91,7 +91,7 @@ public:
         int64_t timestampSeconds) const override
     {
         forkVersionAtCalls.push_back(timestampSeconds);
-        return l1Context.forkVersion;
+        return engine::detail::ethBlockVersionFor(l1Context.revision);
     }
     task::Task<engine_common::ExternalBuildResult> buildL1Block(
         RealGlobalStateStorage::ViewType&, engine_common::ExternalBuildBlock const& block) override
@@ -114,7 +114,7 @@ public:
     int64_t lastDeriveTimestamp = 0;
     engine_common::ExternalL1Context l1Context{.baseFee = 7,
         .excessBlobGas = 0,
-        .forkVersion = bcos::protocol::EthBlockVersion::CANCUN};
+        .revision = EVMC_CANCUN};
     mutable std::vector<int64_t> forkVersionAtCalls;
     unsigned buildCalls = 0;
     std::optional<engine_common::ExternalBuildBlock> lastBuild;
@@ -744,7 +744,7 @@ BOOST_FIXTURE_TEST_CASE(builtPayloadParentUnknownReadsEraFromForkSchedule, Exter
         static_cast<int64_t>(payload->executionPayload.timestamp / 1000));
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0U);
 
-    mockVerifier->l1Context.forkVersion = bcos::protocol::EthBlockVersion::PRAGUE;
+    mockVerifier->l1Context.revision = EVMC_PRAGUE;
     auto mismatched = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK(mismatched.status == PayloadValidationStatus::InvalidBlockHash);
     BOOST_CHECK_EQUAL(mockVerifier->forkVersionAtCalls.size(), 2U);
