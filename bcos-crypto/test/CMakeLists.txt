@@ -34,9 +34,3 @@ if(FULLNODE)
 endif()
 set_source_files_properties("unittests/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" "")
-
-# Regression guard against the bundled-secp256k1 link hijack (see the script header).
-add_test(NAME wedpr-no-bundled-secp256k1
-    COMMAND ${CMAKE_COMMAND} -DBINARY_DIR=${CMAKE_BINARY_DIR} "-DGENERATOR=${CMAKE_GENERATOR}"
-        "-DWEDPR_LIB_DIR=$<TARGET_FILE_DIR:wedprcrypto::crypto>"
-        -P ${CMAKE_SOURCE_DIR}/cmake/CheckWedprSecp256k1.cmake)

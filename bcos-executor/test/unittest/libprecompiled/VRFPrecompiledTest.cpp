@@ -19,13 +19,13 @@
 #include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-crypto/signature/sm2/SM2Crypto.h"
+#include "bcos-crypto/vrf/Curve25519Vrf.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/precompiled/CryptoPrecompiled.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <wedpr-crypto/WedprCrypto.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -78,28 +78,18 @@ void testVRFVerify(VRFPrecompiledFixture _fixture)
     auto keyPair = _fixture.m_cryptoSuite->signatureImpl()->generateKeyPair();
     // generate vrfProof
     std::string input = "abcd";
-    bytes vrfPublicKey;
-    vrfPublicKey.resize(32);
-    CInputBuffer privateKey{
-        (const char*)keyPair->secretKey()->data().data(), keyPair->secretKey()->size()};
-    COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+    auto secretRef =
+        bytesConstRef(reinterpret_cast<const byte*>(keyPair->secretKey()->data().data()),
+            keyPair->secretKey()->size());
     // derive the public key
-    std::cout << "try to wedpr_curve25519_vrf_derive_public_key" << std::endl;
-    auto ret = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
-    BOOST_CHECK_EQUAL(ret, WEDPR_SUCCESS);
-    std::cout << "try to wedpr_curve25519_vrf_derive_public_key success" << std::endl;
+    bytes vrfPublicKey = curve25519VrfDerivePublicKey(secretRef);
+    BOOST_REQUIRE_EQUAL(vrfPublicKey.size(), CURVE25519_VRF_PUBLIC_KEY_SIZE);
 
     // generate proof
     bytes inputBytes = bytes(input.begin(), input.end());
-    CInputBuffer inputMsg{(const char*)inputBytes.data(), inputBytes.size()};
-    bytes vrfProof;
-    size_t proofSize = 96;
-    vrfProof.resize(proofSize);
-    COutputBuffer proof{(char*)vrfProof.data(), proofSize};
-    std::cout << "try to wedpr_curve25519_vrf_prove_utf8" << std::endl;
-    ret = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
-    BOOST_CHECK_EQUAL(ret, WEDPR_SUCCESS);
-    std::cout << "try to wedpr_curve25519_vrf_prove_utf8 success" << std::endl;
+    bytes vrfProof =
+        curve25519VrfProve(secretRef, bytesConstRef(inputBytes.data(), inputBytes.size()));
+    BOOST_REQUIRE_EQUAL(vrfProof.size(), CURVE25519_VRF_PROOF_SIZE);
 
     // case1: verify success
     u256 lastRandomValue;

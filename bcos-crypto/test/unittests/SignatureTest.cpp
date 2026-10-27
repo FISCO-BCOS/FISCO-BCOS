@@ -24,6 +24,7 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithV.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
+#include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
@@ -33,9 +34,6 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
-#if SM2_OPTIMIZE
-#include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
-#endif
 using namespace bcos;
 using namespace bcos::crypto;
 
@@ -101,6 +99,11 @@ BOOST_AUTO_TEST_CASE(testSecp256k1KeyPair)
     BOOST_CHECK(keyPair->publicKey()->data() == testPub->data());
     SecretPtr emptySecret = std::make_shared<KeyImpl>(SECP256K1_PRIVATE_LEN);
     BOOST_CHECK_THROW(Secp256k1KeyPair emptyKeyPair(emptySecret), PriToPublicKeyException);
+    // short secret: secp256k1_ec_pubkey_create would read 32 bytes unconditionally —
+    // must be rejected before the FFI call (base wedpr threw cleanly)
+    SecretPtr shortSecret = std::make_shared<KeyImpl>(SECP256K1_PRIVATE_LEN - 1);
+    BOOST_CHECK_THROW(secp256k1PriToPub(shortSecret), PriToPublicKeyException);
+    BOOST_CHECK_THROW(Secp256k1KeyPair shortKeyPair(shortSecret), PriToPublicKeyException);
 }
 
 BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
@@ -348,11 +351,99 @@ BOOST_AUTO_TEST_CASE(testSM2SignAndVerify)
     std::cout << "### testSM2SignAndVerify: SM2Crypto" << std::endl;
     auto signatureCrypto = std::make_shared<SM2Crypto>();
     SM2SignAndVerifyTest(signatureCrypto);
-#if SM2_OPTIMIZE
     std::cout << "### testSM2SignAndVerify: FastSM2Crypto" << std::endl;
     auto fastCrypto = std::make_shared<FastSM2Crypto>();
     SM2SignAndVerifyTest(fastCrypto);
-#endif
+}
+
+// fast_sm2_verify copies raw_public_key->len bytes into a fixed 65-byte stack buffer;
+// KeyImpl does not truncate oversized input, so a >64-byte public key must fail cleanly
+// (under ASan any residual overflow would abort the test binary)
+BOOST_AUTO_TEST_CASE(testSM2VerifyOversizedPublicKey)
+{
+    auto signatureCrypto = std::make_shared<SM2Crypto>();
+    auto keyPair = signatureCrypto->generateKeyPair();
+    auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
+    auto signature = signatureCrypto->sign(*keyPair, hashData, false);
+    BOOST_CHECK(signatureCrypto->verify(
+        keyPair->publicKey(), hashData, bytesConstRef(signature->data(), signature->size())));
+
+    // valid 64-byte key with an extra trailing byte
+    auto oversizedPub = std::make_shared<bytes>(keyPair->publicKey()->constData(),
+        keyPair->publicKey()->constData() + keyPair->publicKey()->size());
+    oversizedPub->push_back(0x01);
+    BOOST_CHECK(!signatureCrypto->verify(
+        oversizedPub, hashData, bytesConstRef(signature->data(), signature->size())));
+    // short public key through the bytes-shared_ptr overload: KeyImpl rejects it
+    auto shortPub = std::make_shared<bytes>(keyPair->publicKey()->constData(),
+        keyPair->publicKey()->constData() + keyPair->publicKey()->size() - 1);
+    BOOST_CHECK_THROW(signatureCrypto->verify(
+                          shortPub, hashData, bytesConstRef(signature->data(), signature->size())),
+        InvalidKey);
+    // short public key reaching fast_sm2_verify directly (KeyImpl without the size ctor)
+    BOOST_CHECK(!signatureCrypto->verify(std::make_shared<KeyImpl>(bytes(63, 0x04)), hashData,
+        bytesConstRef(signature->data(), signature->size())));
+}
+
+// SM2Crypto::verify must reject a short signature before constructing the fixed
+// SM2_SIGNATURE_LEN view, which would otherwise read past the caller's buffer (under ASan
+// any residual overread would abort the test binary)
+BOOST_AUTO_TEST_CASE(testSM2VerifyShortSignature)
+{
+    auto signatureCrypto = std::make_shared<SM2Crypto>();
+    auto keyPair = signatureCrypto->generateKeyPair();
+    auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
+    auto signature = signatureCrypto->sign(*keyPair, hashData, false);
+    BOOST_REQUIRE_EQUAL(signature->size(), SM2_SIGNATURE_LEN);
+
+    BOOST_CHECK(!signatureCrypto->verify(
+        keyPair->publicKey(), hashData, bytesConstRef(signature->data(), SM2_SIGNATURE_LEN - 1)));
+    BOOST_CHECK(!signatureCrypto->verify(keyPair->publicKey(), hashData, bytesConstRef{}));
+}
+
+// ed25519Verify must reject a short signature before constructing the fixed
+// ED25519_SIGNATURE_LEN view, which would otherwise read past the caller's buffer (under
+// ASan any residual overread would abort the test binary)
+BOOST_AUTO_TEST_CASE(testEd25519VerifyShortSignature)
+{
+    auto signatureCrypto = std::make_shared<Ed25519Crypto>();
+    auto keyPair = signatureCrypto->generateKeyPair();
+    auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
+    auto signature = signatureCrypto->sign(*keyPair, hashData, false);
+    BOOST_REQUIRE_EQUAL(signature->size(), ED25519_SIGNATURE_LEN);
+
+    BOOST_CHECK(!signatureCrypto->verify(keyPair->publicKey(), hashData,
+        bytesConstRef(signature->data(), ED25519_SIGNATURE_LEN - 1)));
+    BOOST_CHECK(!signatureCrypto->verify(keyPair->publicKey(), hashData, bytesConstRef{}));
+}
+
+// positive control for the sizeof(in) fix: a real hash‖pub‖r‖s buffer must verify and
+// recover the signing key's address (reverting to sizeof(_input) turns this red);
+// a truncated input leaves the tail zero-filled and fails verification deterministically
+BOOST_AUTO_TEST_CASE(testEd25519RecoverAddressFromInput)
+{
+    auto signatureCrypto = std::make_shared<Ed25519Crypto>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto keyPair = signatureCrypto->generateKeyPair();
+    auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
+    auto sig = signatureCrypto->sign(*keyPair, hashData, false);
+    BOOST_REQUIRE_EQUAL(sig->size(), ED25519_SIGNATURE_LEN);
+
+    bytes input;
+    input.insert(input.end(), hashData.begin(), hashData.end());
+    auto const& pub = *keyPair->publicKey();
+    input.insert(input.end(), pub.constData(), pub.constData() + pub.size());
+    input.insert(input.end(), sig->begin(), sig->end());
+    BOOST_REQUIRE_EQUAL(input.size(), 32 + pub.size() + sig->size());
+
+    auto [ok, addr] = signatureCrypto->recoverAddress(hashImpl, ref(input));
+    BOOST_CHECK(ok);
+    BOOST_CHECK(addr == calculateAddress(hashImpl, keyPair->publicKey()).asBytes());
+
+    auto truncated = bytes(input.begin(), input.end() - 1);
+    auto [okShort, addrShort] = signatureCrypto->recoverAddress(hashImpl, ref(truncated));
+    BOOST_CHECK(!okShort);
+    BOOST_CHECK(addrShort.empty());
 }
 
 

@@ -20,8 +20,8 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyPairFactory.h>
+#include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
-#include <wedpr-crypto/WedprCrypto.h>
 #include <memory>
 namespace bcos
 {
@@ -31,7 +31,7 @@ class SM2KeyPairFactory : public KeyPairFactory
 {
 public:
     using Ptr = std::shared_ptr<SM2KeyPairFactory>;
-    SM2KeyPairFactory() { m_keyPairGenerator = wedpr_sm2_gen_key_pair; }
+    SM2KeyPairFactory() { m_keyPairGenerator = fast_sm2_gen_key_pair; }
     ~SM2KeyPairFactory() override {}
 
     virtual KeyPairInterface::UniquePtr createKeyPair() { return std::make_unique<SM2KeyPair>(); }

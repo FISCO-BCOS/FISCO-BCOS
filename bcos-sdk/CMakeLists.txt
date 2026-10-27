@@ -9,7 +9,6 @@ if (ONLY_CPP_SDK AND (NOT WITH_SWIG_SDK))
 endif ()
 
 find_package(Boost REQUIRED log serialization)
-find_package(wedprcrypto REQUIRED)
 find_package(jsoncpp REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Microsoft.GSL REQUIRED)

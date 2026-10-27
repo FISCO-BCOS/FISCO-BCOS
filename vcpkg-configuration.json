@@ -7,7 +7,6 @@
       "packages": [
         "ethash",
         "fiscobcos",
-        "wedprcrypto",
         "hsm-crypto"
       ]
     }
@@ -26,6 +25,7 @@
     "./ports/ittapi",
     "./ports/group-sig",
     "./ports/paillier",
+    "./ports/libsodium",
     "./ports-data/ethereum-tests"
   ]
 }

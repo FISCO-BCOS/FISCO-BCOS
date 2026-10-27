@@ -21,32 +21,41 @@
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <wedpr-crypto/WedprCrypto.h>
+#include <openssl/evp.h>
+#include <memory>
 
 using namespace bcos;
 using namespace bcos::crypto;
 
+namespace
+{
+using EvpCipherCtxPtr = std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)>;
+}  // namespace
+
 bytes bcos::crypto::AESEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize)
 {
-    CInputBuffer plainText{(const char*)_plainData, _plainDataSize};
-
     FixedBytes<AES_KEY_SIZE> fixedKeyData(_key, _keySize);
-    CInputBuffer key{(const char*)fixedKeyData.data(), AES_KEY_SIZE};
+    FixedBytes<AES_IV_DATA_SIZE> fixedIVData(_ivData, _ivDataSize);
 
-    FixedBytes<AES_IV_DATA_SIZE> FixedIVData(_ivData, _ivDataSize);
-    CInputBuffer ivData{(const char*)FixedIVData.data(), AES_IV_DATA_SIZE};
-
-    bytes encryptedData;
-    size_t ciperDataSize = _plainDataSize + AES_MAX_PADDING_SIZE;
-    encryptedData.resize(ciperDataSize);
-    COutputBuffer encryptResult{(char*)(encryptedData.data()), ciperDataSize};
-
-    if (wedpr_aes256_encrypt(&plainText, &key, &ivData, &encryptResult) == WEDPR_ERROR)
+    // AES-256-CBC with PKCS7 padding (EVP default padding)
+    EvpCipherCtxPtr ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
+    if (!ctx || EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_cbc(), nullptr, fixedKeyData.data(),
+                    fixedIVData.data()) != 1)
     {
         BOOST_THROW_EXCEPTION(EncryptException() << errinfo_comment("AES encrypt exception"));
     }
-    encryptedData.resize(encryptResult.len);
+
+    bytes encryptedData(_plainDataSize + AES_MAX_PADDING_SIZE);
+    int updateLen = 0;
+    int finalLen = 0;
+    if ((_plainDataSize > 0 && EVP_EncryptUpdate(ctx.get(), encryptedData.data(), &updateLen,
+                                   _plainData, static_cast<int>(_plainDataSize)) != 1) ||
+        EVP_EncryptFinal_ex(ctx.get(), encryptedData.data() + updateLen, &finalLen) != 1)
+    {
+        BOOST_THROW_EXCEPTION(EncryptException() << errinfo_comment("AES encrypt exception"));
+    }
+    encryptedData.resize(updateLen + finalLen);
 
     return encryptedData;
 }
@@ -54,24 +63,28 @@ bytes bcos::crypto::AESEncrypt(const unsigned char* _plainData, size_t _plainDat
 bytes bcos::crypto::AESDecrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize)
 {
-    CInputBuffer ciper{(const char*)_cipherData, _cipherDataSize};
-
     FixedBytes<AES_KEY_SIZE> fixedKeyData(_key, _keySize);
-    CInputBuffer key{(const char*)fixedKeyData.data(), AES_KEY_SIZE};
-
     FixedBytes<AES_IV_DATA_SIZE> fixedIVData(_ivData, _ivDataSize);
-    CInputBuffer iv{(const char*)fixedIVData.data(), AES_IV_DATA_SIZE};
 
-    bytes decodedData;
-    auto plainDataSize = _cipherDataSize;
-    decodedData.resize(plainDataSize);
-    COutputBuffer decodedResult{(char*)decodedData.data(), plainDataSize};
-
-    if (wedpr_aes256_decrypt(&ciper, &key, &iv, &decodedResult) == WEDPR_ERROR)
+    // AES-256-CBC with PKCS7 padding (EVP default padding)
+    EvpCipherCtxPtr ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
+    if (!ctx || EVP_DecryptInit_ex(ctx.get(), EVP_aes_256_cbc(), nullptr, fixedKeyData.data(),
+                    fixedIVData.data()) != 1)
     {
         BOOST_THROW_EXCEPTION(DecryptException() << errinfo_comment("AES decrypt exception"));
     }
-    decodedData.resize(decodedResult.len);
+
+    // EVP_DecryptUpdate may hold back one block for the padding check
+    bytes decodedData(_cipherDataSize + AES_MAX_PADDING_SIZE);
+    int updateLen = 0;
+    int finalLen = 0;
+    if ((_cipherDataSize > 0 && EVP_DecryptUpdate(ctx.get(), decodedData.data(), &updateLen,
+                                    _cipherData, static_cast<int>(_cipherDataSize)) != 1) ||
+        EVP_DecryptFinal_ex(ctx.get(), decodedData.data() + updateLen, &finalLen) != 1)
+    {
+        BOOST_THROW_EXCEPTION(DecryptException() << errinfo_comment("AES decrypt exception"));
+    }
+    decodedData.resize(updateLen + finalLen);
 
     return decodedData;
 }

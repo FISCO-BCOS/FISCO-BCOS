@@ -25,9 +25,10 @@
 #include "bcos-pbft/core/ConsensusConfig.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include <bcos-codec/wrapper/CodecWrapper.h>
+#include <bcos-crypto/vrf/Curve25519Vrf.h>
+#include <bcos-crypto/vrf/Secp256k1Vrf.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-txpool/TxPool.h>
-#include <wedpr-crypto/WedprCrypto.h>
 #include <boost/endian/conversion.hpp>
 #include <cstdint>
 
@@ -94,55 +95,40 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
             return SealBlockResult::WAIT_FOR_LATEST_BLOCK;
         }
         auto keyPair = _sealerConfig->keyPair();
-        CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
-            keyPair->secretKey()->size()};
+        auto secretRef =
+            bytesConstRef(reinterpret_cast<const byte*>(keyPair->secretKey()->data().data()),
+                keyPair->secretKey()->size());
         bytes vrfPublicKey;
         bcos::bytes vrfProof;
         // FIB-160: curve choice from the same Features snapshot as blockNumberInput
         // above, so a concurrent setFeatures cannot make the two flags disagree.
         sealer::VrfCurveType vrfCurveType = getVrfCurveType(features);
-        int8_t vrfProve = 0;
-        int8_t pubkeyDerive = 0;
         auto blockHash = _sealingManager->latestHash();
         auto blockNumberBigEndian = boost::endian::native_to_big(blockNumber);
-        CInputBuffer inputMsg = {
-            .data = blockNumberInput ?
-                        reinterpret_cast<const char*>(std::addressof(blockNumberBigEndian)) :
-                        reinterpret_cast<const char*>(blockHash.data()),
-            .len = blockNumberInput ? sizeof(blockNumberBigEndian) :
-                                      static_cast<size_t>(blockHash.size())};
+        bytesConstRef inputMsg =
+            blockNumberInput ?
+                bytesConstRef(reinterpret_cast<const byte*>(std::addressof(blockNumberBigEndian)),
+                    sizeof(blockNumberBigEndian)) :
+                bytesConstRef(blockHash.data(), blockHash.size());
         if (vrfCurveType == sealer::VrfCurveType::CURVE25519)
         {
-            vrfPublicKey.resize(curve25519PublicKeySize);
-            COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
             // NOTE: curve25519 fits sm2 and secp256k1 private key value range, so if you want to
             // change elliptic curve, do think twice here.
-            pubkeyDerive = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
-
-            vrfProof.resize(curve25519VRFProofSize);
-            COutputBuffer proof{(char*)vrfProof.data(), curve25519VRFProofSize};
-            // FIB-147: do NOT redeclare 'vrfProve' here. The previous code used
-            // 'auto vrfProve = ...' which shadowed the outer-scope int8_t vrfProve
-            // (declared at function scope, initialized to 0). The error check below
-            // (vrfProve != WEDPR_SUCCESS) tested the outer's initial 0 (treated as
-            // success), so a failed curve25519 VRF proof was silently accepted and
-            // the sealer continued with an invalid/empty proof. Assign to the outer
-            // variable so the subsequent check sees the actual call result.
-            vrfProve = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
+            vrfPublicKey = crypto::curve25519VrfDerivePublicKey(secretRef);
+            // FIB-147: a failed proof must surface here — the previous FFI code shadowed the
+            // result variable, so a failed curve25519 VRF proof was silently accepted. The
+            // curve25519 VRF never returns empty; its failure surface is a thrown
+            // std::runtime_error, caught by the enclosing try/catch which returns FAILED.
+            vrfProof = crypto::curve25519VrfProve(secretRef, inputMsg);
         }
         else if (vrfCurveType == sealer::VrfCurveType::SECKP256K1)
         {
-            vrfPublicKey.resize(secp256k1PublicKeySize);
-            COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
-            pubkeyDerive = wedpr_secp256k1_vrf_derive_public_key(&privateKey, &publicKey);
-
-            vrfProof.resize(secp256k1VRFProofSize);
-            COutputBuffer proof{(char*)vrfProof.data(), secp256k1VRFProofSize};
-            vrfProve = wedpr_secp256k1_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
+            // the secp256k1 VRF family reports failure as an empty bytes object, checked below
+            vrfPublicKey = crypto::secp256k1VrfDerivePublicKey(secretRef);
+            vrfProof = crypto::secp256k1VrfProve(secretRef, inputMsg);
         }
 
-
-        if (vrfProve != WEDPR_SUCCESS || pubkeyDerive != WEDPR_SUCCESS) [[unlikely]]
+        if (vrfPublicKey.empty() || vrfProof.empty()) [[unlikely]]
         {
             SEAL_LOG(WARNING) << LOG_DESC(
                                      "generateTransactionForRotating: generate vrf-proof failed")
