@@ -265,15 +265,55 @@ PayloadStatus makeStatus(PayloadValidationStatus status, std::optional<h256> lat
 }
 
 void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,
-    std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion)
+    std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion,
+    std::optional<evmc_revision> l1Revision)
 {
     if (!isGetPayloadVersionCompatible(static_cast<ApiVersion>(requestVersion), builtVersion))
     {
         BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                                   "Payload version is incompatible with requested method version"});
     }
-    if (requestVersion >= static_cast<std::uint32_t>(ApiVersion::V4) &&
-        !payload.withdrawalsRoot.has_value())
+    if (l1Revision.has_value())
+    {
+        // L1 (execution-apis): each getPayload version serves one fork window and answers
+        // -38005 outside it — V2 up to Shanghai (cancun.md "Update the methods of previous
+        // forks"), V3 Cancun only (prague.md), V4 Prague only (osaka.md), V5 Osaka
+        // (osaka.md; the BPO forks map to EVMC_OSAKA in evmcRevisionForTimestamp, Amsterdam
+        // is getPayloadV6). geth's GetPayloadV2..V5 fork tables are the same sets. The L1
+        // V4/V5 shapes add executionRequests (and at V5 the Osaka blobs bundle) on top of
+        // ExecutionPayloadV3; the OP-dialect withdrawalsRoot checked below is not part of
+        // them. V2's upper bound is unreachable today (an L1 build at Cancun or later
+        // requires FCU V3's parentBeaconBlockRoot, so no shape-2 payload exists there) and
+        // stays for the spec's sake.
+        auto const revision = *l1Revision;
+        bool inWindow = true;
+        switch (static_cast<ApiVersion>(requestVersion))
+        {
+        case ApiVersion::V1:
+            break;
+        case ApiVersion::V2:
+            inWindow = revision < EVMC_CANCUN;
+            break;
+        case ApiVersion::V3:
+            inWindow = revision == EVMC_CANCUN;
+            break;
+        case ApiVersion::V4:
+            inWindow = revision == EVMC_PRAGUE;
+            break;
+        case ApiVersion::V5:
+            inWindow = revision == EVMC_OSAKA;
+            break;
+        }
+        if (!inWindow)
+        {
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "getPayloadV" + std::to_string(requestVersion) +
+                    ": the payload was built for a fork outside this method's window"});
+        }
+    }
+    else if (requestVersion >= static_cast<std::uint32_t>(ApiVersion::V4) &&
+             !payload.withdrawalsRoot.has_value())
     {
         BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                                   "Payload does not carry the V4+ response shape"});

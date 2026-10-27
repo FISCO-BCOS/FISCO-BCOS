@@ -351,8 +351,8 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     }
     catch (engine::UnsupportedFork const& e)
     {
-        // The payload's fork is outside this method's window (getPayloadV4 for a Karst payload,
-        // V5 for a pre-Karst one).
+        // The payload's fork is outside this method's window: OP lane getPayloadV4 for a Karst
+        // payload or V5 for a pre-Karst one; L1 lane V3/V4/V5 outside Cancun/Prague/Osaka.
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
