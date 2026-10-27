@@ -17,6 +17,7 @@
  * @brief EIP-4844 KZG point-evaluation (0x0a) registration + known-answer (A6.14)
  */
 #include "vm/Precompiled.h"
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 

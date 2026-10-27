@@ -72,6 +72,22 @@ struct OpEthDepositGasLimitReached : std::runtime_error
     using std::runtime_error::runtime_error;
 };
 
+/// Regolith+ rejects system deposits outright (op-geth ErrSystemTxNotSupported,
+/// block-level error). Named for diagnostics; the std::runtime_error base keeps the
+/// deposit path's existing catches working (no caller catches this type today).
+struct OpEthDepositSystemTxUnsupported : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
+/// A receipt gasUsed below zero is an internal invariant violation, never a contract
+/// outcome. Named for diagnostics; the std::runtime_error base keeps existing catches
+/// working (no caller catches this type today).
+struct OpEthDepositNegativeGasUsed : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
 /// Decode `0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data])`.
 /// Trust boundary: deposits are unsigned, so a peer can forge tars mint/value; only the
 /// 0x7e envelope bytes bind those fields. Never read mint/value from the tars mirror.
@@ -196,7 +212,7 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
     // op-geth state_transition.go preCheck: "Don't touch the gas pool for system transactions"
     // pre-Regolith; Regolith rejects them outright (ErrSystemTxNotSupported, block-level error).
     if (dep.isSystemTx && spec.regolith_deposit_fixes)
-        throw std::runtime_error(
+        throw OpEthDepositSystemTxUnsupported(
             "op deposit: is_system_tx not supported since Regolith (block error)");
     const bool preRegolith = !spec.regolith_deposit_fixes;
     const bool unmeteredSystemTx = dep.isSystemTx && preRegolith;
@@ -282,12 +298,12 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
             .flags = 0,
             .depth = 0,
             .gas = dep.gasLimit - intrinsicCost,
+            .state_gas = {},
             .recipient = recipient,
             .sender = dep.from,
             .input_data = dep.data.data(),
             .input_size = dep.data.size(),
             .value = eth::evm::toEvmcBE<evmc::uint256be>(dep.value),
-            .create2_salt = {},
             .code_address = recipient,
             .code = nullptr,
             .code_size = 0,
@@ -321,7 +337,7 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
     }
 
     if (receiptGasUsed < 0)
-        throw std::runtime_error("opRunDeposit: negative gas_used");
+        throw OpEthDepositNegativeGasUsed("opRunDeposit: negative gas_used");
     auto out = rf.createReceipt(bcos::u256{static_cast<uint64_t>(receiptGasUsed)},
         !dep.to.has_value() ? toFiscoContractAddress(dep.from, preNonce) : std::string{},
         std::move(logs), toFiscoOpStatus(receiptStatus),

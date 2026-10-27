@@ -8,8 +8,10 @@
 ///
 /// Ported from bcos-evm/opstack (OpTransition.cpp's opValidate/opTransition
 /// and OpHost.cpp's three overrides) onto the EthExecutionPolicy hook surface;
-/// every formula and constant is byte-for-byte the bcos-evm original (the
-/// dual-run harness in tests/ pins the equivalence against the old path).
+/// every formula and constant is byte-for-byte the bcos-evm original (equivalence
+/// was dual-run-verified once; today's standing pins are the determinism twin in
+/// OpEthForkMatrixTest — the new layer twice from independent forks — plus the
+/// t8n goldens, which are the independent oracle).
 ///
 /// Unlike the stateless EthL1Policy, OpPolicy carries runtime state, so its
 /// hooks are non-static member functions (the hook call sites — `policy.hook(...)`
@@ -96,7 +98,7 @@ public:
         // rejected; an accepted out-of-range kind would fall through the revision
         // gates and be priced as legacy.
         if (txKind == 3 || txKind > 4)
-            return make_error_code(eth::evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(eth::evm::ErrorCode::TYPE_NOT_SUPPORTED);
 
         const auto maxGasPrice = eth::ethMaxGasPrice(tx, callParams);
         const auto maxPriorityGasPrice = eth::ethMaxPriorityGasPrice(tx, callParams);
@@ -270,7 +272,7 @@ public:
 
         if (entry->max_input_size > 0 &&
             static_cast<size_t>(msg.input_size) > entry->max_input_size)
-            return evmc::Result{EVMC_FAILURE, 0};
+            return evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
 
         // Length-limit-only (0x08 / BLS): the base table handles pricing and execution.
         if (entry->gas_cost_override < 0)
@@ -279,7 +281,7 @@ public:
         // Gas-override (0x100): the base table's is_precompile(PRAGUE) is false, so the
         // override dispatches it itself (ported executeGasOverridePrecompile).
         if (msg.gas < entry->gas_cost_override)
-            return evmc::Result{EVMC_OUT_OF_GAS, 0};
+            return evmc::Result{EVMC_OUT_OF_GAS, 0, 0, {.left = msg.state_gas}};
         const int64_t gas_left = msg.gas - entry->gas_cost_override;
 
         // The gas-override branch currently implements only P256Verify; any future additional
@@ -288,30 +290,33 @@ public:
         if (entry->addr != OP_P256_VERIFY_ADDRESS)
         {
             assert(false && "unhandled gas-override precompile address");
-            return evmc::Result{EVMC_INTERNAL_ERROR, gas_left};
+            return evmc::Result{EVMC_INTERNAL_ERROR, gas_left, 0, {.left = msg.state_gas}};
         }
 
-        constexpr size_t kMaxOutput = 32;
+        constexpr size_t c_maxOutput = 32;
         // Heap buffer with a release callback, matching eth::evm::call_precompile's
         // ownership convention (the caller's evmc::Result releases it).
-        const auto output_data = new (std::nothrow) uint8_t[kMaxOutput];
+        const auto output_data = new (std::nothrow) uint8_t[c_maxOutput];
         const auto exec =
-            eth::evm::p256verify_execute(msg.input_data, msg.input_size, output_data, kMaxOutput);
+            eth::evm::p256verify_execute(msg.input_data, msg.input_size, output_data, c_maxOutput);
 
         if (exec.status_code == EVMC_SUCCESS && exec.output_size > 0)
         {
-            const evmc_result result{
-                EVMC_SUCCESS, gas_left, 0, output_data, exec.output_size,
-                [](const evmc_result* res) noexcept { delete[] res->output_data; },
-                evmc::address{},  // create_address
-                {}                // padding
-            };
+            // evmc ABI 19: bind by designator — the struct gained state_gas and
+            // lost create_address/padding, so positional init misaligns.
+            const evmc_result result{.status_code = EVMC_SUCCESS,
+                .gas_left = gas_left,
+                .gas_refund = 0,
+                .state_gas = {.left = msg.state_gas},
+                .output_data = output_data,
+                .output_size = exec.output_size,
+                .release = [](const evmc_result* res) noexcept { delete[] res->output_data; }};
             return evmc::Result{result};
         }
         delete[] output_data;
         // op-geth charges only the 3450 on an input error — the remaining gas survives
         // (unlike evmone's generic path, which zeroes it).
-        return evmc::Result{exec.status_code, gas_left};
+        return evmc::Result{exec.status_code, gas_left, 0, {.left = msg.state_gas}};
     }
 
     /// Addresses in the override table are always warm: op-geth statedb.Prepare warms
@@ -326,6 +331,13 @@ public:
     /// The OP receipt shape (ported opTransition's projection): FISCO 0/1 status, the
     /// return-data output, the 256-byte logsBloom (encodeReceiptLeaf requires it), the
     /// creation contractAddress, the OP metadata snapshot and the hex effective gas price.
+    /// A receipt gasUsed below zero is an internal invariant violation, never a
+    /// contract outcome (review F22: was a bare std::runtime_error).
+    struct NegativeGasUsed : std::runtime_error
+    {
+        using std::runtime_error::runtime_error;
+    };
+
     template <class Host>
     /// @param keepOutput accepted for signature parity with EthL1Policy::buildReceipt; the OP
     ///        receipt has always carried the return data, which is left unchanged here.
@@ -337,7 +349,7 @@ public:
         // (evmone guarantees it; under NDEBUG the assert is gone and the consensus surface
         // tolerates no wrap).
         if (gasUsed < 0)
-            throw std::runtime_error("opTransition: negative gas_used");
+            throw NegativeGasUsed("opTransition: negative gas_used");
 
         std::vector<protocol::LogEntry> logs = eth::takeBcosLogs(host);
         // Guard output_data nullptr (void-return calls): `nullptr + 0` is UB.

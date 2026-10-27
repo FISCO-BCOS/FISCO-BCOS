@@ -23,7 +23,7 @@ inline task::Task<void> createAuthTable(auto& storage, protocol::BlockHeader con
     auto senderAddress = address2HexString(message.sender);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
         std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
-        true);
+        true, ledgerConfig.features());
 
     executive->creatAuthTable(tableName, originAddress, senderAddress, blockHeader.version());
     co_return;
@@ -37,7 +37,7 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
     auto contractAddress = address2HexString(message.code_address);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
         std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
-        true);
+        true, features);
 
     auto params = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
     params->senderAddress = address2HexString(message.sender);
@@ -78,11 +78,10 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
             evmc_result{.status_code = static_cast<evmc_status_code>(params->evmStatus),
                 .gas_left = params->gas,
                 .gas_refund = 0,
+                .state_gas = {},
                 .output_data = buffer.release(),
                 .output_size = errorOutput.size(),
-                .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-                .create_address = {},
-                .padding = {}},
+                .release = [](const struct evmc_result* result) { delete[] result->output_data; }},
             static_cast<protocol::TransactionStatus>(params->status)});
     }
     return {};

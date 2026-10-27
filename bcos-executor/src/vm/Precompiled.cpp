@@ -23,6 +23,7 @@
 #include "../Common.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "wedpr-crypto/WedprCrypto.h"
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/LogStream.h>
 #include <algorithm>
@@ -327,7 +328,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(modexp)(bytesConstRef _in)
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
 {
-    using namespace evmmax::bn254;
+    using namespace evmone::crypto::bn254;  // evmone 0.24: evmmax::bn254 moved here.
 
     uint8_t buf[128]{};
     if (_in.size() != 0)
@@ -339,13 +340,13 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
         return {false, bytes(64, 0)};
 
     bytes output(64, 0);
-    evmmax::ecc::add_affine(*p, *q).to_bytes(std::span<uint8_t, 64>{output.data(), 64});
+    evmone::crypto::ecc::add_affine(*p, *q).to_bytes(std::span<uint8_t, 64>{output.data(), 64});
     return {true, std::move(output)};
 }
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
 {
-    using namespace evmmax::bn254;
+    using namespace evmone::crypto::bn254;  // evmone 0.24: evmmax::bn254 moved here.
 
     uint8_t buf[96]{};
     if (_in.size() != 0)
@@ -361,16 +362,18 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
     return {true, std::move(output)};
 }
 
-ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)(bytesConstRef _in)
+ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)
+(bytesConstRef _in)
 {
+    // No feature flag gates canonicity: the bounded parse is both the EIP-197 rule and
+    // the pre-upgrade 0.21 behaviour, so every chain answers this input identically.
     static constexpr size_t PAIR_SIZE = 192;
     if (_in.size() % PAIR_SIZE != 0)
         return {false, bytes(32, 0)};
 
-    using namespace evmmax::bn254;
-    using intx::be::unsafe::load;
+    using namespace evmone::crypto::bn254;  // evmone 0.24: evmmax::bn254 moved here.
 
-    std::vector<std::pair<Point, ExtPoint>> pairs;
+    std::vector<std::pair<AffinePoint, ExtPoint>> pairs;
     pairs.reserve(_in.size() / PAIR_SIZE);
     for (const uint8_t* ptr = _in.data(); ptr != _in.data() + _in.size(); ptr += PAIR_SIZE)
     {
@@ -378,9 +381,24 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)(bytesConstRef _in)
         if (!g1.has_value() || !validate(*g1))
             return {false, bytes(32, 0)};
 
-        const ExtPoint g2{{load<intx::uint256>(ptr + 96), load<intx::uint256>(ptr + 64)},
-            {load<intx::uint256>(ptr + 160), load<intx::uint256>(ptr + 128)}};
-        pairs.emplace_back(Point{g1->x.value(), g1->y.value()}, g2);
+        // G2 EVM ABI feeds the imaginary coefficient before the real one for each Fq².
+        // Every coordinate is parsed with the bounded Fq::from_bytes, so a value >= the
+        // base field prime is rejected per EIP-197. This is also what the pre-upgrade
+        // evmone 0.21 dependency did: its pairing_check gated all six coordinates through
+        // is_field_element (v < Curve::FIELD_PRIME) and returned nullopt, which the caller
+        // maps to a precompile failure — so pre-upgrade blocks replay byte for byte. The
+        // eth lane's mirror (ethereum-executor/EVMPrecompiles.cpp) is strict the same way.
+        const auto loadG2Coord = [](const uint8_t* word) -> std::optional<Fq> {
+            return Fq::from_bytes(std::span<const uint8_t, 32>{word, 32});
+        };
+        const auto gx_real = loadG2Coord(ptr + 96);
+        const auto gx_imag = loadG2Coord(ptr + 64);
+        const auto gy_real = loadG2Coord(ptr + 160);
+        const auto gy_imag = loadG2Coord(ptr + 128);
+        if (!gx_real || !gx_imag || !gy_real || !gy_imag)
+            return {false, bytes(32, 0)};
+        const ExtPoint g2{Fq2({*gx_real, *gx_imag}), Fq2({*gy_real, *gy_imag})};
+        pairs.emplace_back(*g1, g2);
     }
 
     bytes output(32, 0);
@@ -680,7 +698,7 @@ ETH_REGISTER_PRECOMPILED(p256verify)(bytesConstRef _in)
     const auto s = intx::be::unsafe::load<intx::uint256>(d + 64);
     const auto qx = intx::be::unsafe::load<intx::uint256>(d + 96);
     const auto qy = intx::be::unsafe::load<intx::uint256>(d + 128);
-    bool ok = evmmax::secp256r1::verify(h, r, s, qx, qy);
+    bool ok = evmone::crypto::secp256r1::verify(h, r, s, qx, qy);
     if (!ok)
         return {true, {}};  // EIP-7212: invalid signature → success with empty output
     bytes output(32, 0);

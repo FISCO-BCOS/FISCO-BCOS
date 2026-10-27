@@ -48,11 +48,10 @@ inline EVMCResult buildBuiltinPrecompiledResult(bool success, auto const& output
             .status_code = success ? EVMC_SUCCESS : EVMC_REVERT,
             .gas_left = gasLeft,
             .gas_refund = 0,
+            .state_gas = {},
             .output_data = buffer.release(),
             .output_size = output.size(),
             .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-            .create_address = {},
-            .padding = {},
         },
         success ? protocol::TransactionStatus::None :
                   protocol::TransactionStatus::RevertInstruction};
@@ -105,7 +104,7 @@ inline EVMCResult callBcosPrecompiled(
     auto contractAddress = address2HexString(message.code_address);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
         std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
-        authCheck);
+        authCheck, features);
 
     auto params = std::make_shared<precompiled::PrecompiledExecResult>();
     params->m_sender = address2HexString(message.sender);
@@ -137,11 +136,10 @@ inline EVMCResult callBcosPrecompiled(
                 .status_code = EVMC_SUCCESS,
                 .gas_left = response->m_gasLeft,
                 .gas_refund = 0,
+                .state_gas = {},
                 .output_data = buffer.release(),
                 .output_size = params->m_execResult.size(),
                 .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-                .create_address = {},
-                .padding = {},
             },
             protocol::TransactionStatus::None};
     }
@@ -154,8 +152,32 @@ inline EVMCResult callBcosPrecompiled(
             protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, errorGas(), e.what(),
             features.get(ledger::Features::Flag::bugfix_v1_error_handling));
     }
+    catch (bcos::Error& e)
+    {
+        // A node/infra fault (storage I/O, row decode) is NOT a contract decision
+        // (review F7). Gated on bit 67:
+        //  - ON: rethrow to executeCall()'s FIB-88/92 arm — the identical fault through
+        //    an EVMC callback already fails the whole frame; a receipt sealed from a
+        //    node fault is one the rest of the network cannot reproduce.
+        //  - OFF (the pre-existing behaviour, kept for replay): the fault is sealed as
+        //    the PrecompiledError REVERT below — byte-identical to historical receipts.
+        if (features.get(ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow))
+        {
+            PRECOMPILE_LOG(WARNING) << "Precompiled node fault (rethrowing to the ladder): "
+                                    << boost::diagnostic_information(e);
+            throw;
+        }
+        PRECOMPILE_LOG(WARNING) << "Precompiled node fault (historical REVERT receipt): "
+                                << boost::diagnostic_information(e);
+        return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
+            protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, errorGas(),
+            "InternalPrecompiledFailed"s,
+            features.get(ledger::Features::Flag::bugfix_v1_error_handling));
+    }
     catch (std::exception& e)
     {
+        // Contract-domain failure from the precompiled's own logic (bcos::Exception
+        // derivatives): the REVERT receipt stands.
         PRECOMPILE_LOG(WARNING) << "Precompiled execute error: "
                                 << boost::diagnostic_information(e);
         return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
@@ -178,6 +200,18 @@ inline constexpr struct
         const bool bugfixPrecompiled =
             features.get(ledger::Features::Flag::bugfix_v1_error_handling);
 
+        auto handleException = [&](std::exception& e) -> EVMCResult {
+            PRECOMPILE_LOG(ERROR) << "Unexpected precompiled exception: " << e.what();
+            // FIB-79: preserve old exception behavior when the flag is off.
+            if (!bugfixPrecompiled)
+            {
+                throw;
+            }
+            return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
+                protocol::TransactionStatus::PrecompiledError, EVMC_INTERNAL_ERROR, 0,
+                "InternalPrecompiledError", bugfixPrecompiled);
+        };
+
         try
         {
             return std::visit(
@@ -191,18 +225,19 @@ inline constexpr struct
                     }},
                 precompiled.m_precompiled);
         }
-        catch (std::exception& e)
+        catch (bcos::Error& e)
         {
-            PRECOMPILE_LOG(ERROR) << "Unexpected precompiled exception: " << e.what();
-            // FIB-79: preserve old std::terminate behavior when flag off; return receipt when on.
-            if (!bugfixPrecompiled)
+            // PR #5689 F2: the outer wrapper must preserve the typed node fault
+            // which callBcosPrecompiled deliberately rethrows under this flag.
+            if (features.get(ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow))
             {
                 throw;
             }
-            return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
-                protocol::TransactionStatus::PrecompiledError, EVMC_INTERNAL_ERROR, 0,
-                "InternalPrecompiledError",
-                features.get(ledger::Features::Flag::bugfix_v1_error_handling));
+            return handleException(e);
+        }
+        catch (std::exception& e)
+        {
+            return handleException(e);
         }
     }
 } callPrecompiled{};

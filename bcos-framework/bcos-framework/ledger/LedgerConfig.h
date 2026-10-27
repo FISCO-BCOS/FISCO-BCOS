@@ -422,7 +422,8 @@ inline constexpr int MAX_GOVERNANCE_EXECUTOR_VERSION =
     static_cast<int>(magic_enum::enum_values<ExecutorLane>().back());
 
 /// Convert a canonical EVM fork name (case-insensitive, e.g. "cancun"/"osaka") to an
-/// EVMC revision. Returns nullopt for unknown names so callers can fall back to a default.
+/// EVMC revision. Returns nullopt for unknown — and deliberately refused — names; every
+/// caller halts loudly on nullopt rather than falling back to a default.
 inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
 {
     std::string n(name);
@@ -439,8 +440,12 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
         return EVMC_SPURIOUS_DRAGON;
     if (n == "byzantium")
         return EVMC_BYZANTIUM;
-    if (n == "constantinople")
-        return EVMC_CONSTANTINOPLE;
+    // evmone 0.23 removed the Constantinople revision and retargets its opcodes to
+    // Petersburg. `constantinople` is refused: EIP-1283 (SSTORE net gas metering) is
+    // active there and reverted in Petersburg, so the same SSTORE is charged
+    // differently — and this binary has no EIP-1283 metering to run.
+    // `constantinoplefix` is the retesteth/geth name for the Petersburg schedule
+    // itself, so it selects the identical revision and is accepted as an alias.
     if (n == "petersburg" || n == "constantinoplefix")
         return EVMC_PETERSBURG;
     if (n == "istanbul" || n == "muirglacier" || n == "muir glacier")
@@ -459,8 +464,17 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
         return EVMC_PRAGUE;
     if (n == "osaka")
         return EVMC_OSAKA;
-    if (n == "experimental")
-        return EVMC_EXPERIMENTAL;
+    // `amsterdam` and `experimental` are deliberately NOT accepted: amsterdam's
+    // EIP-8037/8038 state_gas dimension has no consumer in this binary (state_gas is
+    // written as {} at every message construction site and read nowhere), so accepting
+    // it would run a chain under a revision this binary cannot price; `experimental`
+    // has no released semantics — evmone's behaviour for it changes between versions,
+    // and the genesis loader already refuses it to keep consensus off it. Accepting
+    // either here would let a persisted row bypass the loader's gate at boot. Exactly
+    // the silent mixed-binary outcome the halt-loudly policy below rejects unknown
+    // names to prevent. Both stay emitted by evmcRevisionName so that the no-default
+    // total switch there keeps being a compile-time guard; re-add the arms in the PR
+    // that wires state_gas / lands a released experimental.
     return std::nullopt;
 }
 
@@ -484,8 +498,6 @@ inline std::string_view evmcRevisionName(evmc_revision rev)
         return "spuriousdragon";
     case EVMC_BYZANTIUM:
         return "byzantium";
-    case EVMC_CONSTANTINOPLE:
-        return "constantinople";
     case EVMC_PETERSBURG:
         return "petersburg";
     case EVMC_ISTANBUL:
@@ -504,7 +516,14 @@ inline std::string_view evmcRevisionName(evmc_revision rev)
         return "prague";
     case EVMC_OSAKA:
         return "osaka";
+    case EVMC_AMSTERDAM:
+        // Nameable but NOT config-selectable in this binary (state_gas is unwired, so
+        // evmcRevisionFromName refuses the name); the arm stays so this no-default switch
+        // remains total.
+        return "amsterdam";
     case EVMC_EXPERIMENTAL:
+        // Same shape as amsterdam: nameable for the compile-time guard, refused by
+        // evmcRevisionFromName (no released semantics — the loader refuses it too).
         return "experimental";
     }
     // Unreachable: the switch above is exhaustive over evmc_revision.
@@ -698,6 +717,7 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
     ledgerConfig.clearForkTransitions();
     std::optional<evmc_revision> base;
     std::optional<evmc_revision> single;
+    bool hasTransition = false;
 
     std::string_view::size_type pos = 0;
     while (pos < value.size())
@@ -717,6 +737,18 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
             // before any block, so the operator sees the named entry.
             if (auto rev = evmcRevisionFromName(entry); rev)
             {
+                // Two bare names are as unproducible by the encoder as a bare name
+                // beside transitions (the encoder always spells "block:forkName"), and
+                // silently last-winning would execute every block under one revision
+                // where the writer meant a schedule. Refuse it like every other
+                // ambiguous cell.
+                if (single)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidEVMCRevisionConfig() << errinfo_comment(
+                            "ambiguous evmc_revision config value (multiple bare names): " +
+                            std::string(value)));
+                }
                 single = *rev;
             }
             else
@@ -752,6 +784,7 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         if (auto rev = evmcRevisionFromName(name); rev)
         {
             ledgerConfig.addForkTransition(block, *rev);
+            hasTransition = true;
             if (!base || block == 0)
             {
                 base = *rev;
@@ -770,6 +803,18 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
 
     if (single)
     {
+        // A bare name alongside transition entries is a shape the encoder can never
+        // produce (it always spells every entry as "block:forkName"), so the row is
+        // hand-written or foreign. Honouring the bare name would silently drop the
+        // transitions — the row then governs every block under one revision where the
+        // writer meant a schedule. Refuse it like every other ambiguous cell.
+        if (hasTransition)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidEVMCRevisionConfig() << errinfo_comment(
+                    "mixed evmc_revision config value (bare name with transition entries): " +
+                    std::string(value)));
+        }
         // A single explicit revision covers every block.
         ledgerConfig.clearForkTransitions();
         ledgerConfig.setEVMCRevision(*single);

@@ -2553,10 +2553,6 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setCreate(params->create);
     message->setInternalCreate(params->internalCreate);
     message->setInternalCall(params->internalCall);
-    if (params->createSalt)
-    {
-        message->setCreateSalt(*params->createSalt);
-    }
 
     message->setEvmStatus(params->evmStatus);
     message->setStatus(params->status);
@@ -2684,6 +2680,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     callParameters->contextID = input.contextID();
     callParameters->seq = input.seq();
+    callParameters->schedulerSeq = input.schedulerSeq();
     constexpr static auto addressSize = Address::SIZE * 2;
     if (staticCall)
     {

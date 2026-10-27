@@ -42,6 +42,10 @@ class TransactionExecutive;
 /// Host-provided hash for the KECCAK256 opcode; dispatches via GlobalHashImpl::g_hashImpl
 /// (SM3 on SM chains). Installed on evmone::VM by VMInstance.
 evmc_bytes32 evm_hash_fn(evmc_host_context* context, const uint8_t* data, size_t size);
+evmc_address evm_create_address_fn(
+    evmc_host_context* context, const evmc_address* sender, uint64_t nonce);
+evmc_address evm_create2_address_fn(evmc_host_context* context, const evmc_address* sender,
+    const evmc_bytes32* salt, const uint8_t* init_code, size_t init_code_size);
 
 class HostContext
 {
@@ -113,6 +117,41 @@ public:
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
+    /// A host-side fault recorded by the fail-closed catches in EVMHostInterface. The
+    /// exception cannot cross the VM (evmc::VM::execute is noexcept and evmone's
+    /// instruction frames do not unwind), so the callback records it together with the
+    /// ladder family it belongs to and answers fail-closed; TransactionExecutive::go
+    /// checks this right after vm.execute() and rethrows the fault into the arm it would
+    /// have reached — `halting` = the std::exception arm (exit(1), the node halts), the
+    /// bcos::Error family otherwise (revert the whole frame). Never a receipt the rest
+    /// of the network would not produce (review F1).
+    ///
+    /// First fault wins, halting is sticky (review F19): the ladder decides on the
+    /// FIRST exception thrown, and the fail-closed answers let the frame keep running
+    /// after a fault, so a later record must not soften an earlier one — a bcos::Error
+    /// arriving after a non-bcos fault must not turn the exit(1) decision into a revert
+    /// receipt. The first fault's message is kept (it names the exception that decided
+    /// the family); a later halting fault still upgrades the family to halt.
+    // Presence is tracked by its own flag (review F5): the message is diagnostic
+    // text and can legitimately be empty (an Error built with only a code), so
+    // gating on m_hostFault.empty() silently dropped empty-message faults —
+    // exactly the node faults this record exists to make loud.
+    void recordHostFault(std::string message, bool halting)
+    {
+        if (!m_hasHostFault)
+        {
+            m_hostFault = std::move(message);
+            m_hasHostFault = true;
+        }
+        m_hostFaultHalting = m_hostFaultHalting || halting;
+    }
+
+    /// R6 F3 read-side: a frame that already recorded a host fault stops driving
+    /// the host and the scheduler (translateHostFault / call short-circuit on it).
+    bool hasHostFault() const { return m_hasHostFault; }
+    std::string const& hostFault() const { return m_hostFault; }
+    void throwIfHostFault() const;
+
     virtual std::string_view myAddress() const;
     virtual std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
@@ -144,6 +183,18 @@ public:
     }
 
     evmc_bytes32 getBalance(const evmc_address* _addr);
+    uint64_t getNonce(const evmc_address* _addr);
+    /// CREATE-opcode address for a contract created by THIS contract, via the
+    /// evmone create_address_fn hook: keccak(rlp(sender, nonce)) on
+    /// feature_evm_address chains, the legacy replay-stable FISCO formula
+    /// otherwise (both mirroring TransactionExecutive::externalCall).
+    evmc_address createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const;
+    /// CREATE2 counterpart: the chain hasher over
+    /// 0xff || sender || salt || hash(initcode) — newCreate2EVMAddress's formula, kept
+    /// host-side so the opcode pushes the chain's own address (keccak256 upstream would
+    /// fork SM-crypto chains).
+    evmc_address create2AddressForOpcode(
+        const evmc_address& sender, const evmc_bytes32& salt, bytesConstRef initCode) const;
     bool selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary);
 
     CallParameters::UniquePtr&& takeCallParameters();
@@ -170,6 +221,15 @@ public:
             return EVMC_ACCESS_COLD;
         }
         auto& accessState = eip2929AccessState();
+        // R5 F2, flag off: 0.24's create_impl warms the just-derived address; 0.21
+        // never did. Answer the creation warm-up query cold WITHOUT inserting, so
+        // the first genuine touch pays the cold fee exactly like the base.
+        if (!m_executive->blockContext().features().get(
+                ledger::Features::Flag::bugfix_evm2929_created_address_warm) &&
+            accessState.consumeCreationWarmupQuery(addr))
+        {
+            return EVMC_ACCESS_COLD;
+        }
         return accessState.warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
@@ -204,6 +264,9 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
+    std::string m_hostFault;
+    bool m_hasHostFault = false;
+    bool m_hostFaultHalting = false;
 
     /// Per-transaction warm set; cached at construction to avoid BucketMap lookup on every
     /// accessAccount/accessStorage (same pattern as TE HostContext::m_eip2929Access).

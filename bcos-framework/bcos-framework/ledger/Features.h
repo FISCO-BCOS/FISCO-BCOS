@@ -123,6 +123,58 @@ public:
                                                // hasher's hash("") (keccak on a non-SM
                                                // chain) for a code-less live account, 0 for
                                                // an absent/empty one; was true / 0.
+        bugfix_nested_create_creator_nonce,    // v2 executor bumps the creating contract's nonce
+                                               // on every nested CREATE (EVM message depth != 0,
+                                               // absent nonce counts as 0 like the get_nonce
+                                               // callback). Off: the historical gate (web3 tx &&
+                                               // m_level != 0) and the throwing increaseNonce()
+                                               // semantics stay in force, so existing chains see
+                                               // no new nonce rows.
+        bugfix_dmc_create_address_rule,  // Scheduler: the DMC lane derives a top-level create's
+                                         // (empty-to) address with the SAME rule as
+                                         // SerialBlockExecutive — honour feature_evm_address
+                                         // (keccak(rlp(sender, nonce))) instead of always using
+                                         // the (block, context, seq) formula. Off: the DMC lane
+                                         // keeps the formula address, so existing chains replay
+                                         // byte-identically; only a chain that also enables
+                                         // feature_evm_address observes a difference.
+        bugfix_baseline_status_mapper_ordinary_failures,  // baseline lane (transaction-executor)
+                                                          // receipt construction maps the ordinary
+                                                          // EVM failure statuses
+                                                          // (BAD_JUMP_DESTINATION,
+                                                          // INVALID_MEMORY_ACCESS,
+                                                          // STATIC_MODE_VIOLATION) instead of
+                                                          // letting the mapper's default throw
+                                                          // relabel them EVMC_INTERNAL_ERROR in
+                                                          // execute()'s catch arm. Off: the
+                                                          // historical relabel (status
+                                                          // Unknown/OutOfGas, gas 0/ref->gas per
+                                                          // bugfix_v1_error_handling), so
+                                                          // pre-existing blocks replay
+                                                          // byte-identically.
+        bugfix_internal_create_seq,  // Precompiled-initiated creates publish the consumed seq
+                                     // base, so two creates through one ExecutiveWrapper derive
+                                     // distinct addresses instead of colliding on f(seq+1). Off:
+                                     // the historical snapshot semantics, so blocks replay
+                                     // byte-identically.
+        bugfix_precompiled_node_fault_rethrow,  // bcos precompiled dispatch: a bcos::Error
+                                                // (node/infra fault: storage I/O, row decode)
+                                                // rethrows to executeCall()'s FIB-88/92 arm
+                                                // instead of being sealed as a PrecompiledError
+                                                // REVERT receipt. Off: the pre-existing REVERT
+                                                // receipt is kept, so historical blocks replay
+                                                // byte-identically.
+
+        bugfix_evm2929_created_address_warm,  // v1 lane, chains with feature_evm_eip2929:
+                                              // evmone 0.24's create_impl warms the created
+                                              // address (access_account on msg.recipient);
+                                              // 0.21 never called it, so on the base the
+                                              // address stayed cold until its first genuine
+                                              // touch. ON keeps the 0.24/geth behaviour; OFF
+                                              // reproduces the base metering exactly: the
+                                              // creation-time query answers cold without
+                                              // inserting, and the first genuine touch pays
+                                              // the cold fee and turns the address warm.
     };
 
     // magic_enum reflects values in its default range [-128, 127]; a flag past it would drop out

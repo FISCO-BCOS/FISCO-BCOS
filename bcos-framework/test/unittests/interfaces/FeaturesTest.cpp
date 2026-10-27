@@ -208,6 +208,25 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_mpt_state_root",
         "bugfix_nonce_ordering",
         "bugfix_eip161_1052_account_semantics",
+        // bugfix_nested_create_creator_nonce: v2 nested-CREATE creator-nonce bump,
+        // opt-in so existing chains keep the historical gate.
+        "bugfix_nested_create_creator_nonce",
+        // bugfix_dmc_create_address_rule: the DMC lane honours feature_evm_address for
+        // empty-to create addresses (same rule as SerialBlockExecutive) when on; off keeps
+        // the historical formula so replay is unchanged.
+        "bugfix_dmc_create_address_rule",
+        // bugfix_baseline_status_mapper_ordinary_failures: maps the three ordinary EVM failure
+        // statuses instead of the default relabel; off = historical receipts.
+        "bugfix_baseline_status_mapper_ordinary_failures",
+        // bugfix_internal_create_seq: two creates through one ExecutiveWrapper get distinct
+        // addresses; off = historical snapshot semantics.
+        "bugfix_internal_create_seq",
+        // bugfix_precompiled_node_fault_rethrow: node faults rethrow to the FIB arm instead of
+        // a PrecompiledError REVERT; off = the pre-existing receipt.
+        "bugfix_precompiled_node_fault_rethrow",
+        // bugfix_evm2929_created_address_warm: v1 lane; ON keeps evmone 0.24's
+        // created-address warmth, OFF reproduces the 0.21 cold-then-first-touch metering.
+        "bugfix_evm2929_created_address_warm",
     };
     // clang-format on
     BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());
@@ -640,5 +659,26 @@ BOOST_AUTO_TEST_CASE(testDependenciesFeatures)
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_cancun));
 }
 
+
+// The newest version set activates the DMC create-address rule flag (review F2):
+// chains created at MAX_VERSION derive top-level create addresses with the serial
+// lane's rule (feature_evm_address honoured); older persisted feature rows keep the
+// historical formula, so replay is byte-identical.
+BOOST_AUTO_TEST_CASE(newestVersionSetActivatesDmcCreateAddressRule)
+{
+    Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_dmc_create_address_rule), true);
+    BOOST_CHECK_EQUAL(
+        features.get(Features::Flag::bugfix_baseline_status_mapper_ordinary_failures), true);
+    BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_internal_create_seq), true);
+    BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_precompiled_node_fault_rethrow), true);
+    BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_evm2929_created_address_warm), true);
+
+    Features older;
+    older.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION);
+    BOOST_CHECK_EQUAL(older.get(Features::Flag::bugfix_dmc_create_address_rule), false);
+    BOOST_CHECK_EQUAL(older.get(Features::Flag::bugfix_evm2929_created_address_warm), false);
+}
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -84,6 +84,16 @@ void bcostars::protocol::ExecutionMessageImpl::setSeq(int64_t seq)
     m_inner()->seq = seq;
 }
 
+int64_t bcostars::protocol::ExecutionMessageImpl::schedulerSeq() const
+{
+    return m_inner()->schedulerSeq;
+}
+
+void bcostars::protocol::ExecutionMessageImpl::setSchedulerSeq(int64_t schedulerSeq)
+{
+    m_inner()->schedulerSeq = schedulerSeq;
+}
+
 std::string_view bcostars::protocol::ExecutionMessageImpl::origin() const
 {
     return m_inner()->origin;

@@ -82,12 +82,12 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 300 * 10000,
+            .state_gas = {},
             .recipient = {},
             .sender = {},
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
             .input_size = helloworldBytecodeBinary.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};
@@ -100,7 +100,7 @@ public:
         syncWait(hostContext.prepare());
         auto result = syncWait(hostContext.execute());
         BOOST_REQUIRE_EQUAL(result.status_code, 0);
-        helloworldAddress = result.create_address;
+        helloworldAddress = hostContext.message().recipient;
     }
 };
 
@@ -133,12 +133,12 @@ BOOST_AUTO_TEST_CASE(FIB88_InsufficientBalanceConsumesAllGas)
             .flags = 0,
             .depth = 0,
             .gas = GAS_LIMIT,
+            .state_gas = {},
             .recipient = recipient,
             .sender = sender,
             .input_data = nullptr,
             .input_size = 0,
             .value = bcos::toEvmC(bcos::u256(1000)),  // value > balance
-            .create2_salt = {},
             .code_address = recipient,
             .code = nullptr,
             .code_size = 0};
@@ -176,12 +176,12 @@ BOOST_AUTO_TEST_CASE(FIB88_NotFoundCodeRevertPreservesGas)
             .flags = 0,
             .depth = 0,
             .gas = GAS_LIMIT,
+            .state_gas = {},
             .recipient = nonExistentAddr,
             .sender = {},
             .input_data = dummyInput.data(),
             .input_size = dummyInput.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = nonExistentAddr,
             .code = nullptr,
             .code_size = 0};
@@ -216,12 +216,12 @@ BOOST_AUTO_TEST_CASE(FIB88_NotFoundCodeStaticCallReturnsSuccess)
             .flags = EVMC_STATIC,
             .depth = 0,
             .gas = GAS_LIMIT,
+            .state_gas = {},
             .recipient = nonExistentAddr,
             .sender = {},
             .input_data = dummyInput.data(),
             .input_size = dummyInput.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = nonExistentAddr,
             .code = nullptr,
             .code_size = 0};
@@ -281,12 +281,12 @@ BOOST_AUTO_TEST_CASE(FIB91_AuthCheckInsideTryBlock)
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
+            .state_gas = {},
             .recipient = helloworldAddress,
             .sender = {},
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = helloworldAddress,
             .code = nullptr,
             .code_size = 0};
@@ -373,12 +373,12 @@ BOOST_AUTO_TEST_CASE(FIB88_FlagOff_InsufficientBalancePreservesGas)
             .flags = 0,
             .depth = 0,
             .gas = GAS_LIMIT,
+            .state_gas = {},
             .recipient = recipient,
             .sender = sender,
             .input_data = nullptr,
             .input_size = 0,
             .value = bcos::toEvmC(bcos::u256(1000)),
-            .create2_salt = {},
             .code_address = recipient,
             .code = nullptr,
             .code_size = 0};
@@ -409,6 +409,172 @@ BOOST_AUTO_TEST_CASE(FIB92_FlagOff_InternalErrorUsesOutOfGas)
     BOOST_CHECK_EQUAL(result.status_code, EVMC_INTERNAL_ERROR);
     BOOST_CHECK_EQUAL(result.gas_left, 300000);
     BOOST_CHECK_EQUAL(result.status, bcos::protocol::TransactionStatus::OutOfGas);
+}
+
+// ---------------------------------------------------------------------------
+// End-to-end pins of execute()'s catch(std::exception&) arm (review F12): the
+// helper-level cases above call makeErrorEVMCResult directly; these drive a real
+// fault through the production path — recordHostFault, then execute() runs the VM,
+// executeCall's throwIfHostFault() rethrows, and the catch arm builds the result.
+// ---------------------------------------------------------------------------
+
+// Flag ON (bugfix_v1_error_handling, this fixture's MAX_VERSION default): a host
+// fault lands as EVMC_INTERNAL_ERROR / TransactionStatus::Unknown with gas_left = 0
+// (FIB-88 clamp, FIB-92 status).
+BOOST_AUTO_TEST_CASE(FIB88_92_InjectedHostFaultFlagOnUnknownZeroGas)
+{
+    syncWait([this]() -> Task<void> {
+        blockHeader.setNumber(seq++);
+        blockHeader.calculateHash(*hashImpl);
+
+        constexpr int64_t GAS_LIMIT = 300000;
+        evmc_message message = {.kind = EVMC_CALL,
+            .flags = 0,
+            .depth = 0,
+            .gas = GAS_LIMIT,
+            .state_gas = {},
+            .recipient = helloworldAddress,
+            .sender = {},
+            .input_data = nullptr,
+            .input_size = 0,
+            .value = {},
+            .code_address = helloworldAddress,
+            .code = nullptr,
+            .code_size = 0};
+        evmc_address origin{};
+
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+                bcos::task::syncWait);
+        co_await hostContext.prepare();
+        hostContext.recordHostFault("injected fault for the catch-arm pin");
+
+        auto result = co_await hostContext.execute();
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_INTERNAL_ERROR);
+        BOOST_CHECK_EQUAL(result.status, bcos::protocol::TransactionStatus::Unknown);
+        BOOST_CHECK_EQUAL(result.gas_left, 0);
+    }());
+}
+
+// Flag OFF (V3_16_3): the same drive lands as EVMC_INTERNAL_ERROR / OutOfGas with
+// gas_left = ref->gas (the historical accounting receipts hashed on old nodes).
+BOOST_AUTO_TEST_CASE(FIB88_92_InjectedHostFaultFlagOffOutOfGasPreservesGas)
+{
+    syncWait([this]() -> Task<void> {
+        bcostars::protocol::BlockHeaderImpl oldHeader;
+        oldHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_16_3_VERSION));
+        oldHeader.setNumber(seq++);
+        oldHeader.calculateHash(*hashImpl);
+
+        bcos::ledger::LedgerConfig oldConfig;
+        auto features = oldConfig.features();
+        features.setGenesisFeatures(bcos::protocol::BlockVersion::V3_16_3_VERSION);
+        oldConfig.setFeatures(features);
+
+        constexpr int64_t GAS_LIMIT = 300000;
+        evmc_message message = {.kind = EVMC_CALL,
+            .flags = 0,
+            .depth = 0,
+            .gas = GAS_LIMIT,
+            .state_gas = {},
+            .recipient = helloworldAddress,
+            .sender = {},
+            .input_data = nullptr,
+            .input_size = 0,
+            .value = {},
+            .code_address = helloworldAddress,
+            .code = nullptr,
+            .code_size = 0};
+        evmc_address origin{};
+
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, oldHeader, message,
+                origin, "", 0, seq, *precompiledManager, oldConfig, *hashImpl, false, 0,
+                bcos::task::syncWait);
+        co_await hostContext.prepare();
+        hostContext.recordHostFault("injected fault for the catch-arm pin");
+
+        auto result = co_await hostContext.execute();
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_INTERNAL_ERROR);
+        BOOST_CHECK_EQUAL(result.status, bcos::protocol::TransactionStatus::OutOfGas);
+        BOOST_CHECK_EQUAL(result.gas_left, GAS_LIMIT);
+    }());
+}
+
+// ---------------------------------------------------------------------------
+// Round-8 review F2: bugfix_precompiled_node_fault_rethrow must reach the ladder it
+// documents. Under bugfix_v1_error_handling (on for every 3.18 chain) the generic
+// catch(std::exception&) in callPrecompiled used to swallow the rethrown node-fault
+// bcos::Error as an "InternalPrecompiledError" INTERNAL_ERROR receipt — i.e. the
+// node-local receipt the flag exists to prevent. With the fix the bcos::Error escapes
+// to the dispatch site, which records it on the owning frame (executeCall) so the
+// child boundary's hasHostFault() copy fails the parent chain too.
+namespace
+{
+class ThrowingNodeFaultPrecompiled : public bcos::precompiled::Precompiled
+{
+public:
+    explicit ThrowingNodeFaultPrecompiled(bcos::crypto::Hash::Ptr hashImpl)
+      : bcos::precompiled::Precompiled(std::move(hashImpl))
+    {}
+
+    std::shared_ptr<bcos::precompiled::PrecompiledExecResult> call(
+        std::shared_ptr<executor::TransactionExecutive>,
+        bcos::precompiled::PrecompiledExecResult::Ptr) override
+    {
+        // The shape callBcosPrecompiled's catch(bcos::Error&) classifies as a node/
+        // infra fault (the rethrow flag's trigger).
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "injected precompiled node fault"));
+    }
+};
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(precompiledNodeFaultEscapesUnderTheFlag)
+{
+    bcos::ledger::Features offFeatures{};
+    offFeatures.set(bcos::ledger::Features::Flag::bugfix_v1_error_handling);
+    auto onFeatures = offFeatures;
+    onFeatures.set(bcos::ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow);
+
+    auto precompiled = std::make_shared<ThrowingNodeFaultPrecompiled>(hashImpl);
+    Precompiled entry{precompiled};
+
+    evmc_message message = {.kind = EVMC_CALL,
+        .flags = 0,
+        .depth = 0,
+        .gas = 100000,
+        .state_gas = {},
+        .recipient = {},
+        .sender = {},
+        .input_data = nullptr,
+        .input_size = 0,
+        .value = {},
+        .code_address = {},
+        .code = nullptr,
+        .code_size = 0};
+    evmc_address origin{};
+    auto externalCaller = [](evmc_message const&) {
+        return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
+                              .gas_left = 0,
+                              .gas_refund = 0,
+                              .state_gas = {},
+                              .output_data = nullptr,
+                              .output_size = 0,
+                              .release = nullptr},
+            bcos::protocol::TransactionStatus::None};
+    };
+
+    // Flag off: the historical REVERT receipt stands, byte-identical to the base.
+    auto receipt = executor_v1::callPrecompiled(entry, rollbackableStorage, blockHeader, message,
+        origin, externalCaller, *precompiledManager, 0, seq, false, offFeatures);
+    BOOST_CHECK_EQUAL(receipt.status_code, EVMC_REVERT);
+    BOOST_CHECK_EQUAL(receipt.status, bcos::protocol::TransactionStatus::PrecompiledError);
+
+    // Flag on: the fault must escape to the owning frame, never become a receipt.
+    BOOST_CHECK_THROW(executor_v1::callPrecompiled(entry, rollbackableStorage, blockHeader, message,
+                          origin, externalCaller, *precompiledManager, 0, seq, false, onFeatures),
+        bcos::Error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
