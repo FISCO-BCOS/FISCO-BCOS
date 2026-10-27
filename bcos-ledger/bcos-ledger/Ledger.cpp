@@ -30,7 +30,6 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
-#include "bcos-framework/protocol/TransactionReceiptNormalize.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
@@ -270,33 +269,11 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     int64_t writeTxsTime = -1;
     if (writeTxsAndReceipts)
     {
-        // Ethereum-lane receipts must carry their block position, and only this write path can
-        // guarantee it: every producer that normalizes (BaselineScheduler::finishExecute, the
-        // engine, the OP sealer) is bypassed by the serial/legacy block drivers, which hand the
-        // receipts straight here. The value is derived from the block, so writing it is a pure
-        // function of data this function already has.
-        //
-        // Gated on the header carrying EIP-4844 fields, i.e. an Ethereum-lane block: its
-        // receiptsRoot is the MPT over encodeReceiptLeaf (status, cumulativeGasUsed, logsBloom,
-        // logs), which does NOT commit transactionIndex -- so renumbering here cannot contradict
-        // the header this node (and its peers) already hashed. On a legacy FISCO block the
-        // receiptsRoot is a Merkle fold over the whole receipt struct, transactionIndex
-        // included, and renumbering would put the stored receipt at odds with that root, so
-        // those blocks are left untouched.
-        auto const header = block->blockHeader();
-        auto const* headerPtr = header.get();
-        auto const ethereumLaneReceipts =
-            headerPtr != nullptr &&
-            (headerPtr->excessBlobGas().has_value() || headerPtr->blobGasUsed().has_value());
         // hash 2 receipts
         std::vector<std::string> txsHash(block->receiptsSize());
         std::vector<bytes> receipts(block->receiptsSize());
         std::vector<std::string_view> receiptsView(block->receiptsSize());
         auto blockReceipts = block->receipts();
-        if (ethereumLaneReceipts)
-        {
-            protocol::normalizeReceipts(*block);
-        }
         tbb::parallel_for(tbb::blocked_range<size_t>(0, block->receiptsSize(), 256),
             [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i < range.end(); ++i)

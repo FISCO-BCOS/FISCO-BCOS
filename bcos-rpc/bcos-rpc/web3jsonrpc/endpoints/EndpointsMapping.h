@@ -37,9 +37,9 @@ public:
     /// config key ([engine_rpc] vs [web3_rpc] enable_miner_api), so enabling the batcher's
     /// handshake on the engine port never exposes it on the web3 port, and vice versa.
     /// enableDebugApi: register the geth debug namespace (debug_dbGet / debug_getRawHeader /
-    /// debug_executePayload) on THIS listener only, behind the same per-listener convention
-    /// ([engine_rpc] vs [web3_rpc] enable_debug_api). Off by default — it serves the
-    /// fault-proof preimage oracle (kona-host), not general clients.
+    /// debug_getRawReceipts / debug_executePayload) on THIS listener only, behind the same
+    /// per-listener convention ([engine_rpc] vs [web3_rpc] enable_debug_api). Off by default —
+    /// it serves the fault-proof preimage oracle (kona-host), not general clients.
     EndpointsMapping(
         bool enableOPEngine = false, bool enableMinerApi = false, bool enableDebugApi = false)
     {

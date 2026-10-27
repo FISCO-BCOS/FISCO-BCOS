@@ -59,6 +59,7 @@ public:
     /// stateless execution witness" hint. See the .cpp for why it answers MethodNotFound.
     task::Task<void> executePayload(const Json::Value&, Json::Value&);
 
+private:
     /// Resolve the single block parameter both raw-data endpoints take (a block number, a
     /// tag other than safe/finalized/pending, or a 32-byte hash) to a height, and reject one
     /// this node does not have. Shared so the header and receipts paths cannot disagree about
@@ -67,7 +68,6 @@ public:
     task::Task<protocol::BlockNumber> resolveRawBlockParameter(
         const Json::Value& request, std::string_view method);
 
-private:
     NodeService::Ptr m_nodeService;
 };
 

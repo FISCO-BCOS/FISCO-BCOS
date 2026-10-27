@@ -28,6 +28,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
+#include <bcos-framework/protocol/TransactionReceiptNormalize.h>
 #include <bcos-rlp-protocol/EthReceipt.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Bloom.h>
@@ -71,14 +72,19 @@ inline h256 calculateEthereumReceiptsRoot(
     txTypes.reserve(::ranges::size(transactions));
     for (auto const& transaction : transactions)
     {
-        if constexpr (requires { transaction.web3TypedTxKind(); })
-        {
-            txTypes.push_back(transaction.web3TypedTxKind());
-        }
-        else
-        {
-            txTypes.push_back(transaction->web3TypedTxKind());
-        }
+        // Through the shared helper, so this root and debug_getRawReceipts derive the prefix
+        // from the same source (the signed envelope, not the forgeable tars mirror).
+        auto const& tx = [&]() -> protocol::Transaction const& {
+            if constexpr (requires { transaction.web3TypedTxKind(); })
+            {
+                return transaction;
+            }
+            else
+            {
+                return *transaction;
+            }
+        }();
+        txTypes.push_back(receiptLeafTypeByte(tx));
     }
     if (txTypes.size() != ::ranges::size(receipts))
     {
@@ -135,8 +141,17 @@ inline task::Task<EthereumBlockComputation> computeEthereumRoots(
 {
     EthereumBlockComputation computation;
 
-    // Per-receipt cumulativeGasUsed + logsBloom.
-    u256 cumulativeGasUsed;
+    // Number the receipts and derive their bloom, using the shared policy. This is the v2
+    // lane's only in-place receipt-finalization point -- reached from the shared
+    // executeEthereumBlock, so it covers both the block builder and the verifier -- which is why
+    // the policy belongs here rather than at the ledger write boundary: a hook there would have
+    // had to guess the lane from the header (an EIP-4844 field probe, i.e. "past Cancun") and
+    // would leave every pre-Cancun Ethereum-lane block unnumbered.
+    //
+    // The shared policy fills cumulativeGasUsed only when empty (a scheduler-supplied running
+    // prefix is a scheduling decision). On this lane the running prefix IS the committed value:
+    // receiptsRoot commits it, so it is authoritative here and is written unconditionally.
+    protocol::ReceiptNormalizer normalizer;
     for (auto& receipt : receipts)
     {
         if (!receipt)
@@ -144,10 +159,8 @@ inline task::Task<EthereumBlockComputation> computeEthereumRoots(
             BOOST_THROW_EXCEPTION(
                 std::runtime_error{"computeEthereumRoots: null receipt returned by scheduler"});
         }
-        auto logBloom = bcos::getLogsBloom(receipt->logEntries());
-        receipt->setLogsBloom({logBloom.data(), logBloom.size()});
-        cumulativeGasUsed += receipt->gasUsed();
-        receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
+        normalizer.apply(receipt);
+        receipt->setCumulativeGasUsed(normalizer.cumulativeGasUsed.str());
     }
 
     // txsRoot over the raw EIP-2718 encodings (index-keyed trie).

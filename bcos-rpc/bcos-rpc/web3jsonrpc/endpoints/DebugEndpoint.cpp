@@ -120,7 +120,7 @@ task::Task<protocol::BlockNumber> DebugEndpoint::resolveRawBlockParameter(
     if (request.size() < 1 || !request[0U].isString())
     {
         BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "expected one block parameter"));
+            JsonRpcException(InvalidParams, std::string(method) + " expects one block parameter"));
     }
     auto const blockTag = toView(request[0U]);
 
@@ -190,8 +190,7 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
     // eth_getBlockBy* reports (canonicalBlockHash), which is what kona-host checks.
     co_await requireEthereumLane(*m_nodeService->ledger(), "debug_getRawHeader");
     auto const ledger = m_nodeService->ledger();
-    auto const blockNumber =
-        co_await resolveRawBlockParameter(request, "debug_getRawHeader");
+    auto const blockNumber = co_await resolveRawBlockParameter(request, "debug_getRawHeader");
     auto const block = co_await ledger::getBlockData(*ledger, blockNumber, ledger::HEADER);
     auto const headerPtr = block ? block->blockHeader() : nullptr;
     if (!headerPtr) [[unlikely]]
@@ -233,10 +232,9 @@ task::Task<void> DebugEndpoint::getRawReceipts(const Json::Value& request, Json:
     //
     // kona-host reads the L1 receipts through this method to build the preimages its trace
     // needs; without it the challenger cannot produce an L1-side trace at all.
-    co_await requireEthereumLane(*m_nodeService->ledger(), "debug_getRawReceipts");
+    co_await requireEthereumExecutorLane(*m_nodeService->ledger(), "debug_getRawReceipts");
     auto const ledger = m_nodeService->ledger();
-    auto const blockNumber =
-        co_await resolveRawBlockParameter(request, "debug_getRawReceipts");
+    auto const blockNumber = co_await resolveRawBlockParameter(request, "debug_getRawReceipts");
 
     // TRANSACTIONS (not just their hashes) because the receipts-trie leaf is prefixed with the
     // transaction's EIP-2718 type byte, which only the transaction carries.
@@ -247,26 +245,31 @@ task::Task<void> DebugEndpoint::getRawReceipts(const Json::Value& request, Json:
     }
 
     Json::Value result(Json::arrayValue);
-    auto transactions = block->transactions();  // non-const: the view is not const-iterable
-    for (auto anyTx : transactions)  // AnyTransaction::operator-> gives the Transaction
+    // The receipts are zipped with the transactions by index, so a mismatch would silently
+    // truncate or misalign the response. Fail closed before the loop rather than inside it.
+    if (block->transactionsSize() != block->receiptsSize()) [[unlikely]]
     {
-        auto const* tx = anyTx.operator->();
-        if (tx == nullptr) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InternalError, "Block carries an undecodable transaction"));
-        }
-        auto const receipt = co_await ledger::getReceipt(*ledger, tx->hash());
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InternalError, "Block " + std::to_string(blockNumber) + " carries " +
+                               std::to_string(block->transactionsSize()) + " transactions but " +
+                               std::to_string(block->receiptsSize()) + " receipts"));
+    }
+    auto transactions = block->transactions();  // non-const: the view is not const-iterable
+    for (auto anyTx : transactions)             // AnyTransaction::operator-> gives the Transaction
+    {
+        auto const& tx = *anyTx.operator->();
+        auto const receipt = co_await ledger::getReceipt(*ledger, tx.hash());
         if (!receipt) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(
-                InternalError, "Missing receipt for transaction " + tx->hash().hexPrefixed()));
+                InternalError, "Missing receipt for transaction " + tx.hash().hexPrefixed()));
         }
         // Exactly the value the block's receipts trie holds (encodeReceiptLeaf): the same
         // encoding this node committed to, so a client can reassemble the trie from these
-        // bytes and get the header's receiptsRoot back.
-        result.append(toHexStringWithPrefix(
-            bcos::ledger::mpt::encodeReceiptLeaf(*receipt, tx->web3TypedTxKind())));
+        // bytes and get the header's receiptsRoot back. The type byte comes from the signed
+        // envelope through the same helper the committed root uses, so the two cannot disagree.
+        result.append(toHexStringWithPrefix(bcos::ledger::mpt::encodeReceiptLeaf(
+            *receipt, bcos::ledger::mpt::receiptLeafTypeByte(tx))));
     }
     buildJsonContent(result, response);
     co_return;

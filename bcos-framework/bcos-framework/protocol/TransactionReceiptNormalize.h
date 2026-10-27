@@ -22,8 +22,9 @@
 #include "TransactionReceipt.h"
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
+#include <concepts>
 #include <cstddef>
-#include <vector>
+#include <ranges>
 
 namespace bcos::protocol
 {
@@ -48,7 +49,7 @@ namespace bcos::protocol
 /// must stay alive across the call (it is the holder that owns the pointer to the stored receipt).
 struct ReceiptNormalizer
 {
-    u256 cumulativeGasUsed;
+    u256 cumulativeGasUsed{};
     size_t logIndex = 0;
     size_t index = 0;
 
@@ -70,7 +71,15 @@ struct ReceiptNormalizer
 };
 
 /// Normalize a range of receipt pointers (the shape every scheduler-path caller has).
+///
+/// Constrained to input ranges on purpose. Without the constraint this template out-ranks the
+/// Block overload below for a non-const `Block&`: it would deduce `Receipts = Block`, bind
+/// `Block&` (a better match than `Block const&`), and then fail to instantiate because
+/// protocol::Block has no begin/end. A caller holding a `Block::Ptr` -- the shape the scheduler
+/// and the engine use -- would get an error from inside this header with no hint that an
+/// overload exists for exactly their case.
 template <class Receipts>
+    requires ::ranges::input_range<Receipts>
 inline u256 normalizeReceipts(Receipts& receipts)
 {
     ReceiptNormalizer normalizer;

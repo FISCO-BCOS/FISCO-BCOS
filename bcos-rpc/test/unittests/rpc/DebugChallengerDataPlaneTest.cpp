@@ -335,9 +335,9 @@ BOOST_AUTO_TEST_CASE(NonOpLaneIsMethodNotFound)
         {
             setExecutorVersion(*version);
         }
-        for (auto const& resp : {call1("debug_getRawHeader", "latest"),
-                 call1("debug_getRawReceipts", "latest"),
-                 dbGet(bcos::bytes(root.begin(), root.end()))})
+        for (auto const& resp :
+            {call1("debug_getRawHeader", "latest"), call1("debug_getRawReceipts", "latest"),
+                dbGet(bcos::bytes(root.begin(), root.end()))})
         {
             BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), MethodNotFound);
             BOOST_CHECK_EQUAL(
@@ -361,15 +361,26 @@ BOOST_AUTO_TEST_CASE(EthereumLaneServesTheDataPlane)
     BOOST_TEST(!header.empty());
 
     // Receipts: an array, one entry per transaction. Asked of the genesis block because it has
-    // no transactions -- the fixture has no stored receipts for its later blocks, and a missing
-    // receipt is (correctly) a hard error rather than a short array. This pins the method's
-    // presence, its lane gate and its result shape; the per-receipt bytes
-    // (type-prefix || rlp([status, cumGas, bloom, logs])) are covered by the ledger write test
-    // that owns the stored numbering.
+    // no transactions -- this fixture has no stored receipts for its later blocks, and a missing
+    // receipt is (correctly) a hard error rather than a short array, so this pins the method's
+    // presence, its lane gate and its result shape only.
+    //
+    // The byte contract -- that the returned strings reassemble into the header's receiptsRoot --
+    // is pinned in LedgerTest::ethereumLaneReceiptLeavesRebuildTheCommittedRoot, where block 4242
+    // has real stored receipts and the root they commit to. It is not covered here, and this
+    // comment used to claim otherwise.
     auto const receipts = call1("debug_getRawReceipts", "0x0");
     BOOST_REQUIRE_MESSAGE(!receipts.isMember("error"), printJson(receipts));
     BOOST_REQUIRE_MESSAGE(receipts["result"].isArray(), printJson(receipts));
     BOOST_CHECK_EQUAL(receipts["result"].size(), 0U);
+
+    // The OP lane is refused: its receipts-trie leaf deliberately omits depositNonce inside one
+    // fork window (EthTrieRoots.cpp), so the leaf is not the receipt's consensus encoding there.
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    auto const onOpLane = call1("debug_getRawReceipts", "0x0");
+    BOOST_REQUIRE_MESSAGE(onOpLane.isMember("error"), printJson(onOpLane));
+    BOOST_CHECK_EQUAL(onOpLane["error"]["code"].asInt(), MethodNotFound);
+    setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
 
     // Trie nodes: the preimage lookup answers on this lane too.
     auto const node = dbGet(bcos::bytes(root.begin(), root.end()));
