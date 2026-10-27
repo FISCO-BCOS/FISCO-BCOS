@@ -16,6 +16,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <future>
 #include <string_view>
 
@@ -487,10 +488,10 @@ BOOST_AUTO_TEST_CASE(estimateGasCapComesFromTheTipBlockHeaderAtTheEndpoint)
     BOOST_CHECK_EQUAL(recordingScheduler->gasLimits.front(), u256(21'000'000));
 }
 
-// eth_estimateGas measures once at the ceiling and then retries upward from the measurement:
-// the answer is the first budget that actually executes, and probing stops there instead of
-// walking all the way back to the ceiling.
-BOOST_AUTO_TEST_CASE(estimateGasRetriesFromTheMeasurementUpward)
+// eth_estimateGas measures once at the ceiling and then bisects [measurement, ceiling]: the
+// answer is a budget the node ran the call with and saw succeed, and the probe count is
+// logarithmic in the interval rather than proportional to it.
+BOOST_AUTO_TEST_CASE(estimateGasBisectsFromTheMeasurement)
 {
     m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(21'000'000));
 
@@ -515,18 +516,20 @@ BOOST_AUTO_TEST_CASE(estimateGasRetriesFromTheMeasurementUpward)
     BOOST_REQUIRE_GE(probes.size(), 2U);  // the ceiling probe plus at least one retry
     BOOST_CHECK_EQUAL(probes.front(), u256(21'000'000));  // ceiling first
     BOOST_CHECK_EQUAL(probes.at(1), u256(21'000));        // then the measured floor
-    // Every retry grows: 10% plus one, so the ladder cannot stall on a rounding zero.
-    for (size_t i = 2; i < probes.size(); ++i)
-    {
-        auto const previous = probes[i - 1].convert_to<uint64_t>();
-        BOOST_CHECK_GT(probes[i].convert_to<uint64_t>(), previous);
-    }
-    // The answer is the first budget that executed: at least what the call needs, and strictly
-    // below the ceiling.
+    // The upper bound is the property a linear ladder failed. Bisecting [21000, 21000000] takes
+    // at most ceil(log2(21'000'000 - 21'000)) = 25 halvings, so 26 probes including the ceiling
+    // one -- against 83 for a ladder that grew by 10% per step to the same ceiling.
+    BOOST_CHECK_LE(probes.size(), 26U);
+    // The answer is at least what the call needs and strictly below the ceiling, and it is a
+    // budget a probe actually ran with.
     auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
     BOOST_CHECK_GE(answer, ladderScheduler->required);
     BOOST_CHECK_LT(answer, 21'000'000U);
     BOOST_CHECK_EQUAL(probes.back(), u256(answer));
+    // No budget is probed twice: a duplicate would mean the interval stopped shrinking.
+    auto sorted = probes;
+    std::sort(sorted.begin(), sorted.end());
+    BOOST_CHECK(std::adjacent_find(sorted.begin(), sorted.end()) == sorted.end());
 }
 
 // A client sends an EIP-55 mixed-case `from` (ethers/viem default). The account row key is

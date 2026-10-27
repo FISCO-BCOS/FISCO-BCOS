@@ -97,6 +97,17 @@ bool isBlockNotFound(JsonRpcException const& e) noexcept
 /// low". The target block's own gasLimit bounds it further when it is readable and non-zero.
 constexpr uint64_t c_ethCallGasCap = 50'000'000;
 
+/// The intrinsic-gas floor of a transaction: the EIP-2028 base cost every transaction pays
+/// before the EVM runs (21,000). Named because eth_estimateGas floors its search here, and an
+/// unnamed literal in that expression is indistinguishable from a magic number.
+constexpr uint64_t c_intrinsicGasFloor = 21'000;
+
+/// Above this many dry runs, eth_estimateGas reports its probe count at INFO. The dry runs are
+/// the entire cost of the method, so an operator needs to be able to see a request that needed
+/// many of them at the log level a production node actually runs; below the threshold the line
+/// would be noise on every request.
+constexpr uint32_t c_estimateGasProbeLogThreshold = 8;
+
 /// The human-readable form of the ABI-encoded revert payload the way geth's abi.UnpackRevert
 /// reads it: Error(string) → the string, Panic(uint256) → the Solidity panic description.
 /// nullopt for raw / custom-error / malformed data (the caller then decodes `data` itself).
@@ -1488,8 +1499,8 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
 {
     co_await call(request, response, nullptr, false);
 }
-task::Task<void> EthEndpoint::call(
-    const Json::Value& request, Json::Value& response, u256* gasUsed, bool isEstimate)
+task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response, u256* gasUsed,
+    bool isEstimate, uint64_t* budgetUsed)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: data(DATA)
@@ -1621,6 +1632,12 @@ task::Task<void> EthEndpoint::call(
     }
     auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
         std::move(pendingNonce), chainBlockGasLimit);
+    if (budgetUsed != nullptr)
+    {
+        // The budget rule is decided above; report what it produced instead of letting a caller
+        // re-implement it. tx->gasLimit() is exactly the value the probe runs with.
+        *budgetUsed = static_cast<uint64_t>(tx->gasLimit());
+    }
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
@@ -1727,8 +1744,9 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     }
 
     u256 gasUsed;
+    uint64_t ceiling = c_ethCallGasCap;
     Json::Value probe;
-    co_await call(request, probe, std::addressof(gasUsed), true);
+    co_await call(request, probe, std::addressof(gasUsed), true, std::addressof(ceiling));
 
     // A probe at the ceiling that fails is the caller's answer: it had the whole budget, so more
     // gas would not change the outcome (a revert, or a transaction that does not validate).
@@ -1738,67 +1756,74 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         co_return;
     }
 
-    // The budget this request may use. An explicit `gas` is the caller's own ceiling, clamped
-    // exactly as call() clamps it; without one call() sizes the probe from the target block's gas
-    // limit, so that is the ceiling here too.
-    uint64_t ceiling = c_ethCallGasCap;
-    auto [callValid, callRequest] = decodeCallRequest(request[0U]);
-    if (!callValid)
+    uint64_t measured = bcos::u256FitsUint64(gasUsed) ? static_cast<uint64_t>(gasUsed) : ceiling;
+    measured = std::min<uint64_t>(std::max<uint64_t>(c_intrinsicGasFloor, measured), ceiling);
+    if (measured >= ceiling)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid call request!"));
+        // The measurement already fills the budget this request may use; there is nothing to
+        // tighten, and the ceiling probe above proved it runs.
+        Json::Value result = toQuantity(ceiling);
+        buildJsonContent(result, response);
+        co_return;
     }
-    if (callRequest.gas.has_value() && *callRequest.gas != 0)
+
+    // Find the least budget that executes. The loop rests on one premise, stated as a premise and
+    // not as a fact: within one block state, a budget at or below the ceiling that fails failed
+    // because of the budget -- the dry run is free (no balance check, no base fee), so a larger
+    // budget cannot newly fail anything else. Every probe pins the resolved block number, so the
+    // premise holds across the probes even when the caller passed `latest`; it cannot hold for
+    // state that moves between them, which is why the answer is the least budget this endpoint
+    // *observed* succeeding rather than a guarantee about later blocks.
+    //
+    // [measured, ceiling] is bisected, not walked: `high` is always a budget a probe saw succeed
+    // (it starts at the ceiling, proven above) and `low` a budget a probe saw fail, so the answer
+    // is derived from an execution and the request costs at most 2 + ceil(log2(ceiling)) dry runs
+    // however far the answer is from the measurement. A linear climb would cost dozens on exactly
+    // the deep-call shape that is most expensive to execute.
+    uint64_t low = measured;
+    uint64_t high = ceiling;
+    bool lowFailed = false;  // no probe has run at `low` yet
+    uint32_t probes = 1;     // the ceiling probe above
+    while (high - low > 1)
     {
-        ceiling = std::min<uint64_t>(*callRequest.gas, c_ethCallGasCap);
-    }
-    else if (auto block = co_await ledger::getBlockData(
-                 *m_nodeService->ledger(), blockNumber, bcos::ledger::HEADER))
-    {
-        auto const limit = block->blockHeader()->gasLimit();
-        if (bcos::u256FitsUint64(limit) && limit > 0)
+        // The first iteration probes the measurement itself, which keeps the common case (the
+        // answer is the measurement) at two dry runs; every later one halves the interval.
+        auto const budget = lowFailed ? low + (high - low) / 2 : low;
+        Json::Value attempt = request;
+        // Pin the block: re-resolving `latest` per attempt would let the probes straddle blocks,
+        // and a failure could then be the state moving rather than the budget.
+        attempt[1U] = toQuantity(blockNumber);
+        attempt[0U]["gas"] = toQuantity(budget);
+        Json::Value attemptResponse;
+        co_await call(attempt, attemptResponse, nullptr, true);
+        ++probes;
+        if (attemptResponse.isMember("error"))
         {
-            ceiling = static_cast<uint64_t>(limit);
+            low = budget;
+            lowFailed = true;
+        }
+        else
+        {
+            high = budget;
         }
     }
 
-    // Retry from the measurement upward. The ceiling probe above succeeded, so a run below it
-    // that fails failed only because of the budget -- that makes "the first budget that passes"
-    // the minimum this endpoint can prove, without modelling per-frame gas at all. Growing by
-    // 10% keeps the number of dry runs small when the answer is close to the measurement, which
-    // is the common case; a deep call chain needs a few more.
-    uint64_t candidate = bcos::u256FitsUint64(gasUsed) ? static_cast<uint64_t>(gasUsed) : ceiling;
-    candidate = std::max<uint64_t>(21000, std::min<uint64_t>(candidate, ceiling));
-    uint32_t attempts = 0;
-    for (;;)
+    // The dry runs are the entire cost of this method, so report how many it took at a level an
+    // operator runs. `high` is a budget this request ran the call with and saw succeed: no path
+    // reaches here with an unproven answer, so there is no "report the ceiling anyway" fallback.
+    if (probes > c_estimateGasProbeLogThreshold)
     {
-        Json::Value attempt = request;
-        attempt[0U]["gas"] = toQuantity(candidate);
-        Json::Value attemptResponse;
-        co_await call(attempt, attemptResponse, nullptr, true);
-        ++attempts;
-        if (!attemptResponse.isMember("error"))
-        {
-            if (c_fileLogLevel == TRACE)
-            {
-                WEB3_LOG(TRACE) << LOG_DESC("eth_estimateGas: settled") << LOG_KV("gas", candidate)
-                                << LOG_KV("measured", gasUsed.str()) << LOG_KV("ceiling", ceiling)
-                                << LOG_KV("attempts", attempts);
-            }
-            Json::Value result = toQuantity(candidate);
-            buildJsonContent(result, response);
-            co_return;
-        }
-        if (candidate >= ceiling)
-        {
-            // Unreachable while the ceiling probe still succeeds (it is re-run above at the same
-            // budget); kept so a state change between the two probes cannot spin forever.
-            break;
-        }
-        candidate = std::min<uint64_t>(ceiling, candidate + candidate / 10 + 1);
+        WEB3_LOG(INFO) << LOG_DESC("eth_estimateGas: bisected") << LOG_KV("gas", high)
+                       << LOG_KV("measured", measured) << LOG_KV("ceiling", ceiling)
+                       << LOG_KV("probes", probes) << LOG_KV("block", blockNumber);
     }
-    // The ceiling itself did not pass on the retry (the state moved between the two probes).
-    // Report the ceiling: the first probe did prove the call runs at that budget.
-    Json::Value result = toQuantity(ceiling);
+    else if (c_fileLogLevel == TRACE)
+    {
+        WEB3_LOG(TRACE) << LOG_DESC("eth_estimateGas: bisected") << LOG_KV("gas", high)
+                        << LOG_KV("measured", measured) << LOG_KV("ceiling", ceiling)
+                        << LOG_KV("probes", probes) << LOG_KV("block", blockNumber);
+    }
+    Json::Value result = toQuantity(high);
     buildJsonContent(result, response);
 }
 task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::Value& response)

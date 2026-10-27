@@ -1541,7 +1541,8 @@ private:
         OpRecentBlockHashes<AnyView> hashes(
             view, header.number(), detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
 
-        // One executor (and one evmc::VM) per call.
+        // One executor per call; the EVM instance is created per transaction inside
+        // ExecuteContext::execute, so nothing is shared across calls or threads.
         OpEthExecutor executor(m_receiptFactory, spec);
 
         protocol::TransactionReceipt::Ptr receipt;

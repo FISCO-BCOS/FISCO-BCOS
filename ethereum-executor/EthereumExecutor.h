@@ -115,8 +115,6 @@ public:
       : m_receiptFactory(receiptFactory), m_blockHashLookup(std::move(blockHashLookup))
     {}
 
-    /// Access the EVM instance (needed for system_call functions).
-
     /// Execute a single Ethereum transaction.
     ///
     /// Convenience entry point that drives the three lifecycle phases in

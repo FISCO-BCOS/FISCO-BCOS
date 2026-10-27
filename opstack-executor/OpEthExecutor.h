@@ -231,8 +231,6 @@ public:
         return m_errorSlot;
     }
 
-    /// Access the EVM instance (needed for system_call functions).
-
     // ---- TransactionExecutor concept: ExecuteContext with prepare/execute/finish ----
     using BlockContext = OpEthBlockContext;
 
