@@ -9,8 +9,10 @@
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <chrono>
+#include <concepts>
 #include <future>
 #include <iostream>
+#include <ranges>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -191,18 +193,37 @@ bcos::task::Generator<int> genInt()
     co_yield 2;
     co_yield 3;
 }
+
+bcos::task::Generator<int> genNestedInt()
+{
+    co_yield 0;
+    co_yield elements_of(genInt());
+    co_yield 4;
+}
 #if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
 #pragma GCC diagnostic pop
 #endif
 
 BOOST_AUTO_TEST_CASE(generator)
 {
+    static_assert(std::same_as<std::ranges::range_reference_t<Generator<int>>, int&&>);
+    static_assert(std::same_as<std::ranges::range_value_t<Generator<int>>, int>);
+    static_assert(std::ranges::input_range<Generator<int>>);
+    static_assert(std::ranges::view<Generator<int>>);
+
     int j = 0;
     for (auto i : genInt())
     {
         BOOST_CHECK_EQUAL(i, ++j);
         std::cout << i << std::endl;
     }
+
+    j = 0;
+    for (auto i : genNestedInt())
+    {
+        BOOST_CHECK_EQUAL(i, j++);
+    }
+    BOOST_CHECK_EQUAL(j, 5);
     std::cout << "All outputed" << std::endl;
 }
 
