@@ -13,6 +13,47 @@
 
 **后续跟进**：`WsStreamDelegate::setVerifyCallback` fail-closed（raw 流上请求证书校验时抛错）将在独立 PR 落地
 
+**执行模式（lane）由 genesis `[executor] version` 唯一决定**：
+
+* `version=0/1` 为 FISCO 联盟链模式（PBFT/rPBFT 出块），`version=2` 为 Ethereum L1 执行层（由共识客户端经 Engine API 驱动），`version>=3` 为 OP Stack L2 执行层（由 op-node 经 Engine API 驱动）。一个二进制同时装入三条 lane，没有编译开关；推导函数为 `bcos-tool/bcos-tool/ChainLaneConfig.h` `laneForExecutorVersion()`，出块驱动矩阵为 `NodeConfig::blockDriver()`
+* genesis 没写 `[executor] version` 的链按 `version=0` 运行（BcosBuilder 模板 `tools/BcosBuilder/src/tpl/config.genesis` 与早期 build_chain.sh 建的 AIR 链都是）。3.18.0 修复了 v0 lane 启动即崩（`SchedulerFactory`/`LedgerInitializer` 不传 IOServicePool，`Initializer::initSysContract` 解空指针）与 v0 lane 落块死锁（`Ledger::storeTransactionsAndReceipts` 把回执写入 post 到共享 IOServicePool 再同步等待，`thread_pool.io_thread_count=1` 时唯一 worker 等待自己队列里的任务；现改为 dispatch，调用方已在池内 worker 时就地执行）；**不含这两处修复的 3.18.0 构建不能用于 v0 链**，v1 链不受影响
+* `[engine_rpc]`（默认 `listen_ip=127.0.0.1`、`listen_port=8551`、`jwt_secret_file=conf/engine/jwt.hex`）只在 `version=2/3` 且未启用 `[debug]` 驱动时监听；v0/v1 不开该端口，`[engine_rpc] enable` 键已删除（见下）
+* `[debug] enable=true` 只允许 `version=1/2`：v0 与 OP lane 上设置该键拒绝启动；`[debug] follow_devp2p` 只允许 OP lane，且与 `[debug] enable` 互斥
+
+**配置项变更：`enable_single_node_consensus` 由 `[debug]` 段替代**：
+
+* config.ini `[consensus] enable_single_node_consensus=true` 改写为 `[debug] enable=true`；原 `[consensus]` 下的 `block_interval`、`produce_empty_blocks`、`fee_recipient`、`prev_randao`、`fixed_timestamp` 搬到 `[debug]`，只在 `[debug] enable=true` 时读取（`[debug] enable` 未开时这些键按死键告警）
+
+**配置项变更：死键只告警不拒启**（`NodeConfig.cpp` `c_deadConfigKeys` 等表，用例 `NodeConfigDeadKeysTest`）。下列键已无效，节点启动时对每个键输出一条 `WARNING this key has no effect` 并给出替代写法，不拒绝启动；建议升级时从配置中删除：
+
+| 文件 | 死键 | 替代写法 |
+|---|---|---|
+| config.ini | `[web3_rpc] http_body_size_limit` | `[web3_rpc] request_body_size_limit` |
+| config.ini | `[executor] baseline_scheduler` | 无 |
+| config.ini | `[storage] pd_ssl_*`（`pd_ssl_ca_path`/`pd_ssl_cert_path`/`pd_ssl_key_path`） | 无 |
+| config.ini | `[redis]` 整段 | 无 |
+| config.ini | `[flow_control] enable_distributed_ratelimit`、`enable_distributed_ratelimit_cache`、`distributed_ratelimit_cache_percent` | 无 |
+| config.ini | `[security] hsm_public_key_file_path` | 无 |
+| config.ini | `[experimental] check_parallel_conflict` | 无 |
+| config.ini | `[consensus] enable_single_node_consensus` | `[debug] enable` |
+| config.ini | `[consensus] block_interval`/`produce_empty_blocks`/`fee_recipient`/`prev_randao`/`fixed_timestamp` | `[debug]` 同名键 |
+| config.ini | `[op_engine_rpc]` 整段 | `[engine_rpc]`（`enable_debug_api`、`enable_miner_api`、`listen_ip/port`、`jwt_secret_file` 等同名搬过去；`enable` 与 `unsafe_allow_v1_executor` 删除） |
+| config.ini | `[engine_rpc] enable` | 无：出块驱动为 Engine（v2/v3 且无 `[debug]` 驱动）时监听自动开启 |
+| config.ini | `[ethereum] mode` | genesis `[executor] version`（lane 由它决定）；原 `mode=opstack-el` 的节点改为 config.ini `[debug] follow_devp2p=true`，只删键会落到 Engine 驱动等 op-node |
+| config.ini | `[chain]` 整段 | config.genesis `[chain]`（compatibility_version 3.1 起由 genesis 携带） |
+| config.ini | `[web3]` 整段 | config.genesis `[web3]`（v0/v1）/ `[chain] chain_id`（v2/v3） |
+| config.genesis | `[consensus] consensus_timeout` | config.ini `[consensus] checkpoint_timeout` |
+| config.genesis（v0/v1） | `[executor] evm_revision`、`evm_revision_forks` | 无：v0/v1 跟随 `[version]` 与 `[features]` |
+| config.genesis（v2/v3） | `[ethereum] mode`、`[executor] evm_revision`/`evm_revision_forks`、`[op_fork_schedule]`、`[web3]`、`[version]`、`[features]` | `[fork_timestamps]`（v2）/ `[op_fork_timestamps]`（v3）；chain_id 写 `[chain] chain_id`；v2/v3 运行在固定兼容版本上，不读 `[version]`/`[features]` |
+
+**build_chain.sh / BcosBuilder 默认兼容版本**：不带 `-v` 建链现在写 `compatibility_version=3.18.0`（此前为 `v3.16.0`，导致新链不激活 3.17.0 与 3.18.0 注册的 bugfix flag）；BcosBuilder 配置缺省 `compatibility_version` 时由 `3.1.0` 改为 `3.18.0`；两处与 `docs/README_EN.md` 的版本行一并纳入 `tools/version_sync.sh --check`
+
+**升级描述**
+
+* v1 链（build_chain.sh 建的 AIR 链默认）：直接替换二进制，不需要改配置；genesis 字节不变（`NodeConfigV1GenesisPinGoldenTest` 钉住 3.0.0/3.1.0/3.6.0/3.17.0/3.18.0 × pbft/rpbft 的黄金值）
+* v0 链（genesis 无 `[executor] version`，含 BcosBuilder 建的 Pro 链）：同样直接替换二进制，但必须使用含 v0 lane IOServicePool 修复的构建
+* 上表中的死键不改也能启动，只多几行 WARNING；`enable_single_node_consensus` 的单节点开发链若要继续自出块，须改写为 `[debug] enable=true`
+
 ---
 
 ### v3.16.2
