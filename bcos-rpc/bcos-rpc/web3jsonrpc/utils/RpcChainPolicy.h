@@ -122,10 +122,14 @@ inline task::Task<int> requireEthereumLane(
 /// preserve backwards compatibility of receipt-root hash computation". Serving those bytes as a
 /// receipt would hand kona-host an encoding that is missing a field. The OP-aware encoding is a
 /// follow-up; until it lands the method is scoped to the lane this change targets.
+///
+/// Expressed as "the lenient gate, then narrow" so the two cannot drift: a lane the lenient gate
+/// refuses is refused here too, and the version it already read is reused rather than reading
+/// SYS_CONFIG again.
 inline task::Task<void> requireEthereumExecutorLane(
     bcos::ledger::LedgerInterface& ledger, std::string_view method)
 {
-    auto const executorVersion = co_await readExecutorVersion(ledger);
+    auto const executorVersion = co_await requireEthereumLane(ledger, method);
     if (executorVersion != bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         WEB3_LOG(DEBUG) << LOG_DESC("Ethereum-executor-only method on another lane")
