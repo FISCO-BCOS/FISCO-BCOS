@@ -25,6 +25,7 @@
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/ZstdCompress.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -61,12 +62,23 @@ Service::Ptr makeService()
     P2PInfo selfInfo;
     selfInfo.rawP2pID = "selfRawP2pID";
     selfInfo.p2pID = "selfP2pID";
-    return std::make_shared<Service>(selfInfo);
+    return Service::Ptr(new Service(selfInfo), [](Service* service) {
+        // These services never start or have a host, so close completes their pumps inline.
+        for (uint16_t type : {GatewayMessageType::Handshake, GatewayMessageType::Heartbeat,
+                 GatewayMessageType::PeerToPeerMessage, GatewayMessageType::BroadcastMessage})
+        {
+            if (auto channel = service->inboundChannel(type))
+            {
+                channel->close();
+            }
+        }
+        delete service;
+    });
 }
 
 // Deliver one message of the given type through the pump's dispatch entry point, exactly as
-// receiveLoop does after decode. onMessage is a coroutine since the per-type channel
-// back-pressures; the tests below never fill a channel past capacity, so this completes inline.
+// receiveLoop does after decode. Use this helper only when the channel has room; full-channel
+// cases drive onMessage detached so the test can drain it after the producer parks.
 void deliver(
     Service& service, P2PSession::Ptr const& p2pSession, uint16_t packetType, std::string payload)
 {
@@ -201,6 +213,128 @@ BOOST_AUTO_TEST_CASE(fullChannelParksThePushInsteadOfDropping)
     auto second = task::syncWait(channel->recv());
     BOOST_CHECK_EQUAL(
         std::string(second.message.payload().begin(), second.message.payload().end()), "x");
+}
+
+BOOST_AUTO_TEST_CASE(fullChannelParksMultipleProducersWithoutDropping)
+{
+    auto service = makeService();
+    auto channel = service->subscribe(TYPE_A, inlinePoster(), /*capacity=*/1);
+    auto peerA = std::make_shared<FakeSubscribeSession>("peerA");
+    auto peerB = std::make_shared<FakeSubscribeSession>("peerB");
+    deliver(*service, peerA, TYPE_A, "first");
+
+    bool deliveredA = false;
+    bool deliveredB = false;
+    auto deliverDetached = [&](P2PSession::Ptr peer, uint32_t seq, std::string payload,
+                               bool& deliveredFlag) {
+        task::wait([](Service& service, P2PSession::Ptr p2pSession, uint32_t seq,
+                       std::string payload, bool& deliveredFlag) -> task::Task<void> {
+            Message message;
+            message.setPacketType(TYPE_A);
+            message.setSeq(seq);
+            message.setPayload(bytes(payload.begin(), payload.end()));
+            co_await service.onMessage(bcos::network::NetworkException{}, nullptr,
+                std::move(message), std::move(p2pSession));
+            deliveredFlag = true;
+        }(*service, std::move(peer), seq, std::move(payload), deliveredFlag));
+    };
+    deliverDetached(peerA, 2, "from-A", deliveredA);
+    deliverDetached(peerB, 3, "from-B", deliveredB);
+    BOOST_REQUIRE(!deliveredA);
+    BOOST_REQUIRE(!deliveredB);
+    BOOST_CHECK_EQUAL(channel->size(), 1);
+
+    auto payloadString = [](InboundMessage& inbound) {
+        return std::string(inbound.message.payload().begin(), inbound.message.payload().end());
+    };
+    auto first = task::syncWait(channel->recv());
+    BOOST_CHECK_EQUAL(payloadString(first), "first");
+    BOOST_REQUIRE(deliveredA);
+    BOOST_REQUIRE(!deliveredB);
+
+    auto second = task::syncWait(channel->recv());
+    BOOST_CHECK_EQUAL(payloadString(second), "from-A");
+    BOOST_REQUIRE(deliveredB);
+    auto third = task::syncWait(channel->recv());
+    BOOST_CHECK_EQUAL(payloadString(third), "from-B");
+}
+
+BOOST_AUTO_TEST_CASE(compressedTakeBufferWithCeilingCapacityFitsInboundBudget)
+{
+    auto service = makeService();
+    auto channel = service->subscribe(TYPE_A, inlinePoster(), /*capacity=*/1);
+    auto peer = std::make_shared<FakeSubscribeSession>("peerCompressed");
+
+    auto payload = bytes(8192, 'z');
+    bytes compressed;
+    BOOST_REQUIRE(ZstdCompress::compress(
+        bcos::ref(payload), compressed, static_cast<int>(bcos::network::c_zstdCompressLevel)));
+    Message wire;
+    wire.setPacketType(TYPE_A);
+    wire.setSeq(4);
+    wire.setExt(Message::COMPRESS_EXT_FLAG);
+    P2PMessageOptions options;
+    options.setGroupID("group0");
+    options.setSrcNodeID(bytes(1024, 0x1));
+    options.mutableDstNodeIDs().push_back(bytes(1024, 0x2));
+    wire.setOptions(std::move(options));
+    bytes frame;
+    BOOST_REQUIRE(wire.encodeHeader(frame));
+    frame.insert(frame.end(), compressed.begin(), compressed.end());
+    Message::stampLength(frame, static_cast<uint32_t>(frame.size()));
+    frame.reserve(Session::MAX_RECV_QUEUE_BYTES);
+
+    Message decoded;
+    BOOST_REQUIRE_GT(decoded.decodeOwned(std::move(frame), 0), 0);
+    BOOST_CHECK_GE(decoded.ownedStorageBytes(), payload.size() + 1024);
+    BOOST_CHECK_LT(decoded.ownedStorageBytes(), Session::MAX_RECV_QUEUE_BYTES);
+    task::syncWait(
+        service->onMessage(bcos::network::NetworkException{}, nullptr, std::move(decoded), peer));
+
+    BOOST_REQUIRE_EQUAL(channel->size(), 1);
+    auto inbound = task::syncWait(channel->recv());
+    BOOST_REQUIRE_EQUAL(inbound.message.payload().size(), payload.size());
+    BOOST_CHECK(std::equal(
+        inbound.message.payload().begin(), inbound.message.payload().end(), payload.begin()));
+}
+
+BOOST_AUTO_TEST_CASE(uncompressedTakeBufferAndMetadataFitInboundBudget)
+{
+    auto service = makeService();
+    auto channel = service->subscribe(TYPE_A, inlinePoster(), /*capacity=*/1);
+    auto peer = std::make_shared<FakeSubscribeSession>("peerMetadata");
+
+    auto payload = bytes(8192, 'p');
+    Message wire;
+    wire.setPacketType(TYPE_A);
+    wire.setSeq(5);
+    P2PMessageOptions options;
+    options.setGroupID(std::string(P2PMessageOptions::MAX_GROUPID_LENGTH, 'g'));
+    options.setSrcNodeID(bytes(P2PMessageOptions::MAX_NODEID_LENGTH, 0x1));
+    for (auto i = 0; i < 4; ++i)
+    {
+        options.mutableDstNodeIDs().push_back(bytes(P2PMessageOptions::MAX_NODEID_LENGTH, i + 2));
+    }
+    wire.setOptions(std::move(options));
+    bytes frame;
+    BOOST_REQUIRE(wire.encodeHeader(frame));
+    frame.insert(frame.end(), payload.begin(), payload.end());
+    Message::stampLength(frame, static_cast<uint32_t>(frame.size()));
+    frame.reserve(Session::MAX_RECV_QUEUE_BYTES);
+
+    Message decoded;
+    BOOST_REQUIRE_GT(decoded.decodeOwned(std::move(frame), 0), 0);
+    BOOST_CHECK_GT(decoded.ownedStorageBytes(), Session::MAX_RECV_QUEUE_BYTES);
+    BOOST_CHECK_LT(decoded.ownedStorageBytes(), Service::DEFAULT_INBOUND_QUEUE_BYTES);
+    task::syncWait(
+        service->onMessage(bcos::network::NetworkException{}, nullptr, std::move(decoded), peer));
+
+    BOOST_REQUIRE_EQUAL(channel->size(), 1);
+    auto inbound = task::syncWait(channel->recv());
+    BOOST_REQUIRE_EQUAL(inbound.message.options().dstNodeIDs().size(), 4);
+    BOOST_REQUIRE_EQUAL(inbound.message.payload().size(), payload.size());
+    BOOST_CHECK(std::equal(
+        inbound.message.payload().begin(), inbound.message.payload().end(), payload.begin()));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

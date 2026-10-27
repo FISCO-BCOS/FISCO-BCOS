@@ -830,9 +830,9 @@ task::Task<void> Service::onMessage(bcos::network::NetworkException e, Session::
             {
                 if (!co_await channel->waitWritable(bytes))
                 {
-                    // false = closed (stop(): teardown owns the message) or can-never-fit — a
-                    // message larger than the whole budget, unreachable in production
-                    // (allowMaxMsgSize << DEFAULT_INBOUND_QUEUE_BYTES), dropped loudly.
+                    // false = closed (stop(): teardown owns the message) or can-never-fit.
+                    // The 96MB budget covers the upstream 64MB frame-storage bound plus decoded
+                    // metadata; compressed wire storage is released, so this is defensive.
                     if (!channel->closed())
                     {
                         SERVICE_LOG(ERROR)

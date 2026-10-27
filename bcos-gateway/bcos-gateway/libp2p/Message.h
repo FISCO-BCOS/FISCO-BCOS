@@ -89,6 +89,17 @@ public:
     void setDstNodeIDs(std::vector<bytes> _dstNodeIDs);
     std::vector<bytes>& mutableDstNodeIDs();
 
+    std::size_t ownedStorageBytes() const
+    {
+        std::size_t total =
+            m_groupID.capacity() + m_srcNodeID.capacity() + m_dstNodeIDs.capacity() * sizeof(bytes);
+        for (auto const& nodeID : m_dstNodeIDs)
+        {
+            total += nodeID.capacity();
+        }
+        return total;
+    }
+
 protected:
     std::string m_groupID;
     bytes m_srcNodeID;
@@ -173,11 +184,15 @@ public:
     bytesConstRef payload() const;
     void setPayload(bytes _payload);
 
-    /// The heap this message retains: the owned frame storage (decodeOwned — on the take-buffer
-    /// path the session's whole grown receive buffer) plus any owned payload (send path /
-    /// compressed frames). The inbound channel's byte budget charges this, so a queued message
-    /// accounts for what it actually pins rather than its plaintext length.
-    std::size_t ownedStorageBytes() const { return m_ownedFrame.capacity() + m_payload.capacity(); }
+    /// The heap this message retains: the owned frame storage (decodeOwned — on the uncompressed
+    /// take-buffer path the session's whole grown receive buffer), any owned payload, and the
+    /// decoded options / node IDs. The inbound channel's byte budget charges this, so a queued
+    /// message accounts for what it actually pins rather than its plaintext length.
+    std::size_t ownedStorageBytes() const
+    {
+        return m_ownedFrame.capacity() + m_payload.capacity() + m_srcP2PNodeID.capacity() +
+               m_dstP2PNodeID.capacity() + m_options.ownedStorageBytes();
+    }
 
     void setRespPacket();
     // Deprecated: the send path encodes the header with encodeHeader and passes the payload as
@@ -189,8 +204,9 @@ public:
     /// copy path (frameOffset == 0), the session's former receive buffer on the take-buffer
     /// path (frame at [frameOffset, ...)). payload() then views into the owned storage;
     /// compressed frames fall back to an owned m_payload (decompression materializes new bytes
-    /// anyway). A message decoded this way must not be re-encode()d whole — the send paths
-    /// re-encode the header and pass payload() as views, which stays correct.
+    /// anyway), and their now-unreferenced wire storage is released after successful decoding.
+    /// A message decoded this way must not be re-encode()d whole — the send paths re-encode the
+    /// header and pass payload() as views, which stays correct.
     int32_t decodeOwned(bytes&& storage, uint32_t frameOffset);
     bool isRespPacket() const;
 

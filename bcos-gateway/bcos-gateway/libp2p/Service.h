@@ -80,7 +80,7 @@ public:
     // Coroutine because the per-type inbound channel back-pressures: a full channel parks the
     // caller (a session's receive pump) in waitWritable() instead of dropping the message, so the
     // dispatch must be awaitable. The park ends when the type's pump drains space, or with false
-    // once stop() closes the channel.
+    // once stop() closes the channel or the message can never fit the byte budget.
     virtual task::Task<void> onMessage(bcos::network::NetworkException e, Session::Ptr session,
         Message message, std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
@@ -210,10 +210,11 @@ public:
 
     // Default per-type inbound queue depth for subscribe().
     constexpr static std::size_t DEFAULT_INBOUND_QUEUE_SIZE = 1024;
-    // Per-type inbound byte budget (measured by inboundMessageBytes). Mirrors the session recv
-    // channel's 64MB: the session-level bound caps what one PEER can pin, this one caps what a
-    // slow per-type consumer lets the whole NODE pin per message type.
-    constexpr static std::size_t DEFAULT_INBOUND_QUEUE_BYTES = 64 * 1024 * 1024;
+    // Per-type inbound queued-heap budget, independently measured by inboundMessageBytes. Large
+    // frames reduce the usable count below 1024 by design. The 96MB budget covers the upstream
+    // 64MB frame-storage bound plus decoded options / node metadata; compressed decoding releases
+    // its wire storage, so every successfully decoded production message can fit this budget.
+    constexpr static std::size_t DEFAULT_INBOUND_QUEUE_BYTES = 96 * 1024 * 1024;
 
     // Pull-mode inbound subscription: one bounded channel per message type. The receive pump of
     // every session pushes matching inbound messages here; the consumer drains the channel with
@@ -221,7 +222,7 @@ public:
     // the parked consumer resumes). A full channel PARKS the pushing receive pump in
     // waitWritable() — back-pressure that propagates through the session's recv queue to the TCP
     // window, never a silent drop. Channels are closed by stop(), which wakes the consumer's
-    // recv() with a NetworkException and a parked producer's waitWritable() with false.
+    // recv() with a NetworkException and every parked producer's waitWritable() with false.
     std::shared_ptr<InboundChannel> subscribe(uint16_t _type, InboundChannel::Poster _poster,
         std::size_t _capacity = DEFAULT_INBOUND_QUEUE_SIZE);
     // The channel-registry half of subscribe(), split out as a virtual seam: subscribeHandler() is

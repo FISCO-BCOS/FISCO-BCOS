@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "bcos-task/Task.h"
+#include <atomic>
 #include <coroutine>
 #include <cstddef>
 #include <deque>
@@ -26,6 +28,7 @@
 #include <optional>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace bcos::task
 {
@@ -37,15 +40,13 @@ namespace bcos::task
 // Backpressure: push() returns false when the channel is full (count or byte budget) or closed —
 // leaving the value INTACT, so a producer can park and retry the same item: a coroutine producer
 // co_awaits waitWritable(bytes) until a push of `bytes` (same measure as sizeOf) fits, turning
-// "full" into producer-side backpressure rather than a drop. Like recv(), at most ONE
-// waitWritable() waiter may be parked at a time, and its wake is also delivered through the
-// poster. A second parked waiter DISPLACES the first, which is woken with a failure (recv()
-// throws, waitWritable() returns false) instead of being stranded. Space is only freed by the
-// consumer popping, so only a pop can wake a parked producer. With more than one producer the
+// "full" into producer-side backpressure rather than a drop. Producers park in a FIFO queue and
+// their wakes are also delivered through the poster. A pop wakes the first parked producer whose
+// item fits; recv() remains single-waiter, with a second recv() displacing the first. A producer
 // wake does not reserve the space — another producer may consume it first — so multi-producer
-// users must loop push/waitWritable (safe only because a failed push keeps the value).
+// users must loop push/waitWritable (safe because a failed push keeps the value).
 // close() is idempotent (the FIRST close's exception sticks), wakes a parked recv() with that
-// exception and a parked waitWritable() with false, and rejects later pushes; values already
+// exception and every parked waitWritable() with false, and rejects later pushes; values already
 // queued remain drainable — recv() throws only once the queue is empty, so teardown loses
 // nothing that was accepted.
 //
@@ -53,13 +54,13 @@ namespace bcos::task
 // an external teardown waking a parked pump so it does not have to wait out a socket timeout. It is
 // thread-safe and idempotent, and queued values stay drainable ahead of the error.
 //
-// Lifetime: the queue, the close state and both waiter slots live in a shared State owned by
+// Lifetime: the queue, the close state and all waiter state live in a shared State owned by
 // the channel AND by every awaitable it handed out, so either side may be destroyed first.
 // A coroutine frame destroyed while still parked (e.g. a dropped Task pump — teardown, not
-// misuse) unregisters its slot from the awaitable's destructor: a later push()/close()/pop
-// then just enqueues or closes instead of writing into or resuming the dead frame, and the
-// abandoned wait is simply forgotten. The channel itself may also be destroyed while waiters
-// are parked — the State is kept alive by the parked awaitables, but with the channel gone
+// misuse) unregisters its slot or queue entry from the awaitable's destructor: a later
+// push()/close()/pop then just enqueues or closes instead of writing into or resuming the dead
+// frame, and the abandoned wait is simply forgotten. The channel itself may also be destroyed while
+// waiters are parked — the State is kept alive by the parked awaitables, but with the channel gone
 // nothing will ever wake them, so they stay parked until their own frames are destroyed;
 // callers that want parked pumps to FINISH must still close() first. The wakes touch only the
 // waiting coroutines' frames (await_resume reads only its own slots, never the channel), so
@@ -69,10 +70,10 @@ class Channel
 {
 public:
     // Wake delivery for parked waiters. Must be callable CONCURRENTLY from any thread —
-    // push(), close() and both awaitables' await_suspend() all post, from producer and
-    // consumer threads alike — and RE-ENTRANT from inside a running wake: an inline poster
-    // resumes the woken coroutine on the caller's stack, and that coroutine may immediately
-    // re-enter the channel and post another wake.
+    // push(), close() and RecvAwaitable::await_suspend() all post, from producer and consumer
+    // threads alike — and RE-ENTRANT from inside a running wake: an inline poster resumes the
+    // woken coroutine on the caller's stack, and that coroutine may immediately re-enter the
+    // channel and post another wake.
     using Poster = std::function<void(std::function<void()>)>;
     using Ptr = std::shared_ptr<Channel>;
 
@@ -129,8 +130,8 @@ public:
 
     void close(std::exception_ptr error = nullptr)
     {
-        std::function<void()> wake;
-        std::function<void()> wakeProducer;
+        std::vector<std::function<void()>> wakes;
+        std::vector<std::function<void()>> producerWakes;
         {
             std::lock_guard lock(m_state->mutex);
             if (m_state->closed)
@@ -143,21 +144,48 @@ public:
             if (m_state->waiter)
             {
                 *m_state->waiter->error = m_state->closeError;
-                wake = m_state->takeWaiterLocked();
+                wakes.emplace_back(m_state->takeWaiterLocked());
             }
-            if (m_state->writableWaiter)
+            // Results stay false: no space is coming for any parked producer.
+            producerWakes = m_state->takeAllWritableWaitersLocked();
+        }
+        for (auto& wake : producerWakes)
+        {
+            wakes.emplace_back(std::move(wake));
+        }
+        if (wakes.empty())
+        {
+            return;
+        }
+
+        // One idempotent delivery ensures a poster failure cannot strand the remaining waiters or
+        // resume one twice when the fallback runs. A waiter exception must not block the others.
+        auto sharedWakes = std::make_shared<std::vector<std::function<void()>>>(std::move(wakes));
+        auto started = std::make_shared<std::atomic_bool>(false);
+        std::function<void()> wakeAll = [sharedWakes, started] {
+            if (started->exchange(true))
             {
-                // result stays false: no space is coming
-                wakeProducer = m_state->takeWritableWaiterLocked();
+                return;
             }
-        }
-        if (wake)
+            for (auto& wake : *sharedWakes)
+            {
+                try
+                {
+                    wake();
+                }
+                catch (...)
+                {
+                    detail::reclaimEscapedFrames();
+                }
+            }
+        };
+        try
         {
-            m_state->poster(std::move(wake));
+            m_state->poster(wakeAll);
         }
-        if (wakeProducer)
+        catch (...)
         {
-            m_state->poster(std::move(wakeProducer));
+            wakeAll();
         }
     }
 
@@ -200,13 +228,13 @@ public:
     // item about to be pushed; irrelevant when the channel has no byte budget) can succeed, then
     // returns true. Returns false once the channel is closed, or immediately when such a push
     // can never fit (a zero maxCount, or `bytes` larger than the whole byte budget) — parking
-    // there could never be woken. At most one waiter may be parked: a second displaces the
-    // first, which is woken with false, mirroring recv().
+    // there could never be woken. Any number of producers may park; they wait in FIFO order and
+    // are woken through the poster as consumer pops make room.
     auto waitWritable(std::size_t bytes = 1) { return WritableAwaitable{m_state, bytes}; }
 
 private:
     // Everything a parked waiter can still touch after the Channel itself is gone: the
-    // configuration, the queue, the close state and both waiter slots, behind one mutex. The
+    // configuration, the queue, the close state and all waiter state, behind one mutex. The
     // shared ownership (channel + every live awaitable) is what makes "either side may be
     // destroyed first" safe — see the lifetime contract at the top of the file.
     struct State
@@ -276,9 +304,20 @@ private:
 
         std::function<void()> takeWritableWaiterLocked()
         {
-            auto handle = writableWaiter->handle;
-            writableWaiter.reset();
+            auto handle = writableWaiters.front().handle;
+            writableWaiters.pop_front();
             return [handle]() { handle.resume(); };
+        }
+
+        std::vector<std::function<void()>> takeAllWritableWaitersLocked()
+        {
+            std::vector<std::function<void()>> wakes;
+            wakes.reserve(writableWaiters.size());
+            while (!writableWaiters.empty())
+            {
+                wakes.emplace_back(takeWritableWaiterLocked());
+            }
+            return wakes;
         }
 
         // One waiter at a time: before parking over an already-parked waiter, the new waiter
@@ -295,25 +334,15 @@ private:
             return takeWaiterLocked();
         }
 
-        std::function<void()> displaceWritableWaiterLocked()
-        {
-            if (!writableWaiter)
-            {
-                return nullptr;
-            }
-            // result stays false, as on close(): no space is coming for the displaced waiter.
-            return takeWritableWaiterLocked();
-        }
-
-        // Called by the consumer after a pop: hands the freed space to a parked producer if the
-        // producer's pending push now fits, otherwise leaves it parked.
+        // Called by the consumer after a pop: hands the freed space to the first parked producer
+        // whose pending push now fits, otherwise leaves the FIFO queue parked.
         std::function<void()> takeWritableWaiterIfSpaceLocked()
         {
-            if (!writableWaiter || !hasSpaceForLocked(writableWaiter->bytes))
+            if (writableWaiters.empty() || !hasSpaceForLocked(writableWaiters.front().bytes))
             {
                 return nullptr;
             }
-            *writableWaiter->result = true;
+            *writableWaiters.front().result = true;
             return takeWritableWaiterLocked();
         }
 
@@ -328,7 +357,7 @@ private:
         bool closed = false;
         std::exception_ptr closeError;
         std::optional<WaiterSlot> waiter;
-        std::optional<WritableWaiterSlot> writableWaiter;
+        std::deque<WritableWaiterSlot> writableWaiters;
     };
 
     struct RecvAwaitable
@@ -455,13 +484,13 @@ private:
           : m_state(std::move(state)), m_bytes(bytes)
         {}
 
-        // Not movable, like RecvAwaitable: the waiter slot points at THIS object's m_result.
+        // Not copyable: a registered queue entry points at THIS object's m_result.
         WritableAwaitable(const WritableAwaitable&) = delete;
         WritableAwaitable& operator=(const WritableAwaitable&) = delete;
         WritableAwaitable& operator=(WritableAwaitable&&) = delete;
 
         // See RecvAwaitable's move constructor: only moved pre-registration in practice; the
-        // registered branch re-points the slot at the new address.
+        // registered branch re-points the queue entry at the new address.
         WritableAwaitable(WritableAwaitable&& other)
           : m_state(std::move(other.m_state)),
             m_bytes(other.m_bytes),
@@ -471,16 +500,20 @@ private:
             if (m_registered)
             {
                 std::lock_guard lock(m_state->mutex);
-                if (m_state->writableWaiter && m_state->writableWaiter->result == &other.m_result)
+                for (auto& waiter : m_state->writableWaiters)
                 {
-                    m_state->writableWaiter->result = &m_result;
+                    if (waiter.result == &other.m_result)
+                    {
+                        waiter.result = &m_result;
+                        break;
+                    }
                 }
                 other.m_registered = false;
             }
         }
 
         // See ~RecvAwaitable: a frame destroyed while parked in waitWritable() unregisters its
-        // slot here, so a later pop or close() cannot write into or resume the dead frame.
+        // queue entry here, so a later pop or close() cannot write into or resume the dead frame.
         ~WritableAwaitable()
         {
             if (!m_registered)
@@ -488,9 +521,14 @@ private:
                 return;
             }
             std::lock_guard lock(m_state->mutex);
-            if (m_state->writableWaiter && m_state->writableWaiter->result == &m_result)
+            for (auto it = m_state->writableWaiters.begin(); it != m_state->writableWaiters.end();
+                ++it)
             {
-                m_state->writableWaiter.reset();
+                if (it->result == &m_result)
+                {
+                    m_state->writableWaiters.erase(it);
+                    break;
+                }
             }
         }
 
@@ -502,51 +540,26 @@ private:
         static bool await_ready() noexcept { return false; }
         bool await_suspend(std::coroutine_handle<> handle)
         {
-            // Same invariant as RecvAwaitable: the displaced waiter's wake is posted while OUR
-            // OWN slot is unregistered, and nothing is posted after registering it.
-            while (true)
+            std::lock_guard lock(m_state->mutex);
+            if (m_state->closed)
             {
-                std::function<void()> wake;
-                {
-                    std::lock_guard lock(m_state->mutex);
-                    if (m_state->closed)
-                    {
-                        return false;  // m_result stays false
-                    }
-                    if (m_state->hasSpaceForLocked(m_bytes))
-                    {
-                        m_result = true;
-                        return false;  // never suspended: space already available
-                    }
-                    if (!m_state->canEverFitLocked(m_bytes))
-                    {
-                        // m_result stays false: this push can never fit, so fail fast instead
-                        // of parking until close().
-                        return false;
-                    }
-                    if (m_state->writableWaiter)
-                    {
-                        // One waiter at a time: a second parked waitWritable() displaces the
-                        // first, which is woken with false rather than stranded. Loop and
-                        // re-check AFTER the post: a pop or close() may have landed while the
-                        // displaced waiter's wake ran.
-                        wake = m_state->displaceWritableWaiterLocked();
-                    }
-                    else
-                    {
-                        m_state->writableWaiter =
-                            typename State::WritableWaiterSlot{handle, m_bytes, &m_result};
-                        m_registered = true;
-                        return true;
-                    }
-                }
-                // Posted outside the lock, as in push()/close(): the poster can run a wake
-                // INLINE, and a producer resumed there calls back into the channel.
-                if (wake)
-                {
-                    m_state->poster(std::move(wake));
-                }
+                return false;  // m_result stays false
             }
+            if (m_state->hasSpaceForLocked(m_bytes))
+            {
+                m_result = true;
+                return false;  // never suspended: space already available
+            }
+            if (!m_state->canEverFitLocked(m_bytes))
+            {
+                // m_result stays false: this push can never fit, so fail fast instead
+                // of parking until close().
+                return false;
+            }
+            m_state->writableWaiters.push_back(
+                typename State::WritableWaiterSlot{handle, m_bytes, &m_result});
+            m_registered = true;
+            return true;
         }
         bool await_resume() const noexcept { return m_result; }
     };

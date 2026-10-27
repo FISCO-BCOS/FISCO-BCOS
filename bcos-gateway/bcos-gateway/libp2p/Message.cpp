@@ -492,8 +492,15 @@ int32_t Message::decodeOwned(bytes&& storage, uint32_t frameOffset)
     {
         return bcos::network::MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
-    return decodeImpl(
+    auto result = decodeImpl(
         {m_ownedFrame.data() + frameOffset, m_ownedFrame.size() - frameOffset}, true, frameOffset);
+    if (result > 0 && !m_payloadInFrame)
+    {
+        // A compressed message owns its decompressed payload and keeps no view into the wire
+        // frame. Release the potentially much larger receive buffer before budget accounting.
+        bytes{}.swap(m_ownedFrame);
+    }
+    return result;
 }
 
 int32_t Message::decodeImpl(const bytesConstRef& _buffer, bool _frameOwned, uint32_t _viewStart)

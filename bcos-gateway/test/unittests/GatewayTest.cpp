@@ -524,9 +524,11 @@ public:
         auto gate = std::make_shared<task::OneShot<bool>>();
         sendGates.push_back(gate);
         ++sendStarted;
-        co_await *gate;  // outstanding until releaseAll()
+        co_await *gate;  // outstanding until the test releases it
         ++sendReleased;
     }
+
+    void releaseOne(std::size_t index) { sendGates.at(index)->complete(true); }
 
     void releaseAll()
     {
@@ -613,6 +615,32 @@ public:
 
     std::vector<std::pair<std::string, std::string>> received;
 };
+
+Message makeP2PRequest(uint32_t seq, bcos::crypto::NodeIDPtr const& dstNodeID)
+{
+    Message message;
+    message.setPacketType(GatewayMessageType::PeerToPeerMessage);
+    message.setSeq(seq);
+    message.setPayload(bytes{'p'});
+    P2PMessageOptions options;
+    options.setGroupID("group0");
+    options.setSrcNodeID(bytes(32, 0x1));
+    options.mutableDstNodeIDs().push_back(dstNodeID->encode());
+    message.setOptions(std::move(options));
+    return message;
+}
+
+void closeP2PChannels(Service& service)
+{
+    for (uint16_t type : {GatewayMessageType::Handshake, GatewayMessageType::Heartbeat,
+             GatewayMessageType::PeerToPeerMessage, GatewayMessageType::BroadcastMessage})
+    {
+        if (auto channel = service.inboundChannel(type))
+        {
+            channel->close();
+        }
+    }
+}
 }  // namespace
 
 // Round-3 review (F1): the node-wide per-type PeerToPeerMessage pump must never await remote I/O.
@@ -634,49 +662,114 @@ BOOST_AUTO_TEST_CASE(p2pMessageDispatchNotBlockedByOutstandingResponseWrite)
 
     auto gateway = std::make_shared<Gateway>(nullptr, service, nodeManager, nullptr, nullptr);
 
-    auto makeRequest = [&](uint32_t seq) {
-        Message message;
-        message.setPacketType(GatewayMessageType::PeerToPeerMessage);
-        message.setSeq(seq);
-        message.setPayload(bytes{'p'});
-        P2PMessageOptions options;
-        options.setGroupID("group0");
-        options.setSrcNodeID(bytes(32, 0x1));
-        options.mutableDstNodeIDs().push_back(dstNodeID->encode());
-        message.setOptions(std::move(options));
-        return message;
-    };
-
     // No host is wired, so the channel poster wakes the pump inline: every step below completes
     // on this thread, deterministically.
     auto peerA = std::make_shared<FakePeerSession>("peerA");
-    task::syncWait(
-        service->onMessage(bcos::network::NetworkException{}, nullptr, makeRequest(1), peerA));
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(1, dstNodeID), peerA));
     BOOST_REQUIRE_EQUAL(front->received.size(), 1u);  // A's dispatch ran
     BOOST_REQUIRE_EQUAL(service->sendStarted, 1);     // A's response write is outstanding
     BOOST_REQUIRE_EQUAL(service->sendReleased, 0);
 
     // B's message is dispatched while A's response write is STILL outstanding.
     auto peerB = std::make_shared<FakePeerSession>("peerB");
-    task::syncWait(
-        service->onMessage(bcos::network::NetworkException{}, nullptr, makeRequest(2), peerB));
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(2, dstNodeID), peerB));
     BOOST_CHECK_EQUAL(front->received.size(), 2u);
     BOOST_CHECK_EQUAL(service->sendStarted, 2);
     BOOST_CHECK_EQUAL(service->sendReleased, 0);
 
     service->releaseAll();
     BOOST_CHECK_EQUAL(service->sendReleased, 2);
+    closeP2PChannels(*service);
+}
 
-    // The channels are the handler pumps' only exit (Service::stop() closes them, but this
-    // service never started) — close them so the parked pumps end here instead of leaking.
-    for (uint16_t type : {GatewayMessageType::Handshake, GatewayMessageType::Heartbeat,
-             GatewayMessageType::PeerToPeerMessage, GatewayMessageType::BroadcastMessage})
+BOOST_AUTO_TEST_CASE(p2pMessageDispatchIsBoundedByInFlightBudget)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<ParkedSendService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+    const auto messageBytes = makeP2PRequest(0, dstNodeID).ownedStorageBytes();
+    auto gateway = std::make_shared<Gateway>(nullptr, service, nodeManager, nullptr, nullptr,
+        "localGateway", /*_dispatchInFlightBytes=*/2 * messageBytes,
+        /*_dispatchInFlightCount=*/8);
+
+    auto peerA = std::make_shared<FakePeerSession>("peerA");
+    auto peerB = std::make_shared<FakePeerSession>("peerB");
+    auto peerC = std::make_shared<FakePeerSession>("peerC");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(1, dstNodeID), peerA));
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(2, dstNodeID), peerB));
+    BOOST_REQUIRE_EQUAL(front->received.size(), 2u);
+    BOOST_REQUIRE_EQUAL(service->sendStarted, 2);
+
+    // Two requests fill the byte budget. The third is popped by the pump but cannot detach until
+    // an earlier dispatch releases its permit.
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(3, dstNodeID), peerC));
+    BOOST_CHECK_EQUAL(front->received.size(), 2u);
+    BOOST_CHECK_EQUAL(service->sendStarted, 2);
+    BOOST_CHECK_EQUAL(service->sendReleased, 0);
+
+    service->releaseOne(0);
+    BOOST_REQUIRE_EQUAL(service->sendReleased, 1);
+    BOOST_REQUIRE_EQUAL(front->received.size(), 3u);
+    BOOST_REQUIRE_EQUAL(service->sendStarted, 3);
+    service->releaseAll();
+    BOOST_CHECK_EQUAL(service->sendReleased, 3);
+    closeP2PChannels(*service);
+}
+
+BOOST_AUTO_TEST_CASE(p2pMessageDispatchBudgetWaitIsCancelledByStop)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<ParkedSendService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+    std::vector<std::function<void()>> dispatchWakes;
+    const auto messageBytes = makeP2PRequest(0, dstNodeID).ownedStorageBytes();
+    auto gateway = std::make_shared<Gateway>(nullptr, service, nodeManager, nullptr, nullptr,
+        "localGateway", /*_dispatchInFlightBytes=*/messageBytes, /*_dispatchInFlightCount=*/8,
+        [&dispatchWakes](std::function<void()> wake) { dispatchWakes.push_back(std::move(wake)); });
+
+    auto peerA = std::make_shared<FakePeerSession>("peerA");
+    auto peerB = std::make_shared<FakePeerSession>("peerB");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(1, dstNodeID), peerA));
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(2, dstNodeID), peerB));
+    BOOST_REQUIRE_EQUAL(front->received.size(), 1u);
+    BOOST_REQUIRE_EQUAL(service->sendStarted, 1);
+
+    std::weak_ptr<Gateway> weakGateway = gateway;
+    gateway->stop();
+    BOOST_REQUIRE_EQUAL(dispatchWakes.size(), 1);
+    gateway.reset();
+    service->releaseAll();
+    BOOST_REQUIRE(weakGateway.expired());
+    BOOST_CHECK_EQUAL(service->sendReleased, 1);
+
+    // Resume the cancelled pump only after its Gateway owner is gone. It must exit through the
+    // weak owner instead of touching the destroyed object.
+    for (auto& wake : dispatchWakes)
     {
-        if (auto channel = service->inboundChannel(type))
-        {
-            channel->close();
-        }
+        wake();
     }
+    BOOST_CHECK_EQUAL(front->received.size(), 1u);
+    BOOST_CHECK_EQUAL(service->sendStarted, 1);
+    closeP2PChannels(*service);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

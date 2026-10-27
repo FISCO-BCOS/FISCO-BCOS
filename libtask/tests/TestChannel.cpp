@@ -289,27 +289,91 @@ BOOST_AUTO_TEST_CASE(secondRecvDisplacesAndFailsFirstWaiter)
     BOOST_CHECK_EQUAL(second.get_future().get(), 7);
 }
 
-BOOST_AUTO_TEST_CASE(secondWaitWritableDisplacesAndFailsFirstWaiter)
+BOOST_AUTO_TEST_CASE(parkedProducersWakeInFifoOrder)
 {
     Channel<int> channel(inlinePoster(), 1);
     BOOST_CHECK(channel.push(1));  // full
 
     std::promise<bool> first;
     std::promise<bool> second;
+    auto firstResult = first.get_future();
+    auto secondResult = second.get_future();
+    auto producer = [](Channel<int>& ch, int value, std::promise<bool>& out) -> Task<void> {
+        while (!ch.push(value))
+        {
+            if (!co_await ch.waitWritable())
+            {
+                out.set_value(false);
+                co_return;
+            }
+        }
+        out.set_value(true);
+    };
 
-    bcos::task::wait([](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
-        out.set_value(co_await ch.waitWritable());
-    }(channel, first));
+    bcos::task::wait(producer(channel, 2, first));
+    bcos::task::wait(producer(channel, 3, second));
+    BOOST_CHECK(firstResult.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready);
+    BOOST_CHECK(secondResult.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready);
 
-    // A second parked waitWritable() displaces the first, which is woken with false.
-    bcos::task::wait([](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
-        out.set_value(co_await ch.waitWritable());
-    }(channel, second));
-
-    BOOST_CHECK(!first.get_future().get());
-    // The surviving waiter is still woken by a drain.
+    // Each drain wakes the next FIFO producer. Neither producer is displaced by the other.
     BOOST_CHECK_EQUAL(syncWait(channel.recv()), 1);
-    BOOST_CHECK(second.get_future().get());
+    BOOST_CHECK(firstResult.get());
+    BOOST_CHECK(secondResult.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready);
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 2);
+    BOOST_CHECK(secondResult.get());
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 3);
+}
+
+BOOST_AUTO_TEST_CASE(closeWakesAllParkedProducers)
+{
+    Channel<int> channel(inlinePoster(), 1);
+    BOOST_CHECK(channel.push(1));  // full
+
+    std::promise<bool> first;
+    std::promise<bool> second;
+    auto firstResult = first.get_future();
+    auto secondResult = second.get_future();
+    auto producer = [](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
+        out.set_value(co_await ch.waitWritable());
+    };
+    bcos::task::wait(producer(channel, first));
+    bcos::task::wait(producer(channel, second));
+
+    channel.close();
+    BOOST_CHECK(!firstResult.get());
+    BOOST_REQUIRE(secondResult.wait_for(std::chrono::seconds(1)) == std::future_status::ready);
+    BOOST_CHECK(!secondResult.get());
+}
+
+BOOST_AUTO_TEST_CASE(closeDeliversAllWakesWhenPosterThrows)
+{
+    for (bool deliverBeforeThrow : {false, true})
+    {
+        Channel<int> channel(
+            [deliverBeforeThrow](std::function<void()> wake) {
+                if (deliverBeforeThrow)
+                {
+                    wake();
+                }
+                throw std::runtime_error("poster failure");
+            },
+            1);
+        BOOST_CHECK(channel.push(1));
+
+        std::promise<bool> first;
+        std::promise<bool> second;
+        auto firstResult = first.get_future();
+        auto secondResult = second.get_future();
+        auto producer = [](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
+            out.set_value(co_await ch.waitWritable());
+        };
+        bcos::task::wait(producer(channel, first));
+        bcos::task::wait(producer(channel, second));
+
+        BOOST_CHECK_NO_THROW(channel.close());
+        BOOST_CHECK(!firstResult.get());
+        BOOST_CHECK(!secondResult.get());
+    }
 }
 
 BOOST_AUTO_TEST_CASE(destroyedParkedConsumerUnregistersBeforePush)

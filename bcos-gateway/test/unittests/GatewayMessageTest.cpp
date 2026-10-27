@@ -26,6 +26,7 @@
 #include "bcos-utilities/ZstdCompress.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
+#include <cstdint>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -726,8 +727,10 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeOwned_compressedFallsBack)
 
     auto frame = buildOwnedTestFrame(
         11, (uint16_t)bcos::protocol::MessageExtFieldFlag::COMPRESS, compressed);
-    const byte* storageBase = frame.data();
-    std::size_t storageSize = frame.size();
+    frame.reserve(1024 * 1024);  // simulate surplus take-buffer capacity
+    auto storageBase = reinterpret_cast<std::uintptr_t>(frame.data());
+    auto storageEnd = storageBase + frame.size();
+    auto storageCapacity = frame.capacity();
 
     Message message;
     BOOST_REQUIRE_GT(message.decodeOwned(std::move(frame), 0), 0);
@@ -736,8 +739,10 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeOwned_compressedFallsBack)
     BOOST_REQUIRE_EQUAL(message.payload().size(), payload.size());
     BOOST_CHECK(std::equal(message.payload().begin(), message.payload().end(), payload.begin()));
     // fallback: the payload is materialized outside the owned frame storage
-    auto payloadData = message.payload().data();
-    BOOST_CHECK(payloadData < storageBase || payloadData >= storageBase + storageSize);
+    auto payloadData = reinterpret_cast<std::uintptr_t>(message.payload().data());
+    BOOST_CHECK(payloadData < storageBase || payloadData >= storageEnd);
+    // The payload has no view into the wire frame, so its surplus storage is released.
+    BOOST_CHECK_LT(message.ownedStorageBytes(), storageCapacity);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
