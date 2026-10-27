@@ -544,7 +544,7 @@ BOOST_AUTO_TEST_CASE(seal_gas_budget_skips_sender_that_does_not_fit)
     BOOST_CHECK_EQUAL(std::string(out.front()->sender()), small);
 }
 
-// No count ceiling: 1500 transfers of 20000 gas fill a 30M-gas block in one seal (the old
+// No count ceiling: 1500 transfers of 21000 gas fill a 31.5M-gas block in one seal (the old
 // constant capped every block at 1000 transactions regardless of gas).
 BOOST_AUTO_TEST_CASE(seal_gas_budget_30m_takes_1500_small_transfers)
 {
@@ -555,16 +555,37 @@ BOOST_AUTO_TEST_CASE(seal_gas_budget_30m_takes_1500_small_transfers)
         std::string sender(20, static_cast<char>('a' + senderIndex));
         for (int64_t nonce = 0; nonce < 100; ++nonce)
         {
-            txs.push_back(makeTxWithGas(sender, nonce, 20000));
+            txs.push_back(makeTxWithGas(sender, nonce, 21000));
         }
     }
     pool.add(txs);
 
     MapStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
-    pool.seal(30000000, state, std::back_inserter(out));
+    pool.seal(31500000, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 1500);
+}
+
+// A transaction that declares no gas (gasLimit 0, legal for FISCO transactions on the lanes
+// that do not meter gas) still spends c_minSealGas of the budget: a budget that never
+// decreased would seal the whole pool into one block.
+BOOST_AUTO_TEST_CASE(seal_charges_zero_gas_transactions_the_floor)
+{
+    MemPoolImpl pool;
+    std::string sender(20, 'z');
+    std::vector<protocol::Transaction::Ptr> txs;
+    for (int64_t nonce = 0; nonce < 30; ++nonce)
+    {
+        txs.push_back(makeTxWithGas(sender, nonce, 0));
+    }
+    pool.add(txs);
+
+    MapStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> out;
+    pool.seal(10 * c_minSealGas, state, std::back_inserter(out));
+
+    BOOST_CHECK_EQUAL(out.size(), 10);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

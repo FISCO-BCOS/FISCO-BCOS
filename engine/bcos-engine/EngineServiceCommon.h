@@ -407,19 +407,17 @@ GetPayloadResult assembleGetPayloadData(const EntryT& entry, std::uint32_t versi
     });
 }
 
-/// Block gas budget for the FISCO-executor (v1) build lanes: buildPayload stamps the
-/// tx_gas_limit SYS_CONFIG row as the block gasLimit, so the seal reads the same row and
-/// fills the block up to the limit the header will carry (LedgerConfig's default when the
-/// row is absent, as getLedgerConfig would).
+/// Block gas budget for the FISCO-executor (v1) build lanes: buildPayload stamps
+/// `std::get<0>(ledgerConfig.gasLimit())` of the parent's LedgerConfig (the tx_gas_limit
+/// row) as the block gasLimit, so the seal reads it through the same getLedgerConfig call
+/// and fills the block up to exactly the limit the header will carry.
 template <class View>
-task::Task<int64_t> legacyBlockGasLimit(View& view)
+task::Task<int64_t> legacyBlockGasLimit(View& view, bcos::protocol::BlockNumber parentNumber,
+    bcos::protocol::BlockFactory& blockFactory)
 {
-    auto entry = co_await ledger::getSystemConfig(view, ledger::SYSTEM_KEY_TX_GAS_LIMIT);
-    if (!entry.has_value())
-    {
-        co_return static_cast<int64_t>(ledger::DEFAULT_GAS_LIMIT);
-    }
-    co_return boost::lexical_cast<int64_t>(std::get<0>(*entry));
+    ledger::LedgerConfig ledgerConfig;
+    co_await ledger::getLedgerConfig(view, ledgerConfig, parentNumber, blockFactory);
+    co_return static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
 }
 
 namespace op
