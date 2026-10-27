@@ -464,14 +464,13 @@ static_assert(bcos::engine::EngineServiceConcept<OpEngine>);
 // OpLedgerConfigRepublish.h). The lane's holder is republished from the ledger by the notifier
 // the initializer installs instead, pinned at runtime by
 // OpLedgerConfigRepublishTest/commit_republish_keeps_the_holder_complete.
-static_assert(
-    std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
-        bcos::protocol::BlockFactory::Ptr, int64_t, bcos::scheduler::SchedulerInterface::Ptr,
-        std::shared_ptr<bcos::engine::DACaps>, bool>,
+static_assert(std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
+                  bcos::protocol::BlockFactory::Ptr, bcos::scheduler::SchedulerInterface::Ptr,
+                  std::shared_ptr<bcos::engine::DACaps>, bool>,
     "positive control: the OP engine is constructible at its documented arity");
 static_assert(
     !std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
-        bcos::protocol::BlockFactory::Ptr, int64_t, bcos::scheduler::SchedulerInterface::Ptr,
+        bcos::protocol::BlockFactory::Ptr, bcos::scheduler::SchedulerInterface::Ptr,
         std::shared_ptr<bcos::engine::DACaps>, bool, bcos::ledger::LedgerConfigState::Ptr>,
     "OpEngineService must not take a LedgerConfigState: the only configuration its commit "
     "callback can publish is the delegate's number+timestamp stub, which fail-closes EIP-155 "
@@ -686,8 +685,8 @@ struct OpServicePair
         bcos::ledger::OpForkSchedule forkSchedule = {})
       : scheduler(forkSchedule, {}),
         delegate(std::move(delegateIn)),
-        service(memPool, storage, scheduler, blockFactory, bcos::engine::c_defaultBlockTxCountLimit,
-            delegate, std::move(daCapsIn), allowSynthesizedL1Attributes)
+        service(memPool, storage, scheduler, blockFactory, delegate, std::move(daCapsIn),
+            allowSynthesizedL1Attributes)
     {}
 };
 
@@ -711,8 +710,7 @@ struct SharedForkchoicePair
 
     SharedForkchoicePair()
       : legacy(legacyMemPool, legacyStorage, legacyExecutor, legacyScheduler, blockFactory),
-        op(opMemPool, opStorage, opScheduler, blockFactory,
-            bcos::engine::c_defaultBlockTxCountLimit, nullptr)
+        op(opMemPool, opStorage, opScheduler, blockFactory, nullptr)
     {}
 };
 
