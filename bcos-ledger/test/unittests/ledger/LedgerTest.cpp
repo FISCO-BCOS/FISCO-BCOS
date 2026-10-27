@@ -32,6 +32,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/ReceiptBlockPosition.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -2271,20 +2272,20 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
     }());
 }
 
-// Regression test for the stored receipt numbering.
+// The stored receipt position is deliberately NOT maintained: it stays at the value the field was
+// first written with (0), and the RPC layer derives the real position from the block when it
+// answers. Three properties are pinned here, together, because they only make sense together:
 //
-// A block whose receipts reach storage without having gone through
-// protocol::normalizeReceipts used to be written with transactionIndex = 0 on EVERY receipt and
-// logIndex restarted per receipt. op-node rejects that outright -- "receipt N has unexpected tx
-// index 0" -- so L1 derivation froze at the first multi-transaction block.
+//   1. the write path leaves the field alone -- a node upgraded in place and a node that resyncs
+//      from genesis therefore store identical rows for the same historical block;
+//   2. the producer that finalizes a v2 block (computeEthereumRoots) does not quietly renumber
+//      either, so a resync cannot "repair" history the older node still holds as 0;
+//   3. the derivation that the RPC layer uses does produce the position op-node needs, from the
+//      block alone -- so the client-visible answer is right even though storage is not.
 //
-// The numbering now happens where the v2 lane finalizes receipts (ledger::mpt::
-// computeEthereumRoots, reached from the shared executeEthereumBlock), not at the ledger write
-// boundary: a hook there had to guess the lane from an EIP-4844 header field -- i.e. "past
-// Cancun" -- and so skipped every pre-Cancun Ethereum-lane block. This drives the producer and
-// then the real write path, pinning the client-visible contract end to end: transactionIndex is
-// the block position, and logIndex is cumulative across the block.
-BOOST_AUTO_TEST_CASE(ethereumLaneReceiptsAreNumberedOnWrite)
+// (2) is why this reads the block back and asserts 0: if someone reintroduced numbering at the
+// producer, that assertion -- not a client test -- is what would catch it.
+BOOST_AUTO_TEST_CASE(ethereumLaneStoredReceiptsKeepTheirLegacyPosition)
 {
     initFixture();
 
@@ -2360,29 +2361,36 @@ BOOST_AUTO_TEST_CASE(ethereumLaneReceiptsAreNumberedOnWrite)
     BOOST_REQUIRE(readBlock != nullptr);
     BOOST_REQUIRE_EQUAL(readBlock->receiptsSize(), logsPerTx.size());
 
-    // Assert against the literal sequence the fixture implies, not against a value derived from
-    // the receipt under test: if logEntries ever stop round-tripping through storage, deriving the
-    // expectation from them would make expected and actual collapse to the same number and the
-    // assertion would pass vacuously.
-    std::vector<std::size_t> const expectedLogIndex{0, 2, 3};
+    // Stored rows keep the legacy value: nothing on the write path numbers them any more.
     std::size_t receiptIndex = 0;
     for (auto receipt : readBlock->receipts())
     {
-        BOOST_REQUIRE_LT(receiptIndex, expectedLogIndex.size());
-        BOOST_CHECK_MESSAGE(receipt->transactionIndex() == receiptIndex,
-            "receipt " << receiptIndex << " stored transactionIndex "
-                       << receipt->transactionIndex());
-        BOOST_CHECK_MESSAGE(receipt->logIndex() == expectedLogIndex[receiptIndex],
+        BOOST_CHECK_MESSAGE(receipt->transactionIndex() == 0,
+            "receipt " << receiptIndex << " stored transactionIndex " << receipt->transactionIndex()
+                       << ", expected the untouched 0");
+        BOOST_CHECK_MESSAGE(receipt->logIndex() == 0,
             "receipt " << receiptIndex << " stored logIndex " << receipt->logIndex()
-                       << ", expected " << expectedLogIndex[receiptIndex]);
-        // Pin the log list itself, so a lost list fails here instead of silently keeping the
-        // logIndex assertions above true.
+                       << ", expected the untouched 0");
+        // Pin the log list itself, so a lost list fails loudly instead of letting the derivation
+        // below collapse to the same wrong answer as a missing row.
+        BOOST_REQUIRE_LT(receiptIndex, logsPerTx.size());
         BOOST_CHECK_MESSAGE(receipt->logEntries().size() == logsPerTx[receiptIndex],
             "receipt " << receiptIndex << " stored " << receipt->logEntries().size()
                        << " logs, expected " << logsPerTx[receiptIndex]);
         ++receiptIndex;
     }
     BOOST_CHECK_EQUAL(receiptIndex, logsPerTx.size());
+
+    // And the derivation the RPC layer publishes is the position op-node needs. Literal
+    // expectations, not values read back off the receipts under test.
+    std::vector<std::size_t> const expectedLogIndex{0, 2, 3};
+    auto const positions = protocol::stampReceiptBlockPositions(*readBlock);
+    BOOST_REQUIRE_EQUAL(positions.size(), logsPerTx.size());
+    for (std::size_t i = 0; i < positions.size(); ++i)
+    {
+        BOOST_CHECK_EQUAL(positions[i].transactionIndex, i);
+        BOOST_CHECK_EQUAL(positions[i].logIndex, expectedLogIndex[i]);
+    }
 }
 
 // The byte contract of the fault-proof data plane: debug_getRawReceipts serves, per transaction,
@@ -2446,10 +2454,10 @@ BOOST_AUTO_TEST_CASE(ethereumLaneReceiptLeavesRebuildTheCommittedRoot)
     // root. Swapping encodeReceiptLeaf for any other encoder turns this red.
     BOOST_CHECK_EQUAL(ledger::mpt::calculateReceiptsRoot(leafRefs), computation.receiptsRoot);
     BOOST_CHECK(computation.receiptsRoot != bcos::h256{});
-    // And the leaves carry the block position the write path stores.
-    BOOST_CHECK_EQUAL(receipts[0]->transactionIndex(), 0U);
-    BOOST_CHECK_EQUAL(receipts[1]->transactionIndex(), 1U);
-    BOOST_CHECK_EQUAL(receipts[1]->logIndex(), logsPerTx[0]);
+    // The producer finalizes bloom + cumulativeGasUsed only; the position is derived at read time
+    // (see ethereumLaneStoredReceiptsKeepTheirLegacyPosition), so it is still unset here.
+    BOOST_CHECK_EQUAL(receipts[1]->transactionIndex(), 0U);
+    BOOST_CHECK_EQUAL(receipts[1]->logIndex(), 0U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

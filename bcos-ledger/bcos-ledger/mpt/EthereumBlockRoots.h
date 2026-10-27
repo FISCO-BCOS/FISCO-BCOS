@@ -141,17 +141,12 @@ inline task::Task<EthereumBlockComputation> computeEthereumRoots(
 {
     EthereumBlockComputation computation;
 
-    // Number the receipts and derive their bloom, using the shared policy. This is the v2
-    // lane's only in-place receipt-finalization point -- reached from the shared
-    // executeEthereumBlock, so it covers both the block builder and the verifier -- which is why
-    // the policy belongs here rather than at the ledger write boundary: a hook there would have
-    // had to guess the lane from the header (an EIP-4844 field probe, i.e. "past Cancun") and
-    // would leave every pre-Cancun Ethereum-lane block unnumbered.
-    //
-    // The shared policy fills cumulativeGasUsed only when empty (a scheduler-supplied running
-    // prefix is a scheduling decision). On this lane the running prefix IS the committed value:
-    // receiptsRoot commits it, so it is authoritative here and is written unconditionally.
-    protocol::ReceiptNormalizer normalizer;
+    // Per-receipt cumulativeGasUsed + logsBloom. Deliberately NOT transactionIndex / logIndex:
+    // those are not committed by receiptsRoot, and storing them would make a node that resyncs
+    // from genesis disagree with one upgraded in place (whose historical rows keep the 0 the
+    // field was written with). The RPC layer derives both from the block's own order when it
+    // serves a receipt, so the field has one meaning everywhere and history needs no migration.
+    u256 cumulativeGasUsed;
     for (auto& receipt : receipts)
     {
         if (!receipt)
@@ -159,8 +154,10 @@ inline task::Task<EthereumBlockComputation> computeEthereumRoots(
             BOOST_THROW_EXCEPTION(
                 std::runtime_error{"computeEthereumRoots: null receipt returned by scheduler"});
         }
-        normalizer.apply(receipt);
-        receipt->setCumulativeGasUsed(normalizer.cumulativeGasUsed.str());
+        auto logBloom = bcos::getLogsBloom(receipt->logEntries());
+        receipt->setLogsBloom({logBloom.data(), logBloom.size()});
+        cumulativeGasUsed += receipt->gasUsed();
+        receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
     }
 
     // txsRoot over the raw EIP-2718 encodings (index-keyed trie).
