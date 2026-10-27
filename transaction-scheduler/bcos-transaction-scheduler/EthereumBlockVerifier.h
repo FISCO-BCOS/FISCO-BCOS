@@ -611,8 +611,11 @@ public:
         // behavior byte-identical to before this change.
         if (blockRevision >= EVMC_CANCUN)
         {
+            // A VM of its own for the system-call round: it runs on this thread only, and
+            // nothing is gained by sharing one with transaction execution.
+            evmc::VM vm{evmc_create_evmone()};
             if (auto error = co_await applyBlockStartSystemCalls(
-                    view, m_executor.get().vm(), ethHeader, blockRevision, storageErrorSlot);
+                    view, vm, ethHeader, blockRevision, storageErrorSlot);
                 error.has_value())
             {
                 co_return co_await fail("EthereumBlockVerifier: " + *error);
@@ -842,8 +845,9 @@ public:
         // receipts (deposit-contract address is per-chain: forkSchedule carries it).
         if (blockRevision >= EVMC_PRAGUE)
         {
+            evmc::VM vm{evmc_create_evmone()};
             auto blockEnd = co_await applyBlockEndSystemCalls(
-                view, m_executor.get().vm(), ethHeader, blockRevision, storageErrorSlot);
+                view, vm, ethHeader, blockRevision, storageErrorSlot);
             if (blockEnd.error.has_value())
             {
                 co_return co_await fail("EthereumBlockVerifier: " + *blockEnd.error);

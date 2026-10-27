@@ -1770,8 +1770,9 @@ public:
                 // system_call_block_start read as block_hashes.get_block_hash(number - 1).
                 // A failure is tolerated (upstream asserts success — a release-mode no-op —
                 // and silently continues): the post-state check remains the arbiter.
-                auto sysErr = task::tbb::syncWait(eth::systemCallBlockStart(storage, executor.vm(),
-                    bi, blockHashes.get_block_hash(bi.number - 1), blockRev));
+                evmc::VM vm{evmc_create_evmone()};
+                auto sysErr = task::tbb::syncWait(eth::systemCallBlockStart(
+                    storage, vm, bi, blockHashes.get_block_hash(bi.number - 1), blockRev));
                 if (sysErr.has_value() && !g_opts.quiet)
                 {
                     printLine("block-start system call skipped: " + *sysErr);
@@ -1896,8 +1897,9 @@ public:
                 // the upstream fixture behaviour: an error here means "no block-end diff".
                 // The state write-back happens inside the call; the returned EIP-7685 requests
                 // are not consumed by the fixture check.
-                auto endResult = task::tbb::syncWait(
-                    eth::systemCallBlockEnd(storage, executor.vm(), biEnd, blockRev));
+                evmc::VM vm{evmc_create_evmone()};
+                auto endResult =
+                    task::tbb::syncWait(eth::systemCallBlockEnd(storage, vm, biEnd, blockRev));
                 if (endResult.error.has_value() && !g_opts.quiet)
                 {
                     printLine("block-end system call skipped: " + *endResult.error);

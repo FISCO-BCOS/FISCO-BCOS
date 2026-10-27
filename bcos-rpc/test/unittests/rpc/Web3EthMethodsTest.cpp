@@ -392,6 +392,37 @@ BOOST_AUTO_TEST_CASE(estimateGasMissingParentBlockFailsClosed)
 
 namespace
 {
+// A scheduler whose execution succeeds only when the gasLimit reaches `required`, and which
+// reports `measured` as the gasUsed of a successful run. That is the shape eth_estimateGas sees:
+// the ceiling probe succeeds and measures, and a tighter budget runs out of gas.
+class LadderScheduler : public FakeScheduler2
+{
+public:
+    using FakeScheduler2::FakeScheduler2;
+    u256 measured{21'000};
+    uint64_t required{30'000};
+    std::vector<u256> gasLimits;
+
+    void call(protocol::Transaction::Ptr _tx,
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> _callback) noexcept
+        override
+    {
+        gasLimits.push_back(_tx->gasLimit());
+        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        if (_tx->gasLimit() < u256(required))
+        {
+            receipt->inner().data.status =
+                static_cast<int32_t>(protocol::TransactionStatus::OutOfGas);
+        }
+        else
+        {
+            receipt->inner().data.status = static_cast<int32_t>(protocol::TransactionStatus::None);
+            receipt->inner().data.gasUsed = measured.str();
+        }
+        _callback({}, receipt);
+    }
+};
+
 // Captures the transaction EthEndpoint::call hands to the scheduler, so a test can pin
 // the gasLimit the endpoint actually derived (the response alone does not expose it).
 class RecordingScheduler : public FakeScheduler2
@@ -399,6 +430,10 @@ class RecordingScheduler : public FakeScheduler2
 public:
     using FakeScheduler2::FakeScheduler2;
     protocol::Transaction::Ptr lastTx;
+    // Every gasLimit the endpoint handed over, in order. eth_estimateGas probes at the ceiling
+    // first and then retries upward from the measurement, so the ceiling is entries.front(), not
+    // the last one.
+    std::vector<u256> gasLimits;
     // Records what the RPC layer asked the pool for, so a test can pin the lookup key.
     std::string lastPendingAddress;
     std::string lastPendingKey;
@@ -406,6 +441,7 @@ public:
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> _callback) noexcept
         override
     {
+        gasLimits.push_back(_tx->gasLimit());
         lastTx = std::move(_tx);
         // Same shape as FakeScheduler2::call (which is private): an empty receipt.
         _callback({}, std::make_shared<bcostars::protocol::TransactionReceiptImpl>());
@@ -444,10 +480,53 @@ BOOST_AUTO_TEST_CASE(estimateGasCapComesFromTheTipBlockHeaderAtTheEndpoint)
     Json::Value response;
     task::syncWait(endpoint->estimateGas(params, response));
 
-    // The estimate proceeded through the header read (no refusal) and the budget handed
-    // to the scheduler is the target block's gasLimit — not 30M, not the 50M RPC cap.
-    BOOST_REQUIRE(recordingScheduler->lastTx != nullptr);
-    BOOST_CHECK_EQUAL(recordingScheduler->lastTx->gasLimit(), 21'000'000u);
+    // The estimate proceeded through the header read (no refusal) and the FIRST probe — the
+    // ceiling — is the target block's gasLimit: not 30M, not the 50M RPC cap. Later probes are
+    // the retry ladder starting from the measured gasUsed.
+    BOOST_REQUIRE(!recordingScheduler->gasLimits.empty());
+    BOOST_CHECK_EQUAL(recordingScheduler->gasLimits.front(), u256(21'000'000));
+}
+
+// eth_estimateGas measures once at the ceiling and then retries upward from the measurement:
+// the answer is the first budget that actually executes, and probing stops there instead of
+// walking all the way back to the ceiling.
+BOOST_AUTO_TEST_CASE(estimateGasRetriesFromTheMeasurementUpward)
+{
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(21'000'000));
+
+    auto ladderScheduler = std::make_shared<LadderScheduler>(m_ledger, m_blockFactory);
+    ladderScheduler->measured = u256(20'000);
+    ladderScheduler->required = 23'000;  // needs more than the measurement, far less than the cap
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, ladderScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    Json::Value response;
+    task::syncWait(endpoint->estimateGas(params, response));
+
+    auto const& probes = ladderScheduler->gasLimits;
+    BOOST_REQUIRE_GE(probes.size(), 2U);  // the ceiling probe plus at least one retry
+    BOOST_CHECK_EQUAL(probes.front(), u256(21'000'000));  // ceiling first
+    BOOST_CHECK_EQUAL(probes.at(1), u256(21'000));        // then the measured floor
+    // Every retry grows: 10% plus one, so the ladder cannot stall on a rounding zero.
+    for (size_t i = 2; i < probes.size(); ++i)
+    {
+        auto const previous = probes[i - 1].convert_to<uint64_t>();
+        BOOST_CHECK_GT(probes[i].convert_to<uint64_t>(), previous);
+    }
+    // The answer is the first budget that executed: at least what the call needs, and strictly
+    // below the ceiling.
+    auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
+    BOOST_CHECK_GE(answer, ladderScheduler->required);
+    BOOST_CHECK_LT(answer, 21'000'000U);
+    BOOST_CHECK_EQUAL(probes.back(), u256(answer));
 }
 
 // A client sends an EIP-55 mixed-case `from` (ethers/viem default). The account row key is

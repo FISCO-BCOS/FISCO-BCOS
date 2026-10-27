@@ -1579,8 +1579,8 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         // then pin the header's requestsHash to the assembled value so the block verifies.
         auto probeView = multiLayerStorage.fork();
         probeView.newMutable();
-        auto blockEnd =
-            co_await applyBlockEndSystemCalls(probeView, executor->vm(), ethHeader, EVMC_PRAGUE);
+        evmc::VM vm{evmc_create_evmone()};
+        auto blockEnd = co_await applyBlockEndSystemCalls(probeView, vm, ethHeader, EVMC_PRAGUE);
         BOOST_REQUIRE(!blockEnd.error.has_value());
         BOOST_REQUIRE_EQUAL(blockEnd.requests.size(), 2u);
         BOOST_CHECK(blockEnd.requests[0].type() == EthRequests::Type::withdrawal);
