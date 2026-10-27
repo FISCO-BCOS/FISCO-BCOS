@@ -326,8 +326,7 @@ struct OpE2eFixture
         opDelegate(
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
                 kChainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool)),
-        service(memPool, multiLayerStorage, scheduler, blockFactory,
-            bcos::engine::c_defaultBlockTxCountLimit, opDelegate)
+        service(memPool, multiLayerStorage, scheduler, blockFactory, opDelegate)
     {
         seedSysTables(multiLayerStorage);
     }
