@@ -2272,19 +2272,24 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
     }());
 }
 
-// The stored receipt position is deliberately NOT maintained: it stays at the value the field was
-// first written with (0), and the RPC layer derives the real position from the block when it
-// answers. Three properties are pinned here, together, because they only make sense together:
+// The stored receipt position is not repaired, and the RPC layer no longer reads it: the position
+// is derived from the block when a receipt is served (protocol::stampReceiptBlockPositions).
 //
-//   1. the write path leaves the field alone -- a node upgraded in place and a node that resyncs
-//      from genesis therefore store identical rows for the same historical block;
-//   2. the producer that finalizes a v2 block (computeEthereumRoots) does not quietly renumber
-//      either, so a resync cannot "repair" history the older node still holds as 0;
-//   3. the derivation that the RPC layer uses does produce the position op-node needs, from the
-//      block alone -- so the client-visible answer is right even though storage is not.
+// That is what makes the two ways a node can hold the same historical block agree. The stored
+// value is producer-dependent and stays whatever that producer wrote: a block built through
+// BaselineScheduler carries real indices, one written by the serial driver (and one re-executed by
+// a resync) carries the struct default 0. Deriving at read time gives both nodes ONE answer
+// without rewriting a single stored row -- no backfill, no activation marker, no lane predicate.
 //
-// (2) is why this reads the block back and asserts 0: if someone reintroduced numbering at the
-// producer, that assertion -- not a client test -- is what would catch it.
+// Two properties are pinned here:
+//
+//   1. this write path does not number the receipts it stores (they reach the ledger as the
+//      producer left them), so nothing tries to "repair" history behind the operator's back;
+//   2. the derivation produces the position op-node needs, from the block alone, with literal
+//      expectations rather than values read back off the receipts under test.
+//
+// (1) is why this asserts 0 on the read-back block: if someone reintroduced numbering here, that
+// assertion -- not a client test -- is what would catch it.
 BOOST_AUTO_TEST_CASE(ethereumLaneStoredReceiptsKeepTheirLegacyPosition)
 {
     initFixture();

@@ -22,11 +22,13 @@
  * `receipt.data`, and the Ethereum-lane receiptsRoot covers (status, cumulativeGasUsed, logsBloom,
  * logs) -- so this derivation cannot disagree with anything the chain committed.
  *
- * Deriving is what makes the two ways a node can have a block agree. A node upgraded in place
- * already holds historical receipt rows written before the field was maintained (all 0); a node
- * that resyncs from genesis must NOT repair those, or the same historical block would be answered
- * differently by the two. Deriving at read time gives every node one answer without rewriting a
- * single stored row, so there is no backfill, no activation marker and no lane predicate.
+ * Deriving is what makes the two ways a node can hold the same block agree. The stored value is
+ * producer-dependent and is left as each producer wrote it: a block built through
+ * BaselineScheduler carries real indices, while one written by the serial driver -- and one a
+ * resync re-executes -- carries the struct default 0. Repairing that on write cannot be done
+ * without telling resyncs and upgrades apart, which no on-chain signal can do. Deriving at read
+ * time gives every node one answer without rewriting a single stored row: no backfill, no
+ * activation marker, no lane predicate.
  *
  * The stored value is therefore not authoritative and is never consulted. Only the in-memory
  * receipt objects a block read just decoded are stamped; nothing here writes to storage.
