@@ -130,12 +130,17 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getFilterLogs)] = &Endpoints::getFilterLogs;
     m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
     m_handlers[methodString(EthMethod::eth_maxPriorityFeePerGas)] = &Endpoints::maxPriorityFeePerGas;
-    // OP-lane methods (op-batcher / op-proposer / op-node): the handlers answer MethodNotFound
-    // on any other executor_version (requireOpStackLane).
+    // Ethereum/OP-lane methods served on BOTH the Ethereum lane (v2) and the OP lane (v3):
+    // they answer MethodNotFound on the legacy FISCO lane only.
+    m_handlers[methodString(EthMethod::eth_blobBaseFee)] = &Endpoints::blobBaseFee;
     m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
     m_handlers[methodString(EthMethod::eth_getBlockReceipts)] = &Endpoints::getBlockReceipts;
+    // OP-lane only (requireOpStackLane): MethodNotFound on the Ethereum lane too, since a bare
+    // Ethereum chain has no batcher to serve a DA snapshot to.
     m_handlers[methodString(EthMethod::txpool_status)] = &Endpoints::txpoolStatus;
     m_handlers[methodString(EthMethod::txpool_content)] = &Endpoints::txpoolContent;
+    // Served on every lane, including the legacy FISCO one: EIP-1186 proofs are answered from
+    // whatever state trie the block has, so there is no lane claim to make here.
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
     // clang-format on
 }

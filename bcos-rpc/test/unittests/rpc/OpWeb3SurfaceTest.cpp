@@ -23,9 +23,11 @@
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/ledger/SystemConfigs.h>
+#include <bcos-framework/protocol/BlobSchedule.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/EthPoSHeaderValidation.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/FeeHistory.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
@@ -35,6 +37,7 @@
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace bcos::test
@@ -447,21 +450,233 @@ BOOST_AUTO_TEST_CASE(TxpoolWithoutMempoolIsEmpty)
     BOOST_CHECK_EQUAL(status["queued"].asString(), "0x0");
 }
 
-// Off the OP lane the four OP-only methods answer what an unregistered method answers.
+// The OP-only methods answer what an unregistered method answers off their lane, and serve a
+// real result on it. eth_feeHistory / eth_getBlockReceipts / eth_blobBaseFee are gated on
+// executor_version >= 2 (RpcChainPolicy usesEthereumFeeSemantics), so the legacy lane (v1)
+// answers MethodNotFound while the Ethereum lane (v2) and the OP lane serve them; txpool_* stay
+// OP-only.
 BOOST_AUTO_TEST_CASE(NonOpLaneIsMethodNotFound)
 {
+    // Self-contained: eth_getBlockReceipts needs a block whose receipts actually exist, and the
+    // fixture's default block does not have any. Relying on a previous case to have installed
+    // them made this pass only when the whole suite ran in order.
+    BOOST_REQUIRE(!blockWithDepositAndTx().empty());
+
     auto const unregistered = call("eth_noSuchMethod")["error"];
-    for (int version : {1, int(ledger::ETHEREUM_EXECUTOR_VERSION)})
+
+    // Legacy lane: every gated method is indistinguishable from an unregistered one.
+    setExecutorVersion(1);
+    for (auto const& resp : {call("eth_feeHistory", params({"0x1", "latest"})),
+             call("eth_getBlockReceipts", params({"latest"})), call("eth_blobBaseFee"),
+             call("txpool_status"), call("txpool_content")})
     {
-        setExecutorVersion(version);
-        for (auto const& resp : {call("eth_feeHistory", params({"0x1", "latest"})),
-                 call("eth_getBlockReceipts", params({"latest"})), call("txpool_status"),
-                 call("txpool_content")})
-        {
-            BOOST_CHECK(resp["error"] == unregistered);
-            BOOST_CHECK(!resp.isMember("result"));
-        }
+        BOOST_CHECK(resp["error"] == unregistered);
+        BOOST_CHECK(!resp.isMember("result"));
     }
+
+    // Ethereum lane: the three fee/receipt methods are served, txpool_* still are not.
+    // Asserted one by one so a failure names the method instead of leaving the reader to guess
+    // which element of a brace list broke.
+    setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+    for (auto const& [method, resp] : std::vector<std::pair<std::string, Json::Value>>{
+             {"eth_feeHistory", call("eth_feeHistory", params({"0x1", "latest"}))},
+             {"eth_getBlockReceipts", call("eth_getBlockReceipts", params({"latest"}))},
+             {"eth_blobBaseFee", call("eth_blobBaseFee")}})
+    {
+        BOOST_CHECK_MESSAGE(!resp.isMember("error"), method << ": " << printJson(resp));
+        BOOST_CHECK_MESSAGE(resp.isMember("result"), method << ": " << printJson(resp));
+    }
+    for (auto const& resp : {call("txpool_status"), call("txpool_content")})
+    {
+        BOOST_CHECK(resp["error"] == unregistered);
+        BOOST_CHECK(!resp.isMember("result"));
+    }
+}
+
+// eth_blobBaseFee: null before Cancun, then geth's CalcBlobFee(excess, fraction) with the
+// fraction taken from the [fork_timestamps] ladder wired onto the node service — the only
+// schedule source the RPC path has (getLedgerConfig rebuilds from storage and a v2 genesis
+// records neither a blob schedule nor an evmc_revision row).
+BOOST_AUTO_TEST_CASE(BlobBaseFeeFollowsTheForkSchedule)
+{
+    // The header must carry an excess for the null below to mean anything: without one the
+    // endpoint answers null for an unrelated reason, which is what made the earlier version of
+    // this assertion vacuous. calculateHash is required after mutating the header or the next
+    // hash() call throws EmptyBlockHeaderHash.
+    auto const excess = 4000U * protocol::BLOB_GAS_PER_BLOB;  // large enough that the
+    // fraction changes the answer (fakeExponential floors, so a small excess rounds to 1)
+    // The Ethereum lane: this case is about resolving the EIP-7840 schedule from the fork
+    // ladder. The OP lane answers the documented constant instead (see the feeHistory case).
+    setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+    auto const headNumber = m_ledger->blockNumber();
+    auto const headSeconds = uint64_t{2'000'000'000};  // a fixed instant, in seconds
+    header(headNumber)->setExcessBlobGas(excess);
+    header(headNumber)->setTimestamp(static_cast<int64_t>(headSeconds) * 1000);  // ms on the wire
+    header(headNumber)->calculateHash(*cryptoSuite->hashImpl());
+
+    // Pre-Cancun: an excess is present but no schedule is, so geth answers null.
+    BOOST_CHECK(call("eth_blobBaseFee")["result"].isNull());
+
+    // The fork ladder is in SECONDS while blockHeader().timestamp() is milliseconds: a fork
+    // scheduled one second after the head is not in effect, one scheduled at the head's own
+    // second is. Getting that conversion wrong makes one of these two assertions fail.
+    nodeService->setBlobForkTimes(protocol::BlobForkTimes{.cancunTime = headSeconds + 1});
+    BOOST_CHECK_MESSAGE(call("eth_blobBaseFee")["result"].isNull(),
+        "a fork one second in the future must not be in effect");
+    nodeService->setBlobForkTimes(protocol::BlobForkTimes{.cancunTime = headSeconds});
+    BOOST_REQUIRE_MESSAGE(!call("eth_blobBaseFee")["result"].isNull(),
+        "a fork scheduled at the head's own second must be in effect");
+
+    // Cancun active from genesis: fraction = DefaultCancunBlobConfig.
+    nodeService->setBlobForkTimes(protocol::BlobForkTimes{.cancunTime = 0});
+    auto const cancun = call("eth_blobBaseFee")["result"];
+    BOOST_REQUIRE_MESSAGE(cancun.isString(), printJson(call("eth_blobBaseFee")));
+    BOOST_CHECK_EQUAL(
+        cancun.asString(), toQuantity(protocol::fakeExponential(u256{1}, u256{excess},
+                               u256{protocol::CANCUN_BLOB_SCHEDULE.baseFeeUpdateFraction})));
+
+    // Prague bumps the schedule; the value must follow, which is what proves the fraction is
+    // resolved per fork rather than hard-coded.
+    nodeService->setBlobForkTimes(protocol::BlobForkTimes{.cancunTime = 0, .pragueTime = 0});
+    auto const prague = call("eth_blobBaseFee")["result"];
+    BOOST_REQUIRE_MESSAGE(prague.isString(), printJson(call("eth_blobBaseFee")));
+    BOOST_CHECK_EQUAL(
+        prague.asString(), toQuantity(protocol::fakeExponential(u256{1}, u256{excess},
+                               u256{protocol::PRAGUE_BLOB_SCHEDULE.baseFeeUpdateFraction})));
+    BOOST_CHECK(cancun.asString() != prague.asString());
+
+    // A fork scheduled in the future is not in effect at the head block.
+    nodeService->setBlobForkTimes(
+        protocol::BlobForkTimes{.cancunTime = std::numeric_limits<uint64_t>::max()});
+    BOOST_CHECK(call("eth_blobBaseFee")["result"].isNull());
+}
+
+// eth_feeHistory's blob series has to price blobs the same way eth_blobBaseFee does on the
+// Ethereum lane. Before this was routed per lane the series was a constant 1 wei, which agreed
+// with eth_blobBaseFee only while excessBlobGas was 0 -- i.e. in exactly the state a devnet
+// smoke test runs in.
+BOOST_AUTO_TEST_CASE(EthLaneFeeHistoryBlobSeriesMatchesBlobBaseFee)
+{
+    // This excess puts the fee an order of magnitude above 1 wei without saturating: too small
+    // and both entries floor to the same integer, too large and fakeExponential saturates at the
+    // u256 maximum, and either way the negative control below would pass vacuously.
+    auto const excess = 60U * protocol::BLOB_GAS_PER_BLOB;
+    auto const headNumber = m_ledger->blockNumber();
+    header(headNumber)->setExcessBlobGas(excess);
+    // Above target (Cancun: target 3, max 6 blobs), so the next excess grows. A parent that
+    // used exactly one blob would instead SHRINK the excess -- the direction depends on
+    // blobGasUsed vs target, which is the whole reason the parent's blobGasUsed must be read.
+    header(headNumber)->setBlobGasUsed(6 * protocol::BLOB_GAS_PER_BLOB);
+    header(headNumber)->setTimestamp(static_cast<int64_t>(2'000'000'000) * 1000);
+    // The next-block base-fee projection needs a gas target; the default fixture header has none.
+    header(headNumber)->setGasLimit(30'000'000);
+    header(headNumber)->setBaseFee(1'000'000'000);
+    header(headNumber)->calculateHash(*cryptoSuite->hashImpl());
+    nodeService->setBlobForkTimes(protocol::BlobForkTimes{.cancunTime = 0});
+
+    // Ethereum lane: the blob series follows excessBlobGas and the Cancun fraction.
+    setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+    auto const history = call("eth_feeHistory", params({"0x1", "latest", Json::arrayValue}));
+    BOOST_REQUIRE_MESSAGE(history.isMember("result"), printJson(history));
+    auto const series = history["result"]["baseFeePerBlobGas"];
+    BOOST_REQUIRE_EQUAL(series.size(), 2U);  // the block itself + the next block
+    auto const expected = toQuantity(protocol::fakeExponential(
+        u256{1}, u256{excess}, u256{protocol::CANCUN_BLOB_SCHEDULE.baseFeeUpdateFraction}));
+    BOOST_CHECK_EQUAL(series[0U].asString(), expected);
+    // The trailing entry is the NEXT block's fee, and EIP-4844 derives that from the parent's
+    // excess AND blobGasUsed -- this parent carried more than the target, so the next block is
+    // priced strictly higher. Asserting series[1] == series[0] (which this used to do) pinned
+    // the bug: it reported the parent's fee as the next block's.
+    auto const nextExcess = protocol::computeNextExcessBlobGas(
+        [&] {
+            protocol::EthBlockHeaderData parent{};
+            parent.baseFee = header(headNumber)->baseFee();
+            parent.blobGasUsed = header(headNumber)->blobGasUsed();
+            parent.excessBlobGas = header(headNumber)->excessBlobGas();
+            return parent;
+        }(),
+        protocol::toGasSchedule(protocol::CANCUN_BLOB_SCHEDULE), /*osakaActive=*/false);
+    BOOST_CHECK_GT(nextExcess, u256{excess});
+    BOOST_CHECK_EQUAL(
+        series[1U].asString(), toQuantity(protocol::fakeExponential(u256{1}, nextExcess,
+                                   u256{protocol::CANCUN_BLOB_SCHEDULE.baseFeeUpdateFraction})));
+    BOOST_CHECK(series[1U].asString() != series[0U].asString());
+
+    // The whole point: one artifact, one blob base fee. eth_blobBaseFee reads the head's excess
+    // through the same fraction resolver, so the two must agree exactly.
+    auto const direct = call("eth_blobBaseFee");
+    BOOST_REQUIRE_MESSAGE(direct.isMember("result"), printJson(direct));
+    BOOST_CHECK_EQUAL(direct["result"].asString(), series[0U].asString());
+    BOOST_CHECK_NE(direct["result"].asString(), "0x1");
+
+    // The OP lane carries no blob schedule: the series stays the documented constants even with
+    // an excess in the header, because MaxBlobGasPerBlock is 0 there.
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    auto const opHistory = call("eth_feeHistory", params({"0x1", "latest", Json::arrayValue}));
+    BOOST_REQUIRE_MESSAGE(opHistory.isMember("result"), printJson(opHistory));
+    auto const opSeries = opHistory["result"]["baseFeePerBlobGas"];
+    BOOST_CHECK_EQUAL(opSeries[0U].asString(), "0x1");
+    BOOST_CHECK_EQUAL(opHistory["result"]["blobGasUsedRatio"][0U].asDouble(), 0.0);
+
+    // eth_blobBaseFee on the OP lane answers the same documented projection (1 when the header
+    // carries excessBlobGas), from the header rather than from a schedule this lane does not
+    // have. Before this it resolved the Ethereum schedule, which is not wired on v3, and so
+    // answered null on a lane where op-geth answers 1.
+    auto const opDirect = call("eth_blobBaseFee");
+    BOOST_REQUIRE_MESSAGE(opDirect.isMember("result"), printJson(opDirect));
+    BOOST_CHECK_EQUAL(opDirect["result"].asString(), opSeries[0U].asString());
+}
+
+// A bare 32-byte block hash in a block-tag position resolves to that block's number (geth's
+// BlockNumberOrHash semantics); op-deployer's fork-mode state reader depends on it. Unknown
+// hashes must not answer as if they were a block, and malformed hex must not leak as -32603.
+BOOST_AUTO_TEST_CASE(BareBlockHashBlockTagResolves)
+{
+    auto const tipNumber = m_ledger->blockNumber();
+    auto const tipHash = header(tipNumber)->hash().hexPrefixed();
+    BOOST_REQUIRE_EQUAL(tipHash.size(), 66U);
+
+    // Known hash -> that block. eth_getBlockByNumber echoes the resolved block, so the number
+    // the tag resolved to is directly observable.
+    auto const byHash = call("eth_getBlockByNumber", params({tipHash, false}));
+    BOOST_REQUIRE_MESSAGE(byHash.isMember("result"), printJson(byHash));
+    BOOST_CHECK_EQUAL(byHash["result"]["number"].asString(), toQuantity(tipNumber));
+
+    // An earlier block's hash resolves to that earlier block, not to the tip.
+    auto const earlierHash = header(tipNumber - 3)->hash().hexPrefixed();
+    auto const earlier = call("eth_getBlockByNumber", params({earlierHash, false}));
+    BOOST_REQUIRE_MESSAGE(earlier.isMember("result"), printJson(earlier));
+    BOOST_CHECK_EQUAL(earlier["result"]["number"].asString(), toQuantity(tipNumber - 3));
+
+    // Unknown hash: must not be served as a block. The ledger reports "not found" and the tag
+    // path surfaces it, so a state read fails instead of answering from the wrong state --
+    // and it fails with a client error, not with the -32603 a raw ledger error would produce.
+    auto const unknown = call("eth_getTransactionCount",
+        params({Address("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").hexPrefixed(),
+            h256(0xdeadbeefU).hexPrefixed()}));
+    BOOST_REQUIRE_MESSAGE(unknown.isMember("error"), printJson(unknown));
+    BOOST_CHECK_EQUAL(unknown["error"]["code"].asInt(), -32602);
+    BOOST_CHECK(!unknown.isMember("result"));
+
+    // The null-contract endpoints answer null for the same input rather than an error.
+    auto const receipts = call("eth_getBlockReceipts", params({h256(0xdeadbeefU).hexPrefixed()}));
+    BOOST_CHECK_MESSAGE(receipts["result"].isNull(), printJson(receipts));
+    auto const txCount =
+        call("eth_getBlockTransactionCountByNumber", params({h256(0xdeadbeefU).hexPrefixed()}));
+    BOOST_CHECK_MESSAGE(txCount["result"].isNull(), printJson(txCount));
+    // ... and the by-hash sibling answers the same way as the by-number one.
+    auto const txCountByHash =
+        call("eth_getBlockTransactionCountByHash", params({h256(0xdeadbeefU).hexPrefixed()}));
+    BOOST_CHECK_MESSAGE(txCountByHash["result"].isNull(), printJson(txCountByHash));
+
+    // 66 characters of non-hex: invalid argument (-32602), not an internal error (-32603).
+    // eth_getTransactionCount is the shape op-deployer uses, and unlike eth_getBlockByNumber it
+    // does not swallow the resolver's exception into a null result.
+    auto const bad = call("eth_getTransactionCount",
+        params({Address("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").hexPrefixed(),
+            "0x" + std::string(64, 'z')}));
+    BOOST_REQUIRE_MESSAGE(bad.isMember("error"), printJson(bad));
+    BOOST_CHECK_EQUAL(bad["error"]["code"].asInt(), -32602);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

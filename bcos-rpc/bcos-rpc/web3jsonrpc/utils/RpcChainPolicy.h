@@ -91,4 +91,25 @@ inline task::Task<void> requireOpStackLane(
         BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
     }
 }
+
+/// Gate for the Ethereum/OP-lane methods (executor_version >= ETHEREUM_EXECUTOR_VERSION):
+/// geth-standard methods that are meaningful on both the pure-Ethereum lane (v2) and the OP
+/// lane (v3) but not on the legacy FISCO lane (0/1), which has no Ethereum fee/receipt
+/// semantics. Off both lanes they answer exactly what the dispatcher answers an unregistered
+/// method.
+/// @return the executor version the gate read, so a caller that also needs it (to pick a lane
+///         projection, say) does not read SYS_CONFIG a second time and cannot disagree with the
+///         gate about which lane it is on.
+inline task::Task<int> requireEthereumLane(
+    bcos::ledger::LedgerInterface& ledger, std::string_view method)
+{
+    auto const executorVersion = co_await readExecutorVersion(ledger);
+    if (!usesEthereumFeeSemantics(executorVersion))
+    {
+        WEB3_LOG(DEBUG) << LOG_DESC("Ethereum/OP-lane-only method on the legacy lane")
+                        << LOG_KV("method", method) << LOG_KV("executorVersion", executorVersion);
+        BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
+    }
+    co_return executorVersion;
+}
 }  // namespace bcos::rpc

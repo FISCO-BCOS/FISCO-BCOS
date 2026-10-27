@@ -337,21 +337,30 @@ struct EthL1Policy
 
     /// Build a BCOS receipt from the executed EVM result (no evmone receipt
     /// intermediate; moved verbatim from EthereumTransition.h's former
-    /// buildBcosReceipt). Return data is not retained by the host, matching
-    /// the v2 executor's documented limitation.
+    /// buildBcosReceipt). Return data is retained only when @p keepOutput is set (dry runs).
     ///
     /// Templated on the host type (not on Storage/Policy separately) so the
     /// hook works for any policy's host instantiation — only take_logs() is
     /// consumed. An L2 policy overrides this to impose its own receipt shape
     /// (OP collapses status to 0/1 and stamps the rollup fee metadata).
+    /// @param keepOutput retain the EVM return data in the receipt. Only dry runs ask for it:
+    ///        eth_call / eth_estimateGas answer it to the caller, and their receipts are
+    ///        thrown away. A mined transaction's receipt does not keep it -- the receipt shape
+    ///        a v2 chain commits to (encodeReceiptLeaf: status, cumulativeGasUsed, logsBloom,
+    ///        logs) has no output field, so persisting it would only grow the receipt store.
     template <class Host>
     static protocol::TransactionReceipt::Ptr buildReceipt(Host& host, evmc::Result const& result,
-        int64_t gasUsed, protocol::TransactionReceiptFactory const& rf, int64_t blockNumber)
+        int64_t gasUsed, protocol::TransactionReceiptFactory const& rf, int64_t blockNumber,
+        bool keepOutput = false)
     {
-        auto logs = takeBcosLogs(host);
+        auto logs = eth::takeBcosLogs(host);
+        // evmone leaves output_data null for an empty result; `nullptr + 0` is still UB.
         bcos::bytes output;
-        return rf.createReceipt(bcos::u256(static_cast<uint64_t>(gasUsed)), std::string{}, logs,
-            mapEvmcStatusToBcosStatus(result.status_code), bcos::ref(output), blockNumber);
+        if (keepOutput && result.output_size != 0)
+            output.assign(result.output_data, result.output_data + result.output_size);
+        return rf.createReceipt(bcos::u256(static_cast<uint64_t>(gasUsed)), std::string{},
+            std::move(logs), mapEvmcStatusToBcosStatus(result.status_code), bcos::ref(output),
+            blockNumber);
     }
 };
 }  // namespace bcos::executor_v1::eth
