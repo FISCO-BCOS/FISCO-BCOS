@@ -139,8 +139,10 @@ public:
 protected:
     // for UT
     Gateway() = default;
-    // Coroutine: it awaits the response send on every path that replies (rate-limit reject and the
-    // front-service completion), so no detached frame is needed per message.
+    // Coroutine: it awaits the response send on every path that replies (rate-limit reject and
+    // the front-service completion). A caller that must not wait on remote I/O — the node-wide
+    // per-type inbound pump — detaches it per message via task::wait (see the constructor); the
+    // detached frame owns _msg, so the dispatch stays zero-copy.
     virtual task::Task<void> onReceiveP2PMessage(P2PSession::Ptr _session, Message _msg);
 
     /**

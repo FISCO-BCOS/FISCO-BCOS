@@ -22,15 +22,20 @@
 #include "bcos-gateway/Gateway.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-crypto/signature/key/KeyFactoryImpl.h"
+#include "bcos-framework/front/FrontServiceInterface.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
+#include "bcos-gateway/gateway/LocalRouterTable.h"
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libp2p/Service.h"
+#include "bcos-task/OneShot.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <memory>
+#include <utility>
+#include <vector>
 
 using namespace fakeit;
 using namespace bcos;
@@ -494,6 +499,184 @@ BOOST_AUTO_TEST_CASE(testErrorHandlingScenarios)
 
     // Verify both calls were made
     fakeit::Verify(Method(mockAMOP, sendMessageByTopic)).Exactly(2);
+}
+
+namespace
+{
+// Round-3 review (F1) fixtures. ParkedSendService makes the response WRITE block until the test
+// releases it: the fake parks inside sendRespMessageBySession exactly where production parks —
+// the session's write queue behind a stalled peer's socket.
+class ParkedSendService : public Service
+{
+public:
+    ParkedSendService()
+      : Service([] {
+            P2PInfo info;
+            info.rawP2pID = "selfRawP2pID";
+            info.p2pID = "selfP2pID";
+            return info;
+        }())
+    {}
+
+    task::Task<void> sendRespMessageBySession(bcos::bytes /*payload*/, uint32_t /*seq*/,
+        std::string /*srcP2PNodeID*/, P2PSession::Ptr /*session*/) override
+    {
+        auto gate = std::make_shared<task::OneShot<bool>>();
+        sendGates.push_back(gate);
+        ++sendStarted;
+        co_await *gate;  // outstanding until releaseAll()
+        ++sendReleased;
+    }
+
+    void releaseAll()
+    {
+        for (auto& gate : sendGates)
+        {
+            gate->complete(true);
+        }
+    }
+
+    std::vector<std::shared_ptr<task::OneShot<bool>>> sendGates;
+    int sendStarted = 0;
+    int sendReleased = 0;
+};
+
+// Minimal P2PSession fake: onMessage needs a lockable weak_ptr<P2PSession> and a p2pID for
+// logging; no socket is involved.
+class FakePeerSession : public P2PSession
+{
+public:
+    explicit FakePeerSession(std::string id) : m_id(std::move(id))
+    {
+        auto info = mutableP2pInfo();
+        info->rawP2pID = m_id;
+        info->p2pID = m_id;
+    }
+    bcos::network::P2pID p2pID() override { return m_id; }
+    std::string printP2pID() override { return m_id; }
+    std::string m_id;
+};
+
+// The UT GatewayNodeManager constructor (uuid, keyFactory, p2pInterface) skips the io_context the
+// production one drives timers with; this test never starts those timers.
+class TestGatewayNodeManager : public GatewayNodeManager
+{
+public:
+    TestGatewayNodeManager(bcos::crypto::KeyFactory::Ptr keyFactory, Service::Ptr service)
+      : GatewayNodeManager("", std::move(keyFactory), std::move(service))
+    {}
+};
+
+// Records every front-service dispatch; onReceiveMessage completes inline.
+class RecordingFrontService : public bcos::front::FrontServiceInterface
+{
+public:
+    void start() override {}
+    void stop() override {}
+    task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo()
+        override
+    {
+        co_return std::make_tuple(Error::Ptr(nullptr), bcos::gateway::GroupNodeInfo::Ptr(nullptr));
+    }
+    task::Task<Error::Ptr> onReceiveGroupNodeInfo(
+        std::string, bcos::gateway::GroupNodeInfo::Ptr) override
+    {
+        co_return nullptr;
+    }
+    task::Task<Error::Ptr> onReceiveMessage(
+        std::string groupID, bcos::crypto::NodeIDPtr nodeID, bytesConstRef data) override
+    {
+        received.emplace_back(std::move(groupID),
+            std::string(reinterpret_cast<const char*>(data.data()), data.size()));
+        co_return nullptr;
+    }
+    task::Task<Error::Ptr> onReceiveBroadcastMessage(
+        std::string, bcos::crypto::NodeIDPtr, bytesConstRef) override
+    {
+        co_return nullptr;
+    }
+    task::Task<Error::Ptr> sendResponse(
+        std::string, int, bcos::crypto::NodeIDPtr, bytesConstRef) override
+    {
+        co_return nullptr;
+    }
+    task::Task<void> broadcastMessage(
+        uint16_t, int, ::ranges::any_view<bytesConstRef, ::ranges::category::forward>) override
+    {
+        co_return;
+    }
+    task::Task<bcos::front::SendResult> sendMessageByNodeID(int, bcos::crypto::NodeIDPtr,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward>, uint32_t) override
+    {
+        co_return bcos::front::SendResult{};
+    }
+
+    std::vector<std::pair<std::string, std::string>> received;
+};
+}  // namespace
+
+// Round-3 review (F1): the node-wide per-type PeerToPeerMessage pump must never await remote I/O.
+// Peer A's response write is outstanding (parked in the fake above, exactly where production
+// parks behind a stalled peer's write queue); a message from peer B must still reach the front
+// service. The pre-fix handler co_awaited the response send on the pump, so B would have queued
+// behind A until the inbound channel back-pressured.
+BOOST_AUTO_TEST_CASE(p2pMessageDispatchNotBlockedByOutstandingResponseWrite)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<ParkedSendService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+
+    auto gateway = std::make_shared<Gateway>(nullptr, service, nodeManager, nullptr, nullptr);
+
+    auto makeRequest = [&](uint32_t seq) {
+        Message message;
+        message.setPacketType(GatewayMessageType::PeerToPeerMessage);
+        message.setSeq(seq);
+        message.setPayload(bytes{'p'});
+        P2PMessageOptions options;
+        options.setGroupID("group0");
+        options.setSrcNodeID(bytes(32, 0x1));
+        options.mutableDstNodeIDs().push_back(dstNodeID->encode());
+        message.setOptions(std::move(options));
+        return message;
+    };
+
+    // No host is wired, so the channel poster wakes the pump inline: every step below completes
+    // on this thread, deterministically.
+    auto peerA = std::make_shared<FakePeerSession>("peerA");
+    task::syncWait(
+        service->onMessage(bcos::network::NetworkException{}, nullptr, makeRequest(1), peerA));
+    BOOST_REQUIRE_EQUAL(front->received.size(), 1u);  // A's dispatch ran
+    BOOST_REQUIRE_EQUAL(service->sendStarted, 1);     // A's response write is outstanding
+    BOOST_REQUIRE_EQUAL(service->sendReleased, 0);
+
+    // B's message is dispatched while A's response write is STILL outstanding.
+    auto peerB = std::make_shared<FakePeerSession>("peerB");
+    task::syncWait(
+        service->onMessage(bcos::network::NetworkException{}, nullptr, makeRequest(2), peerB));
+    BOOST_CHECK_EQUAL(front->received.size(), 2u);
+    BOOST_CHECK_EQUAL(service->sendStarted, 2);
+    BOOST_CHECK_EQUAL(service->sendReleased, 0);
+
+    service->releaseAll();
+    BOOST_CHECK_EQUAL(service->sendReleased, 2);
+
+    // The channels are the handler pumps' only exit (Service::stop() closes them, but this
+    // service never started) — close them so the parked pumps end here instead of leaking.
+    for (uint16_t type : {GatewayMessageType::Handshake, GatewayMessageType::Heartbeat,
+             GatewayMessageType::PeerToPeerMessage, GatewayMessageType::BroadcastMessage})
+    {
+        if (auto channel = service->inboundChannel(type))
+        {
+            channel->close();
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

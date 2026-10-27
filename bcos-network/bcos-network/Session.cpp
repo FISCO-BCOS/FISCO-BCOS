@@ -92,9 +92,10 @@ std::size_t bcos::network::SessionRecvBuffer::takeStorage(bytes& out, std::size_
     out = std::move(m_recvBuffer);
     // Reseed at the SAME (grown) size, not at a small floor: a take happens only once the buffer
     // has grown to hold a large frame, and a small reseed would make the NEXT large frame
-    // re-enter the NeedMoreData grow path — a fresh allocate plus a zero-fill of 2*length per
-    // frame, the cost this path exists to avoid. Keeping the size keeps the allocation
-    // one-per-take instead of grow-from-scratch per frame.
+    // re-enter the NeedMoreData grow path. The reseed IS a fresh allocate plus a zero-fill of the
+    // grown size (the moved-from vector has no capacity) — that cost is relocated here from the
+    // grow path, not eliminated. What the take path still saves against the plain copy branch is
+    // the payload-sized memcpy; whether that beats the reseed's zero-fill overall is unmeasured.
     m_recvBuffer.resize(m_recvBufferSize);
     if (tail > 0)
     {
@@ -104,11 +105,11 @@ std::size_t bcos::network::SessionRecvBuffer::takeStorage(bytes& out, std::size_
     // keeps the whole plaintext: for every current decoder the plaintext begins at the wire
     // frame's first byte and is no longer than it (RlpxFrameDecoder's plaintext is shorter).
     out.resize(wireEnd);
-    // The consumer retains this storage (Message::decodeOwned / the RLPx facade) while the recv
-    // channel charges only meta.frameSize against its byte budget: release the surplus capacity
-    // (the buffer had grown to ~2x the frame) so the heap a full queue pins matches what the
-    // channel accounts for.
-    out.shrink_to_fit();
+    // No shrink_to_fit: it would reallocate and copy the whole frame, putting back exactly the
+    // payload-sized copy this path exists to avoid. The consumer retains the surplus capacity
+    // (the buffer had grown to ~2x the frame, plus the dead prefix), and the recv channel's byte
+    // measure charges that capacity (BasicSession::recvQueueCharge), so the heap a full queue
+    // pins matches what the channel accounts for.
     m_readPos = 0;
     m_writePos = tail;
     return frameStart;

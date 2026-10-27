@@ -45,6 +45,15 @@ struct InboundMessage
 };
 using InboundChannel = task::Channel<InboundMessage>;
 
+// The byte measure the inbound channel charges for a queued message: the heap the message
+// actually retains (see Message::ownedStorageBytes), not its plaintext length. Used both as the
+// channel's sizeOf at construction and as the waitWritable() argument on the push side — the two
+// must agree, which is why it exists as one function.
+inline std::size_t inboundMessageBytes(const InboundMessage& inbound)
+{
+    return inbound.message.ownedStorageBytes();
+}
+
 class Service : public std::enable_shared_from_this<Service>
 {
 public:
@@ -68,8 +77,12 @@ public:
     virtual void onConnect(
         bcos::network::NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Session::Ptr session);
     virtual void onDisconnect(bcos::network::NetworkException e, P2PSession::Ptr p2pSession);
-    virtual void onMessage(bcos::network::NetworkException e, Session::Ptr session, Message message,
-        std::weak_ptr<P2PSession> p2pSessionWeakPtr);
+    // Coroutine because the per-type inbound channel back-pressures: a full channel parks the
+    // caller (a session's receive pump) in waitWritable() instead of dropping the message, so the
+    // dispatch must be awaitable. The park ends when the type's pump drains space, or with false
+    // once stop() closes the channel.
+    virtual task::Task<void> onMessage(bcos::network::NetworkException e, Session::Ptr session,
+        Message message, std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
     virtual std::optional<bcos::Error> onBeforeMessage(
         Session& _session, const Message& _message, uint32_t _wireLength);
@@ -197,13 +210,18 @@ public:
 
     // Default per-type inbound queue depth for subscribe().
     constexpr static std::size_t DEFAULT_INBOUND_QUEUE_SIZE = 1024;
+    // Per-type inbound byte budget (measured by inboundMessageBytes). Mirrors the session recv
+    // channel's 64MB: the session-level bound caps what one PEER can pin, this one caps what a
+    // slow per-type consumer lets the whole NODE pin per message type.
+    constexpr static std::size_t DEFAULT_INBOUND_QUEUE_BYTES = 64 * 1024 * 1024;
 
     // Pull-mode inbound subscription: one bounded channel per message type. The receive pump of
     // every session pushes matching inbound messages here; the consumer drains the channel with
     // `co_await channel->recv()` and chooses its own execution context through `poster` (where
-    // the parked consumer resumes). A full channel drops the message for THIS type only (logged)
-    // — a slow consumer must not take down the whole session. Channels are closed by stop(),
-    // which wakes the consumer's recv() with a NetworkException.
+    // the parked consumer resumes). A full channel PARKS the pushing receive pump in
+    // waitWritable() — back-pressure that propagates through the session's recv queue to the TCP
+    // window, never a silent drop. Channels are closed by stop(), which wakes the consumer's
+    // recv() with a NetworkException and a parked producer's waitWritable() with false.
     std::shared_ptr<InboundChannel> subscribe(uint16_t _type, InboundChannel::Poster _poster,
         std::size_t _capacity = DEFAULT_INBOUND_QUEUE_SIZE);
     // The channel-registry half of subscribe(), split out as a virtual seam: subscribeHandler() is

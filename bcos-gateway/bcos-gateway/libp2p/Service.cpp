@@ -489,8 +489,8 @@ task::Task<void> Service::receiveLoop(P2PSession::Ptr _p2pSession)
                 // "decoded" with "incomplete" and dispatches an all-zero Message.
                 if (message.decodeOwned(std::move(meta.frame), meta.frameOffset) > 0) [[likely]]
                 {
-                    onMessage(bcos::network::NetworkException{}, session, std::move(message),
-                        _p2pSession);
+                    co_await onMessage(bcos::network::NetworkException{}, session,
+                        std::move(message), _p2pSession);
                     continue;
                 }
             }
@@ -666,8 +666,8 @@ std::optional<bcos::Error> Service::onBeforeMessage(
     return std::nullopt;
 }
 
-void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session, Message message,
-    std::weak_ptr<P2PSession> p2pSessionWeakPtr)
+task::Task<void> Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
+    Message message, std::weak_ptr<P2PSession> p2pSessionWeakPtr)
 {
     // router path (merged from the former ServiceV2::onMessage): a message whose dstP2PNodeID is
     // another node is forwarded through the router table; on local delivery the short p2pIDs are
@@ -694,7 +694,7 @@ void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
                     << LOG_KV("dst", message.dstP2PNodeID()) << LOG_KV("type", message.packetType())
                     << LOG_KV("rsp", message.isRespPacket())
                     << LOG_KV("payLoadSize", message.payload().size()) << LOG_KV("ttl", ttl);
-                return;
+                co_return;
             }
             ttl -= 1;
             // recover to long p2p-node id for dispatcher through router
@@ -734,7 +734,7 @@ void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
                             << LOG_KV("what", boost::diagnostic_information(e));
                     }
                 }(self, std::move(message)));
-            return;
+            co_return;
         }
         else
         {
@@ -757,7 +757,7 @@ void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
     auto p2pSession = p2pSessionWeakPtr.lock();
     if (!p2pSession)
     {
-        return;
+        co_return;
     }
 
     try
@@ -783,7 +783,7 @@ void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
                 p2pSession->stop(bcos::network::UserReason);
                 onDisconnect(e, p2pSession);
             }
-            return;
+            co_return;
         }
 
         if (auto result =
@@ -796,7 +796,7 @@ void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
                                << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("seq", message.seq())
                                << LOG_KV("version", message.version())
                                << LOG_KV("packetType", message.packetType());
-            return;
+            co_return;
         }
 
         if (c_fileLogLevel <= TRACE) [[unlikely]]
@@ -813,16 +813,37 @@ void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
         auto version = message.version();
         auto seq = message.seq();
         // THE dispatch: push into the channel subscribed for this type; its pump runs the handler.
-        // A full channel drops THIS message only (logged) — a slow consumer must not take down the
-        // whole session.
+        // A full channel PARKS this receive pump in waitWritable() instead of dropping the
+        // message: the back-pressure propagates through the session's recv queue to the TCP
+        // window, which is what the PR body already claimed. This is safe only because a per-type
+        // handler pump never awaits remote I/O (the PeerToPeerMessage handler hands its dispatch
+        // and response write off to a detached coroutine) — parking here couples every inbound
+        // type of this session to the slowest PUMP, never to the slowest PEER.
         if (auto channel = inboundChannel(packetType))
         {
-            if (!channel->push(InboundMessage{std::move(p2pSession), std::move(message)}))
+            auto inbound = InboundMessage{std::move(p2pSession), std::move(message)};
+            // The same measure the channel's sizeOf charges (they must agree). push() leaves the
+            // value intact on failure, so losing the wake race costs one more park, never the
+            // message.
+            const auto bytes = inboundMessageBytes(inbound);
+            while (!channel->push(inbound))
             {
-                SERVICE_LOG(WARNING) << LOG_DESC("inbound channel full or closed, drop message")
-                                     << LOG_KV("packetType", packetType) << LOG_KV("seq", seq);
+                if (!co_await channel->waitWritable(bytes))
+                {
+                    // false = closed (stop(): teardown owns the message) or can-never-fit — a
+                    // message larger than the whole budget, unreachable in production
+                    // (allowMaxMsgSize << DEFAULT_INBOUND_QUEUE_BYTES), dropped loudly.
+                    if (!channel->closed())
+                    {
+                        SERVICE_LOG(ERROR)
+                            << LOG_DESC("inbound message exceeds the channel byte budget, drop")
+                            << LOG_KV("packetType", packetType) << LOG_KV("seq", seq)
+                            << LOG_KV("bytes", bytes);
+                    }
+                    co_return;
+                }
             }
-            return;
+            co_return;
         }
 
         if (packetType == gateway::AMOPMessageType)
@@ -833,7 +854,7 @@ void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
                                << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
                                << LOG_KV("version", version)
                                << LOG_KV("dst p2p", message.printDstP2PNodeID());
-            return;
+            co_return;
         }
         SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type") << LOG_KV("seq", message.seq())
                            << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
@@ -1253,8 +1274,17 @@ task::Task<void> bcos::gateway::Service::handlerPump(
         }
         catch (std::exception const& e)
         {
-            // One bad message must not kill the type's dispatch: log it and take the next one.
-            // (The detached-task shape this replaced rethrew onto whichever thread resumed it.)
+            // recv() throws ONLY once the channel is closed and drained (Channel's contract) —
+            // the pump's normal exit, whatever the close error's type (a bare close() delivers a
+            // plain runtime_error, which must not spin the loop). Anything from the HANDLER is
+            // one bad message: log it and take the next one.
+            if (_channel->closed())
+            {
+                SERVICE_LOG(INFO) << LOG_DESC("handler pump exit, channel closed")
+                                  << LOG_KV("packetType", _type)
+                                  << LOG_KV("what", boost::diagnostic_information(e));
+                co_return;
+            }
             SERVICE_LOG(WARNING) << LOG_DESC("handler pump message failed, continuing")
                                  << LOG_KV("packetType", _type)
                                  << LOG_KV("what", boost::diagnostic_information(e));
@@ -1275,7 +1305,11 @@ std::shared_ptr<bcos::gateway::InboundChannel> bcos::gateway::Service::subscribe
     auto& slot = m_channels.at(_type);
     if (!slot)
     {
-        slot = std::make_shared<InboundChannel>(std::move(_poster), _capacity);
+        // Count AND byte bounded (the byte measure is inboundMessageBytes): the session recv
+        // channel already caps what one peer can pin — this budget caps what a slow per-type
+        // consumer lets the whole node pin, keeping the FIB-184 bound intact one hop downstream.
+        slot = std::make_shared<InboundChannel>(
+            std::move(_poster), _capacity, DEFAULT_INBOUND_QUEUE_BYTES, inboundMessageBytes);
     }
     return slot;
 }

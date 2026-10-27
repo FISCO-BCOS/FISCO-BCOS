@@ -34,15 +34,16 @@ namespace bcos::task
 // recv() is always resumed through the Poster handed to the constructor, never inline on a
 // producer's stack — a producer (e.g. a socket read loop) can never be stalled by consumer code.
 //
-// Backpressure: push() returns false when the channel is full (count or byte budget) or closed;
-// a coroutine producer can instead co_await waitWritable(bytes) to park until a push of `bytes`
-// (same measure as sizeOf) fits, turning "full" into producer-side backpressure rather than a
-// drop. Like recv(), at most ONE waitWritable() waiter may be parked at a time, and its wake is
-// also delivered through the poster. A second parked waiter DISPLACES the first, which is woken
-// with a failure (recv() throws, waitWritable() returns false) instead of being stranded. Space
-// is only freed by the consumer popping, so only a pop can wake a parked producer. With more
-// than one producer the wake does not reserve the space — another producer may consume it
-// first — so multi-producer users must loop push/waitWritable.
+// Backpressure: push() returns false when the channel is full (count or byte budget) or closed —
+// leaving the value INTACT, so a producer can park and retry the same item: a coroutine producer
+// co_awaits waitWritable(bytes) until a push of `bytes` (same measure as sizeOf) fits, turning
+// "full" into producer-side backpressure rather than a drop. Like recv(), at most ONE
+// waitWritable() waiter may be parked at a time, and its wake is also delivered through the
+// poster. A second parked waiter DISPLACES the first, which is woken with a failure (recv()
+// throws, waitWritable() returns false) instead of being stranded. Space is only freed by the
+// consumer popping, so only a pop can wake a parked producer. With more than one producer the
+// wake does not reserve the space — another producer may consume it first — so multi-producer
+// users must loop push/waitWritable (safe only because a failed push keeps the value).
 // close() is idempotent (the FIRST close's exception sticks), wakes a parked recv() with that
 // exception and a parked waitWritable() with false, and rejects later pushes; values already
 // queued remain drainable — recv() throws only once the queue is empty, so teardown loses
@@ -87,7 +88,9 @@ public:
     Channel& operator=(Channel&&) = delete;
     ~Channel() = default;
 
-    bool push(T value)
+    // On false (full or closed) `value` is left intact: only a successful push moves from it, so
+    // a producer that lost the waitWritable race can retry the same item after parking again.
+    bool push(T& value)
     {
         std::function<void()> wake;
         {
@@ -120,6 +123,9 @@ public:
         }
         return true;
     }
+
+    // Rvalue convenience: same semantics — on false the argument is NOT consumed.
+    bool push(T&& value) { return push(value); }
 
     void close(std::exception_ptr error = nullptr)
     {

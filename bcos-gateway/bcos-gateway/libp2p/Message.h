@@ -173,6 +173,12 @@ public:
     bytesConstRef payload() const;
     void setPayload(bytes _payload);
 
+    /// The heap this message retains: the owned frame storage (decodeOwned — on the take-buffer
+    /// path the session's whole grown receive buffer) plus any owned payload (send path /
+    /// compressed frames). The inbound channel's byte budget charges this, so a queued message
+    /// accounts for what it actually pins rather than its plaintext length.
+    std::size_t ownedStorageBytes() const { return m_ownedFrame.capacity() + m_payload.capacity(); }
+
     void setRespPacket();
     // Deprecated: the send path encodes the header with encodeHeader and passes the payload as
     // views (see Session::sendMessage); kept for tests and legacy callers.

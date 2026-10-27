@@ -15,8 +15,9 @@
  *
  * @file ServiceSubscribeTest.cpp
  * @brief Tests for Service::subscribe — the pull-mode inbound interface. The receive pump's
- *        dispatch goes through the channel subscribed for the message type, a full channel drops
- *        only that message, and subscribeHandler() runs a coroutine handler per message.
+ *        dispatch goes through the channel subscribed for the message type, a full channel parks
+ *        the pushing pump (back-pressure, no drop), and subscribeHandler() runs a coroutine
+ *        handler per message.
  */
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
@@ -64,7 +65,8 @@ Service::Ptr makeService()
 }
 
 // Deliver one message of the given type through the pump's dispatch entry point, exactly as
-// receiveLoop does after decode.
+// receiveLoop does after decode. onMessage is a coroutine since the per-type channel
+// back-pressures; the tests below never fill a channel past capacity, so this completes inline.
 void deliver(
     Service& service, P2PSession::Ptr const& p2pSession, uint16_t packetType, std::string payload)
 {
@@ -72,7 +74,8 @@ void deliver(
     message.setPacketType(packetType);
     message.setSeq(1);
     message.setPayload(bytes(payload.begin(), payload.end()));
-    service.onMessage(bcos::network::NetworkException{}, nullptr, std::move(message), p2pSession);
+    task::syncWait(service.onMessage(
+        bcos::network::NetworkException{}, nullptr, std::move(message), p2pSession));
 }
 
 // Inline poster: the tests are single-threaded, so resuming the consumer on the pusher's stack
@@ -161,21 +164,43 @@ BOOST_AUTO_TEST_CASE(handlerCanStopItsPump)
     BOOST_CHECK_EQUAL(calls, 1);
 }
 
-BOOST_AUTO_TEST_CASE(fullChannelDropsOnlyThatMessageAndServiceSurvives)
+// A full channel no longer drops the message (round-3 review): the pushing onMessage parks in
+// waitWritable() until the consumer drains space, and the parked message survives to be delivered.
+BOOST_AUTO_TEST_CASE(fullChannelParksThePushInsteadOfDropping)
 {
     auto service = makeService();
     auto channel = service->subscribe(TYPE_A, inlinePoster(), /*capacity=*/1);
     auto peer = std::make_shared<FakeSubscribeSession>("peerD");
 
     deliver(*service, peer, TYPE_A, "first");
-    deliver(*service, peer, TYPE_A, "second");  // queue full: dropped, logged, no throw
-    deliver(*service, peer, TYPE_A, "third");   // still full: same
+    BOOST_REQUIRE_EQUAL(channel->size(), 1);
 
-    auto inbound = task::syncWait(channel->recv());
+    // The channel is full: the next onMessage must PARK, not drop. Drive it detached and record
+    // completion; with the inline poster every step runs on this thread, deterministically.
+    bool delivered = false;
+    task::wait(
+        [](Service& service, P2PSession::Ptr p2pSession, bool& deliveredFlag) -> task::Task<void> {
+            Message message;
+            message.setPacketType(TYPE_A);
+            message.setSeq(2);
+            message.setPayload(bytes{'x'});
+            co_await service.onMessage(bcos::network::NetworkException{}, nullptr,
+                std::move(message), std::move(p2pSession));
+            deliveredFlag = true;
+        }(*service, peer, delivered));
+    BOOST_CHECK(!delivered);  // still parked: no drop, no overwrite
+    BOOST_CHECK_EQUAL(channel->size(), 1);
+
+    // Draining one slot frees the space the parked producer was waiting for; its push then
+    // completes inline (the pop wakes it through the poster).
+    auto first = task::syncWait(channel->recv());
     BOOST_CHECK_EQUAL(
-        std::string(inbound.message.payload().begin(), inbound.message.payload().end()), "first");
-    // both overflow messages were dropped; the queue is now empty
-    BOOST_CHECK_EQUAL(channel->size(), 0);
+        std::string(first.message.payload().begin(), first.message.payload().end()), "first");
+    BOOST_REQUIRE(delivered);
+    BOOST_CHECK_EQUAL(channel->size(), 1);
+    auto second = task::syncWait(channel->recv());
+    BOOST_CHECK_EQUAL(
+        std::string(second.message.payload().begin(), second.message.payload().end()), "x");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

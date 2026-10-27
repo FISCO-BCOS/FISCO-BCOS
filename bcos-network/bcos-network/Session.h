@@ -159,6 +159,19 @@ public:
     // header length so the first read can always make forward progress.
     constexpr static const std::size_t INITIAL_SESSION_RECV_BUFFER_SIZE = 16 * 1024UL;
 
+    // The byte measure the recv channel charges for a queued frame: the storage the consumer
+    // actually RETAINS. On the take-buffer path meta.frame is the session's former (grown)
+    // receive buffer, so its capacity — not frameSize — is what the heap pins (a take happens
+    // only once the buffer has grown to ~2x the frame, and the dead prefix rides along inside).
+    // On the copy path meta.frame is a fresh exact-size copy whose capacity IS the frame, and a
+    // Timeout meta carries no bytes at all. The guard and waitWritable in the read loop MUST use
+    // this same measure: a frame whose charge exceeds the budget could never be queued, and a
+    // mismatched waitWritable would park forever instead of failing fast.
+    static std::size_t recvQueueCharge(const FrameMeta& meta)
+    {
+        return meta.frame.empty() ? meta.frameSize : meta.frame.capacity();
+    }
+
     BasicSession(std::shared_ptr<SocketT> socket, Host<DecoderT, SocketT>& server,
         size_t _recvBufferSize = INITIAL_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false)
       : m_maxRecvBufferSize(std::max<size_t>(_recvBufferSize, MIN_SESSION_RECV_BUFFER_SIZE)),
@@ -190,7 +203,7 @@ public:
                 }
             },
             MAX_RECV_QUEUE_FRAMES, MAX_RECV_QUEUE_BYTES,
-            [](const FrameMeta& meta) { return meta.frameSize; }),
+            [](const FrameMeta& meta) { return recvQueueCharge(meta); }),
         m_idleCheckTimer(
             std::make_shared<Timer>(m_socket->ioService(), m_idleTimeInterval, "idleChecker"))
     {
@@ -848,21 +861,26 @@ private:
                             // the read loop until the consumer drains space — the TCP receive
                             // window then throttles the sender. No timeout: drop()/close() wakes
                             // the park on teardown, and a live consumer always makes progress.
-                            // A frame larger than the entire byte budget could never be queued —
-                            // drop instead of parking forever (unreachable in production:
-                            // allowMaxMsgSize < the budget).
-                            if (meta.frameSize > MAX_RECV_QUEUE_BYTES)
+                            // The charge is the storage the consumer will RETAIN (see
+                            // recvQueueCharge): the guard and the waitWritable below must use the
+                            // channel's own measure, or a frame whose retained capacity exceeds
+                            // the budget would park forever instead of failing fast here
+                            // (reachable only when the configured recv buffer outgrows the fixed
+                            // queue budget; in production 2*allowMaxMsgSize == the budget).
+                            const auto queueCharge = recvQueueCharge(meta);
+                            if (queueCharge > MAX_RECV_QUEUE_BYTES)
                             {
                                 SESSION_LOG(ERROR)
                                     << LOG_BADGE("readLoop")
                                     << LOG_DESC("frame larger than the recv queue budget, drop")
+                                    << LOG_KV("charge", queueCharge)
                                     << LOG_KV("frameSize", meta.frameSize)
                                     << LOG_KV("budget", MAX_RECV_QUEUE_BYTES)
                                     << LOG_KV("endpoint", nodeIPEndpoint());
                                 drop(UserReason);
                                 co_return;
                             }
-                            if (!co_await m_recvChannel.waitWritable(meta.frameSize))
+                            if (!co_await m_recvChannel.waitWritable(queueCharge))
                             {
                                 // Channel closed: drop()/protocol-error teardown owns the session.
                                 co_return;

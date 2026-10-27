@@ -107,6 +107,22 @@ BOOST_AUTO_TEST_CASE(pushFailsWhenFull)
     BOOST_CHECK(channel.push(3));
 }
 
+// A failed push leaves the value INTACT: the multi-producer loop the class comment mandates
+// (push → waitWritable → retry the same item) would lose the message otherwise.
+BOOST_AUTO_TEST_CASE(failedPushPreservesTheValue)
+{
+    Channel<std::string> channel(inlinePoster(), 1);
+    BOOST_CHECK(channel.push(std::string("first")));
+
+    auto value = std::string("second");
+    BOOST_CHECK(!channel.push(value));  // full: the value must survive the failed push
+    BOOST_CHECK_EQUAL(value, "second");
+
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), "first");
+    BOOST_CHECK(channel.push(value));  // retrying the SAME value now succeeds
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), "second");
+}
+
 BOOST_AUTO_TEST_CASE(byteBudgetIsHonoured)
 {
     Channel<std::string> channel(

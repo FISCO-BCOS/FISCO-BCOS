@@ -348,7 +348,10 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
 task::Task<void> Gateway::onReceiveP2PMessage(P2PSession::Ptr _session, Message _msg)
 {
     // COROUTINE: the whole dispatch plus the reply are awaited on this frame, so the response
-    // payload rides as a VIEW into _msg instead of a copy, and no detached task is needed.
+    // payload rides as a VIEW into _msg instead of a copy. The registered channel handler detaches
+    // one frame per message via task::wait (see the constructor): this body awaits remote I/O —
+    // the front-service dispatch and the response write — which the node-wide per-type pump must
+    // never wait on.
     const auto& options = _msg.options();
     auto msgPayload = _msg.payload();
     auto payload = bytesConstRef(msgPayload.data(), msgPayload.size());
@@ -538,7 +541,27 @@ bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, Service::Ptr 
 {
     m_p2pInterface->subscribeHandler(GatewayMessageType::PeerToPeerMessage,
         [this](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
-            co_await onReceiveP2PMessage(std::move(inbound.session), std::move(inbound.message));
+            // Never await remote I/O on the pump: onReceiveP2PMessage awaits the front-service
+            // dispatch AND the response write to the originating peer, and this pump is one
+            // node-wide serial loop for the type — a single peer with a stalled socket would
+            // otherwise stop PeerToPeerMessage dispatch for EVERY peer until the inbound channel
+            // back-pressures. Hand each message to its own coroutine (the shape the pre-refactor
+            // base used) and return immediately; the per-type channel remains the ordering and
+            // admission seam.
+            auto self = std::static_pointer_cast<Gateway>(shared_from_this());
+            task::wait([](std::shared_ptr<Gateway> _self, P2PSession::Ptr _session,
+                           Message _msg) -> task::Task<void> {
+                try
+                {
+                    co_await _self->onReceiveP2PMessage(std::move(_session), std::move(_msg));
+                }
+                catch (std::exception const& e)
+                {
+                    GATEWAY_LOG(WARNING) << LOG_BADGE("onReceiveP2PMessage")
+                                         << LOG_DESC("detached dispatch exception")
+                                         << LOG_KV("what", boost::diagnostic_information(e));
+                }
+            }(self, std::move(inbound.session), std::move(inbound.message)));
             co_return true;
         });
     m_p2pInterface->subscribeHandler(GatewayMessageType::BroadcastMessage,
