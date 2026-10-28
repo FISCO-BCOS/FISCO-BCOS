@@ -184,7 +184,7 @@ private:
 
     task::Task<std::pair<bcos::protocol::TransactionsPtr,
         std::shared_ptr<std::map<std::string, MerkleProofPtr>>>>
-        getBatchTxsWithProofs(crypto::HashListPtr txHashList, bool withProof);
+    getBatchTxsWithProofs(crypto::HashListPtr txHashList, bool withProof);
 
     void asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> hashes,
         std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)>

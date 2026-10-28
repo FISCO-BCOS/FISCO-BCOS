@@ -355,8 +355,7 @@ task::Task<std::string> Ledger::prewriteBlockImpl(bcos::storage::StorageInterfac
                       << LOG_KV("number", blockNumberStr) << LOG_KV("totalCount", totalCount)
                       << LOG_KV("failedCount", failedCount);
 
-    // Total transaction count: read-modify-write AFTER all row writes settled. The historical
-    // code read through asyncGetTotalTransactionCount's open-table gate; this storage2-native
+    // Total transaction count: read-modify-write AFTER all row writes settled. The storage2-native
     // read cannot distinguish a missing SYS_CURRENT_STATE table from missing rows and treats
     // either as 0; genesis normally creates the table before any prewrite.
     auto count = co_await ledger::getTransactionCount(*m_stateStorage, fromStorage);
@@ -1281,7 +1280,9 @@ task::Task<std::vector<protocol::Transaction::Ptr>> Ledger::batchGetTransactions
         {
             auto field = entry->get();
             auto transaction = m_blockFactory->transactionFactory()->createTransaction(
-                bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false, false);
+                bcos::bytesConstRef(
+                    reinterpret_cast<bcos::byte const*>(field.data()), field.size()),
+                false, false, false);
             transactions.push_back(std::move(transaction));
         }
 
