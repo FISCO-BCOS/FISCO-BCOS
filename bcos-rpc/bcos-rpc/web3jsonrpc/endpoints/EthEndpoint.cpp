@@ -97,8 +97,9 @@ bool isBlockNotFound(JsonRpcException const& e) noexcept
 /// low". The target block's own gasLimit bounds it further when it is readable and non-zero.
 constexpr uint64_t c_ethCallGasCap = 50'000'000;
 
-/// The intrinsic-gas floor of a transaction: the EIP-2028 base cost every transaction pays
-/// before the EVM runs (21,000). Named because eth_estimateGas floors its search here, and an
+/// The intrinsic-gas floor of a transaction: the Yellow Paper's G_transaction base cost plus the
+/// zero-data cost of an unsigned transaction's payload (21,000 per EIP-2028's non-zero/zero byte
+/// split), paid before the EVM runs. Named because eth_estimateGas floors its search here, and an
 /// unnamed literal in that expression is indistinguishable from a magic number.
 constexpr uint64_t c_intrinsicGasFloor = 21'000;
 
@@ -1578,7 +1579,16 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
             auto const limit = block->blockHeader()->gasLimit();
             if (bcos::u256FitsUint64(limit))
             {
-                chainBlockGasLimit = static_cast<uint64_t>(limit);
+                // Capped like the caller's own `gas`, because this value becomes the budget the
+                // dry run is executed with and every retry re-enters call() through the caller
+                // `gas` field, which is clamped to the same cap. Reporting an uncapped ceiling
+                // here let the search scan an interval no probe could reach: with a 100M block
+                // limit and 60M required, every retry ran at 50M and failed, so the endpoint
+                // answered the whole 100M instead of 60.5M. The RPC gas cap bounds what this node
+                // will execute for one unauthenticated caller on both paths; a transaction that
+                // genuinely needs more is answered with an error rather than a number the node
+                // could not run.
+                chainBlockGasLimit = std::min(c_ethCallGasCap, static_cast<uint64_t>(limit));
             }
         }
         // No default cap: an unreadable header or an over-wide gasLimit must fail the request
@@ -1757,11 +1767,20 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
 
     u256 gasUsed;
     uint64_t ceiling = c_ethCallGasCap;
+    // Pin the resolved block on EVERY probe, this one included. Re-resolving the caller's tag per
+    // attempt would let the probes straddle a block boundary, and the loop's whole premise -- a
+    // failure at or below the ceiling failed because of the budget -- holds only within one state.
+    // The pinned number is the tip, so call() still takes the live scheduler path (isLatest stays
+    // true) and nothing is diverted to the historical one.
+    Json::Value pinnedRequest = request;
+    pinnedRequest[1U] = toQuantity(blockNumber);
     Json::Value probe;
-    co_await call(request, probe, std::addressof(gasUsed), true, std::addressof(ceiling));
+    co_await call(pinnedRequest, probe, std::addressof(gasUsed), true, std::addressof(ceiling));
 
-    // A probe at the ceiling that fails is the caller's answer: it had the whole budget, so more
-    // gas would not change the outcome (a revert, or a transaction that does not validate).
+    // A probe at the ceiling that fails is the caller's answer: it had the whole budget this node
+    // is willing to execute for one request (the RPC gas cap bounds both paths), so more gas would
+    // not change the outcome -- a revert, a transaction that does not validate, or a requirement
+    // above the cap.
     if (probe.isMember("error"))
     {
         response = std::move(probe);
@@ -1783,28 +1802,29 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     //
     // The cost profile is asymmetric, so one strategy does not fit both ends. A 10% ladder is the
     // right first move: a nested call usually needs a small multiple of what it consumes (EIP-150
-    // forwards 63/64 per level, so a shalow chain lands just above the measurement), and there the
-    // ladder settles in two or three probes -- 1.1x, 1.21x -- where bisecting the whole interval
-    // would spend ~25 probes narrowing to the same gas. Its weakness is the far end: from the
-    // 21,000 floor to a 30M limit the ladder is 77 steps, on exactly the deep-call shape that is
-    // the most expensive to execute.
+    // forwards 63/64 per level, so a shallow chain lands just above the measurement), and there
+    // the ladder settles in two or three probes -- 1.1x, 1.21x -- where bisecting the whole
+    // interval would spend ~25 probes narrowing to the same gas. Its weakness is the far end: from
+    // the 21,000 floor to a 50M ceiling the ladder is 83 steps, on exactly the deep-call shape
+    // that is the most expensive to execute.
     //
     // So the ladder gets a fixed number of steps and the remainder is bisected. The near case
     // keeps its two or three probes; the far case is bounded by
-    // 1 + 1 + LADDER_STEPS + ceil(log2(ceiling)) instead of ~83.
+    // 1 + 1 + LADDER_STEPS + ceil(log2(ceiling)) = 36 against the 50M cap, instead of 83.
     //
     // The loop rests on one premise, stated as a premise and not as a fact: within one block
     // state, a budget at or below the ceiling that fails failed because of the budget -- the dry
     // run is free (no balance check, no base fee), so a larger budget cannot newly fail anything
-    // else. Every probe pins the resolved block number, so the premise holds across the probes
-    // even when the caller passed `latest`; it cannot hold for state that moves between them,
-    // which is why the answer is the least budget this endpoint *observed* succeeding rather than
-    // a guarantee about later blocks.
+    // else. Every probe pins the same resolved block number, including the ceiling one above, so
+    // the premise holds across the probes even when the caller passed `latest`; it cannot hold for
+    // state that moves between them, which is why the answer is the least budget this endpoint
+    // *observed* succeeding rather than a guarantee about later blocks.
     uint64_t low = measured;  // highest budget known to fail; starts at the unprobed measurement
     uint64_t high = ceiling;  // lowest budget known to succeed (the ceiling probe above)
     bool lowFailed = false;
     uint32_t probes = 1;  // the ceiling probe above
     uint32_t ladderSteps = 0;
+    bool probeFailedOutright = false;
     while (high - low > 1)
     {
         uint64_t budget;
@@ -1830,13 +1850,30 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         {
             budget = low + (high - low) / 2;  // remainder: bisect
         }
-        Json::Value attempt = request;
-        // Pin the block: re-resolving `latest` per attempt would let the probes straddle blocks,
-        // and a failure could then be the state moving rather than the budget.
-        attempt[1U] = toQuantity(blockNumber);
+        Json::Value attempt = pinnedRequest;
         attempt[0U]["gas"] = toQuantity(budget);
         Json::Value attemptResponse;
-        co_await call(attempt, attemptResponse, nullptr, true);
+        try
+        {
+            co_await call(attempt, attemptResponse, nullptr, true);
+        }
+        catch (std::exception const& e)
+        {
+            // A probe after the ceiling one can fail for a reason other than the budget: pinning
+            // the block means an advancing chain eventually resolves this number below the new
+            // head, which routes through callAtBlock -- and a historical read on a lane without a
+            // complete MPT (or one whose nodes were pruned) is refused. `high` is already a budget
+            // this request ran the call with and saw succeed, so answer with it rather than
+            // discarding a proven result on a transient refusal to tighten it further.
+            WEB3_LOG(DEBUG) << LOG_DESC(
+                                   "eth_estimateGas: probe failed, keeping the last proven "
+                                   "budget")
+                            << LOG_KV("budget", budget) << LOG_KV("proven", high)
+                            << LOG_KV("block", blockNumber)
+                            << LOG_KV("error", boost::diagnostic_information(e));
+            probeFailedOutright = true;
+            break;
+        }
         ++probes;
         if (attemptResponse.isMember("error"))
         {
@@ -1850,19 +1887,23 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     }
 
     // The dry runs are the entire cost of this method, so report how many it took at a level an
-    // operator runs. `high` is a budget this request ran the call with and saw succeed: no path
-    // reaches here with an unproven answer, so there is no "report the ceiling anyway" fallback.
+    // operator runs. `high` is a budget this request ran the call with and saw succeed: it starts
+    // at the ceiling probe's budget (which the check above proved), and only ever moves to a budget
+    // a probe observed succeeding. A probe that threw therefore leaves a proven answer in place;
+    // there is no path that reports an unproven number.
     if (probes > c_estimateGasProbeLogThreshold)
     {
         WEB3_LOG(INFO) << LOG_DESC("eth_estimateGas: settled") << LOG_KV("gas", high)
                        << LOG_KV("measured", measured) << LOG_KV("ceiling", ceiling)
-                       << LOG_KV("probes", probes) << LOG_KV("block", blockNumber);
+                       << LOG_KV("probes", probes) << LOG_KV("truncated", probeFailedOutright)
+                       << LOG_KV("block", blockNumber);
     }
     else if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << LOG_DESC("eth_estimateGas: settled") << LOG_KV("gas", high)
                         << LOG_KV("measured", measured) << LOG_KV("ceiling", ceiling)
-                        << LOG_KV("probes", probes) << LOG_KV("block", blockNumber);
+                        << LOG_KV("probes", probes) << LOG_KV("truncated", probeFailedOutright)
+                        << LOG_KV("block", blockNumber);
     }
     Json::Value result = toQuantity(high);
     buildJsonContent(result, response);

@@ -625,6 +625,46 @@ BOOST_AUTO_TEST_CASE(estimateGasBoundsTheFarEnd)
     auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
     BOOST_CHECK_GE(answer, ladderScheduler->required);
     BOOST_CHECK_LT(answer, 21'000'000U);
+    // The bound above only says the probe count is bounded; it says nothing about the answer being
+    // usable. Bisection narrows until high - low == 1 with high succeeding, so the answer lands
+    // within a hair of the requirement -- a tenth over it is already generous, and a "return the
+    // ceiling" regression (35 dry runs to answer 21,000,000) fails here.
+    BOOST_CHECK_LE(answer, ladderScheduler->required + ladderScheduler->required / 10 + 2);
+}
+
+// A block gasLimit above the RPC gas cap must not widen the search past what a probe can execute.
+// 100M limit, 60M required: the ceiling is clamped to the 50M cap, so the 50M probe runs out of
+// gas and the request is answered with that failure. Negative control: drop the clamp on the
+// estimate arm's default (chainBlockGasLimit = limit) and the ceiling probe at 100M succeeds, the
+// ladder climbs from the measurement inside a range it can never reach, and the endpoint answers
+// 100,000,000 -- so the "expects an error" assertion below is what goes red.
+BOOST_AUTO_TEST_CASE(estimateGasCeilingIsClampedToTheRpcGasCap)
+{
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(100'000'000));
+
+    auto ladderScheduler = std::make_shared<LadderScheduler>(m_ledger, m_blockFactory);
+    ladderScheduler->measured = u256(21'000);
+    ladderScheduler->required = 60'000'000;  // above the cap, below the block limit
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, ladderScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    Json::Value response;
+    task::syncWait(endpoint->estimateGas(params, response));
+
+    // Exactly one probe, at the cap rather than at the block limit, and its out-of-gas is the
+    // answer: no budget this node will execute can satisfy this request.
+    auto const& probes = ladderScheduler->gasLimits;
+    BOOST_REQUIRE_EQUAL(probes.size(), 1U);
+    BOOST_CHECK_EQUAL(probes.at(0), u256(50'000'000));
+    BOOST_CHECK(response.isMember("error"));
 }
 
 // A client sends an EIP-55 mixed-case `from` (ethers/viem default). The account row key is
