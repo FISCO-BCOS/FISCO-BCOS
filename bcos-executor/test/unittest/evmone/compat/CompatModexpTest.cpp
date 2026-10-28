@@ -8,6 +8,7 @@
 #include "CompatTestFixture.h"
 #include "vm/Precompiled.h"
 #include <Common.h>
+#include <bcos-framework/ledger/Features.h>
 #include <boost/test/unit_test.hpp>
 #include <vector>
 

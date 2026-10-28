@@ -59,7 +59,29 @@ BOOST_AUTO_TEST_CASE(FC_S_cancun_only_legacy_gas_smoke)
         "FC-A/TE-FC. Run --run_test=CompatEip2929 for account/storage warm behaviour.");
 }
 
+// recordHostFault("", halting) must still fail the frame (review F5): the record's
+// presence is a separate flag, not the message's emptiness — an Error built with only
+// a code (empty diagnostic) is a real node fault. Both directions pinned: non-empty
+// control throws, empty message throws too. (The pre-fix code silently recorded
+// nothing and the frame committed.)
+BOOST_AUTO_TEST_CASE(recordHostFaultEmptyMessageStillFailsFrame)
+{
+    using compat::CompatFeatureProfile;
+    {
+        auto host = makeCompatHostContext(*this, CompatFeatureProfile::cancunOnly());
+        host.recordHostFault("storage I/O fault", /*halting=*/true);
+        BOOST_CHECK_THROW(host.throwIfHostFault(), std::runtime_error);
+    }
+    {
+        auto host = makeCompatHostContext(*this, CompatFeatureProfile::cancunOnly());
+        host.recordHostFault("", /*halting=*/true);
+        BOOST_CHECK_THROW(host.throwIfHostFault(), std::runtime_error);
+    }
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()  // CompatSmoke
+
 BOOST_AUTO_TEST_SUITE_END()  // Compat (shared with other compat/*.cpp)
 
 }  // namespace bcos::test

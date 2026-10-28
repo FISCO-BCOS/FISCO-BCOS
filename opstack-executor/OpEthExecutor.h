@@ -399,7 +399,7 @@ public:
             // fee — the EIP-1559 priority term is capped at max-baseFee, so the
             // effective price becomes exactly baseFee, never above. A caller
             // that explicitly requested a lower cap keeps it and validation
-            // rejects with FEE_CAP_LESS_THAN_BLOCKS, exactly like op-geth's
+            // rejects with INSUFFICIENT_MAX_FEE_PER_GAS, exactly like op-geth's
             // ErrFeeCapTooLow.
             if (call && !transaction.gasPrice().has_value() &&
                 !transaction.maxFeePerGas().has_value())
@@ -462,8 +462,8 @@ public:
             {
                 // On the block path a full gas pool is a capacity fault (keep the
                 // transaction), not a poisoned-tx reject; eth_call / estimateGas
-                // keep GAS_LIMIT_REACHED as ordinary validation.
-                if (*err == make_error_code(eth::evm::ErrorCode::GAS_LIMIT_REACHED) && !call)
+                // keep GAS_ALLOWANCE_EXCEEDED as ordinary validation.
+                if (*err == make_error_code(eth::evm::ErrorCode::GAS_ALLOWANCE_EXCEEDED) && !call)
                 {
                     throw bcos::evm::OpConsensusError(
                         std::string("OpScheduler: block gas pool full: ") + err->message(),

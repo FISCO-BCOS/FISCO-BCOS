@@ -31,11 +31,15 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-utilities/Common.h"
+#include <bcos-crypto/ChecksumAddress.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 #include <iterator>
+#include <limits>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -51,6 +55,47 @@ namespace bcos::executor
 evmc_bytes32 evm_hash_fn(evmc_host_context* /*context*/, const uint8_t* data, size_t size)
 {
     return toEvmC(HostContext::hashImpl()->hash(bytesConstRef(data, size)));
+}
+
+// FISCO extension (evmone create_address_fn): the CREATE opcode asks the CREATOR's
+// HostContext for the replay-stable legacy formula address instead of deriving
+// keccak(rlp(sender, nonce)) — see HostContext::createAddressForOpcode.
+// The same F1/F10 translation the data callbacks use: the derivation is pure
+// computation (hash + hex), so a throw here is an allocation/crypto-level fault — the
+// non-bcos family, recorded halting — and the zero address is a fail-closed answer
+// that never commits (go() rethrows the recorded fault into the exit(1) arm right
+// after vm.execute returns, before any address is stored or forwarded).
+evmc_address evm_create_address_fn(
+    evmc_host_context* context, const evmc_address* sender, uint64_t nonce)
+{
+    auto& hostContext = *reinterpret_cast<HostContext*>(context);
+    try
+    {
+        return hostContext.createAddressForOpcode(*sender, nonce);
+    }
+    catch (...)
+    {
+        hostContext.recordHostFault(
+            boost::current_exception_diagnostic_information(), /*halting=*/true);
+        return evmc_address{};
+    }
+}
+
+evmc_address evm_create2_address_fn(evmc_host_context* context, const evmc_address* sender,
+    const evmc_bytes32* salt, const uint8_t* init_code, size_t init_code_size)
+{
+    auto& hostContext = *reinterpret_cast<HostContext*>(context);
+    try
+    {
+        return hostContext.create2AddressForOpcode(
+            *sender, *salt, bytesConstRef(init_code, init_code_size));
+    }
+    catch (...)
+    {
+        hostContext.recordHostFault(
+            boost::current_exception_diagnostic_information(), /*halting=*/true);
+        return evmc_address{};
+    }
 }
 
 HostContext::HostContext(CallParameters::UniquePtr callParameters,
@@ -134,6 +179,24 @@ std::string evmAddress2String(const evmc_address& address)
     return addressBytesStr2String(receiveAddressBytes);
 }
 
+void HostContext::throwIfHostFault() const
+{
+    if (!m_hasHostFault)
+    {
+        return;
+    }
+    if (m_hostFaultHalting)
+    {
+        // The family that would have reached go()'s std::exception arm: unexpected /
+        // non-deterministic faults halt the node (that arm's policy), they never become
+        // a receipt. The callback could not propagate it — the VM boundary is noexcept —
+        // so the ladder's decision is reproduced from the recorded family.
+        BOOST_THROW_EXCEPTION(std::runtime_error("EVM host-side fault: " + m_hostFault));
+    }
+    // bcos::Error family: lands in go()'s first arm, which reverts the whole frame.
+    BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, m_hostFault));
+}
+
 evmc_result HostContext::externalRequest(const evmc_message* _msg)
 {
     // Convert evmc_message to CallParameters
@@ -154,33 +217,48 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     switch (_msg->kind)
     {
-    // Phase 1: EVMC_EOFCREATE is rejected as a defensive guard.
-    // This branch is unreachable in practice: EOF contracts can only exist on-chain if they were
-    // deployed via EOFCREATE, which this guard prevents. Therefore no EOF bytecode will ever
-    // generate this callback.
-    // gas_left=0 is intentional and matches standard EVM semantics for an invalid/unsupported
-    // opcode (all remaining gas is consumed). EVMC_REJECTED must NOT be used here — it is a
-    // VM-selection signal (negative status), not an EVM execution error.
-    case EVMC_EOFCREATE:
-    {
-        return evmc_result{.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION),
-            .gas_left = 0,
-            .gas_refund = 0,
-            .output_data = nullptr,
-            .output_size = 0,
-            .release = nullptr,
-            .create_address = {},
-            .padding = {}};
-    }
     case EVMC_CREATE2:
-        request->createSalt = fromEvmC(_msg->create2_salt);
-        if (features().get(
+    case EVMC_CREATE:
+    {
+        // evmc ABI 19 + the create_address_fn hook: for CREATE, evmone derives the
+        // stack address via the host hook (legacy FISCO formula — replay-stable
+        // under the DMC per-hop frame replay, unlike a nonce-derived address); for
+        // CREATE2 it uses the deterministic 0xff scheme. ABI 18 removed the
+        // result->create_address echo this lane used to feed its formula address
+        // back, so the message now carries the address in recipient and
+        // TransactionExecutive::externalCall honors it (non-empty receiveAddress)
+        // as the creation address. Top-level deploys never pass through
+        // externalRequest — their executor-built messages carry the tx's own
+        // receiveAddress — so this only affects nested opcode creates.
+        // Pre-bugfix chains reject CREATE2 outright. The rejection keeps the message's
+        // historical SHAPE: no derived recipient is assigned before the break below, so a
+        // legacy CREATE2 still spawns with an empty recipient and the
+        // isStaticPrecompiled/isEthereumPrecompiled probes run against the empty address
+        // exactly as before. What the ABI-19 createSalt removal DID change is the address
+        // the scheduler stamps on that rejected hop: the message reaches
+        // DmcExecutor::handleCreateMessage with to() empty and create == false, which now
+        // derives newEVMAddress(blockNumber, contextID, seq) where the base derived
+        // newCreate2EVMAddress(from, <empty data>, salt). Both substitution targets are
+        // code-less accounts, so the hop fails identically and neither address reaches the
+        // receipt — the rejected hop's shape is pinned by
+        // preBugfixRejectedCreate2PinsStatusGasOutput.
+        if (_msg->kind == EVMC_CREATE2 &&
+            !features().get(
                 ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
         {
-            request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
-            request->create = true;
+            break;  // pre-bugfix chains keep rejecting CREATE2 (historical behavior)
         }
+        if (!concepts::bytebuffer::equalTo(
+                _msg->recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+        {
+            request->receiveAddress = evmAddress2String(_msg->recipient);
+            request->codeAddress = request->receiveAddress;
+        }
+        request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+        request->create = true;
+        request->createFromOpcode = true;
         break;
+    }
     case EVMC_CALL:
         request->receiveAddress = evmAddress2String(_msg->code_address);
 
@@ -231,10 +309,6 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
         return result;
     }
-    case EVMC_CREATE:
-        request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
-        request->create = true;
-        break;
     }
     if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
     {
@@ -280,15 +354,28 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     auto response = m_executive->externalCall(std::move(request));
 
+    // A host fault recorded in a child frame (review F1; the v1 mirror of the v2
+    // propagation at transaction-executor/.../vm/HostContext.h:881): the child's
+    // bcos::Error arm marks a recorded fault as INTERNAL_ERROR + RevertInstruction.
+    // EVMC_INTERNAL_ERROR is never produced by a deterministic arm (a VM-level
+    // INTERNAL_ERROR halts the node in parseEVMCResult instead of becoming a receipt),
+    // so the pair identifies the record without a wire field — and it survives the DMC
+    // hop; the coroutine/Promise normalizer preserves this pair. Recording it makes this
+    // frame's own throwIfHostFault() fail it too, up to the top frame.
+    if (response->evmStatus == (int32_t)EVMC_INTERNAL_ERROR &&
+        response->status == (int32_t)bcos::protocol::TransactionStatus::RevertInstruction)
+    {
+        recordHostFault(response->message, /*halting=*/false);
+    }
+
     // Convert CallParameters to evmc_resultx
     evmc_result result{.status_code = toEVMStatus(response, blockContext),
         .gas_left = response->gas,
         .gas_refund = 0,
+        .state_gas = {},  // evmc ABI 19 (EIP-8037); unused below Amsterdam.
         .output_data = response->data.data(),
         .output_size = response->data.size(),
-        .release = nullptr,  // TODO: check if the response data need to release
-        .create_address = toEvmC(boost::algorithm::unhex(response->newEVMContractAddress)),
-        .padding = {}};
+        .release = nullptr};  // TODO: check if the response data need to release
 
     if (features().get(ledger::Features::Flag::bugfix_event_log_order))
     {
@@ -800,6 +887,98 @@ evmc_bytes32 HostContext::getBalance(const evmc_address* _addr)
     m_responseStore.emplace_back(std::move(response));
 
     return toEvmC(result);
+}
+
+evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const
+{
+    evmc_address out{};
+    auto& exec = *m_executive;
+    const bool eipStyle =
+        exec.blockContext().features().get(ledger::Features::Flag::feature_evm_address) &&
+        exec.usesLocalCreateAddress();
+    if (eipStyle)
+    {
+        // EIP-style: keccak(rlp(sender, nonce)) — the same value evmone's own
+        // derivation would produce (the hook receives the get_nonce result);
+        // mirrored host-side so externalCall's feature branch and the stack agree.
+        const auto addrStr = bcos::newLegacyEVMAddressString(
+            bytesConstRef{sender.bytes, sizeof(sender.bytes)}, u256(nonce));
+        boost::algorithm::unhex(addrStr, out.bytes);
+        if (m_eip2929Access && !exec.blockContext().features().get(
+                                   ledger::Features::Flag::bugfix_evm2929_created_address_warm))
+        {
+            m_eip2929Access->markAddressCreatedByHook(out);
+        }
+        return out;
+    }
+    // Mirror the historical owner: synchronous execution uses m_seq + 1, while
+    // DMC uses the last scheduler hand-back + 1. Sharding's local child calls
+    // advance m_seq even though cross-shard calls suspend through a coroutine.
+    const auto addrStr = bcos::newEVMAddress(exec.blockContext().hashHandler(),
+        exec.blockContext().number(), exec.contextID(), exec.createDerivationSeq() + 1);
+    boost::algorithm::unhex(addrStr, out.bytes);
+    if (m_eip2929Access && !exec.blockContext().features().get(
+                               ledger::Features::Flag::bugfix_evm2929_created_address_warm))
+    {
+        m_eip2929Access->markAddressCreatedByHook(out);
+    }
+    return out;
+}
+
+evmc_address HostContext::create2AddressForOpcode(
+    const evmc_address& sender, const evmc_bytes32& salt, bytesConstRef initCode) const
+{
+    // Pre-bugfix chains reject the CREATE2 request outright, and the value the opcode
+    // pushed historically was 0x0: evmone 0.21 echoed the host's result.create_address,
+    // which the rejection path left empty. ABI 18 removed that echo (with
+    // create2_salt; ABI 19 only added state_gas — evmc CHANGELOG 0.23/0.24) and evmone now
+    // pushes its own derivation, so the hook must answer the zero address here or the
+    // rejected create pushes a derived address where history recorded zero.
+    if (!m_executive->blockContext().features().get(
+            ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+    {
+        // R6 F7: 0.24's patched create_impl still calls access_account on the
+        // rejected CREATE2's pushed recipient (the zero address) for rev >= Berlin;
+        // 0.21 never warmed it. Mark it so the creation-time query answers cold
+        // without inserting, exactly like the other three derivation sites. The mark
+        // is gated on the warm flag like everywhere else: flag-ON chains warm it
+        // normally and never consume a marker.
+        if (m_eip2929Access && !m_executive->blockContext().features().get(
+                                   ledger::Features::Flag::bugfix_evm2929_created_address_warm))
+        {
+            evmc_address zero{};
+            m_eip2929Access->markAddressCreatedByHook(zero);
+        }
+        return {};
+    }
+    // The exact formula TransactionExecutive::externalCall's CREATE2 branch stored
+    // (bcos::newCreate2EVMAddress): the chain hasher over
+    // 0xff || sender || salt || chainHasher(initcode), last 20 bytes. Kept host-side so
+    // the CREATE2 push, the message recipient and the stored account all carry the
+    // chain's own address (upstream compute_create2_address hashes with keccak256).
+    evmc_address out{};
+    auto& exec = *m_executive;
+    const auto addrStr = bcos::newCreate2EVMAddress(
+        exec.blockContext().hashHandler(), evmAddress2String(sender), initCode, fromEvmC(salt));
+    boost::algorithm::unhex(addrStr, out.bytes);
+    if (m_eip2929Access && !exec.blockContext().features().get(
+                               ledger::Features::Flag::bugfix_evm2929_created_address_warm))
+    {
+        m_eip2929Access->markAddressCreatedByHook(out);
+    }
+    return out;
+}
+
+uint64_t HostContext::getNonce(const evmc_address* _addr)
+{
+    ledger::account::EVMAccount account(
+        *m_executive->storage().getRawStorage(), *_addr, ledger::account::nodeAddressTableMode());
+    auto nonceStr = task::syncWait(account.nonce());
+    const auto nonce = u256(nonceStr.value_or("0"));
+    // EIP-2681 caps the EVM-visible nonce at 2^64-1; saturate oversized stored
+    // values so evmone treats them as MAX_NONCE and rejects the CREATE.
+    constexpr auto u64Max = u256(std::numeric_limits<uint64_t>::max());
+    return nonce > u64Max ? std::numeric_limits<uint64_t>::max() : static_cast<uint64_t>(nonce);
 }
 
 bool HostContext::selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary)

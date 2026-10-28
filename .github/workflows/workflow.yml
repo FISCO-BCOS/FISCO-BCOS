@@ -402,6 +402,33 @@ jobs:
             echo "::error::EEST pass rate ${PASS_RATE:-unknown}% is below 100% threshold"
             exit 1
           fi
+          # Skips leave the pass-rate denominator, so a shrinking corpus would stay
+          # green at 100% — bound Total and Skipped too (review F4). Exact values for
+          # fixtures_stable v5.4.0 (review F7: no slack — any drift is a corpus change
+          # and must be re-pinned deliberately). ConstantinopleFix is the Petersburg
+          # alias: its 978 tests execute rather than skip. Load failures are gated to zero
+          # (fixture load failures silently counted as skips before).
+          TOTAL_TESTS=$(sed -nE 's/.*Total tests:[[:space:]]+([0-9]+).*/\1/p' eest_output.txt)
+          SKIPPED_TESTS=$(sed -nE 's/.*Skipped tests:[[:space:]]+([0-9]+).*/\1/p' eest_output.txt)
+          SKIPPED_FILES=$(sed -nE 's/.*Skipped files:[[:space:]]+([0-9]+).*/\1/p' eest_output.txt)
+          LOAD_FAILURES=$(sed -nE 's/.*Load failures:[[:space:]]+([0-9]+).*/\1/p' eest_output.txt)
+          echo "EEST totals: ${TOTAL_TESTS:-unknown} tests, ${SKIPPED_TESTS:-unknown} skipped tests, ${SKIPPED_FILES:-unknown} skipped files, ${LOAD_FAILURES:-unknown} load failures"
+          if [ -z "${TOTAL_TESTS}" ] || [ "${TOTAL_TESTS}" -ne 91628 ]; then
+            echo "::error::EEST total tests ${TOTAL_TESTS:-unknown} != 91628 (corpus changed? re-pin the tripwire)"
+            exit 1
+          fi
+          if [ -z "${SKIPPED_TESTS}" ] || [ "${SKIPPED_TESTS}" -ne 0 ]; then
+            echo "::error::EEST skipped tests ${SKIPPED_TESTS:-unknown} != 0 (skip matcher drift? re-pin the tripwire)"
+            exit 1
+          fi
+          if [ -z "${SKIPPED_FILES}" ] || [ "${SKIPPED_FILES}" -ne 29671 ]; then
+            echo "::error::EEST skipped files ${SKIPPED_FILES:-unknown} != 29671 (corpus changed? re-pin the tripwire)"
+            exit 1
+          fi
+          if [ -z "${LOAD_FAILURES}" ] || [ "${LOAD_FAILURES}" -ne 0 ]; then
+            echo "::error::EEST load failures ${LOAD_FAILURES:-unknown} != 0"
+            exit 1
+          fi
           echo "::notice::EEST pass rate ${PASS_RATE}% meets the 100% threshold"
       - name: Upload fisco-bcos binary artifact
         if: matrix.os == 'ubuntu-26.04'

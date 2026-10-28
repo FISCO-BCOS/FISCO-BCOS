@@ -48,11 +48,10 @@ inline EVMCResult buildBuiltinPrecompiledResult(bool success, auto const& output
             .status_code = success ? EVMC_SUCCESS : EVMC_REVERT,
             .gas_left = gasLeft,
             .gas_refund = 0,
+            .state_gas = {},
             .output_data = buffer.release(),
             .output_size = output.size(),
             .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-            .create_address = {},
-            .padding = {},
         },
         success ? protocol::TransactionStatus::None :
                   protocol::TransactionStatus::RevertInstruction};
@@ -137,11 +136,10 @@ inline EVMCResult callBcosPrecompiled(
                 .status_code = EVMC_SUCCESS,
                 .gas_left = response->m_gasLeft,
                 .gas_refund = 0,
+                .state_gas = {},
                 .output_data = buffer.release(),
                 .output_size = params->m_execResult.size(),
                 .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-                .create_address = {},
-                .padding = {},
             },
             protocol::TransactionStatus::None};
     }

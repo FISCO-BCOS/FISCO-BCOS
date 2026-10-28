@@ -208,6 +208,9 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_mpt_state_root",
         "bugfix_nonce_ordering",
         "bugfix_eip161_1052_account_semantics",
+        // bugfix_evm2929_created_address_warm: v1 lane; ON keeps evmone 0.24's
+        // created-address warmth, OFF reproduces the 0.21 cold-then-first-touch metering.
+        "bugfix_evm2929_created_address_warm",
     };
     // clang-format on
     BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());
@@ -640,5 +643,16 @@ BOOST_AUTO_TEST_CASE(testDependenciesFeatures)
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_cancun));
 }
 
+
+BOOST_AUTO_TEST_CASE(newestVersionSetActivatesCreatedAddressWarmth)
+{
+    Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_evm2929_created_address_warm), true);
+
+    Features older;
+    older.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION);
+    BOOST_CHECK_EQUAL(older.get(Features::Flag::bugfix_evm2929_created_address_warm), false);
+}
 
 BOOST_AUTO_TEST_SUITE_END()

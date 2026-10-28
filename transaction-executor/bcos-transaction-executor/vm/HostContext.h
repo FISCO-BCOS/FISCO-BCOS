@@ -27,6 +27,7 @@
 #include "EVMHostInterface.h"
 #include "VMInstance.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/Common.h"
@@ -66,6 +67,7 @@
 #include <cassert>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <range/v3/algorithm/equal.hpp>
@@ -166,12 +168,51 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
 template <class Storage, class TransientStorage>
 class HostContext
 {
+public:
+    /// A host-side fault recorded by a fail-closed EVMC callback. The exception cannot
+    /// cross the VM (evmc::VM::execute is noexcept and evmone's instruction frames do
+    /// not unwind), so EVERY faulting callback — getNonce, the data-reading callbacks
+    /// and the create-address hooks (see EVMHostInterface's fault-translation
+    /// contract) — records it, and executeCall/executeCreate rethrow it right after
+    /// the VM returns: it lands in execute()'s FIB-88/92 arm (status Unknown) — this
+    /// lane's existing policy for execution exceptions — instead of a node fault
+    /// masquerading as a legitimate EIP-2681 nonce rejection the contract's logic
+    /// converts to a revert (review F1), or aborting the process outright (F10).
+    /// First fault wins: the fail-closed answers let the frame keep running, so a
+    /// later fault must not overwrite the one that decided the frame's failure.
+    // Presence flag, not message emptiness (review F5): an empty message is a
+    // legitimate record (Error built with only a code) and must still fail the frame.
+    void recordHostFault(std::string message)
+    {
+        if (!m_hasHostFault)
+        {
+            m_hostFault = std::move(message);
+            m_hasHostFault = true;
+        }
+    }
+    void throwIfHostFault() const
+    {
+        if (m_hasHostFault)
+        {
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "EVM host-side fault: " + m_hostFault));
+        }
+    }
+
+    /// Read-side of the record for the PARENT frame: externalCall must propagate a
+    /// child frame's host fault onto this frame's record (a faulted sub-call cannot
+    /// leave a SUCCESS top-level receipt behind), while the record itself stays
+    /// per-frame so it can never leak across transactions.
+    bool hasHostFault() const noexcept { return m_hasHostFault; }
+    std::string const& hostFaultMessage() const noexcept { return m_hostFault; }
+
 private:
     /// EVMC host interface table (formerly the inherited `interface` field of the
     /// concretized evmc_host_context; the evmc type is upstream-opaque again).
     /// Renamed: `interface` is a Windows SDK macro. Declared first so the
     /// mem-init list order below matches declaration order.
     const evmc_host_interface* m_hostInterface = nullptr;
+    mutable std::string m_hostFault;
+    mutable bool m_hasHostFault = false;
 
     std::reference_wrapper<Storage> m_rollbackableStorage;
     std::reference_wrapper<TransientStorage> m_rollbackableTransientStorage;
@@ -194,7 +235,6 @@ private:
     bool m_enableTransfer = false;
     int64_t m_level;
     bool m_web3Tx;
-
     // EIP-2929/2930 access tracking (shared Eip2929AccessState; see accessAccount/accessStorage)
     std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
     std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
@@ -306,6 +346,86 @@ public:
     constexpr evmc_message& mutableMessage() & { return m_message; }
     constexpr ledger::LedgerConfig const& ledgerConfig() const& { return m_ledgerConfig.get(); }
 
+    /// This lane's own create-address derivations, installed on the
+    /// VM through VMInstance::execute so the CREATE/CREATE2 opcodes push exactly the address
+    /// the executor stores. getMessage resolves depth-0 messages the same way.
+    evmc_address createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const
+    {
+        if (!m_web3Tx)
+        {
+            // Historical v2 derivation (pre-0.24 getMessage): bcos::newEVMAddress over
+            // "<blockNumber>_<contextID>_<seq>". externalCall increments m_seq BEFORE
+            // constructing the nested HostContext, so the child's seq — the value its own
+            // getMessage resolves with, and the one the eip2929 create pin uses — is
+            // m_seq + 1. The hook runs inside the creator's VM before that increment,
+            // hence the +1 here: replay-stable under the DMC per-hop frame replay, unlike
+            // evmone's nonce-derived compute_create_address.
+            return unhexAddress(bcos::newEVMAddress(
+                m_hashImpl.get(), m_blockHeader.get().number(), m_contextID, m_seq + 1));
+        }
+        auto legacyAddr =
+            newLegacyEVMAddress(bytesConstRef(sender.bytes, sizeof(sender.bytes)), nonce);
+        evmc_address out{};
+        std::copy(legacyAddr.begin(), legacyAddr.end(), out.bytes);
+        return out;
+    }
+
+    evmc_address create2AddressForOpcode(
+        const evmc_address& sender, const evmc_bytes32& salt, bytesConstRef initCode) const
+    {
+        // Historical v2 derivation (pre-0.24 getMessage's EVMC_CREATE2 case): the chain
+        // hasher over 0xff || sender || salt || chainHasher(initcode), last 20 bytes —
+        // bcos::newCreate2EVMAddress's formula. Upstream's compute_create2_address hashes
+        // with keccak256, which forks SM-crypto chains.
+        return unhexAddress(bcos::newCreate2EVMAddress(m_hashImpl.get(),
+            bcos::toHex(bytesConstRef(sender.bytes, sizeof(sender.bytes))), initCode,
+            fromEvmC(salt)));
+    }
+
+    /// The shared helpers spell addresses as hex strings; the VM hooks need bytes.
+    static evmc_address unhexAddress(std::string const& hexAddress)
+    {
+        evmc_address out{};
+        auto bytes = bcos::fromHex(hexAddress);
+        std::copy_n(bytes.begin(), sizeof(out.bytes), out.bytes);
+        return out;
+    }
+
+    // Same fault translation as the data callbacks (F10): the derivations are pure
+    // computation (hash + hex), so a throw is an allocation/crypto-level fault; the
+    // zero address is a fail-closed answer that never commits — throwIfHostFault()
+    // fails the whole frame right after the VM returns.
+    static evmc_address createAddressHook(
+        evmc_host_context* context, const evmc_address* sender, uint64_t nonce)
+    {
+        auto& hostContext = *reinterpret_cast<HostContext*>(context);
+        try
+        {
+            return hostContext.createAddressForOpcode(*sender, nonce);
+        }
+        catch (...)
+        {
+            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
+            return evmc_address{};
+        }
+    }
+
+    static evmc_address create2AddressHook(evmc_host_context* context, const evmc_address* sender,
+        const evmc_bytes32* salt, const uint8_t* init_code, size_t init_code_size)
+    {
+        auto& hostContext = *reinterpret_cast<HostContext*>(context);
+        try
+        {
+            return hostContext.create2AddressForOpcode(
+                *sender, *salt, bytesConstRef(init_code, init_code_size));
+        }
+        catch (...)
+        {
+            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
+            return evmc_address{};
+        }
+    }
+
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
     {
         return Account<std::decay_t<Storage>>(hostContext.m_rollbackableStorage.get(), address,
@@ -330,6 +450,21 @@ public:
     {
         auto account = getAccount(*this, addr);
         co_return co_await account.balance();
+    }
+
+    // evmc ABI 19: the VM reads the sender's nonce itself (CREATE address computation
+    // and EIP-2681); it must agree with the nonce externalCall reads for the same
+    // sender, so both go through getAccount().nonce().
+    task::Task<uint64_t> nonce(evmc_address addr, auto&&... /*unused*/)
+    {
+        auto account = getAccount(*this, addr);
+        auto nonceStr = co_await account.nonce();
+        const auto value = u256(nonceStr.value_or(std::string("0")));
+        // EIP-2681 caps the EVM-visible nonce at 2^64-1; saturate oversized stored
+        // values so evmone treats them as MAX_NONCE and rejects the CREATE.
+        constexpr auto u64Max = u256{std::numeric_limits<uint64_t>::max()};
+        co_return value > u64Max ? std::numeric_limits<uint64_t>::max() :
+                                   static_cast<uint64_t>(value);
     }
 
     task::Task<evmc_bytes32> getTransientStorage(const evmc_bytes32* key, auto&&... /*unused*/)
@@ -688,6 +823,14 @@ public:
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
+        // The child's own execute() already converted its fault into a plain
+        // EVMC_INTERNAL_ERROR result — the exception never crosses this boundary, so
+        // without this copy the parent's record stays clear and the top-level frame
+        // could finish SUCCESS and seal a receipt over a failed sub-call.
+        if (hostcontext.hasHostFault())
+        {
+            recordHostFault(hostcontext.hostFaultMessage());
+        }
         auto& logs = hostcontext.logs();
         if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {
@@ -805,7 +948,11 @@ private:
         }
         auto result = m_executable->m_vmInstance.execute(m_hostInterface,
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
-            ref.input_data, ref.input_size);
+            ref.input_data, ref.input_size, &HostContext::createAddressHook,
+            &HostContext::create2AddressHook);
+        // Whole-frame fault check (review F1): a fault recorded by a fail-closed EVMC
+        // callback must fail this frame, not ride the callback's sub-op-level answer.
+        throwIfHostFault();
         if (result.status_code == EVMC_SUCCESS)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);
@@ -816,7 +963,6 @@ private:
                 co_await m_recipientAccount.setNonce("1");
             }
             result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
-            result.create_address = ref.code_address;
 
             // Clear the output
             if (result.release)
@@ -910,6 +1056,24 @@ private:
         }
     }
 
+    EVMCResult callPreparedPrecompiled()
+    {
+        try
+        {
+            return executor_v1::callPrecompiled(*m_preparedPrecompiled, m_rollbackableStorage.get(),
+                m_blockHeader, message(), m_origin, buildLegacyExternalCaller(),
+                m_precompiledManager.get(), m_contextID, m_seq,
+                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
+        }
+        catch (bcos::Error const&)
+        {
+            // PR #5689 F2: execute() builds the error receipt; externalCall() must
+            // also see this child's sticky fault before resuming its parent VM.
+            recordHostFault(boost::current_exception_diagnostic_information());
+            throw;
+        }
+    }
+
     task::Task<EVMCResult> executeCall()
     {
         auto& ref = mutableMessage();
@@ -919,10 +1083,7 @@ private:
 
         if (m_preparedPrecompiled != nullptr)
         {
-            co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
-                m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
-                buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
+            co_return callPreparedPrecompiled();
         }
 
         if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
@@ -937,26 +1098,25 @@ private:
             co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
                                      .gas_left = ref.gas,
                                      .gas_refund = 0,
+                                     .state_gas = {},
                                      .output_data = nullptr,
                                      .output_size = 0,
-                                     .release = nullptr,
-                                     .create_address = {},
-                                     .padding = {}},
+                                     .release = nullptr},
                 protocol::TransactionStatus::None};
         }
         processDynamicPrecompiled();
 
         if (m_preparedPrecompiled != nullptr)
         {
-            co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
-                m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
-                buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
+            co_return callPreparedPrecompiled();
         }
 
-        co_return m_executable->m_vmInstance.execute(m_hostInterface,
+        auto result = m_executable->m_vmInstance.execute(m_hostInterface,
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
-            (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size());
+            (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size(),
+            &HostContext::createAddressHook, &HostContext::create2AddressHook);
+        throwIfHostFault();  // same whole-frame check as the create branch (review F1)
+        co_return result;
     }
 };
 
