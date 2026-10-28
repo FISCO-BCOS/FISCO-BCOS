@@ -657,9 +657,8 @@ BOOST_AUTO_TEST_CASE(v2RemainingResumeArmsStampSchedulerSeq)
     BOOST_CHECK_EQUAL(preFinish->message->schedulerSeq(), 6);
 
     // FINISHED revert-stack generator: regenerate the parent's finish message.
-    auto finished = run(protocol::ExecutionMessage::FINISHED, [](scheduler::ExecutiveState& s) {
-        s.revertStack.push({5, std::string("0xaabbccdd")});
-    });
+    auto finished = run(protocol::ExecutionMessage::FINISHED,
+        [](scheduler::ExecutiveState& s) { s.revertStack.push({5, std::string("0xaabbccdd")}); });
     BOOST_CHECK_EQUAL(finished->message->seq(), 5);
     BOOST_CHECK_EQUAL(finished->message->schedulerSeq(), 6);
 

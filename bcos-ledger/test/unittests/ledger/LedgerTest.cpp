@@ -2048,20 +2048,6 @@ BOOST_AUTO_TEST_CASE(evmcRevisionUnknownNamesFailClosed)
     BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100), EVMC_OSAKA);
 }
 
-// A bare name alongside transition entries is a shape the encoder can never produce
-// (encodeEVMCRevisionConfig always spells every entry as "block:forkName"), so such a
-// row is hand-written or foreign. It used to parse "successfully" by silently dropping
-// the transitions and governing every block under the bare name — a halt-loudly
-// neighbour above refuses every other ambiguous cell, and this shape must not be the
-// exception. Re-acceptance must turn this red (review F20).
-
-
-// Two bare names are the other shape the encoder can never produce, and the same
-// mixed-cell reasoning applies: honouring the last one silently governs every block
-// under it where the writer meant a schedule. Before this guard "cancun,prague"
-// parsed as Prague. Re-acceptance must turn this red (review R9).
-
-
 // The evmc row codec's accepted domain round-trips: every shape an honest loader can
 // produce re-encodes to a string whose parse reproduces the same revision schedule.
 // Base selection order: forks.find(0) > explicitRev > forks.begin().

@@ -87,6 +87,10 @@ Answer translateHostFault(HostContext& hostContext, Fn&& fn, Answer failClosed)
 template <class Fn>
 void translateHostFault(HostContext& hostContext, Fn&& fn)
 {
+    if (hostContext.hasHostFault())
+    {
+        return;
+    }
     try
     {
         fn();
@@ -106,22 +110,22 @@ bool accountExists(evmc_host_context* _context, const evmc_address* _addr) noexc
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     auto addr = fromEvmC(*_addr);
-    return translateHostFault(
-        hostContext, [&] { return hostContext.exists(addr); }, false);
+    return translateHostFault(hostContext, [&] { return hostContext.exists(addr); }, false);
 }
 
 evmc_bytes32 getStorage(
     evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(context);
-    return translateHostFault(
-        hostContext, [&] { return hostContext.store(key); }, evmc_bytes32{});
+    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
+    return translateHostFault(hostContext, [&] { return hostContext.store(key); }, evmc_bytes32{});
 }
 
 evmc_bytes32 getTransientStorage(
     evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(context);
+    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
     return translateHostFault(
         hostContext, [&] { return hostContext.getTransientStorage(key); }, evmc_bytes32{});
 }
@@ -131,6 +135,7 @@ evmc_storage_status setStorage(evmc_host_context* context,
     [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key, const evmc_bytes32* value)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(context);
+    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
     // The status is gas metadata for a frame that is about to fail; ASSIGNED (no
     // refund) is the neutral fail-closed choice (v2 lane mirror).
     return translateHostFault(
@@ -324,6 +329,7 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
 {
     (void)_addr;
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
+    assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
     translateHostFault(hostContext, [&] {
         h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
         hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
