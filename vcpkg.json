@@ -49,13 +49,13 @@
     },
     "fmt",
     "secp256k1",
+    "libsodium",
     {
       "name": "aws-sdk-cpp",
       "features": [
         "kms"
       ]
     },
-    "wedprcrypto",
     "range-v3",
     "rapidhash",
     "proxy",

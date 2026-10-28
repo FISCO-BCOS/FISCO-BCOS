@@ -20,8 +20,8 @@
  */
 #pragma once
 #include "Exceptions.h"
+#include "bcos-crypto/utilities/Buffers.h"
 #include <bcos-utilities/Common.h>
-#include <wedpr-crypto/WedprUtilities.h>
 
 namespace bcos
 {

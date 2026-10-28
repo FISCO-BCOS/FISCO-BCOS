@@ -20,6 +20,7 @@ Env aliases: L1_RPC (anvil url), L1_DEBUG_PROXY_PORT.
 import argparse
 import json
 import os
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import requests
@@ -114,13 +115,21 @@ def encode_receipt(rcpt):
 class L1Proxy:
     def __init__(self, l1_url):
         self.l1_url = l1_url
-        # Reuse one keep-alive session instead of opening a fresh TCP connection per
-        # request. kona-host walks every L1 header during boot (thousands of calls),
-        # and a connect/close per call floods the loopback with TIME_WAIT sockets,
-        # eventually stalling new connects. trust_env=False bypasses any ambient
-        # http_proxy (localhost must never route through a proxy).
-        self.session = requests.Session()
-        self.session.trust_env = False
+        # One keep-alive session PER THREAD. ThreadingHTTPServer serves each connection
+        # on its own thread and requests.Session is not thread-safe: sharing it across
+        # concurrent batch items interleaves upstream responses (a response for call A
+        # surfaces on call B), which the batching multicaller reads as spurious RPC
+        # errors. trust_env=False keeps localhost off any ambient http_proxy.
+        self._local = threading.local()
+
+    @property
+    def session(self):
+        s = getattr(self._local, "session", None)
+        if s is None:
+            s = requests.Session()
+            s.trust_env = False
+            self._local.session = s
+        return s
 
     def forward(self, payload):
         """Forward a JSON-RPC request to anvil and return the parsed result."""

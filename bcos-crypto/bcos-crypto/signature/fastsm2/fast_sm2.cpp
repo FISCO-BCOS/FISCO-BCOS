@@ -28,13 +28,13 @@
 #include <openssl/obj_mac.h>
 #include <openssl/sm2.h>
 
-#ifdef WITH_SM2_OPTIMIZE
 using namespace bcos;
 using namespace bcos::crypto;
 
 const char* c_userId = "1234567812345678";
 const int c_R_FIELD_LEN = 32;
 const int c_S_FIELD_LEN = 32;
+const int c_PRIVATEKEY_LEN = 32;
 const int c_PUBLICKEY_LEN = 64;
 // Note: EC_GROUP_new_by_curve_name cost performance, So only one copy is created globally to
 // improve performance
@@ -53,6 +53,21 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
     BIGNUM* privateKey = nullptr;
     BIGNUM* bn = nullptr;
     int8_t ret = WEDPR_ERROR;
+    // raw_public_key->len feeds a fixed 65-byte stack buffer below — reject anything but the
+    // exact 64-byte X||Y form before the memcpy (KeyImpl does not truncate oversized input)
+    if (raw_public_key->len != (size_t)c_PUBLICKEY_LEN)
+    {
+        CRYPTO_LOG(WARNING) << LOG_DESC("fast_sm2_sign: invalid publicKey length")
+                            << LOG_KV("len", raw_public_key->len);
+        return WEDPR_ERROR;
+    }
+    // the r‖s write at the end puts exactly 64 bytes into output_signature->data
+    if (output_signature->len < (size_t)(c_R_FIELD_LEN + c_S_FIELD_LEN))
+    {
+        CRYPTO_LOG(WARNING) << LOG_DESC("fast_sm2_sign: output buffer too small")
+                            << LOG_KV("len", output_signature->len);
+        return WEDPR_ERROR;
+    }
     uint8_t publicKeyData[65] = {4};
     memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
     bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
@@ -163,6 +178,21 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
     BIGNUM* s = NULL;
     ECDSA_SIG* signData = NULL;
     int8_t ret = WEDPR_ERROR;
+    // raw_public_key->len feeds a fixed 65-byte stack buffer below — reject anything but the
+    // exact 64-byte X||Y form before the memcpy (KeyImpl does not truncate oversized input).
+    // raw_signature is read as exactly r‖s (64 bytes) regardless of its stated length.
+    if (raw_public_key->len != (size_t)c_PUBLICKEY_LEN)
+    {
+        CRYPTO_LOG(WARNING) << LOG_DESC("fast_sm2_verify: invalid publicKey length")
+                            << LOG_KV("len", raw_public_key->len);
+        return WEDPR_ERROR;
+    }
+    if (raw_signature->len < (size_t)(c_R_FIELD_LEN + c_S_FIELD_LEN))
+    {
+        CRYPTO_LOG(WARNING) << LOG_DESC("fast_sm2_verify: invalid signature length")
+                            << LOG_KV("len", raw_signature->len);
+        return WEDPR_ERROR;
+    }
     uint8_t publicKeyData[65] = {4};
     memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
     BIGNUM* bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
@@ -234,6 +264,7 @@ done:
     {
         EC_POINT_free(point);
     }
+    BN_free(bn);
     if (signData == NULL)
     {
         BN_free(r);
@@ -255,11 +286,19 @@ int8_t bcos::crypto::fast_sm2_derive_public_key(
     EC_POINT* pubPoint = NULL;
     BN_CTX* ctx = NULL;
     char* publicKey = NULL;
+    size_t publicKeyLen = 0;
     BIGNUM* privateKey =
         BN_bin2bn((const unsigned char*)raw_private_key->data, raw_private_key->len, NULL);
     if (!privateKey)
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of BN_bin2bn for privateKey";
+        goto done;
+    }
+    // reject invalid private keys (e.g. all-zero), which would otherwise multiply
+    // into the point at infinity and produce a 1-byte "public key"
+    if (BN_is_zero(privateKey))
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of zero privateKey";
         goto done;
     }
     ctx = BN_CTX_new();
@@ -290,11 +329,20 @@ int8_t bcos::crypto::fast_sm2_derive_public_key(
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of EC_POINT_mul";
         goto done;
     }
-    if (!EC_POINT_point2buf(
-            sm2Group, pubPoint, POINT_CONVERSION_UNCOMPRESSED, (unsigned char**)&publicKey, ctx))
+    publicKeyLen = EC_POINT_point2buf(sm2Group, pubPoint, POINT_CONVERSION_UNCOMPRESSED,
+        reinterpret_cast<unsigned char**>(&publicKey), ctx);
+    if (publicKeyLen != c_PUBLICKEY_LEN + 1)
     {
         CRYPTO_LOG(WARNING)
             << "sm2: fast_sm2_derive_public_key: error of EC_POINT_point2bin for publicKey";
+        goto done;
+    }
+    // the destination side of the length contract: COutputBuffer carries a length,
+    // so honour it before writing 64 bytes
+    if (output_public_key->len < (size_t)c_PUBLICKEY_LEN)
+    {
+        CRYPTO_LOG(WARNING) << LOG_DESC("sm2: fast_sm2_derive_public_key: output buffer too small")
+                            << LOG_KV("len", output_public_key->len);
         goto done;
     }
     // remove the prefix 04
@@ -324,4 +372,45 @@ done:
     return ret;
 }
 
-#endif
+// C interface for 'fast_sm2_gen_key_pair'.
+int8_t bcos::crypto::fast_sm2_gen_key_pair(
+    COutputBuffer* output_public_key, COutputBuffer* output_private_key)
+{
+    int8_t ret = WEDPR_ERROR;
+    // BN_bn2binpad and the derive call below write fixed 32/64-byte outputs; honour the
+    // lengths the COutputBuffers carry before touching them
+    if (output_public_key->len < (size_t)c_PUBLICKEY_LEN ||
+        output_private_key->len < (size_t)c_PRIVATEKEY_LEN)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_gen_key_pair: output buffer too small";
+        return ret;
+    }
+    EC_KEY* sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
+    if (sm2Key == NULL)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_gen_key_pair: error of EC_KEY_new_by_curve_name";
+        goto done;
+    }
+    if (!EC_KEY_generate_key(sm2Key))
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_gen_key_pair: error of EC_KEY_generate_key";
+        goto done;
+    }
+    if (BN_bn2binpad(EC_KEY_get0_private_key(sm2Key),
+            reinterpret_cast<unsigned char*>(output_private_key->data),
+            c_PRIVATEKEY_LEN) != c_PRIVATEKEY_LEN)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_gen_key_pair: error of BN_bn2binpad for privateKey";
+        goto done;
+    }
+    {
+        CInputBuffer privateKey{output_private_key->data, c_PRIVATEKEY_LEN};
+        ret = fast_sm2_derive_public_key(&privateKey, output_public_key);
+    }
+done:
+    if (sm2Key)
+    {
+        EC_KEY_free(sm2Key);
+    }
+    return ret;
+}

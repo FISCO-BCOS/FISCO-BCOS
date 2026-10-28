@@ -20,8 +20,9 @@
 
 #include "VRFInfo.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
-#include <wedpr-crypto/WedprCrypto.h>
-#include <wedpr-crypto/WedprUtilities.h>
+#include <bcos-crypto/vrf/Curve25519Vrf.h>
+#include <bcos-crypto/vrf/Secp256k1Vrf.h>
+#include <cstring>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -57,13 +58,13 @@ bcos::sealer::VrfCurveType VRFInfo::vrfCurveType() const
 
 bool VRFInfo::isValidVRFPublicKey()
 {
-    CInputBuffer rawPk{(const char*)m_vrfPublicKey.data(), m_vrfPublicKey.size()};
+    auto publicKeyRef = bytesConstRef(m_vrfPublicKey.data(), m_vrfPublicKey.size());
     switch (m_vrfCurveType)
     {
     case sealer::VrfCurveType::CURVE25519:
-        return (wedpr_curve25519_vrf_is_valid_public_key(&rawPk) == WEDPR_SUCCESS);
+        return curve25519VrfIsValidPublicKey(publicKeyRef);
     case sealer::VrfCurveType::SECKP256K1:
-        return (wedpr_secp256k1_vrf_is_valid_public_key(&rawPk) == WEDPR_SUCCESS);
+        return secp256k1VrfIsValidPublicKey(publicKeyRef);
     default:
         return false;
     }
@@ -71,15 +72,15 @@ bool VRFInfo::isValidVRFPublicKey()
 
 bool VRFInfo::verifyProof()
 {
-    CInputBuffer rawPk{(const char*)m_vrfPublicKey.data(), m_vrfPublicKey.size()};
-    CInputBuffer rawInput{(const char*)m_vrfInput.data(), m_vrfInput.size()};
-    CInputBuffer rawProof{(const char*)m_vrfProof.data(), m_vrfProof.size()};
+    auto publicKeyRef = bytesConstRef(m_vrfPublicKey.data(), m_vrfPublicKey.size());
+    auto inputRef = bytesConstRef(m_vrfInput.data(), m_vrfInput.size());
+    auto proofRef = bytesConstRef(m_vrfProof.data(), m_vrfProof.size());
     switch (m_vrfCurveType)
     {
     case sealer::VrfCurveType::CURVE25519:
-        return (wedpr_curve25519_vrf_verify_utf8(&rawPk, &rawInput, &rawProof) == WEDPR_SUCCESS);
+        return curve25519VrfVerify(publicKeyRef, inputRef, proofRef);
     case sealer::VrfCurveType::SECKP256K1:
-        return (wedpr_secp256k1_vrf_verify_utf8(&rawPk, &rawInput, &rawProof) == WEDPR_SUCCESS);
+        return secp256k1VrfVerify(publicKeyRef, inputRef, proofRef);
     default:
         return false;
     }
@@ -87,25 +88,24 @@ bool VRFInfo::verifyProof()
 
 HashType VRFInfo::getHashFromProof()
 {
-    CInputBuffer rawProof{.data = (const char*)m_vrfProof.data(), .len = m_vrfProof.size()};
-    HashType vrfHash;
-    COutputBuffer outputHash{.data = (char*)vrfHash.data(), .len = vrfHash.size()};
+    auto proofRef = bytesConstRef(m_vrfProof.data(), m_vrfProof.size());
+    bcos::bytes hash;
     switch (m_vrfCurveType)
     {
     case sealer::VrfCurveType::CURVE25519:
-        if (wedpr_curve25519_vrf_proof_to_hash(&rawProof, &outputHash) == WEDPR_SUCCESS)
-        {
-            return vrfHash;
-        }
+        hash = curve25519VrfProofToHash(proofRef);
         break;
     case sealer::VrfCurveType::SECKP256K1:
-        if (wedpr_secp256k1_vrf_proof_to_hash(&rawProof, &outputHash) == WEDPR_SUCCESS)
-        {
-            return vrfHash;
-        }
+        hash = secp256k1VrfProofToHash(proofRef);
         break;
     default:
         break;
     }
-    return HashType{};
+    if (hash.size() != HashType::SIZE)
+    {
+        return HashType{};
+    }
+    HashType vrfHash;
+    std::memcpy(vrfHash.data(), hash.data(), HashType::SIZE);
+    return vrfHash;
 }

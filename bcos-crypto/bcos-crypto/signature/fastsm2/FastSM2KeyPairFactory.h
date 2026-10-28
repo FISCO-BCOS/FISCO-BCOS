@@ -24,8 +24,6 @@
 #include <bcos-crypto/signature/sm2/SM2KeyPairFactory.h>
 #include <memory>
 
-#ifdef WITH_SM2_OPTIMIZE
-
 namespace bcos
 {
 namespace crypto
@@ -49,5 +47,3 @@ public:
 };
 }  // namespace crypto
 }  // namespace bcos
-
-#endif

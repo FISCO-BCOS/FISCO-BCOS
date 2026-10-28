@@ -122,6 +122,11 @@ bool HsmSM2Crypto::verify(
     // get provider
     CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
 
+    // reject undersized inputs before the fixed-length copies below
+    if (_pubKey->size() < HSM_SM2_PUBLIC_KEY_LEN || _signatureData.size() < HSM_SM2_SIGNATURE_LEN)
+    {
+        return false;
+    }
     // parse input
     Key key = Key();
     auto pubKey = std::make_shared<const std::vector<byte>>(

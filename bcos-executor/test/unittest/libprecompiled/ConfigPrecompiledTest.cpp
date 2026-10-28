@@ -21,6 +21,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <bcos-crypto/vrf/Curve25519Vrf.h>
 #include <bcos-framework/storage/Serialize.h>
 #include <bcos-utilities/BoostLog.h>
 #include <boost/endian/conversion.hpp>
@@ -288,26 +289,26 @@ public:
         crypto::KeyPairInterface::UniquePtr const& keyPair, HashType const& blockHash,
         protocol::BlockNumber blockNumber = 0)
     {
-        CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
-            keyPair->secretKey()->size()};
-        bytes vrfPublicKey;
-        vrfPublicKey.resize(32);
-        COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
-        auto ret = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
-        BOOST_CHECK_EQUAL(ret, WEDPR_SUCCESS);
+        auto secretRef =
+            bytesConstRef(reinterpret_cast<const byte*>(keyPair->secretKey()->data().data()),
+                keyPair->secretKey()->size());
+        bytes vrfPublicKey = crypto::curve25519VrfDerivePublicKey(secretRef);
+        BOOST_REQUIRE_EQUAL(vrfPublicKey.size(), crypto::CURVE25519_VRF_PUBLIC_KEY_SIZE);
 
         auto blockNumberBigEndian = boost::endian::native_to_big(blockNumber);
-        CInputBuffer inputMsg{.data = blockNumber > 0 ?
-                                          reinterpret_cast<const char*>(&blockNumberBigEndian) :
-                                          reinterpret_cast<const char*>(blockHash.data()),
-            .len = blockNumber > 0 ? sizeof(blockNumberBigEndian) : (size_t)blockHash.size()};
-        bytes vrfInput(inputMsg.data, inputMsg.data + inputMsg.len);
-        bytes vrfProof;
-        size_t proofSize = 96;
-        vrfProof.resize(proofSize);
-        COutputBuffer proof{(char*)vrfProof.data(), proofSize};
-        ret = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
-        BOOST_CHECK(ret == WEDPR_SUCCESS);
+        bytes vrfInput;
+        if (blockNumber > 0)
+        {
+            auto* raw = reinterpret_cast<const byte*>(&blockNumberBigEndian);
+            vrfInput = bytes(raw, raw + sizeof(blockNumberBigEndian));
+        }
+        else
+        {
+            vrfInput = bytes(blockHash.begin(), blockHash.end());
+        }
+        bytes vrfProof =
+            crypto::curve25519VrfProve(secretRef, bytesConstRef(vrfInput.data(), vrfInput.size()));
+        BOOST_REQUIRE_EQUAL(vrfProof.size(), crypto::CURVE25519_VRF_PROOF_SIZE);
 
         return {vrfPublicKey, vrfProof, vrfInput};
     }

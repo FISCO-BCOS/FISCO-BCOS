@@ -20,8 +20,8 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/Signature.h>
+#include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-crypto/signature/key/KeyPair.h>
-#include <wedpr-crypto/WedprCrypto.h>
 
 namespace bcos
 {
@@ -35,7 +35,7 @@ class SM2KeyPair : public KeyPair
 public:
     SM2KeyPair() : KeyPair(SM2_PUBLIC_KEY_LEN, SM2_PRIVATE_KEY_LEN, KeyPairType::SM2)
     {
-        m_publicKeyDeriver = wedpr_sm2_derive_public_key;
+        m_publicKeyDeriver = fast_sm2_derive_public_key;
     }
     explicit SM2KeyPair(SecretPtr _secretKey);
     ~SM2KeyPair() override {}

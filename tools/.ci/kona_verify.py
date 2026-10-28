@@ -142,11 +142,18 @@ def find_honest_game(dgf):
     Instead, walk every game and pick the one whose rootClaim equals
     optimism_outputAtBlock(extraData) recomputed via keccak — i.e. the honest
     game whose rootClaim kona should reproduce.
+
+    KONA_GAME_INDEX pins the walk to one game index (e.g. an older game whose
+    claimed block is closer to genesis, keeping the replay short).
     """
     count = game_count(dgf)
     if count == 0:
         raise SystemExit("no dispute game exists yet (CONTEST=1 must create one)")
-    for idx in range(count - 1, -1, -1):
+    pinned = os.environ.get("KONA_GAME_INDEX")
+    indices = [int(pinned)] if pinned else range(count - 1, -1, -1)
+    if pinned and not 0 <= int(pinned) < count:
+        raise SystemExit(f"KONA_GAME_INDEX={pinned} out of range (gameCount={count})")
+    for idx in indices:
         game = game_at(dgf, idx)
         root_claim, l2_block, l1_head = read_game_claim(game)
         out = rpc(OP_NODE, "optimism_outputAtBlock", [hex(l2_block)])
@@ -158,6 +165,7 @@ def find_honest_game(dgf):
         recomputed = "0x" + keccak(bytes.fromhex("".join(
             h[2:] for h in (version, state_root, withdrawal_root, block_hash)))).hex()
         if recomputed.lower() == root_claim.lower():
+            print(f"[kona-verify] honest game at index {idx}")
             return game, root_claim, l2_block, l1_head
     raise SystemExit("no honest game found (no rootClaim matches its recomputed output root)")
 
@@ -285,12 +293,15 @@ def main():
                 "RUST_LOG",
                 "kona_derive=info,single_hint_handler=info,host_backend=info,l1_traversal=info")
             # Native replay finishes in seconds; a hint-prefetch stall or derive retry loop can
-            # hang forever, so bound it well above the normal case (900s) and treat a timeout as
+            # hang forever, so bound it well above the normal case and treat a timeout as
             # a verification failure rather than letting the CI job-level timeout (45min) kill it.
+            # KONA_TIMEOUT raises the bound for a devnet whose claimed L2 block is far enough
+            # from genesis that the full replay legitimately needs more than 15 minutes.
+            kona_timeout = int(os.environ.get("KONA_TIMEOUT", "900"))
             try:
-                result = subprocess.run(cmd, env=env, timeout=900)
+                result = subprocess.run(cmd, env=env, timeout=kona_timeout)
             except subprocess.TimeoutExpired:
-                print("[kona-verify] FAIL: kona-host did not finish within 900s "
+                print(f"[kona-verify] FAIL: kona-host did not finish within {kona_timeout}s "
                       "(hint-prefetch stall or derive retry loop)")
                 return 1
             if result.returncode != 0:
