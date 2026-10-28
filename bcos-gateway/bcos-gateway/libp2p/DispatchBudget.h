@@ -31,13 +31,20 @@
 
 namespace bcos::gateway
 {
-// Byte-and-count admission budget with strict FIFO multi-acquirer waits. Only the queue head may
-// complete; claiming it wakes the next head if its charge fits. Abandoned waits unregister too.
+// Byte-and-count admission budget with configurable multi-acquirer waits. Strict FIFO admits only
+// the queue head; first-fit lets later requests use capacity that cannot satisfy earlier waiters.
+// A ready waiter's charge is reserved until it resumes or is cancelled. Abandoned waits unregister.
 class DispatchBudget
 {
 public:
     using Ptr = std::shared_ptr<DispatchBudget>;
     using Poster = std::function<void(std::function<void()>)>;
+
+    enum class WaitPolicy
+    {
+        StrictFIFO,
+        FirstFit
+    };
 
     struct Usage
     {
@@ -71,13 +78,14 @@ private:
 
     struct State
     {
-        State(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster)
-          : maxBytes(_maxBytes), maxCount(_maxCount), poster(std::move(_poster))
+        State(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster, WaitPolicy _policy)
+          : maxBytes(_maxBytes), maxCount(_maxCount), poster(std::move(_poster)), policy(_policy)
         {}
 
         std::size_t maxBytes;
         std::size_t maxCount;
         Poster poster;
+        WaitPolicy policy;
         std::mutex mutex;
         std::size_t usedBytes = 0;
         std::size_t usedCount = 0;
@@ -91,8 +99,21 @@ private:
 
     static bool fitsLocked(State const& _state, std::size_t _bytes)
     {
-        return _state.usedCount < _state.maxCount && _state.usedBytes <= _state.maxBytes &&
-               _bytes <= _state.maxBytes - _state.usedBytes;
+        if (_state.usedCount + (_state.ready ? 1 : 0) >= _state.maxCount ||
+            _state.usedBytes > _state.maxBytes)
+        {
+            return false;
+        }
+        auto availableBytes = _state.maxBytes - _state.usedBytes;
+        if (_state.ready)
+        {
+            if (_state.ready->bytes > availableBytes)
+            {
+                return false;
+            }
+            availableBytes -= _state.ready->bytes;
+        }
+        return _bytes <= availableBytes;
     }
 
     static void finishWaiterLocked(State& _state, Waiter const& _waiter)
@@ -124,21 +145,27 @@ private:
         return false;
     }
 
-    static std::shared_ptr<Waiter> wakeFrontIfFitsLocked(State& _state)
+    static std::shared_ptr<Waiter> wakeNextIfFitsLocked(State& _state)
     {
-        while (!_state.closed && !_state.ready && !_state.waiters.empty())
+        auto it = _state.waiters.begin();
+        while (!_state.closed && !_state.ready && it != _state.waiters.end())
         {
-            if (_state.waiters.front()->result != WaitResult::Pending)
+            if ((*it)->result != WaitResult::Pending)
             {
-                _state.waiters.pop_front();
+                it = _state.waiters.erase(it);
                 continue;
             }
-            if (!fitsLocked(_state, _state.waiters.front()->bytes))
+            if (!fitsLocked(_state, (*it)->bytes))
             {
-                return nullptr;
+                if (_state.policy == WaitPolicy::StrictFIFO)
+                {
+                    return nullptr;
+                }
+                ++it;
+                continue;
             }
-            _state.ready = _state.waiters.front();
-            _state.waiters.pop_front();
+            _state.ready = *it;
+            _state.waiters.erase(it);
             _state.ready->result = WaitResult::Ready;
             return _state.ready;
         }
@@ -224,7 +251,7 @@ private:
                 }
                 waiter->handled = true;
                 removeWaiterLocked(*state, waiter);
-                next = wakeFrontIfFitsLocked(*state);
+                next = wakeNextIfFitsLocked(*state);
             }
             if (next)
             {
@@ -240,7 +267,7 @@ private:
             std::lock_guard lock(_state->mutex);
             --_state->usedCount;
             _state->usedBytes -= _bytes;
-            wake = wakeFrontIfFitsLocked(*_state);
+            wake = wakeNextIfFitsLocked(*_state);
         }
         if (wake)
         {
@@ -289,8 +316,9 @@ public:
         std::size_t m_bytes = 0;
     };
 
-    DispatchBudget(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster)
-      : m_state(std::make_shared<State>(_maxBytes, _maxCount, std::move(_poster)))
+    DispatchBudget(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster,
+        WaitPolicy _policy = WaitPolicy::StrictFIFO)
+      : m_state(std::make_shared<State>(_maxBytes, _maxCount, std::move(_poster), _policy))
     {}
     ~DispatchBudget() { close(); }
 
@@ -315,19 +343,21 @@ public:
                     ++state->usedCount;
                     state->usedBytes += _bytes;
                     acquired = true;
-                    wake = wakeFrontIfFitsLocked(*state);
+                    wake = wakeNextIfFitsLocked(*state);
                 }
                 else if (waiter && waiter->result != WaitResult::Pending)
                 {
                     removeWaiterLocked(*state, waiter);
                     failed = true;
-                    wake = wakeFrontIfFitsLocked(*state);
+                    wake = wakeNextIfFitsLocked(*state);
                 }
                 else if (state->closed)
                 {
                     co_return Permit{};
                 }
-                else if (!waiter && state->waiters.empty() && !state->ready &&
+                else if (!waiter &&
+                         (state->policy == WaitPolicy::FirstFit ||
+                             (state->waiters.empty() && !state->ready)) &&
                          fitsLocked(*state, _bytes))
                 {
                     ++state->usedCount;
@@ -422,7 +452,7 @@ public:
                 finishWaiterLocked(*state, *state->ready);
                 state->ready.reset();
             }
-            if (auto next = wakeFrontIfFitsLocked(*state))
+            if (auto next = wakeNextIfFitsLocked(*state))
             {
                 wakes.push_back(next);
             }
@@ -477,11 +507,13 @@ struct DispatchPermit
 };
 
 // Per-peer caps are smaller than the global cap in both dimensions, so one peer cannot exhaust
-// either global dimension. The global cap is reached only by sharing across multiple peers.
+// either global dimension. Defaults require eight peers by bytes or twelve by count. At genuine
+// saturation, a receive loop waiting for a global permit also pauses later packet types on its
+// session until a permit is released or its wait is cancelled by disconnect/stop.
 struct DispatchBudgetConfig
 {
-    constexpr static std::size_t DEFAULT_GLOBAL_IN_FLIGHT_BYTES = 192 * 1024 * 1024;
-    constexpr static std::size_t DEFAULT_GLOBAL_IN_FLIGHT_COUNT = 1024;
+    constexpr static std::size_t DEFAULT_GLOBAL_IN_FLIGHT_BYTES = 768 * 1024 * 1024;
+    constexpr static std::size_t DEFAULT_GLOBAL_IN_FLIGHT_COUNT = 3072;
     constexpr static std::size_t DEFAULT_PEER_IN_FLIGHT_BYTES = 96 * 1024 * 1024;
     constexpr static std::size_t DEFAULT_PEER_IN_FLIGHT_COUNT = 256;
 

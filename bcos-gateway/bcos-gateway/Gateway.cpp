@@ -555,7 +555,11 @@ bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, Service::Ptr 
                 {
                     co_return false;
                 }
-                self = shared_from_this();
+                self = weak_from_this().lock();
+                if (!self)
+                {
+                    co_return false;
+                }
             }
             task::wait([](std::shared_ptr<Gateway> _self, P2PSession::Ptr _session, Message _msg,
                            DispatchPermit _permit) -> task::Task<void> {

@@ -15,6 +15,17 @@
     ; FIB-186: cap accepted new connections per second to bound handshake CPU under connection
     ; churn (0 = unlimited), default 100
     ; max_connections_per_second = 100
+    ; In-flight dispatch budgets. Byte values are in bytes and count values are in messages.
+    ; Zero is not unlimited: peer budgets must be positive, global bytes must be at least twice
+    ; peer bytes, and global count must be greater than peer count.
+    ; Global in-flight byte budget, default 768 MiB (805306368 bytes)
+    ; dispatch_global_in_flight_bytes=805306368
+    ; Global in-flight message count, default 3072
+    ; dispatch_global_in_flight_count=3072
+    ; Per-peer in-flight byte budget, default 96 MiB (100663296 bytes)
+    ; dispatch_peer_in_flight_bytes=100663296
+    ; Per-peer in-flight message count, default 256
+    ; dispatch_peer_in_flight_count=256
     ; threads for the P2P I/O pool, default 8
     ; thread_count = 8
 

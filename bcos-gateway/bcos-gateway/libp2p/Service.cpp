@@ -954,9 +954,9 @@ task::Task<void> Service::onMessage(bcos::network::NetworkException e, Session::
         // THE dispatch: push into the channel subscribed for this type; its pump runs the handler.
         // A full channel PARKS this receive pump in waitWritable() instead of dropping the
         // message: the back-pressure propagates through the session's recv queue to the TCP
-        // window. The per-type handler never awaits a permit or remote I/O, so back-pressure stays
-        // in the originating session and cannot stall other sessions. It does couple packet types
-        // within this session to its own slowest dispatch/write path.
+        // window. The per-type handler never awaits a permit or remote I/O, and a peer's own
+        // budget limits only its receive loop. The shared global ceiling can pause every session's
+        // receive loop when saturated; either wait also pauses later packet types on that session.
         if (auto channel = inboundChannel(packetType))
         {
             auto inbound = InboundMessage{std::move(p2pSession), std::move(message), {}};
@@ -1599,8 +1599,8 @@ bcos::gateway::DispatchBudget::Ptr bcos::gateway::Service::ensureGlobalDispatchB
     }
     if (!m_globalDispatchBudget)
     {
-        m_globalDispatchBudget = std::make_shared<DispatchBudget>(
-            m_dispatchConfig.globalBytes, m_dispatchConfig.globalCount, makeDispatchPoster());
+        m_globalDispatchBudget = std::make_shared<DispatchBudget>(m_dispatchConfig.globalBytes,
+            m_dispatchConfig.globalCount, makeDispatchPoster(), DispatchBudget::WaitPolicy::FirstFit);
     }
     return m_globalDispatchBudget;
 }

@@ -157,6 +157,11 @@ GatewayConfig::RateLimiterConfig GatewayConfig::rateLimiterConfig() const
     return m_rateLimiterConfig;
 }
 
+DispatchBudgetConfig GatewayConfig::dispatchBudgetConfig() const
+{
+    return m_dispatchBudgetConfig;
+}
+
 const std::set<NodeIPEndpoint>& GatewayConfig::connectedNodes() const
 {
     return m_connectedNodes;
@@ -575,6 +580,29 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
 
     m_enableCompress = _pt.get<bool>("p2p.enable_compression", true);
 
+    DispatchBudgetConfig dispatchBudgetConfig;
+    dispatchBudgetConfig.globalBytes = _pt.get<std::size_t>(
+        "p2p.dispatch_global_in_flight_bytes",
+        DispatchBudgetConfig::DEFAULT_GLOBAL_IN_FLIGHT_BYTES);
+    dispatchBudgetConfig.globalCount = _pt.get<std::size_t>(
+        "p2p.dispatch_global_in_flight_count",
+        DispatchBudgetConfig::DEFAULT_GLOBAL_IN_FLIGHT_COUNT);
+    dispatchBudgetConfig.peerBytes = _pt.get<std::size_t>(
+        "p2p.dispatch_peer_in_flight_bytes", DispatchBudgetConfig::DEFAULT_PEER_IN_FLIGHT_BYTES);
+    dispatchBudgetConfig.peerCount = _pt.get<std::size_t>(
+        "p2p.dispatch_peer_in_flight_count", DispatchBudgetConfig::DEFAULT_PEER_IN_FLIGHT_COUNT);
+    if (dispatchBudgetConfig.peerBytes == 0 || dispatchBudgetConfig.peerCount == 0 ||
+        dispatchBudgetConfig.globalBytes / 2 < dispatchBudgetConfig.peerBytes ||
+        dispatchBudgetConfig.globalCount <= dispatchBudgetConfig.peerCount)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                "initP2PConfig: invalid dispatch budget config; peer bytes/count must be positive, "
+                "global bytes must be at least 2x peer bytes, and global count must be greater "
+                "than peer count"));
+    }
+    m_dispatchBudgetConfig = std::move(dispatchBudgetConfig);
+
     // Deprecation warning for removed p2p.thread_count
     if (_pt.get_optional<uint32_t>("p2p.thread_count"))
     {
@@ -686,6 +714,14 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                              << LOG_KV("p2p.session_max_send_msg_count", m_maxSendMsgCount)
                              << LOG_KV("p2p.max_pending_handshakes", m_maxPendingHandshakes)
                              << LOG_KV("p2p.max_connections_per_second", m_maxConnectionsPerSecond)
+                             << LOG_KV("p2p.dispatch_global_in_flight_bytes",
+                                    m_dispatchBudgetConfig.globalBytes)
+                             << LOG_KV("p2p.dispatch_global_in_flight_count",
+                                    m_dispatchBudgetConfig.globalCount)
+                             << LOG_KV("p2p.dispatch_peer_in_flight_bytes",
+                                    m_dispatchBudgetConfig.peerBytes)
+                             << LOG_KV("p2p.dispatch_peer_in_flight_count",
+                                    m_dispatchBudgetConfig.peerCount)
                              << LOG_KV("p2p.nodes_path", m_nodePath)
                              << LOG_KV("p2p.nodes_file", m_nodeFileName)
                              << LOG_KV("p2p.readonly", m_readonly)

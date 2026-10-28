@@ -818,8 +818,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         }
 
         // init Gateway
-        auto gateway = std::make_shared<Gateway>(
-            _config, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
+        auto gateway = std::make_shared<Gateway>(_config, service, gatewayNodeManager, amop,
+            gatewayRateLimiter, _gatewayServiceName, _config->dispatchBudgetConfig());
         if (_config->readonly())
         {
             gateway->enableReadOnlyMode();
