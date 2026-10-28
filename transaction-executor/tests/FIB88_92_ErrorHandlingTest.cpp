@@ -495,31 +495,4 @@ BOOST_AUTO_TEST_CASE(FIB88_92_InjectedHostFaultFlagOffOutOfGasPreservesGas)
     }());
 }
 
-// ---------------------------------------------------------------------------
-// documents. Under bugfix_v1_error_handling (on for every 3.18 chain) the generic
-// catch(std::exception&) in callPrecompiled used to swallow the rethrown node-fault
-// bcos::Error as an "InternalPrecompiledError" INTERNAL_ERROR receipt — i.e. the
-// node-local receipt the flag exists to prevent. With the fix the bcos::Error escapes
-// to the dispatch site, which records it on the owning frame (executeCall) so the
-// child boundary's hasHostFault() copy fails the parent chain too.
-namespace
-{
-class ThrowingNodeFaultPrecompiled : public bcos::precompiled::Precompiled
-{
-public:
-    explicit ThrowingNodeFaultPrecompiled(bcos::crypto::Hash::Ptr hashImpl)
-      : bcos::precompiled::Precompiled(std::move(hashImpl))
-    {}
-
-    std::shared_ptr<bcos::precompiled::PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive>,
-        bcos::precompiled::PrecompiledExecResult::Ptr) override
-    {
-        // The shape callBcosPrecompiled's catch(bcos::Error&) classifies as a node/
-        // infra fault (the rethrow flag's trigger).
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "injected precompiled node fault"));
-    }
-};
-}  // namespace
-
 BOOST_AUTO_TEST_SUITE_END()
