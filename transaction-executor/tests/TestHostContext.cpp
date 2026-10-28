@@ -393,7 +393,7 @@ BOOST_AUTO_TEST_CASE(dataCallbackFaultIsRecordedNotFatal)
     auto tableName = bcos::ledger::account::accountTableName(
         helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
     syncWait([this, &tableName]() -> Task<void> {
-        co_await storage2::writeOne(storage,
+        co_await bcos::storage2::writeOne(storage,
             bcos::executor_v1::StateKey{tableName, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE},
             bcos::storage::Entry{std::string("not-a-number")});
         co_return;
@@ -1329,7 +1329,7 @@ BOOST_AUTO_TEST_CASE(create2AddressForOpcodeFollowsTheChainHasher)
     evmc_bytes32 salt{};
     salt.bytes[31] = 0x42;
     static const bcos::bytes initCode{0x60, 0x42, 0x60, 0x00, 0xf3};
-    bytesConstRef initCodeRef{initCode.data(), initCode.size()};
+    bcos::bytesConstRef initCodeRef{initCode.data(), initCode.size()};
 
     struct HasherCase
     {
@@ -1354,7 +1354,7 @@ BOOST_AUTO_TEST_CASE(create2AddressForOpcodeFollowsTheChainHasher)
                 sender, "", 0, seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, false, 0,
                 bcos::task::syncWait);
         const auto addr = hostContext.create2AddressForOpcode(sender, salt, initCodeRef);
-        const auto addrHex = bcos::toHex(bytesConstRef{addr.bytes, sizeof(addr.bytes)});
+        const auto addrHex = bcos::toHex(bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)});
         BOOST_CHECK_EQUAL(addrHex, hasherCase.expected);
     }
 }
@@ -1371,7 +1371,7 @@ BOOST_AUTO_TEST_CASE(create2AddressForOpcodeFollowsTheChainHasher)
 BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
 {
     static const evmc_message dummy{};
-    const u256 nonce{7};
+    const bcos::u256 nonce{7};
     evmc_address sender{};
     sender.bytes[19] = 0x2a;
 
@@ -1404,7 +1404,8 @@ BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
             bcos::task::syncWait);
         const auto legacyAddr =
             nonWeb3.createAddressForOpcode(sender, nonce.convert_to<uint64_t>());
-        BOOST_CHECK_EQUAL(bcos::toHex(bytesConstRef{legacyAddr.bytes, sizeof(legacyAddr.bytes)}),
+        BOOST_CHECK_EQUAL(
+            bcos::toHex(bcos::bytesConstRef{legacyAddr.bytes, sizeof(legacyAddr.bytes)}),
             hasherCase.expected);
 
         // Web3: the nonce-derived EIP branch, matching upstream's own derivation.
@@ -1417,7 +1418,7 @@ BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
         // by definition (EIP-161), so one cell covers both hasher cases — computed
         // once out-of-tree, never by the helper under test.
         const auto eipAddr = web3.createAddressForOpcode(sender, nonce.convert_to<uint64_t>());
-        BOOST_CHECK_EQUAL(bcos::toHex(bytesConstRef{eipAddr.bytes, sizeof(eipAddr.bytes)}),
+        BOOST_CHECK_EQUAL(bcos::toHex(bcos::bytesConstRef{eipAddr.bytes, sizeof(eipAddr.bytes)}),
             "2d087d4eb4563e34016c39a3b793edc710b44457");
     }
 }
@@ -1519,7 +1520,7 @@ BOOST_AUTO_TEST_CASE(create2OpcodeDeploysAtTheHookAddress)
         // The account the opcode deployed is the one the hook derived: the created
         // contract holds the 32-byte runtime the inner init returned.
         auto const expected = callHost.create2AddressForOpcode(
-            creatorAddr, salt, bytesConstRef{innerInit.data(), innerInit.size()});
+            creatorAddr, salt, bcos::bytesConstRef{innerInit.data(), innerInit.size()});
         // The frozen literal is the ORACLE: recomputing through the same hook would be
         // self-referential, so a wrong-but-consistent formula would pass (the SM3 cell
         // is the one that discriminates against an upstream-keccak revert).
