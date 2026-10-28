@@ -402,6 +402,11 @@ public:
     using FakeScheduler2::FakeScheduler2;
     u256 measured{21'000};
     uint64_t required{30'000};
+    // When non-zero, the Nth call (1-based) answers with an error instead of a receipt. That is
+    // how a probe stops for a reason other than the budget: once the chain advances past the
+    // pinned block, call() routes to callAtBlock, and a lane that cannot serve that historical
+    // state answers the awaitable with an Error, which call() rethrows.
+    uint32_t failOnCall{0};
     std::vector<u256> gasLimits;
 
     void call(protocol::Transaction::Ptr _tx,
@@ -409,6 +414,11 @@ public:
         override
     {
         gasLimits.push_back(_tx->gasLimit());
+        if (failOnCall != 0 && gasLimits.size() == failOnCall)
+        {
+            _callback(BCOS_ERROR_PTR(-1, "historical state unavailable"), nullptr);
+            return;
+        }
         auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
         if (_tx->gasLimit() < u256(required))
         {
@@ -618,17 +628,17 @@ BOOST_AUTO_TEST_CASE(estimateGasBoundsTheFarEnd)
     Json::Value response;
     task::syncWait(endpoint->estimateGas(params, response));
 
-    // Ceiling probe + measurement probe + the capped ladder + log2 of what remains. A pure 10%
-    // ladder needs ~70 probes to cross this interval; a pure bisection needs ~25 even for a call
-    // that needs nothing extra. The bound is what keeps both ends cheap.
+    // Ceiling probe + measurement probe + the capped ladder + the tolerance-bounded bisection. Both
+    // ends stay cheap: the ladder handles the near case, and the bisection stops at 1/64 of the
+    // upper bound instead of narrowing to a single gas, which used to make this phase cost
+    // ceil(log2(high - low)) whatever the uncertainty was.
     BOOST_CHECK_LE(ladderScheduler->gasLimits.size(), 2U + 8U + 25U);
     auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
     BOOST_CHECK_GE(answer, ladderScheduler->required);
     BOOST_CHECK_LT(answer, 21'000'000U);
     // The bound above only says the probe count is bounded; it says nothing about the answer being
-    // usable. Bisection narrows until high - low == 1 with high succeeding, so the answer lands
-    // within a hair of the requirement -- a tenth over it is already generous, and a "return the
-    // ceiling" regression (35 dry runs to answer 21,000,000) fails here.
+    // usable. The tolerance leaves `high` at most 1/64 above the least budget that runs, so a tenth
+    // over the requirement is already generous -- and a "return the ceiling" regression fails here.
     BOOST_CHECK_LE(answer, ladderScheduler->required + ladderScheduler->required / 10 + 2);
 }
 
@@ -660,11 +670,115 @@ BOOST_AUTO_TEST_CASE(estimateGasCeilingIsClampedToTheRpcGasCap)
     task::syncWait(endpoint->estimateGas(params, response));
 
     // Exactly one probe, at the cap rather than at the block limit, and its out-of-gas is the
-    // answer: no budget this node will execute can satisfy this request.
+    // answer: no budget this node will execute can satisfy this request. The message names the
+    // allowance geth-style, so a client can tell "the node will not dry-run more than this" apart
+    // from "the transaction reverted" -- both are otherwise a bare "out of gas".
     auto const& probes = ladderScheduler->gasLimits;
     BOOST_REQUIRE_EQUAL(probes.size(), 1U);
     BOOST_CHECK_EQUAL(probes.at(0), u256(50'000'000));
     BOOST_CHECK(response.isMember("error"));
+    auto const message = response["error"]["message"].asString();
+    BOOST_CHECK_NE(message.find("gas required exceeds allowance (50000000)"), std::string::npos);
+}
+
+// The mid-range shape nothing else covers: an ordinary two-or-three-level nested call, needing
+// about 2.5x what it consumed. The 8 ladder rungs only reach 1.1^8 = 2.14x, so this is the first
+// answer past that cliff -- under a bisection that narrows to a single gas it cost the same ~35
+// dry runs as a 120x one, because that phase cost ceil(log2(high - low)) regardless of how
+// uncertain the answer was. The relative tolerance stops it at 1/64 of the upper bound.
+BOOST_AUTO_TEST_CASE(estimateGasStopsAtTheRelativeTolerance)
+{
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(21'000'000));
+
+    auto ladderScheduler = std::make_shared<LadderScheduler>(m_ledger, m_blockFactory);
+    ladderScheduler->measured = u256(100'000);
+    ladderScheduler->required = 250'000;  // 2.5x: just past where the ladder gives up
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, ladderScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    Json::Value response;
+    task::syncWait(endpoint->estimateGas(params, response));
+
+    // Ceiling, the measurement, the 8 rungs (100000 -> 214,367, all below 250,000) and 13
+    // bisections. Narrowing to one gas instead needs 12 more. The answer overshoots by 2,425
+    // (0.97%), which is the tolerance's price and inside its 1/64 bound.
+    auto const& probes = ladderScheduler->gasLimits;
+    BOOST_CHECK_EQUAL(probes.size(), 23U);
+    auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
+    BOOST_CHECK_EQUAL(answer, 252'425U);
+    BOOST_CHECK_GE(answer, ladderScheduler->required);
+}
+
+// A probe that stops for a reason other than the budget, before any budget tighter than the ceiling
+// has been proven, must refuse rather than answer with the untightened ceiling. Answering `high`
+// there would report up to the whole 21M/50M cap for a transfer that needs the intrinsic cost, and
+// a wallet would take that number as its gasLimit.
+BOOST_AUTO_TEST_CASE(estimateGasRefusesWhenTruncatedBeforeAnyTightening)
+{
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(21'000'000));
+
+    auto ladderScheduler = std::make_shared<LadderScheduler>(m_ledger, m_blockFactory);
+    ladderScheduler->measured = u256(21'000);
+    ladderScheduler->required = 30'000;
+    ladderScheduler->failOnCall = 2;  // the measurement probe, before anything was tightened
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, ladderScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    Json::Value response;
+    BOOST_CHECK_THROW(task::syncWait(endpoint->estimateGas(params, response)), std::exception);
+    // The ceiling probe and the failing measurement: the search never got to tighten anything.
+    BOOST_CHECK_EQUAL(ladderScheduler->gasLimits.size(), 2U);
+    BOOST_CHECK(!response.isMember("result"));
+}
+
+// The same stop, but after a tighter budget has been proven. That one ran, so it is the answer:
+// dropping it on a transient refusal to tighten further would turn a usable result into a failed
+// request.
+BOOST_AUTO_TEST_CASE(estimateGasKeepsTheProvenBudgetWhenTruncatedLater)
+{
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(21'000'000));
+
+    auto ladderScheduler = std::make_shared<LadderScheduler>(m_ledger, m_blockFactory);
+    ladderScheduler->measured = u256(21'000);
+    ladderScheduler->required = 12'000'000;
+    // Call 12 proves 15,761,256 (it runs), call 13 stops the search. `high` is already tighter
+    // than the ceiling at that point.
+    ladderScheduler->failOnCall = 13;
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, ladderScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    Json::Value response;
+    task::syncWait(endpoint->estimateGas(params, response));
+
+    BOOST_CHECK(!response.isMember("error"));
+    auto const answer = std::stoull(response["result"].asString(), nullptr, 16);
+    BOOST_CHECK_GE(answer, ladderScheduler->required);  // proven to execute
+    BOOST_CHECK_LT(answer, 21'000'000U);                // tightened, not the raw ceiling
+    BOOST_CHECK_EQUAL(answer, 15'761'256U);
 }
 
 // A client sends an EIP-55 mixed-case `from` (ethers/viem default). The account row key is

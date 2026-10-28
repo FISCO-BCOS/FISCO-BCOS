@@ -95,12 +95,20 @@ bool isBlockNotFound(JsonRpcException const& e) noexcept
 /// `gas`. geth / op-geth fall back to this cap (or MaxUint64/2 when the cap is disabled) and
 /// never execute a call with a zero budget — a raw `gas=0` is rejected as "intrinsic gas too
 /// low". The target block's own gasLimit bounds it further when it is readable and non-zero.
+///
+/// On the estimate path this is also the ceiling: eth_estimateGas will not report a budget this
+/// node refuses to execute, so a transaction that needs more than this is answered with an
+/// out-of-gas error naming the allowance rather than with a number. That makes the constant a
+/// functional limit on what the method can estimate, not only a bound on how much work one
+/// request may cost; geth exposes the same number as `--rpc.gascap`, and making it configurable
+/// here is a follow-up, not something this PR changes silently.
 constexpr uint64_t c_ethCallGasCap = 50'000'000;
 
-/// The intrinsic-gas floor of a transaction: the Yellow Paper's G_transaction base cost plus the
-/// zero-data cost of an unsigned transaction's payload (21,000 per EIP-2028's non-zero/zero byte
-/// split), paid before the EVM runs. Named because eth_estimateGas floors its search here, and an
-/// unnamed literal in that expression is indistinguishable from a magic number.
+/// The intrinsic-gas floor of a transaction: the Yellow Paper's G_transaction base cost (21,000),
+/// paid before the EVM runs. Named because eth_estimateGas floors its search here, and an unnamed
+/// literal in that expression is indistinguishable from a magic number. EIP-2028 is NOT part of
+/// it: that EIP repriced calldata bytes (68 → 16 gas per non-zero byte), which is added on top of
+/// G_transaction and is zero for empty calldata.
 constexpr uint64_t c_intrinsicGasFloor = 21'000;
 
 /// Above this many dry runs, eth_estimateGas reports its probe count at INFO. The dry runs are
@@ -114,12 +122,66 @@ constexpr uint32_t c_estimateGasProbeLogThreshold = 8;
 /// The two ends of the interval want opposite strategies, so neither alone is right. Close to the
 /// measurement -- the common case, because a shallow nested call needs only a small multiple of
 /// what it consumed -- a 10% ladder lands in two or three probes, where bisecting the whole
-/// interval would spend ~25 narrowing to the same gas. Far from it (a deep call chain, which is
-/// also the most expensive shape to run), the ladder takes 77 steps. So the ladder gets a small
-/// fixed number of steps and whatever is left is bisected: a request costs at most
-/// 2 + this + ceil(log2(ceiling)) probes instead of ~83, and still two when the answer is just
-/// above the measurement.
+/// interval would spend ~25. Far from it (a deep call chain, which is also the most expensive shape
+/// to run), the ladder takes 77 steps. So the ladder gets a small fixed number of steps and
+/// whatever is left is bisected down to the tolerance below: a request costs at most
+/// 2 + this + ceil(log2(ceiling / tolerance)) probes instead of ~83, and still two when the answer
+/// is just above the measurement.
 constexpr uint32_t c_estimateGasLadderSteps = 8;
+
+/// How close is close enough, for the bisection phase: it stops once the remaining interval is
+/// within 1/c_estimateGasTolerance of the current upper bound, instead of narrowing to a single
+/// gas.
+///
+/// Stopping at one gas made the phase's cost a function of the answer's *magnitude* rather than of
+/// how uncertain it was. The 8 ladder steps only reach 1.1^8 = 2.14x the measurement, and past
+/// that cliff every request paid a full-range bisection: measured against a 50M ceiling, a 1.15x
+/// answer costs 4 probes, a 2.5x answer (an ordinary two-or-three-level nested call) cost 35, and a
+/// 120x answer cost 35 too -- the same price for a 50x difference in what was uncertain. With the
+/// tolerance the worst case over the whole configuration space drops from 36 to 27, 2.5x from 35 to
+/// 23 and 120x from 35 to 19.
+///
+/// The price is the returned budget: `high` may sit up to 1/64 (1.56%) above the least budget that
+/// executes. No caller needs the estimate to the gas -- it is a limit -- so paying 1.5% of headroom
+/// for a quarter of the dry runs is the right side of that trade. `high` is still only ever set
+/// from a probe that ran, so the answer remains a budget this node executed.
+constexpr uint64_t c_estimateGasTolerance = 64;
+
+/// The budget an omitted `gas` is given, from the target header's `gasLimit()`.
+///
+/// The RPC gas cap applies on both of `call()`'s arms, but they differ in exactly one way and it is
+/// a decision rather than an accident: eth_estimateGas fails closed (nullopt -- the caller refuses
+/// the request), because an estimate sized against a guessed ceiling is a wrong answer that a
+/// wallet would submit; eth_call falls back to the cap, because refusing a call for want of a
+/// default is a regression on a path that has always worked. Naming that difference in one
+/// signature is the point: two look-alike `min()` expressions forty lines apart read as an
+/// oversight, and the "missing" zero-guard is exactly the thing a later reader adds to a
+/// fail-closed arm to make it symmetric.
+///
+/// `headerLimit` is only meaningful when `headerLimitFits` is true.
+std::optional<uint64_t> defaultGasFromHeader(
+    bool isEstimate, bool headerReadable, bool headerLimitFits, uint64_t headerLimit)
+{
+    if (!headerReadable || !headerLimitFits)
+    {
+        // Nothing usable in the header: refuse on the estimate arm, keep the cap on the call arm.
+        return isEstimate ? std::nullopt : std::optional<uint64_t>(c_ethCallGasCap);
+    }
+    if (!isEstimate && headerLimit == 0)
+    {
+        // A zero header limit cannot size a dry run -- a zero budget is rejected downstream as
+        // "intrinsic gas too low" -- so a plain call keeps the cap. The estimate arm deliberately
+        // does not take this fallback: it lets the 0 through and the run then fails, which is the
+        // fail-closed behaviour estimateGasMissingParentBlockFailsClosed pins.
+        return c_ethCallGasCap;
+    }
+    // Capped on both arms. For the estimate arm this is load-bearing: the value becomes the budget
+    // a dry run is executed with, and every retry re-enters call() through the caller-facing `gas`
+    // field, which is clamped to the same cap. An uncapped ceiling let the search scan an interval
+    // no probe could reach -- a 100M block limit with 60M required ran every retry at 50M and
+    // answered the whole 100M.
+    return std::min(c_ethCallGasCap, headerLimit);
+}
 
 /// The human-readable form of the ABI-encoded revert payload the way geth's abi.UnpackRevert
 /// reads it: Error(string) → the string, Panic(uint256) → the Solidity panic description.
@@ -1572,27 +1634,21 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
                               << LOG_KV("blockNumber", blockNumber)
                               << LOG_KV("error", e.errorMessage());
         }
+        auto headerLimitFits = false;
+        uint64_t headerLimit = 0;
         if (block)
         {
-            // Bounds-checked narrowing: an over-wide gasLimit leaves the optional unset and
-            // the guard below refuses the request instead of using a truncated cap.
             auto const limit = block->blockHeader()->gasLimit();
-            if (bcos::u256FitsUint64(limit))
+            headerLimitFits = bcos::u256FitsUint64(limit);
+            if (headerLimitFits)
             {
-                // Capped like the caller's own `gas`, because this value becomes the budget the
-                // dry run is executed with and every retry re-enters call() through the caller
-                // `gas` field, which is clamped to the same cap. Reporting an uncapped ceiling
-                // here let the search scan an interval no probe could reach: with a 100M block
-                // limit and 60M required, every retry ran at 50M and failed, so the endpoint
-                // answered the whole 100M instead of 60.5M. The RPC gas cap bounds what this node
-                // will execute for one unauthenticated caller on both paths; a transaction that
-                // genuinely needs more is answered with an error rather than a number the node
-                // could not run.
-                chainBlockGasLimit = std::min(c_ethCallGasCap, static_cast<uint64_t>(limit));
+                headerLimit = static_cast<uint64_t>(limit);
             }
         }
-        // No default cap: an unreadable header or an over-wide gasLimit must fail the request
-        // with a diagnosable message, not silently size the estimate against a constant.
+        // fail-closed: an unreadable header or an over-wide gasLimit must fail the request with a
+        // diagnosable message, not silently size the estimate against a constant.
+        chainBlockGasLimit =
+            defaultGasFromHeader(true, block != nullptr, headerLimitFits, headerLimit);
         if (needsGasDefault && !chainBlockGasLimit.has_value())
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::InternalError,
@@ -1602,28 +1658,28 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
     else if (needsGasDefault)
     {
         // Plain eth_call: geth / op-geth size an omitted gas against the RPC gas cap, never 0
-        // (a zero budget is rejected downstream as "intrinsic gas too low"). Bound the default
-        // by the target block's gasLimit when its header is readable and non-zero; otherwise
-        // (unreadable / genesis / zero gasLimit) keep the cap so a call is never run with gas
-        // 0.
-        uint64_t gasDefault = c_ethCallGasCap;
+        // (a zero budget is rejected downstream as "intrinsic gas too low"). Bound the default by
+        // the target block's gasLimit when its header is readable and non-zero; otherwise
+        // (unreadable / genesis / zero gasLimit) keep the cap so a call is never run with gas 0.
+        auto headerReadable = false;
+        auto headerLimitFits = false;
+        uint64_t headerLimit = 0;
         if (ledger)
         {
             if (auto block =
                     co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
             {
+                headerReadable = true;
                 auto const limit = block->blockHeader()->gasLimit();
-                if (bcos::u256FitsUint64(limit))
+                headerLimitFits = bcos::u256FitsUint64(limit);
+                if (headerLimitFits)
                 {
-                    auto const blockLimit = static_cast<uint64_t>(limit);
-                    if (blockLimit > 0)
-                    {
-                        gasDefault = std::min(gasDefault, blockLimit);
-                    }
+                    headerLimit = static_cast<uint64_t>(limit);
                 }
             }
         }
-        chainBlockGasLimit = gasDefault;
+        chainBlockGasLimit =
+            defaultGasFromHeader(false, headerReadable, headerLimitFits, headerLimit);
     }
     // Await the sender's committed nonce HERE (a coroutine suspension) instead of blocking
     // the handler thread with task::syncWait inside takeToTransaction. Needed so validation
@@ -1770,8 +1826,13 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     // Pin the resolved block on EVERY probe, this one included. Re-resolving the caller's tag per
     // attempt would let the probes straddle a block boundary, and the loop's whole premise -- a
     // failure at or below the ceiling failed because of the budget -- holds only within one state.
-    // The pinned number is the tip, so call() still takes the live scheduler path (isLatest stays
-    // true) and nothing is diverted to the historical one.
+    // Pinning the number the endpoint already resolved cannot change which block is targeted; it
+    // only stops call() re-resolving the tag.
+    //
+    // This probe starts on the live scheduler path (`isLatest` holds while the pinned number is
+    // still the head), and moves to the historical one as soon as the chain advances past it -- see
+    // the catch below, which is what handles that. The route change is real, not hypothetical: it
+    // is why every in-loop probe is wrapped.
     Json::Value pinnedRequest = request;
     pinnedRequest[1U] = toQuantity(blockNumber);
     Json::Value probe;
@@ -1783,6 +1844,19 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     // above the cap.
     if (probe.isMember("error"))
     {
+        // When the cap is what sized the ceiling and the run still ran out of gas, say so the way
+        // geth does. Without this the caller cannot tell "this transaction needs more gas than
+        // this node will dry-run" apart from "this transaction reverted" -- both arrive as a bare
+        // out-of-gas, and the number the node was actually willing to spend appears nowhere.
+        auto const& message = probe["error"]["message"];
+        auto const outOfGas = admissionError(protocol::TransactionStatus::OutOfGas).msg();
+        if (ceiling == c_ethCallGasCap && message.isString() &&
+            std::string_view(message.asString()).starts_with(outOfGas))
+        {
+            probe["error"]["message"] = std::string(outOfGas) +
+                                        ": gas required exceeds allowance (" +
+                                        std::to_string(ceiling) + ")";
+        }
         response = std::move(probe);
         co_return;
     }
@@ -1808,9 +1882,13 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     // the 21,000 floor to a 50M ceiling the ladder is 83 steps, on exactly the deep-call shape
     // that is the most expensive to execute.
     //
-    // So the ladder gets a fixed number of steps and the remainder is bisected. The near case
-    // keeps its two or three probes; the far case is bounded by
-    // 1 + 1 + LADDER_STEPS + ceil(log2(ceiling)) = 36 against the 50M cap, instead of 83.
+    // So the ladder gets a fixed number of steps and the remainder is bisected -- down to
+    // c_estimateGasTolerance, not to a single gas. Narrowing to one gas made the phase cost
+    // ceil(log2(high - low)), which is a function of the answer's magnitude: the ladder reaches
+    // 2.14x, so every answer past that cliff paid the same full-range bisection (~35 probes for a
+    // 2.5x nested call, ~35 for a 120x one). Stopping at 1/64 of the upper bound costs at most
+    // 1.56% of headroom in the answer; measured against a 50M ceiling the worst case goes 36 -> 27,
+    // a 2.5x answer 35 -> 23, and a 120x answer 35 -> 19.
     //
     // The loop rests on one premise, stated as a premise and not as a fact: within one block
     // state, a budget at or below the ceiling that fails failed because of the budget -- the dry
@@ -1825,7 +1903,7 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     uint32_t probes = 1;  // the ceiling probe above
     uint32_t ladderSteps = 0;
     bool probeFailedOutright = false;
-    while (high - low > 1)
+    while (high - low > std::max<uint64_t>(1, high / c_estimateGasTolerance))
     {
         uint64_t budget;
         if (!lowFailed)
@@ -1848,7 +1926,7 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         }
         else
         {
-            budget = low + (high - low) / 2;  // remainder: bisect
+            budget = low + (high - low) / 2;  // remainder: bisect the ratio, not the gas
         }
         Json::Value attempt = pinnedRequest;
         attempt[0U]["gas"] = toQuantity(budget);
@@ -1862,9 +1940,26 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
             // A probe after the ceiling one can fail for a reason other than the budget: pinning
             // the block means an advancing chain eventually resolves this number below the new
             // head, which routes through callAtBlock -- and a historical read on a lane without a
-            // complete MPT (or one whose nodes were pruned) is refused. `high` is already a budget
-            // this request ran the call with and saw succeed, so answer with it rather than
-            // discarding a proven result on a transient refusal to tighten it further.
+            // complete MPT (or one whose nodes were pruned) is refused.
+            //
+            // Two different answers, because `high` means two different things here. If a tighter
+            // budget has already been proven (high < ceiling), answer with it: it ran, so
+            // discarding it on a transient refusal to tighten further would turn a usable result
+            // into a failed request. If nothing tighter has been proven (high == ceiling, i.e. the
+            // throw landed on the very first in-loop probe), `high` is only the untightened cap --
+            // reporting it would answer 50,000,000 for a transfer that needs 21,000, and a wallet
+            // would take that as the gasLimit and fail its balance check. Refuse instead, letting
+            // the probe's own diagnosable failure through.
+            if (high == ceiling)
+            {
+                WEB3_LOG(DEBUG) << LOG_DESC(
+                                       "eth_estimateGas: first probe failed, refusing rather than "
+                                       "reporting the untightened ceiling")
+                                << LOG_KV("budget", budget) << LOG_KV("ceiling", ceiling)
+                                << LOG_KV("block", blockNumber)
+                                << LOG_KV("error", boost::diagnostic_information(e));
+                throw;
+            }
             WEB3_LOG(DEBUG) << LOG_DESC(
                                    "eth_estimateGas: probe failed, keeping the last proven "
                                    "budget")
@@ -1889,8 +1984,8 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     // The dry runs are the entire cost of this method, so report how many it took at a level an
     // operator runs. `high` is a budget this request ran the call with and saw succeed: it starts
     // at the ceiling probe's budget (which the check above proved), and only ever moves to a budget
-    // a probe observed succeeding. A probe that threw therefore leaves a proven answer in place;
-    // there is no path that reports an unproven number.
+    // a probe observed succeeding -- so a probe that threw either leaves a proven answer in place
+    // (high < ceiling, `truncated`) or refuses above, never reports the raw cap.
     if (probes > c_estimateGasProbeLogThreshold)
     {
         WEB3_LOG(INFO) << LOG_DESC("eth_estimateGas: settled") << LOG_KV("gas", high)
