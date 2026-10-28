@@ -77,7 +77,7 @@ public:
         if (_runIo)
         {
             m_workGuard.emplace(boost::asio::make_work_guard(*m_ioContext));
-            m_worker = std::thread([this] { m_ioContext->run(); });
+            m_worker = std::thread([ioContext = m_ioContext] { ioContext->run(); });
         }
     }
 
@@ -90,7 +90,14 @@ public:
         m_ioContext->stop();
         if (m_worker.joinable())
         {
-            m_worker.join();
+            if (m_worker.get_id() == std::this_thread::get_id())
+            {
+                m_worker.detach();
+            }
+            else
+            {
+                m_worker.join();
+            }
         }
     }
 
