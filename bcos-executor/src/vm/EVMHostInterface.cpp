@@ -31,6 +31,7 @@
 #include "../Common.h"
 #include "HostContext.h"
 #include "bcos-utilities/Common.h"
+#include <bcos-framework/executor/ExecuteError.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
@@ -48,15 +49,9 @@ static_assert(alignof(Address) == alignof(evmc_address), "Address types alignmen
 static_assert(sizeof(h256) == sizeof(evmc_bytes32), "Hash types size mismatch");
 static_assert(alignof(h256) == alignof(evmc_bytes32), "Hash types alignment mismatch");
 
-// Fault translation for the remaining host slots (review F4): the same contract
-// getNonce/call below already carry — an exception cannot cross the VM
-// (evmc::VM::execute is noexcept and the unwind dies inside evmone's instruction
-// frames, so a raw throw aborts the process), so record the fault with its family
-// and answer fail-closed; TransactionExecutive::go() rethrows the record into the
-// ladder arm the family would have reached. The fail-closed answer values mirror
-// the v2 lane (transaction-executor EVMHostInterface.h) slot for slot — the answer
-// is irrelevant to consensus (the frame fails at throwIfHostFault before anything
-// commits); it only has to let evmone finish the frame.
+// A callback fault must not unwind through EVMC's noexcept host adapter. Stop
+// subsequent host requests and rethrow after VM execution on the executor error
+// channel. bcos::Error alone does not make a storage failure deterministic.
 template <class Answer, class Fn>
 Answer translateHostFault(HostContext& hostContext, Fn&& fn, Answer failClosed)
 {
@@ -73,7 +68,8 @@ Answer translateHostFault(HostContext& hostContext, Fn&& fn, Answer failClosed)
     }
     catch (bcos::Error& _e)
     {
-        hostContext.recordHostFault(_e.errorMessage(), /*halting=*/false);
+        hostContext.recordHostFault(
+            _e.errorMessage(), /*halting=*/_e.errorCode() != ExecuteError::DEAD_LOCK);
         return failClosed;
     }
     catch (...)
@@ -97,7 +93,8 @@ void translateHostFault(HostContext& hostContext, Fn&& fn)
     }
     catch (bcos::Error& _e)
     {
-        hostContext.recordHostFault(_e.errorMessage(), /*halting=*/false);
+        hostContext.recordHostFault(
+            _e.errorMessage(), /*halting=*/_e.errorCode() != ExecuteError::DEAD_LOCK);
     }
     catch (...)
     {
@@ -220,21 +217,15 @@ uint64_t getNonce(evmc_host_context* _context, const evmc_address* _addr)
     }
     catch (bcos::Error& _e)
     {
-        // A storage/parse fault. It cannot be left to propagate (review F1): an
-        // exception cannot cross the VM — evmc::VM::execute is noexcept (evmc.hpp:722)
-        // and the unwind dies inside evmone's instruction frames (verified: letting one
-        // through aborts with libc++abi "terminating due to uncaught exception of type
-        // bcos::Error"). Answer fail-closed per EIP-2681 (MAX_NONCE makes evmone reject
-        // the CREATE) and record the fault with its family: go() rethrows it into the
-        // ladder arm this family would have reached — bcos::Error reverts the frame —
-        // so the ladder's decision holds without the impossible propagation.
-        hostContext.recordHostFault(_e.errorMessage(), /*halting=*/false);
+        // MAX_NONCE is only a temporary fail-closed answer; the recorded fault
+        // aborts execution after the VM returns.
+        hostContext.recordHostFault(
+            _e.errorMessage(), /*halting=*/_e.errorCode() != ExecuteError::DEAD_LOCK);
         return std::numeric_limits<uint64_t>::max();
     }
     catch (...)
     {
-        // The non-bcos family: the ladder's std::exception arm halts the node, and the
-        // recorded fault reproduces exactly that in go() (it must not become a receipt).
+        // Abort through the executor error channel after the VM returns.
         hostContext.recordHostFault(boost::current_exception_diagnostic_information(),
             /*halting=*/true);
         return std::numeric_limits<uint64_t>::max();
@@ -426,16 +417,9 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg)
     }
     catch (bcos::Error& _e)
     {
-        // A fault while building/serving the sub-call. The catch is load-bearing, not a
-        // fail-open answer (review F1): the exception cannot cross the VM —
-        // evmc::VM::execute is noexcept (evmc.hpp:722) and the unwind dies inside
-        // evmone's instruction frames (verified: a raw throw aborts with libc++abi
-        // "terminating due to uncaught exception of type bcos::Error"), so dropping the
-        // catch turns a node fault into std::terminate instead of the ladder's decision.
-        // Record the fault with its family and answer fail-closed; go() rethrows it into
-        // the ladder arm the family would have reached — bcos::Error reverts the whole
-        // frame, never a committed receipt other nodes would not produce.
-        hostContext.recordHostFault(_e.errorMessage(), /*halting=*/false);
+        // Only the explicit scheduler cancellation is a deterministic revert.
+        hostContext.recordHostFault(
+            _e.errorMessage(), /*halting=*/_e.errorCode() != ExecuteError::DEAD_LOCK);
         return evmc_result{.status_code = EVMC_INTERNAL_ERROR,
             .gas_left = 0,
             .gas_refund = 0,
@@ -446,9 +430,7 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg)
     }
     catch (...)
     {
-        // The non-bcos family: the ladder's std::exception arm halts the node; go()
-        // reproduces that (the fault must not ride a failed sub-call answer into a
-        // receipt).
+        // The temporary callback result must not become a transaction receipt.
         hostContext.recordHostFault(boost::current_exception_diagnostic_information(),
             /*halting=*/true);
         return evmc_result{.status_code = EVMC_INTERNAL_ERROR,

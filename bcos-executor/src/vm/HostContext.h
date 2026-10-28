@@ -28,6 +28,7 @@
 #include "Eip2929Util.h"
 #include "VMInstance.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include <bcos-framework/executor/HostContextFault.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <list>
@@ -117,25 +118,10 @@ public:
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
-    /// A host-side fault recorded by the fail-closed catches in EVMHostInterface. The
-    /// exception cannot cross the VM (evmc::VM::execute is noexcept and evmone's
-    /// instruction frames do not unwind), so the callback records it together with the
-    /// ladder family it belongs to and answers fail-closed; TransactionExecutive::go
-    /// checks this right after vm.execute() and rethrows the fault into the arm it would
-    /// have reached — `halting` = the std::exception arm (exit(1), the node halts), the
-    /// bcos::Error family otherwise (revert the whole frame). Never a receipt the rest
-    /// of the network would not produce (review F1).
-    ///
-    /// First fault wins, halting is sticky (review F19): the ladder decides on the
-    /// FIRST exception thrown, and the fail-closed answers let the frame keep running
-    /// after a fault, so a later record must not soften an earlier one — a bcos::Error
-    /// arriving after a non-bcos fault must not turn the exit(1) decision into a revert
-    /// receipt. The first fault's message is kept (it names the exception that decided
-    /// the family); a later halting fault still upgrades the family to halt.
-    // Presence is tracked by its own flag (review F5): the message is diagnostic
-    // text and can legitimately be empty (an Error built with only a code), so
-    // gating on m_hostFault.empty() silently dropped empty-message faults —
-    // exactly the node faults this record exists to make loud.
+    /// EVMC callbacks cannot unwind through the VM's noexcept host adapter.
+    /// Record the first diagnostic and stop further host requests. Node-local faults
+    /// escape receipt mapping through HostContextFault; only a scheduler DEAD_LOCK
+    /// cancellation may use the non-halting path. A later fatal fault cannot soften.
     void recordHostFault(std::string message, bool halting)
     {
         if (!m_hasHostFault)

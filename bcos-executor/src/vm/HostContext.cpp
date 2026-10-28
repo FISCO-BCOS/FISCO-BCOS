@@ -187,13 +187,9 @@ void HostContext::throwIfHostFault() const
     }
     if (m_hostFaultHalting)
     {
-        // The family that would have reached go()'s std::exception arm: unexpected /
-        // non-deterministic faults halt the node (that arm's policy), they never become
-        // a receipt. The callback could not propagate it — the VM boundary is noexcept —
-        // so the ladder's decision is reproduced from the recorded family.
-        BOOST_THROW_EXCEPTION(std::runtime_error("EVM host-side fault: " + m_hostFault));
+        BOOST_THROW_EXCEPTION(HostContextFault("EVM host-side fault: " + m_hostFault));
     }
-    // bcos::Error family: lands in go()'s first arm, which reverts the whole frame.
+    // Deterministic scheduler cancellation follows the normal revert path.
     BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, m_hostFault));
 }
 
@@ -354,18 +350,12 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     auto response = m_executive->externalCall(std::move(request));
 
-    // A host fault recorded in a child frame (review F1; the v1 mirror of the v2
-    // propagation at transaction-executor/.../vm/HostContext.h:881): the child's
-    // bcos::Error arm marks a recorded fault as INTERNAL_ERROR + RevertInstruction.
-    // EVMC_INTERNAL_ERROR is never produced by a deterministic arm (a VM-level
-    // INTERNAL_ERROR halts the node in parseEVMCResult instead of becoming a receipt),
-    // so the pair identifies the record without a wire field — and it survives the DMC
-    // hop; the coroutine/Promise normalizer preserves this pair. Recording it makes this
-    // frame's own throwIfHostFault() fail it too, up to the top frame.
+    // Recognize the fault marker returned by legacy child producers across DMC.
+    // Abort this frame through the executor error channel before a receipt is built.
     if (response->evmStatus == (int32_t)EVMC_INTERNAL_ERROR &&
         response->status == (int32_t)bcos::protocol::TransactionStatus::RevertInstruction)
     {
-        recordHostFault(response->message, /*halting=*/false);
+        recordHostFault(response->message, /*halting=*/true);
     }
 
     // Convert CallParameters to evmc_resultx

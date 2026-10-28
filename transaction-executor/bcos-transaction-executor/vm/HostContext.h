@@ -52,6 +52,7 @@
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-framework/executor/HostContextFault.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
@@ -65,6 +66,7 @@
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
 #include <cassert>
+#include <exception>
 #include <functional>
 #include <iterator>
 #include <limits>
@@ -169,19 +171,9 @@ template <class Storage, class TransientStorage>
 class HostContext
 {
 public:
-    /// A host-side fault recorded by a fail-closed EVMC callback. The exception cannot
-    /// cross the VM (evmc::VM::execute is noexcept and evmone's instruction frames do
-    /// not unwind), so EVERY faulting callback — getNonce, the data-reading callbacks
-    /// and the create-address hooks (see EVMHostInterface's fault-translation
-    /// contract) — records it, and executeCall/executeCreate rethrow it right after
-    /// the VM returns: it lands in execute()'s FIB-88/92 arm (status Unknown) — this
-    /// lane's existing policy for execution exceptions — instead of a node fault
-    /// masquerading as a legitimate EIP-2681 nonce rejection the contract's logic
-    /// converts to a revert (review F1), or aborting the process outright (F10).
-    /// First fault wins: the fail-closed answers let the frame keep running, so a
-    /// later fault must not overwrite the one that decided the frame's failure.
-    // Presence flag, not message emptiness (review F5): an empty message is a
-    // legitimate record (Error built with only a code) and must still fail the frame.
+    /// Stop callback failures at the VM boundary and rethrow afterwards. Node-local
+    /// faults escape execute() and TransactionExecutorImpl without producing a receipt.
+    /// Preserve the first diagnostic, including an empty error message.
     void recordHostFault(std::string message)
     {
         if (!m_hasHostFault)
@@ -194,7 +186,8 @@ public:
     {
         if (m_hasHostFault)
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "EVM host-side fault: " + m_hostFault));
+            BOOST_THROW_EXCEPTION(
+                executor::HostContextFault("EVM host-side fault: " + m_hostFault));
         }
     }
 
@@ -646,6 +639,7 @@ public:
         }
 
         std::optional<EVMCResult> evmResult;
+        std::exception_ptr hostFailure;
         // FIB-76~92 (bugfix_v1_error_handling): read once, gates all receipt-affecting
         // error paths below for hard-fork compat
         const bool fixErrorHandling =
@@ -759,15 +753,34 @@ public:
                         EVMC_REVERT, ref->gas, "Call address error."s, fixErrorHandling));
             }
         }
+        catch (executor::HostContextFault const&)
+        {
+            hostFailure = std::current_exception();
+        }
         catch (std::exception& e)
         {
-            HOST_CONTEXT_LOG(DEBUG) << "Execute exception: " << boost::diagnostic_information(e);
-            // FIB-88: fatal error consumes all gas
-            // FIB-92: use Unknown instead of OutOfGas for EVMC_INTERNAL_ERROR
-            evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
-                fixErrorHandling ? protocol::TransactionStatus::Unknown :
-                                   protocol::TransactionStatus::OutOfGas,
-                EVMC_INTERNAL_ERROR, fixErrorHandling ? 0 : ref->gas, "", fixErrorHandling));
+            if (hasHostFault())
+            {
+                hostFailure = std::make_exception_ptr(
+                    executor::HostContextFault("EVM host-side fault: " + m_hostFault));
+            }
+            else
+            {
+                HOST_CONTEXT_LOG(DEBUG)
+                    << "Execute exception: " << boost::diagnostic_information(e);
+                evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                    fixErrorHandling ? protocol::TransactionStatus::Unknown :
+                                       protocol::TransactionStatus::OutOfGas,
+                    EVMC_INTERNAL_ERROR, fixErrorHandling ? 0 : ref->gas, "", fixErrorHandling));
+            }
+        }
+
+        if (hostFailure)
+        {
+            co_await m_rollbackableStorage.get().rollback(savepoint);
+            co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
+            m_logs.clear();
+            std::rethrow_exception(hostFailure);
         }
 
         if (evmResult->gas_left < 0)
@@ -823,14 +836,6 @@ public:
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
-        // The child's own execute() already converted its fault into a plain
-        // EVMC_INTERNAL_ERROR result — the exception never crosses this boundary, so
-        // without this copy the parent's record stays clear and the top-level frame
-        // could finish SUCCESS and seal a receipt over a failed sub-call.
-        if (hostcontext.hasHostFault())
-        {
-            recordHostFault(hostcontext.hostFaultMessage());
-        }
         auto& logs = hostcontext.logs();
         if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {

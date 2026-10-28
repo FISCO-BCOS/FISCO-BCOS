@@ -43,23 +43,10 @@ static_assert(alignof(h256) == alignof(evmc_bytes32), "Hash types alignment mism
 template <class HostContextType, auto syncWait>
 struct EVMHostInterface
 {
-    // Fault translation contract (review F1/F10): every callback below can throw —
-    // the syncWait coroutines read storage and parse rows — but the exception cannot
-    // cross the VM (evmc::VM::execute is noexcept and evmone's instruction frames do
-    // not unwind, so a raw throw aborts the process). Every callback therefore catches,
-    // records the fault on the HostContext, and answers fail-closed. The ANSWER VALUE
-    // IS IRRELEVANT TO CONSENSUS: executeCall/executeCreate call throwIfHostFault()
-    // right after the VM returns, so the whole frame fails into execute()'s FIB-88/92
-    // arm (status Unknown) before any of the frame's effects commit — the value only
-    // has to let evmone finish the frame without further faults. getNonce's
-    // MAX_NONCE is the one value with semantics of its own (EIP-2681 reject); the
-    // rest return zero-shaped answers.
-    //
-    // One deliberate exception (disclosed in the PR body): the gas<0 arm of call()
-    // below does NOT catch — it refuses the budget with a deterministic
-    // EVMC_OUT_OF_GAS result before the VM is entered
-    // (only the externalCall dispatch is fault-translated). A negative gas budget is
-    // a deterministic caller bug, not a node fault, so the ladder decides it.
+    // Callback exceptions cannot cross EVMC's noexcept host adapter. Record the
+    // failure and use a temporary fail-closed answer; execute() subsequently throws
+    // HostContextFault through the executor error channel, before receipt creation.
+    // Deterministic VM results (including a negative gas budget) retain their status.
 
     static bool accountExists(evmc_host_context* context, const evmc_address* addr) noexcept
     {

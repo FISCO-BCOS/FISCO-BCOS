@@ -43,12 +43,13 @@ class CryptoPrecompiledFixture : public PrecompiledFixture
 public:
     CryptoPrecompiledFixture()
     {
+        clearName2SelectCache();
         codec = std::make_shared<CodecWrapper>(hashImpl);
         prepareEnv();
         cryptoAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
     }
 
-    virtual ~CryptoPrecompiledFixture() {}
+    ~CryptoPrecompiledFixture() override { clearName2SelectCache(); }
 
     void deployTest()
     {
@@ -412,3 +413,18 @@ BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
+
+BOOST_AUTO_TEST_CASE(cryptoFixtureClearsForeignSelectorCache)
+{
+    bcos::precompiled::clearName2SelectCache();
+    auto sm3 = std::make_shared<bcos::crypto::SM3>();
+    auto keccak = std::make_shared<bcos::crypto::Keccak256>();
+    auto poisoned = bcos::precompiled::getFuncSelector("sm3(bytes)", sm3);
+    auto expected = bcos::precompiled::getFuncSelectorByFunctionName("sm3(bytes)", keccak);
+    BOOST_REQUIRE_NE(poisoned, expected);
+    {
+        bcos::test::CryptoPrecompiledFixture fixture;
+        BOOST_CHECK_EQUAL(bcos::precompiled::getFuncSelector("sm3(bytes)", keccak), expected);
+    }
+    bcos::precompiled::clearName2SelectCache();
+}

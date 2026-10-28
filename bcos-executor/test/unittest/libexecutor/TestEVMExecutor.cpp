@@ -871,86 +871,41 @@ BOOST_AUTO_TEST_CASE(storageFaultDuringSubcallFailsWholeFrame)
     params2->setData(codec->encodeWithSig("createAndCallB(int256)", value));
     params2->setType(NativeExecutionMessage::MESSAGE);
 
-    std::promise<ExecutionMessage::UniquePtr> executePromise2;
+    std::promise<bcos::Error::UniquePtr> failed;
     executor->dmcExecuteTransaction(std::move(params2),
-        [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
-            executePromise2.set_value(std::move(result));
+        [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!result);
+            failed.set_value(std::move(error));
         });
-    auto result2 = executePromise2.get_future().get();
-
-    BOOST_CHECK(result2);
-    // [host-fault regression pin] the whole frame must FAIL here — never a crash, never
-    // a success whose emitted events died with the unwound request.
-    BOOST_TEST_MESSAGE("faulted hop: status=" << result2->status() << " type=" << result2->type()
-                                              << " message=" << result2->message());
-    BOOST_CHECK_NE(result2->status(), 0);
-    // Discriminator: the ladder's bcos::Error arm stamps the original storage fault's
-    // message (the storage wrapper's text), so it can only appear here if the recorded
-    // fault reached that arm. A catch-and-answer variant never fails this frame: the
-    // parent continues, status stays 0 above, and the message comes back empty.
-    BOOST_CHECK(result2->message().find("Get row from storage failed!") != std::string::npos);
+    auto error = failed.get_future().get();
     backend->disarmRowFault();
-    if (result2->type() != ExecutionMessage::MESSAGE)
-    {
-        // The frame already failed at this hop (the fix). Run the survival probe:
-        // disarm and deploy a fresh contract on the same executor.
-        auto sTx = fakeTransaction(
-            cryptoSuite, keyPair, "", bytes(input), std::to_string(999), 100009, "1", "1");
-        auto sHash = sTx->hash();
-        txpool->hash2Transaction.emplace(sHash, sTx);
-        auto sParams = std::make_unique<NativeExecutionMessage>();
-        sParams->setContextID(210);
-        sParams->setSeq(9000);
-        sParams->setDepth(0);
-        sParams->setOrigin(std::string(sender));
-        sParams->setFrom(std::string(sender));
-        h256 sAddr("aa6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd5131099ff");
-        sParams->setTo(sAddr.hex().substr(0, 40));
-        sParams->setStaticCall(false);
-        sParams->setGasAvailable(gas);
-        sParams->setData(input);
-        sParams->setType(NativeExecutionMessage::TXHASH);
-        sParams->setTransactionHash(sHash);
-        sParams->setCreate(true);
-        std::promise<ExecutionMessage::UniquePtr> sPromise;
-        executor->dmcExecuteTransaction(std::move(sParams),
-            [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& sResult) {
-                BOOST_CHECK(!error);
-                sPromise.set_value(std::move(sResult));
-            });
-        auto sResult = sPromise.get_future().get();
-        BOOST_TEST_MESSAGE(
-            "survival hop: status=" << sResult->status() << " type=" << sResult->type());
-        BOOST_CHECK_EQUAL(sResult->status(), 0);
-        return;
-    }
-    // The frame must FAIL at this hop (the fix). A MESSAGE result means the sub-call
-    // fault was swallowed and the parent continued — the precise regression this test
-    // exists to catch. The stale continuation chain that used to run here was only
-    // reachable under that regression; it has been removed so a regression fails loudly
-    // instead of re-running an old characterization.
-    BOOST_FAIL("the frame survived the storage fault: the sub-call fault was not propagated");
+    BOOST_REQUIRE(error);
+    BOOST_CHECK(boost::diagnostic_information(*error).find("Get row from storage failed!") !=
+                std::string::npos);
+    BOOST_CHECK_GT(backend->rowFaultHits.load(), 0);
 }
 
-// The same flow as externalCall but WITHOUT feature_evm_address (no SYS_CONFIG row): the
-// create_address_fn hook's legacy branch — newEVMAddress(hashHandler, blockNumber,
-// contextID, seq + 1) — is what every chain without that feature executes, and it had
-// zero coverage in either lane. Pin the exact address: deleting the hook
-// leaves evmone's nonce-derived compute_create_address in charge, which produces a
-// different value and turns this red.
-// Round-8 review F1: a host fault recorded strictly inside a CHILD frame must reach the
-// parent's record. The child's bcos::Error arm marks its response
-// (evmStatus=EVMC_INTERNAL_ERROR, status=RevertInstruction); externalRequest copies
-// that pair onto the calling frame, whose own throwIfHostFault() then fails it too — up
-// to the top frame, so no SUCCESS receipt can seal over a node-local fault. The
-// end-to-end sibling above arms its fault on the PARENT's own nonce row and only
-// reaches the top frame; a child-frame end-to-end arm cannot be built in this fixture
-// because the child contract is created inside the same transaction, so its rows are
-// served from the in-memory StateStorage and never reach the injectable backend. This
-// pins the copy seam itself, with the deterministic-failure negative control.
 namespace
 {
+// Expose the production conversion functions without changing executor APIs.
+class MessageConversions : public TransactionExecutor
+{
+public:
+    static ExecutionMessage::UniquePtr encode(
+        TransactionExecutor& target, CallParameters::UniquePtr input)
+    {
+        auto method = static_cast<ExecutionMessage::UniquePtr (TransactionExecutor::*)(
+            CallParameters::UniquePtr)>(&MessageConversions::toExecutionResult);
+        return (target.*method)(std::move(input));
+    }
+    static CallParameters::UniquePtr decode(TransactionExecutor& target, ExecutionMessage& input)
+    {
+        auto method = static_cast<CallParameters::UniquePtr (TransactionExecutor::*)(
+            ExecutionMessage&, bool)>(&MessageConversions::createCallParameters);
+        return (target.*method)(input, false);
+    }
+};
+
 class ChildResponseExecutive : public TransactionExecutive
 {
 public:
@@ -1017,6 +972,7 @@ BOOST_AUTO_TEST_CASE(childHostFaultIsCopiedToTheParentRecord)
         BOOST_CHECK_EQUAL(result.status_code, EVMC_INTERNAL_ERROR);
         BOOST_CHECK(host->hasHostFault());
         BOOST_CHECK_EQUAL(host->hostFault(), "injected child-frame fault");
+        BOOST_CHECK_THROW(host->throwIfHostFault(), HostContextFault);
     }
 
     // Negative control: the same REVERT/revert-status shape with evmStatus 0 is a
@@ -1612,7 +1568,7 @@ BOOST_AUTO_TEST_CASE(storageFaultInSloadCallbackIsRecordedNotFatal)
     BOOST_CHECK(std::memcmp(value.bytes, zero.bytes, sizeof(zero.bytes)) == 0);
     // The fault was recorded with its family (bcos::Error → non-halting), so
     // throwIfHostFault() rethrows it into go()'s first arm — never a silent pass.
-    BOOST_CHECK_THROW(host.throwIfHostFault(), bcos::Error);
+    BOOST_CHECK_THROW(host.throwIfHostFault(), HostContextFault);
     // The discriminator: the record carries the storage wrapper's fault text (the
     // message only reaches the ladder if the wrapper really recorded it).
     backend->disarmRowFault();
@@ -3626,7 +3582,7 @@ BOOST_AUTO_TEST_CASE(childSloadFaultFailsParentInSerialAndDmc)
             BOOST_TEST_CONTEXT("lane=" << lane << " scenario=" << scenario)
             {
                 seed(childAddress, scenario == 1 ? "60006000fd" : "60005400");
-                if (scenario == 2)
+                if (scenario == 2 && lane == 0)
                 {
                     backend->armRowFault("/apps/" + childAddress, std::string(32, '\0'));
                 }
@@ -3662,6 +3618,13 @@ BOOST_AUTO_TEST_CASE(childSloadFaultFailsParentInSerialAndDmc)
                 input->receiveAddress = parentAddress;
                 input->codeAddress = parentAddress;
                 input->gas = 1'000'000;
+                if (scenario == 2 && lane == 0)
+                {
+                    BOOST_CHECK_THROW(executive->start(std::move(input)), HostContextFault);
+                    BOOST_CHECK_GT(backend->rowFaultHits.load(), 0);
+                    backend->disarmRowFault();
+                    continue;
+                }
                 auto result = executive->start(std::move(input));
                 BOOST_REQUIRE(result);
                 if (lane != 0)
@@ -3673,21 +3636,33 @@ BOOST_AUTO_TEST_CASE(childSloadFaultFailsParentInSerialAndDmc)
                     configure(child);
                     auto childResult = child->start(std::move(result));
                     BOOST_REQUIRE(childResult);
-                    childResult->schedulerSeq = 1;
+                    if (scenario == 2)
+                    {
+                        // A legacy executor can still send the old fault marker.
+                        childResult->type = CallParameters::REVERT;
+                        childResult->status = (int)TransactionStatus::RevertInstruction;
+                        childResult->evmStatus = EVMC_INTERNAL_ERROR;
+                        childResult->message = "legacy child host fault";
+                    }
+                    auto wire = MessageConversions::encode(*executor, std::move(childResult));
+                    BOOST_CHECK_EQUAL(wire->evmStatus(),
+                        scenario == 2 ? EVMC_INTERNAL_ERROR :
+                                        (scenario == 1 ? EVMC_REVERT : EVMC_SUCCESS));
+                    // The scheduler owns the resume stamp, not the child executor.
+                    wire->setSchedulerSeq(1);
+                    childResult = MessageConversions::decode(*executor, *wire);
+                    BOOST_CHECK_EQUAL(childResult->schedulerSeq, 1);
                     auto coroutine =
                         std::static_pointer_cast<CoroutineTransactionExecutive>(executive);
                     coroutine->setExchangeMessage(std::move(childResult));
+                    if (scenario == 2)
+                    {
+                        BOOST_CHECK_THROW(coroutine->resume(), HostContextFault);
+                        continue;
+                    }
                     result = coroutine->resume();
                     BOOST_REQUIRE(result);
                 }
-                if (scenario == 2)
-                {
-                    BOOST_REQUIRE_GT(backend->rowFaultHits.load(), 0);
-                    BOOST_CHECK(result->type == CallParameters::REVERT);
-                    BOOST_CHECK_EQUAL(result->status, (int)TransactionStatus::RevertInstruction);
-                    BOOST_CHECK_EQUAL(result->evmStatus, EVMC_INTERNAL_ERROR);
-                }
-                else
                 {
                     BOOST_CHECK(result->type == CallParameters::FINISHED);
                     BOOST_CHECK_EQUAL(result->status, 0);

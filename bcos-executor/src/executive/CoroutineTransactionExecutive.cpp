@@ -1,5 +1,6 @@
 #include "CoroutineTransactionExecutive.h"
 #include "bcos-framework/executor/ExecuteError.h"
+#include <bcos-framework/executor/HostContextFault.h>
 
 using namespace bcos::executor;
 
@@ -137,6 +138,10 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
                 return std::move(getExchangeMessageRef());
             }
         }
+    }
+    catch (HostContextFault const&)
+    {
+        throw;
     }
     catch (std::exception& e)
     {

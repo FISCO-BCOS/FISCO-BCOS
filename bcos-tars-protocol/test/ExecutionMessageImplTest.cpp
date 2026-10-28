@@ -63,6 +63,32 @@ BOOST_AUTO_TEST_CASE(scalarFieldsRoundTrip)
     BOOST_CHECK_EQUAL(msg->newEVMContractAddress(), "new-contract");
 }
 
+BOOST_AUTO_TEST_CASE(schedulerHandbackWireRoundTrip)
+{
+    for (int64_t stamp : {-1, 0, 71})
+    {
+        bcostars::ExecutionMessage wire;
+        BOOST_CHECK_EQUAL(wire.schedulerSeq, -1);
+        ExecutionMessageImpl original([&wire] { return &wire; });
+        original.setType(bcos::protocol::ExecutionMessage::REVERT);
+        original.setStatus(16);
+        original.setEvmStatus(-1);
+        original.setSchedulerSeq(stamp);
+        tars::TarsOutputStream<tars::BufferWriter> output;
+        wire.writeTo(output);
+        tars::TarsInputStream<tars::BufferReader> input;
+        input.setBuffer(output.getBuffer(), output.getLength());
+        bcostars::ExecutionMessage restored;
+        restored.schedulerSeq = 999;
+        restored.readFrom(input);
+        ExecutionMessageImpl decoded([&restored] { return &restored; });
+        BOOST_CHECK_EQUAL(decoded.schedulerSeq(), stamp);
+        BOOST_CHECK_EQUAL(decoded.status(), 16);
+        BOOST_CHECK_EQUAL(decoded.evmStatus(), -1);
+        BOOST_CHECK(decoded.type() == bcos::protocol::ExecutionMessage::REVERT);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(boolFlagsRoundTrip)
 {
     ExecutionMessageFactoryImpl factory;

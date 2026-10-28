@@ -736,7 +736,11 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
         }
         precompiledCallParams->takeDataToCallParameter(callParameters);
     }
-    // NotEnoughCashError
+    catch (HostContextFault const&)
+    {
+        revert();
+        throw;
+    }
     catch (protocol::NotEnoughCashError const& e)
     {
         EXECUTIVE_LOG(DEBUG) << "Revert transaction: "
@@ -1286,6 +1290,11 @@ CallParameters::UniquePtr TransactionExecutive::go(
             return callResults;
         }
     }
+    catch (HostContextFault const&)
+    {
+        revert();
+        throw;
+    }
     catch (bcos::Error& e)
     {
         auto callResults = hostContext.takeCallParameters();
@@ -1296,14 +1305,10 @@ CallParameters::UniquePtr TransactionExecutive::go(
         callResults->type = CallParameters::REVERT;
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
-        // A recorded host fault must reach the parent frame as a failing status (review
-        // F1): the caller's externalRequest copies the record from the pair
-        // (EVMC_INTERNAL_ERROR, RevertInstruction). No deterministic arm produces that
-        // pair — a VM-level INTERNAL_ERROR halts the node in parseEVMCResult instead of
-        // becoming a receipt — so the marker needs no replay flag.
         if (hostContext.hasHostFault())
         {
-            callResults->evmStatus = (int32_t)EVMC_INTERNAL_ERROR;
+            // The only non-fatal recorded fault is deterministic DEAD_LOCK.
+            callResults->evmStatus = (int32_t)EVMC_REVERT;
         }
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
