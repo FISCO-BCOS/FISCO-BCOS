@@ -54,7 +54,6 @@ struct DmcRealExecutorFixture
 {
     DmcRealExecutorFixture()
     {
-        boost::log::core::get()->set_logging_enabled(false);
         ioServicePool = std::make_shared<IOServicePool>(1, "dmc-e2e");
         hashImpl = std::make_shared<Keccak256>();
         auto signature = std::make_shared<Secp256k1Crypto>();
