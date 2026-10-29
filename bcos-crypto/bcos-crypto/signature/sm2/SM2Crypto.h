@@ -22,7 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyPairFactory.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPairFactory.h>
-#include <wedpr-crypto/WedprCrypto.h>
+#include <bcos-crypto/utilities/Buffers.h>
 
 namespace bcos
 {

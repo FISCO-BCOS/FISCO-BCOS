@@ -3,7 +3,7 @@ find_package(Boost REQUIRED unit_test_framework)
 find_package(TBB REQUIRED)
 
 add_executable(test-task TestTask.cpp TestFireAwaitable.cpp TestChannel.cpp TestDeadline.cpp TestImmediate.cpp
-	TestOneShot.cpp main.cpp)
+	TestOneShot.cpp TestWhenAll.cpp main.cpp)
 # main.cpp defines BOOST_TEST_MODULE; when merged into a unity batch, boost.test
 # headers are already included by earlier files and the entry macro is disabled,
 # leaving the linker without init_unit_test_suite.

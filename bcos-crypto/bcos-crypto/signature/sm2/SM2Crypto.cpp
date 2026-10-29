@@ -20,6 +20,7 @@
  */
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
+#include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
 #include <bcos-utilities/LogStream.h>
@@ -29,8 +30,8 @@ using namespace bcos::crypto;
 
 SM2Crypto::SM2Crypto()
 {
-    m_signer = wedpr_sm2_sign_fast;
-    m_verifier = wedpr_sm2_verify;
+    m_signer = fast_sm2_sign;
+    m_verifier = fast_sm2_verify;
     m_keyPairFactory = std::make_shared<SM2KeyPairFactory>();
 }
 
@@ -74,6 +75,12 @@ bool SM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _
     CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
     CInputBuffer messageHash{(const char*)_hash.data(), HashType::SIZE};
 
+    // reject short signatures while the length is still known: the fixed-length view below
+    // would otherwise read past the caller's buffer before any check in the verifier fires
+    if (_signatureData.size() < SM2_SIGNATURE_LEN)
+    {
+        return false;
+    }
     auto signatureWithoutPub = bytesConstRef(_signatureData.data(), SM2_SIGNATURE_LEN);
     CInputBuffer signature{(const char*)signatureWithoutPub.data(), signatureWithoutPub.size()};
     auto verifyResult = m_verifier(&publicKey, &messageHash, &signature);
@@ -106,7 +113,7 @@ std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConst
         h256 r;
         h256 s;
     } in;
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(_input)));
+    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(in)));
     // verify the signature
     auto signatureData = std::make_shared<SignatureDataWithPub>(in.r, in.s, in.pub.ref());
     try

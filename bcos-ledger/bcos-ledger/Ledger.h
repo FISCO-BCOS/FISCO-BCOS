@@ -167,15 +167,28 @@ private:
     Error::Ptr checkEntryValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Entry>& entry, const std::string_view& key);
 
-    void asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
-        std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback);
+    // Coroutine bodies behind the asyncPrewriteBlock / asyncGetBatchTxsByHashList callback
+    // shells; the shells bridge them with task::wait and fold exceptions back into the
+    // historical callback error contract.
+    task::Task<std::string> prewriteBlockImpl(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block,
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces);
+
+    // Single asyncGetRows batch bridged through task::OneShot — NOT storage2::readSome, which
+    // degenerates to a serial per-key loop on the legacy storage interface.
+    task::Task<std::vector<protocol::Transaction::Ptr>> batchGetTransactions(
+        std::shared_ptr<std::vector<std::string>> hashes);
+
+    task::Task<MerkleProofPtr> getTxProof(const crypto::HashType& txHash);
+
+    task::Task<std::pair<bcos::protocol::TransactionsPtr,
+        std::shared_ptr<std::map<std::string, MerkleProofPtr>>>>
+    getBatchTxsWithProofs(crypto::HashListPtr txHashList, bool withProof);
 
     void asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> hashes,
         std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)>
             callback);
-
-    void getTxProof(const crypto::HashType& _txHash,
-        std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
 
     void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);

@@ -419,7 +419,9 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
         txProps.min_gas_cost, gasLimit, result.gas_left, delegation_refund, result.gas_refund,
         tx_max_cost, effective_gas_price, priority_gas_price, sender_acc);
 
-    auto receipt = policy.buildReceipt(host, result, gas_used, rf, blockNumber);
+    // Dry runs (eth_call / eth_estimateGas) are the only callers that need the return data in
+    // the receipt; they discard it, while a mined transaction's receipt would grow for nothing.
+    auto receipt = policy.buildReceipt(host, result, gas_used, rf, blockNumber, callParams.free);
 
     co_await state.applyToStorage(rev);
     co_return receipt;

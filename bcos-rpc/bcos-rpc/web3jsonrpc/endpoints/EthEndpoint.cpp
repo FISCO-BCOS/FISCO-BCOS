@@ -42,6 +42,7 @@
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <bcos-rlp-protocol/EthPoSHeaderValidation.h>
 #include <bcos-rlp-protocol/Web3BlobTxWrapper.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/Common.h>
@@ -75,6 +76,21 @@ using namespace bcos::rpc;
 
 namespace
 {
+/// The message the shared block-tag resolver uses for "this node does not have that block".
+/// Endpoints whose geth contract is a JSON null (eth_getBlockReceipts,
+/// eth_getBlockTransactionCountBy*) match on it; everything else lets it propagate as -32602.
+inline constexpr std::string_view c_blockNotFoundMessage = "Block not found";
+
+/// Whether @p e is the shared block resolver's "well-formed identifier, no such block" refusal.
+/// One predicate rather than the same message comparison copied into every endpoint that turns
+/// that refusal into a JSON null, so a change of wording (or, later, a dedicated exception type)
+/// is a one-line change instead of an audit. Everything else the resolver throws -- bad hex,
+/// unsupported tag -- keeps propagating as the error it is.
+bool isBlockNotFound(JsonRpcException const& e) noexcept
+{
+    return e.msg() == c_blockNotFoundMessage;
+}
+
 /// op-geth's default `--rpc.gascap`: the gas budget an `eth_call` uses when the request omits
 /// `gas`. geth / op-geth fall back to this cap (or MaxUint64/2 when the cap is disabled) and
 /// never execute a call with a zero budget — a raw `gas=0` is rejected as "intrinsic gas too
@@ -987,21 +1003,38 @@ task::Task<void> EthEndpoint::getBlockTxCountByHash(
     const Json::Value& request, Json::Value& response)
 {
     // params: blockHash(DATA)
-    // result: transactionCount(QTY)
+    // result: transactionCount(QTY); null for a block this node does not have (geth), matching
+    // the number/tag sibling.
     auto const hashStr = toView(request[0U]);
-    auto hash = crypto::HashType(hashStr, crypto::HashType::FromHex);
+    // This method's parameter is a hash only: unlike getBlockReceipts, a bare quantity here would
+    // be a different request, not the same one spelled differently. Keep that contract by
+    // rejecting anything that is not a 32-byte hex string, then let the shared resolver do the
+    // hash -> number mapping so there is one implementation of the not-found classification.
+    if (hashStr.size() != 66 || !hashStr.starts_with("0x"))
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid block hash"));
+    }
     auto const ledger = m_nodeService->ledger();
-    Json::Value result;
+    Json::Value result = Json::nullValue;
+    protocol::BlockNumber number = 0;
+    protocol::BlockNumber head = 0;
     try
     {
-        auto number = co_await ledger::getBlockNumber(*ledger, hash);
+        std::tie(number, head) = co_await getBlockNumberAndHeadByTag(hashStr);
+    }
+    catch (JsonRpcException const& e)
+    {
+        if (!isBlockNotFound(e))
+        {
+            throw;
+        }
+        number = -1;
+    }
+    if (number >= 0 && number <= head)
+    {
         auto block =
             co_await ledger::getBlockData(*ledger, number, bcos::ledger::TRANSACTIONS_HASH);
         result = toQuantity(block->transactionsHashSize());
-    }
-    catch (...)
-    {
-        result = "0x0";
     }
     buildJsonContent(result, response);
 }
@@ -1009,19 +1042,37 @@ task::Task<void> EthEndpoint::getBlockTxCountByNumber(
     const Json::Value& request, Json::Value& response)
 {
     // params: blockNumber(QTY|TAG)
-    // result: transactionCount(QTY)
-    auto const number = fromQuantity(std::string(toView(request[0U])));
-    auto const ledger = m_nodeService->ledger();
-    Json::Value result;
+    // result: transactionCount(QTY); null for a block this node does not have (geth).
+    // Resolve the tag through the shared resolver (like eth_getBlockByNumber) so "latest" /
+    // "safe" / "finalized" work and an invalid tag surfaces as JSON null rather than a -32603
+    // internal error from a bare fromQuantity(std::invalid_argument).
+    auto const blockTag = toView(request[0U]);
+    Json::Value result = Json::nullValue;
     try
     {
-        auto const block =
-            co_await ledger::getBlockData(*ledger, number, bcos::ledger::TRANSACTIONS_HASH);
-        result = toQuantity(block->transactionsHashSize());
+        auto [number, head] = co_await getBlockNumberAndHeadByTag(blockTag);
+        if (number >= 0 && number <= head)
+        {
+            auto const ledger = m_nodeService->ledger();
+            auto const block =
+                co_await ledger::getBlockData(*ledger, number, bcos::ledger::TRANSACTIONS_HASH);
+            result = toQuantity(block->transactionsHashSize());
+        }
     }
-    catch (...)
+    catch (JsonRpcException const& e)
     {
-        result = "0x0";
+        // "66 characters but not hexadecimal" is client input, not a missing block: the siblings
+        // (eth_getBalance, eth_getTransactionCount, ...) answer -32602 for it and geth answers
+        // invalid argument. Only "this node does not have that block" is a null result here.
+        if (!isBlockNotFound(e))
+        {
+            throw;
+        }
+    }
+    catch (std::exception const& e)
+    {
+        WEB3_LOG(DEBUG) << "getBlockTxCountByNumber failed: " << boost::diagnostic_information(e);
+        result = Json::nullValue;
     }
     buildJsonContent(result, response);
     co_return;
@@ -1204,7 +1255,12 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     // KZG-checked here (versioned hashes match the commitments, proofs verify) and
     // registered with the pool atomically at admission below.
     std::optional<engine::BlobTxSidecar> blobSidecar;
-    if (m_nodeService->ethereumELMode() &&
+    // The sidecar decode keys on the SAME predicate as the admission gate above
+    // (admitsBlobTransactions == executor_version 2), not on ethereumELMode: a
+    // executor_version==2 chain sealed by the built-in single-node consensus admits blob
+    // transactions without being an EL self-sync node, so the wrapper must be decoded here
+    // for it too. The EL-mode-only concerns (devp2p sidecar gossip) live elsewhere.
+    if (admitsBlobTransactions(m_nodeService->executorVersion()) &&
         engine::dispatchRawTransaction(bytesRef) == engine::RawTransactionKind::Blob)
     {
         if (!isBlobTxNetworkWrapper(bcos::bytesConstRef(rawTxBytes.data(), rawTxBytes.size())))
@@ -1969,6 +2025,50 @@ EthEndpoint::getBlockNumberAndHeadByTag(std::string_view blockTag)
 {
     auto ledger = m_nodeService->ledger();
     auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
+    // geth's rpc.BlockNumberOrHash semantics: a 66-char hex string (0x + 32 bytes) is a block
+    // HASH, not a quantity. op-deployer's fork-mode state reader (op-chain-ops/script/forking)
+    // passes the block hash verbatim to eth_getTransactionCount / eth_getBalance / eth_getCode /
+    // eth_getStorageAt, so a bare hash must resolve to that block's number — without this the
+    // shared getBlockNumberByTag below throws "Invalid Block Number" and the deploy hangs.
+    if (blockTag.size() == 66 && blockTag.starts_with("0x"))
+    {
+        // Validate before constructing the hash: HashType(FromHex) throws BadHexCharacter on a
+        // 66-character string that is not valid hex, and that would surface as -32603 (an
+        // internal error) for what is plainly bad client input. geth answers invalid argument
+        // (-32602) for the same input.
+        if (!bcos::isHexString(std::string(blockTag)))
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "Invalid block hash: not hexadecimal"));
+        }
+        // One place decides what an unknown-but-well-formed hash means, so the endpoints that
+        // accept a bare hash cannot answer three different things for the same input.
+        //
+        // An unknown hash throws rather than resolving to a sentinel: the state-read endpoints
+        // (eth_getBalance / eth_getStorageAt / eth_getTransactionCount / eth_getCode) use the
+        // returned number directly, so a sentinel would be read as a real height and serve the
+        // request from the wrong state. Endpoints whose contract is JSON null instead
+        // (eth_getBlockReceipts, eth_getBlockTransactionCountBy*) catch this one message.
+        protocol::BlockNumber number = 0;
+        try
+        {
+            number = co_await ledger::getBlockNumber(
+                *ledger, crypto::HashType(std::string(blockTag), crypto::HashType::FromHex));
+        }
+        catch (bcos::Error const& e)
+        {
+            // GetStorageError without a chained cause is "no such hash"; a storage fault
+            // carries one and must keep propagating as an internal error.
+            if (e.errorCode() != bcos::ledger::LedgerError::GetStorageError ||
+                boost::get_error_info<bcos::Error::STDError>(e) != nullptr)
+            {
+                throw;
+            }
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, std::string(c_blockNotFoundMessage)));
+        }
+        co_return std::make_tuple(number, latest);
+    }
     // On the engine lane (op-node drives forkchoice) the tracker values are preferred for
     // "safe"/"finalized"; an unset value must fail closed (not-found) rather than fall back to
     // the static depth, which with the default 0 would report the unsafe tip as immutable. The
@@ -2025,11 +2125,83 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     co_return;
 }
 
+task::Task<void> EthEndpoint::blobBaseFee(const Json::Value&, Json::Value& response)
+{
+    // params: none
+    // result: blobBaseFee(QTY); null pre-Cancun (geth eth_blobBaseFee returns null there).
+    auto const ledger = m_nodeService->ledger();
+    if (!ledger)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            JsonRpcError::InternalError, "Ledger not available for eth_blobBaseFee"));
+    }
+    // Lane gate, same as the rest of the Ethereum/OP-lane surface: on the legacy FISCO lane this
+    // must answer MethodNotFound, not a JSON null that a client would read as "no blob base fee
+    // right now". The pre-Cancun null below is a different thing: an Ethereum-lane chain that has
+    // not reached Cancun yet.
+    auto const executorVersion = co_await requireEthereumLane(*ledger, "eth_blobBaseFee");
+
+    auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
+    Json::Value result = Json::nullValue;
+
+    bcos::protocol::Block::Ptr head;
+    if (auto block =
+            co_await ledger::getBlockData(*ledger, ledgerConfig->blockNumber(), ledger::HEADER))
+    {
+        head = std::move(block);
+    }
+
+    // The OP lane has no blob schedule and no EIP-4844 pricing to resolve: op-geth reports
+    // minBlobGasPrice as 1 when the header carries excessBlobGas (Ecotone+) and 0 otherwise,
+    // which is also what eth_feeHistory's blob series answers there. Resolving the Ethereum
+    // schedule on this lane would either answer null (the schedule is not wired) or, if the
+    // wiring were widened, price a lane that does not have it.
+    if (isOpStackLane(executorVersion))
+    {
+        if (head != nullptr && head->blockHeader() != nullptr)
+        {
+            result = head->blockHeader()->excessBlobGas() ? Json::Value("0x1") : Json::Value("0x0");
+        }
+        buildJsonContent(result, response);
+        co_return;
+    }
+
+    // Resolve the EIP-7840 blob schedule in effect at the head block through the same helper
+    // eth_feeHistory's blob series uses, so one artifact never has two different blob base fees.
+    // For the sources it considers, and why the node's [fork_timestamps] ladder is the one an
+    // L1 EL node actually has, see FeeHistory.h.
+    uint64_t fraction = 0;
+    if (head != nullptr && head->blockHeader() != nullptr)
+    {
+        // blockHeader().timestamp() is milliseconds; the fork ladder is in seconds.
+        auto const timestampSeconds =
+            static_cast<uint64_t>(head->blockHeader()->timestamp() / 1000);
+        fraction = blobBaseFeeUpdateFraction(ledgerConfig->blobSchedule(),
+            m_nodeService->blobForkTimes(), ledgerConfig->evmcRevision(), timestampSeconds);
+    }
+
+    if (fraction != 0 && head != nullptr && head->blockHeader() != nullptr)
+    {
+        // geth reads CurrentHeader().ExcessBlobGas; mirror that (the head's header, not the
+        // next block's recomputed excess). fakeExponential(MinBlobGasPrice=1, excess, fraction)
+        // is exactly geth's eip4844.CalcBlobFee.
+        if (auto const excess = head->blockHeader()->excessBlobGas(); excess)
+        {
+            result = toQuantity(protocol::fakeExponential(u256{1}, *excess, u256{fraction}));
+        }
+    }
+    buildJsonContent(result, response);
+    co_return;
+}
+
 task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
 {
     // params: blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles(FLOAT[], optional)
     auto& ledger = *m_nodeService->ledger();
-    co_await requireOpStackLane(ledger, "eth_feeHistory");
+    // Ethereum/OP lane only: the legacy FISCO lane has no EIP-1559 fee semantics to history.
+    // The gate hands back the version it read, so the lane decision and the next-base-fee
+    // projection below cannot be made from two different reads.
+    auto const executorVersion = co_await requireEthereumLane(ledger, "eth_feeHistory");
     auto const& countJson = request[0U];
     auto const blockCount = countJson.isUInt64() ?
                                 std::optional(countJson.asUInt64()) :
@@ -2056,7 +2228,13 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
         percentiles.push_back(entry.asDouble());
     }
     auto const [newest, head] = co_await getBlockNumberAndHeadByTag(toView(request[1U]));
-    Json::Value result = co_await buildOpFeeHistory(ledger, newest, head, *blockCount, percentiles);
+    // The same two blob-schedule sources eth_blobBaseFee resolves from (its
+    // ledgerConfig->blobSchedule() / evmcRevision()), so the two endpoints cannot disagree about
+    // the blob base fee of the same block.
+    auto const ledgerConfig = co_await ledger::getLedgerConfig(ledger);
+    Json::Value result = co_await buildOpFeeHistory(ledger, newest, head, *blockCount, percentiles,
+        isOpStackLane(executorVersion), m_nodeService->blobForkTimes(),
+        ledgerConfig->blobSchedule(), ledgerConfig->evmcRevision());
     buildJsonContent(result, response);
 }
 
@@ -2065,33 +2243,25 @@ task::Task<void> EthEndpoint::getBlockReceipts(const Json::Value& request, Json:
     // params: block(QTY|TAG|DATA 32B hash); result: [RECEIPT] in block order, each exactly what
     // eth_getTransactionReceipt answers for that tx; null for an unknown block.
     auto const ledger = m_nodeService->ledger();
-    co_await requireOpStackLane(*ledger, "eth_getBlockReceipts");
+    co_await requireEthereumLane(*ledger, "eth_getBlockReceipts");
     auto const blockId = toView(request[0U]);
+    // A bare 32-byte hash is resolved by the shared tag resolver too (which is what makes the
+    // hash -> number mapping one implementation rather than three). This endpoint answers null
+    // for a block the node does not have, which is the one place the resolver's not-found
+    // exception is turned into a result instead of an error.
     protocol::BlockNumber number = 0;
     protocol::BlockNumber head = 0;
-    if (blockId.size() == 66)
-    {
-        try
-        {
-            number = co_await ledger::getBlockNumber(
-                *ledger, crypto::HashType(blockId, crypto::HashType::FromHex));
-            head = co_await ledger::getCurrentBlockNumber(*ledger);
-        }
-        catch (bcos::Error const& e)
-        {
-            // Unknown hash: GetStorageError without a chained cause (as in eth_getProof); a
-            // storage fault carries one and propagates.
-            if (e.errorCode() != bcos::ledger::LedgerError::GetStorageError ||
-                boost::get_error_info<bcos::Error::STDError>(e) != nullptr)
-            {
-                throw;
-            }
-            number = -1;
-        }
-    }
-    else
+    try
     {
         std::tie(number, head) = co_await getBlockNumberAndHeadByTag(blockId);
+    }
+    catch (JsonRpcException const& e)
+    {
+        if (!isBlockNotFound(e))
+        {
+            throw;
+        }
+        number = -1;
     }
     // geth: null for a block this node does not have; any other failure is an error.
     Json::Value result = Json::nullValue;
@@ -2200,44 +2370,9 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     auto const blockTagStr = resolveBlockTagString(request[2U]);
     std::string_view const blockTag = blockTagStr;
     // op-node passes the 32-byte block hash (DATA) for eth_getProof, unlike the number/tag the
-    // other eth_* endpoints take. Decode the hash FIRST (a malformed hex string is a client
-    // error) and let getBlockNumber distinguish "not found" from a storage fault.
-    protocol::BlockNumber blockNumber = 0;
-    protocol::BlockNumber head = 0;
-    if (isBlockHashString(blockTag))
-    {
-        bcos::crypto::HashType hash;
-        try
-        {
-            hash = bcos::crypto::HashType(blockTag, bcos::crypto::HashType::FromHex);
-        }
-        catch (std::exception const&)
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid block hash"));
-        }
-        try
-        {
-            blockNumber = co_await ledger::getBlockNumber(*m_nodeService->ledger(), hash);
-            head = co_await ledger::getCurrentBlockNumber(*m_nodeService->ledger());
-        }
-        catch (bcos::Error const& e)
-        {
-            // asyncGetBlockNumberByHash answers GetStorageError for an unknown hash (no chained
-            // cause) and for a storage read fault (with a chained std::exception). Only the
-            // former is a client's "Block not found"; the latter must propagate as the internal
-            // error the number/tag path produces for a storage failure.
-            if (e.errorCode() == bcos::ledger::LedgerError::GetStorageError &&
-                boost::get_error_info<bcos::Error::STDError>(e) == nullptr)
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
-            }
-            throw;
-        }
-    }
-    else
-    {
-        std::tie(blockNumber, head) = co_await getBlockNumberAndHeadByTag(blockTag);
-    }
+    // other eth_* endpoints take. The shared resolver decodes it and throws InvalidParams for an
+    // unknown one, which is the shape kona-host expects.
+    auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getProof" << LOG_KV("address", address.hexPrefixed())

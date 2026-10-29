@@ -21,7 +21,7 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-crypto/signature/key/KeyPair.h>
-#include <wedpr-crypto/WedprCrypto.h>
+#include <bcos-crypto/utilities/Buffers.h>
 
 namespace bcos
 {

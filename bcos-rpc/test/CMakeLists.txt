@@ -29,11 +29,10 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 # transaction-scheduler: EthGetProofIntegrationTest.cpp drives the FullChainFixture
 # end-to-end harness (transaction-scheduler/tests/FullChainFixture.h); it brings
 # ledger/storage (RocksDB) transitively. Deliberately NOT linking `executor` here even
-# though the BaselineScheduler instantiation references bcos::unhexAddress: executor
-# PUBLIC-links wedprcrypto's Rust static libraries, whose bundled runtime breaks libc++
-# exception catching binary-wide (testCallRequest/decode_invalid_gas_string starts
-# reporting "unknown type" for a plain std::invalid_argument). The test file carries a
-# linkage-only definition of unhexAddress instead.
+# though the BaselineScheduler instantiation references bcos::unhexAddress: historically
+# executor PUBLIC-linked wedprcrypto's Rust static libraries, whose bundled runtime broke
+# libc++ exception catching binary-wide; wedprcrypto is gone now, but the local
+# linkage-only definition of unhexAddress is kept to keep this binary's closure small.
 target_link_libraries(${TEST_BINARY_NAME} txpool mempool ledger rpc tool transaction-scheduler storage Boost::unit_test_framework)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # keep the attach-channel tests standalone (FakeTxPool.h is namespace-fragile in a unity merge)
