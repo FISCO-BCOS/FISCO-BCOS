@@ -127,10 +127,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
     {
         enableLegacyNtlsChain(ctx);
     }
-    if (_server &&
-        SSL_CTX_set_cipher_list(ctx,
-            "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-"
-            "SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECC-SM2-SM4-CBC-SM3:ECDHE-SM2-SM4-CBC-SM3") <= 0)
+    if (_server && SSL_CTX_set_cipher_list(ctx, "ECC-SM2-SM4-CBC-SM3:ECDHE-SM2-SM4-CBC-SM3") <= 0)
     {
         SSL_CTX_free(ctx);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_set_cipher_list failed"));
@@ -178,14 +175,6 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
     {
         ERR_print_errors_fp(stderr);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_PrivateKey_file failed"));
-    }
-
-    /* Check if the server encrypt certificate and private-key matches */
-    if (!SSL_CTX_check_private_key(sslContext->native_handle()))
-    {
-        fprintf(stderr, "Private key does not match the certificate public key\n");
-        ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed"));
     }
 
     /* Load the RSA CA certificate into the SSL_CTX structure
@@ -246,10 +235,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
     {
         enableLegacyNtlsChain(ctx);
     }
-    if (_server &&
-        SSL_CTX_set_cipher_list(ctx,
-            "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-"
-            "SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECC-SM2-SM4-CBC-SM3:ECDHE-SM2-SM4-CBC-SM3") <= 0)
+    if (_server && SSL_CTX_set_cipher_list(ctx, "ECC-SM2-SM4-CBC-SM3:ECDHE-SM2-SM4-CBC-SM3") <= 0)
     {
         SSL_CTX_free(ctx);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_set_cipher_list failed"));
@@ -296,13 +282,6 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
     {
         ERR_print_errors_fp(stderr);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_PrivateKey failed"));
-    }
-
-    /* Check if the server encrypt certificate and private-key matches */
-    if (!SSL_CTX_check_private_key(sslContext->native_handle()))
-    {
-        ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed"));
     }
 
     sslContext->add_certificate_authority(boost::asio::const_buffer(

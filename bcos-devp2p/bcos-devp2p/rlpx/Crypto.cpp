@@ -23,14 +23,15 @@
 #include <bcos-crypto/encrypt/AesCtrCipher.h>
 #include <bcos-crypto/encrypt/HmacSha256.h>
 #include <bcos-crypto/hash/Sha256.h>
-#include <bcos-crypto/hasher/Keccak256.h>
 #include <bcos-crypto/random/CryptoRandom.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Ecdh.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <openssl/crypto.h>
+#include <openssl/evp.h>
 #include <array>
 #include <cstring>
+#include <memory>
 #include <stdexcept>
 
 namespace bcos::devp2p::rlpx
@@ -39,7 +40,17 @@ using bcos::crypto::kAesBlockSize;
 
 struct Sha3Hasher::Impl
 {
-    bcos::crypto::hasher::Keccak256State state;
+    Impl() : state(EVP_MD_CTX_new(), &EVP_MD_CTX_free)
+    {
+        static const std::unique_ptr<EVP_MD, decltype(&EVP_MD_free)> md(
+            EVP_MD_fetch(nullptr, "KECCAK-256", nullptr), &EVP_MD_free);
+        if (!state || !md || EVP_DigestInit(state.get(), md.get()) != 1)
+        {
+            throw std::runtime_error("RLPx Keccak-256 initialization failed");
+        }
+    }
+
+    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> state;
 };
 
 Sha3Hasher::Sha3Hasher() : m_impl(new Impl()) {}
@@ -50,15 +61,21 @@ Sha3Hasher::~Sha3Hasher()
 
 void Sha3Hasher::update(bytesConstRef _data)
 {
-    m_impl->state.update(
-        std::span<const std::byte>(reinterpret_cast<const std::byte*>(_data.data()), _data.size()));
+    if (EVP_DigestUpdate(m_impl->state.get(), _data.data(), _data.size()) != 1)
+    {
+        throw std::runtime_error("RLPx Keccak-256 update failed");
+    }
 }
 
 bcos::bytes Sha3Hasher::hash()
 {
-    auto snapshot = m_impl->state;
-    std::array<std::byte, 32> digest{};
-    snapshot.final(digest);
+    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> snapshot(
+        EVP_MD_CTX_dup(m_impl->state.get()), &EVP_MD_CTX_free);
+    std::array<unsigned char, 32> digest{};
+    if (!snapshot || EVP_DigestFinal(snapshot.get(), digest.data(), nullptr) != 1)
+    {
+        throw std::runtime_error("RLPx Keccak-256 finalization failed");
+    }
     bcos::bytes out(digest.size());
     std::memcpy(out.data(), digest.data(), out.size());
     return out;

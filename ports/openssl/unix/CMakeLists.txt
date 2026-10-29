@@ -163,6 +163,10 @@ add_custom_command(
         WORKING_DIRECTORY "${BUILDDIR}"
 )
 
+if(IOS OR EMSCRIPTEN)
+    list(APPEND DISABLES enable-ntls)
+endif()
+
 if(NOT IOS)
     add_custom_command(
         OUTPUT "${BUILDDIR}/Makefile"

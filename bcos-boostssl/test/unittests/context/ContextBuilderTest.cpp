@@ -1,3 +1,21 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file ContextBuilderTest.cpp
+ * @brief Tests for NTLS context construction and handshakes.
+ */
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
@@ -73,7 +91,7 @@ void advanceHandshake(SSL* ssl)
         "SSL_do_handshake failed: " << error);
 }
 
-void verifyHandshake(bool content, const char* cipher)
+void verifyHandshake(bool content, const char* cipher, bool defaultClientCipherList = false)
 {
     ContextBuilder builder;
     auto config = makeConfig(content);
@@ -84,7 +102,10 @@ void verifyHandshake(bool content, const char* cipher)
     BOOST_REQUIRE(server);
     BOOST_REQUIRE(client);
     BOOST_REQUIRE_EQUAL(SSL_set_cipher_list(server.get(), cipher), 1);
-    BOOST_REQUIRE_EQUAL(SSL_set_cipher_list(client.get(), cipher), 1);
+    if (!defaultClientCipherList)
+    {
+        BOOST_REQUIRE_EQUAL(SSL_set_cipher_list(client.get(), cipher), 1);
+    }
 
     BIO* serverRead = BIO_new(BIO_s_mem());
     BIO* serverWrite = BIO_new(BIO_s_mem());
@@ -156,6 +177,12 @@ BOOST_AUTO_TEST_CASE(ntlsHandshakeFromContents)
 {
     verifyHandshake(true, "ECC-SM2-SM4-CBC-SM3");
     verifyHandshake(true, "ECDHE-SM2-SM4-CBC-SM3");
+}
+
+BOOST_AUTO_TEST_CASE(ntlsHandshakeWithDefaultClientCipherList)
+{
+    verifyHandshake(false, "ECC-SM2-SM4-CBC-SM3", true);
+    verifyHandshake(true, "ECC-SM2-SM4-CBC-SM3", true);
 }
 
 BOOST_AUTO_TEST_CASE(rejectsMismatchedAndWrongUsageCertificates)

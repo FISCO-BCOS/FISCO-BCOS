@@ -2,11 +2,11 @@
 
 #include "../TrivialObject.h"
 #include "Hasher.h"
-#include "Keccak256.h"
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <memory>
 #include <span>
 #include <stdexcept>
 
@@ -43,12 +43,6 @@ public:
 
     void init()
     {
-        if constexpr (hasherType == HasherType::Keccak256)
-        {
-            m_keccak.reset();
-            return;
-        }
-
         auto md = chooseMD();
         if (!EVP_DigestInit(m_mdCtx.get(), md)) [[unlikely]]
         {
@@ -64,12 +58,6 @@ public:
             m_init = true;
         }
         auto view = bcos::crypto::trivial::toView(std::forward<decltype(in)>(in));
-        if constexpr (hasherType == HasherType::Keccak256)
-        {
-            m_keccak.update(view);
-            return;
-        }
-
         if (!EVP_DigestUpdate(m_mdCtx.get(), view.data(), view.size())) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestUpdate error!"});
@@ -83,12 +71,6 @@ public:
             init();
             m_init = true;
         }
-        if constexpr (hasherType == HasherType::Keccak256)
-        {
-            m_keccak.update(in);
-            return;
-        }
-
         if (!EVP_DigestUpdate(m_mdCtx.get(), reinterpret_cast<unsigned char const*>(in.data()),
                 in.size())) [[unlikely]]
         {
@@ -101,12 +83,6 @@ public:
         m_init = false;
         bcos::crypto::trivial::resizeTo(out, HASH_SIZE);
         auto view = bcos::crypto::trivial::toView(std::forward<decltype(out)>(out));
-        if constexpr (hasherType == HasherType::Keccak256)
-        {
-            m_keccak.final(view);
-            return;
-        }
-
         if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(view.data()), nullptr))
             [[unlikely]]
         {
@@ -117,12 +93,6 @@ public:
     void final(std::span<std::byte> out)
     {
         m_init = false;
-        if constexpr (hasherType == HasherType::Keccak256)
-        {
-            m_keccak.final(out);
-            return;
-        }
-
         if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(out.data()), nullptr))
             [[unlikely]]
         {
@@ -130,20 +100,29 @@ public:
         }
     }
 
-    constexpr const EVP_MD* chooseMD()
+    const EVP_MD* chooseMD() const
     {
         if constexpr (hasherType == HasherType::SM3)
         {
             return EVP_sm3();
         }
-        else if constexpr (hasherType == HasherType::SHA3_256 ||
-                           hasherType == HasherType::Keccak256)
+        else if constexpr (hasherType == HasherType::SHA3_256)
         {
             return EVP_sha3_256();
         }
         else if constexpr (hasherType == HasherType::SHA2_256)
         {
             return EVP_sha256();
+        }
+        else if constexpr (hasherType == HasherType::Keccak256)
+        {
+            static const std::unique_ptr<EVP_MD, decltype(&EVP_MD_free)> md(
+                EVP_MD_fetch(nullptr, "KECCAK-256", nullptr), &EVP_MD_free);
+            if (!md) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_MD_fetch KECCAK-256 error!"});
+            }
+            return md.get();
         }
         else
         {
@@ -158,7 +137,6 @@ public:
         void operator()(EVP_MD_CTX* context) const { EVP_MD_CTX_free(context); }
     };
     std::unique_ptr<::EVP_MD_CTX, Deleter> m_mdCtx;
-    Keccak256State m_keccak;
     bool m_init = false;
 };
 

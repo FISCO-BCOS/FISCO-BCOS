@@ -1,3 +1,21 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file NtlsCompatibilityTest.cpp
+ * @brief Tests for legacy NTLS certificate-chain verification.
+ */
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/context/NtlsCompatibility.h>
@@ -157,6 +175,23 @@ BOOST_AUTO_TEST_CASE(rejectsUntrustedChainAndAmbiguousCertificates)
 
     VerifyFixture ambiguous;
     verifyRoundTrip(ambiguous, {sign.get(), sign.get()}, sign.get(), enc.get(), false, false);
+}
+
+BOOST_AUTO_TEST_CASE(rejectsInvalidSigningCertificateOnFirstInvocation)
+{
+    Certificate sign = loadCertificate("sm_sdk.crt");
+    Certificate enc = loadCertificate("sm_ensdk.crt");
+    Certificate ca = loadCertificate("sm_ca.crt");
+    BOOST_REQUIRE(sign && enc && ca);
+    const auto key = ContextBuilder().readFileContent(std::string(NTLS_CERT_DIR) + "sm_ensdk.key");
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> wrongKey(
+        bcos::boostssl::toEvpPkey(key.c_str()), &EVP_PKEY_free);
+    BOOST_REQUIRE(wrongKey);
+    BOOST_REQUIRE_GT(X509_sign(sign.get(), wrongKey.get(), EVP_sm3()), 0);
+
+    VerifyFixture fixture;
+    verifyRoundTrip(
+        fixture, {sign.get(), enc.get(), ca.get()}, sign.get(), enc.get(), false, false);
 }
 
 BOOST_AUTO_TEST_CASE(invokesExistingVerifyCallback)

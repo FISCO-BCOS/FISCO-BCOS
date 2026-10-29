@@ -1610,7 +1610,8 @@ generate_sm_config_ini() {
     cors_max_age=86400
 
 [cert]
-    ; enable compatibility with legacy TASSL certificate chains (default: false)
+    ; Accept legacy TASSL certificate-chain ordering during rolling upgrades (default: false)
+    ; Keep enabled until all peers and SDKs no longer send legacy chains
     ;enable_legacy_sm_cert_chain=false
     ; directory the certificates located in
     ca_path=./conf
