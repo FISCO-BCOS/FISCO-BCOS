@@ -122,7 +122,7 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
     try
     {
         for (auto it = ::ranges::begin(*getPullMessage()); it != ::ranges::end(*getPullMessage());
-             ++it)
+            ++it)
         {
             if (*it)
             {

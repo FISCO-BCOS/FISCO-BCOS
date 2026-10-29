@@ -1948,11 +1948,18 @@ BOOST_AUTO_TEST_CASE(TE_FC_created_address_warmth_after_creator_revert)
                               << "\n";
                     state->pushCheckpoint();
                     evmc_message call{.kind = EVMC_CALL,
+                        .flags = 0,
                         .depth = 1,
                         .gas = 1000000,
+                        .state_gas = {},  // evmc ABI 19 (EIP-8037)
                         .recipient = b,
                         .sender = a,
-                        .code_address = b};
+                        .input_data = nullptr,
+                        .input_size = 0,
+                        .value = {},
+                        .code_address = b,
+                        .code = nullptr,
+                        .code_size = 0};
                     auto result = syncWait(host.externalCall(call));
                     BOOST_REQUIRE_EQUAL(result.status_code, EVMC_REVERT);
                     BOOST_CHECK_EQUAL(f.seq, 2);
@@ -1997,11 +2004,18 @@ BOOST_AUTO_TEST_CASE(TE_FC_created_address_warmth_after_creator_revert)
                         co_return;
                     }());
                     evmc_message probeCall{.kind = EVMC_CALL,
+                        .flags = 0,
                         .depth = 1,
                         .gas = 100000,
+                        .state_gas = {},  // evmc ABI 19 (EIP-8037)
                         .recipient = probeRunner,
                         .sender = a,
-                        .code_address = probeRunner};
+                        .input_data = nullptr,
+                        .input_size = 0,
+                        .value = {},
+                        .code_address = probeRunner,
+                        .code = nullptr,
+                        .code_size = 0};
                     auto probeResult = syncWait(host.externalCall(probeCall));
                     BOOST_REQUIRE_EQUAL(probeResult.status_code, EVMC_SUCCESS);
                     std::cout << "F1 actualExtcodesizeGas=" << (100000 - probeResult.gas_left)

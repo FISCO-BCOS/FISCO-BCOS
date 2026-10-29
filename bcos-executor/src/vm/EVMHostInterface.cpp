@@ -116,8 +116,7 @@ evmc_bytes32 getStorage(
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(context);
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
-    return translateHostFault(
-        hostContext, [&] { return hostContext.store(key); }, evmc_bytes32{});
+    return translateHostFault(hostContext, [&] { return hostContext.store(key); }, evmc_bytes32{});
 }
 
 evmc_bytes32 getTransientStorage(
