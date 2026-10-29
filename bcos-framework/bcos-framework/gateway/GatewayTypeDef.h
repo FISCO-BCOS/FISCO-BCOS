@@ -19,9 +19,9 @@
  * @date 2021-04-19
  */
 #pragma once
-#include <bcos-network/Endpoint.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Endpoint.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <iostream>
 #include <memory>
@@ -29,10 +29,9 @@
 
 namespace bcos::gateway
 {
-// NodeIPEndpoint now lives in bcos-network (bcos-network/Endpoint.h) so the standalone
-// network library carries no bcos-framework dependency; re-exported here so existing
-// bcos::gateway::NodeIPEndpoint users (libp2p, tests) keep compiling unchanged. The
-// operator<< overload is found by ADL on the bcos::network type.
+// NodeIPEndpoint lives in the shared utilities layer so neither bcos-framework nor bcos-network
+// needs to depend on the other. Re-export it here so existing bcos::gateway::NodeIPEndpoint users
+// keep compiling unchanged; operator<< is found by ADL on the bcos::network type.
 using bcos::network::NodeIPEndpoint;
 
 constexpr static size_t HASH_NODEID_MAX_SIZE = 33;

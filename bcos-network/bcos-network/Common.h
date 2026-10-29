@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "bcos-network/Endpoint.h"
+#include "bcos-utilities/Endpoint.h"
 #include "bcos-utilities/Error.h"
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/LogStream.h>

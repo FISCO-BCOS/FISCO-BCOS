@@ -999,6 +999,45 @@ BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitSkipsUnsatisfiedWaiter)
     large.reset();
 }
 
+BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitAgesHeadWaiter)
+{
+    DispatchBudget budget(
+        100, 8, [](std::function<void()> wake) { wake(); }, DispatchBudget::WaitPolicy::FirstFit,
+        std::chrono::milliseconds{0});
+    auto initial = task::syncWait(budget.acquire(85));
+    auto extra = task::syncWait(budget.acquire(5));
+    BOOST_REQUIRE(initial);
+    BOOST_REQUIRE(extra);
+
+    std::optional<DispatchBudget::Permit> large;
+    std::optional<DispatchBudget::Permit> small;
+    bool largeDone = false;
+    bool smallDone = false;
+    auto acquire = [](DispatchBudget& budget, std::size_t bytes,
+                       std::optional<DispatchBudget::Permit>& out, bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(bytes);
+        done = true;
+    };
+    task::wait(acquire(budget, 20, large, largeDone));
+    task::wait(acquire(budget, 10, small, smallDone));
+    BOOST_CHECK(!largeDone);
+    BOOST_CHECK(!smallDone);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 2);
+
+    extra.reset();
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 85);
+    BOOST_CHECK(!largeDone);
+    BOOST_CHECK(!smallDone);
+
+    initial.reset();
+    BOOST_REQUIRE(largeDone);
+    BOOST_REQUIRE(smallDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 30);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
+    large.reset();
+    small.reset();
+}
+
 BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitReservesReadyBytes)
 {
     std::vector<std::function<void()>> wakes;

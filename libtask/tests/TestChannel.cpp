@@ -337,6 +337,43 @@ BOOST_AUTO_TEST_CASE(parkedProducersWakeInFifoOrder)
     BOOST_CHECK_EQUAL(stats.producerParks, 2);
 }
 
+BOOST_AUTO_TEST_CASE(firstFitProducerSkipsUnsatisfiedFifoHead)
+{
+    Channel<int> channel(
+        inlinePoster(), 8, 100, [](const int& value) { return static_cast<std::size_t>(value); },
+        Channel<int>::WaitPolicy::FirstFit);
+    BOOST_CHECK(channel.push(10));
+    BOOST_CHECK(channel.push(90));
+
+    bool largeDone = false;
+    bool smallDone = false;
+    auto producer = [](Channel<int>& ch, int value, bool& done) -> Task<void> {
+        while (!ch.push(value))
+        {
+            if (!co_await ch.waitWritable(static_cast<std::size_t>(value)))
+            {
+                co_return;
+            }
+        }
+        done = true;
+    };
+    bcos::task::wait(producer(channel, 20, largeDone));
+    bcos::task::wait(producer(channel, 10, smallDone));
+    BOOST_CHECK(!largeDone);
+    BOOST_CHECK(!smallDone);
+
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 10);
+    BOOST_CHECK(!largeDone);
+    BOOST_CHECK(smallDone);
+    BOOST_CHECK_EQUAL(channel.stats().producerWaiters, 1);
+
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 90);
+    BOOST_CHECK(largeDone);
+    BOOST_CHECK_EQUAL(channel.stats().producerWaiters, 0);
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 10);
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 20);
+}
+
 BOOST_AUTO_TEST_CASE(closeWakesAllParkedProducers)
 {
     Channel<int> channel(inlinePoster(), 1);

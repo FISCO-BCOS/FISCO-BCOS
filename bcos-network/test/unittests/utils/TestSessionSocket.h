@@ -40,7 +40,7 @@
  */
 #pragma once
 
-#include "bcos-network/Endpoint.h"
+#include "bcos-utilities/Endpoint.h"
 #include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>

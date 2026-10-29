@@ -13,10 +13,8 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief network endpoint definition (moved here from
- *        bcos-framework/gateway/GatewayTypeDef.h so bcos-network does not depend on
- *        bcos-framework; GatewayTypeDef.h re-exports it into bcos::gateway via a using
- *        alias for backward compatibility)
+ * @brief network endpoint definition shared by bcos-framework and bcos-network;
+ *        GatewayTypeDef.h re-exports it into bcos::gateway for backward compatibility
  * @file Endpoint.h
  */
 #pragma once

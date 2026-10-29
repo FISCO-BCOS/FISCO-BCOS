@@ -6,7 +6,6 @@
 
 #include "bcos-network/ASIOInterface.h"
 #include "bcos-network/Common.h"
-#include "bcos-network/Endpoint.h"
 #include "bcos-network/PeerIdentity.h"
 #include "bcos-network/Session.h"
 #include "bcos-network/Socket.h"
@@ -15,6 +14,7 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Endpoint.h"
 #include "bcos-utilities/IOServicePool.h"
 #include <openssl/x509.h>
 #include <boost/asio/post.hpp>

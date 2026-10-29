@@ -33,7 +33,9 @@ namespace bcos::gateway
 {
 // Byte-and-count admission budget with configurable multi-acquirer waits. Strict FIFO admits only
 // the queue head; first-fit lets later requests use capacity that cannot satisfy earlier waiters.
-// A ready waiter's charge is reserved until it resumes or is cancelled. Abandoned waits unregister.
+// Once the first-fit head reaches the aging threshold, later requests stop bypassing it until it
+// resumes or is cancelled. A ready waiter's charge is reserved until then; abandoned waits
+// unregister.
 class DispatchBudget
 {
 public:
@@ -78,14 +80,20 @@ private:
 
     struct State
     {
-        State(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster, WaitPolicy _policy)
-          : maxBytes(_maxBytes), maxCount(_maxCount), poster(std::move(_poster)), policy(_policy)
+        State(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster, WaitPolicy _policy,
+            std::chrono::steady_clock::duration _agingThreshold)
+          : maxBytes(_maxBytes),
+            maxCount(_maxCount),
+            poster(std::move(_poster)),
+            policy(_policy),
+            agingThreshold(_agingThreshold)
         {}
 
         std::size_t maxBytes;
         std::size_t maxCount;
         Poster poster;
         WaitPolicy policy;
+        std::chrono::steady_clock::duration agingThreshold;
         std::mutex mutex;
         std::size_t usedBytes = 0;
         std::size_t usedCount = 0;
@@ -114,6 +122,14 @@ private:
             availableBytes -= _state.ready->bytes;
         }
         return _bytes <= availableBytes;
+    }
+
+    static bool headWaiterAgedLocked(State const& _state)
+    {
+        return _state.policy == WaitPolicy::FirstFit && !_state.waiters.empty() &&
+               _state.waiters.front()->result == WaitResult::Pending &&
+               std::chrono::steady_clock::now() - _state.waiters.front()->since >=
+                   _state.agingThreshold;
     }
 
     static void finishWaiterLocked(State& _state, Waiter const& _waiter)
@@ -157,7 +173,7 @@ private:
             }
             if (!fitsLocked(_state, (*it)->bytes))
             {
-                if (_state.policy == WaitPolicy::StrictFIFO)
+                if (_state.policy == WaitPolicy::StrictFIFO || headWaiterAgedLocked(_state))
                 {
                     return nullptr;
                 }
@@ -317,8 +333,10 @@ public:
     };
 
     DispatchBudget(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster,
-        WaitPolicy _policy = WaitPolicy::StrictFIFO)
-      : m_state(std::make_shared<State>(_maxBytes, _maxCount, std::move(_poster), _policy))
+        WaitPolicy _policy = WaitPolicy::StrictFIFO,
+        std::chrono::steady_clock::duration _agingThreshold = std::chrono::seconds(10))
+      : m_state(std::make_shared<State>(
+            _maxBytes, _maxCount, std::move(_poster), _policy, _agingThreshold))
     {}
     ~DispatchBudget() { close(); }
 
@@ -355,7 +373,7 @@ public:
                 {
                     co_return Permit{};
                 }
-                else if (!waiter &&
+                else if (!waiter && !headWaiterAgedLocked(*state) &&
                          (state->policy == WaitPolicy::FirstFit ||
                              (state->waiters.empty() && !state->ready)) &&
                          fitsLocked(*state, _bytes))
