@@ -401,10 +401,10 @@ public:
         }
     }
 
-    // GCC 14+ -Wmismatched-new-delete false positive: std::generator's promise
-    // allocator is diagnosed inside the coroutine body below. The diagnostic targets
-    // libstdc++ internals, not this code — scope the suppression to this construct
-    // rather than downgrading the warning for the whole project.
+    // GCC 14+ -Wmismatched-new-delete is triggered inside the coroutine body below.
+    // Depending on the selected Generator.h branch, the promise allocator comes from
+    // libstdc++ or this project. Scope the suppression to this construct rather than
+    // downgrading the warning for the whole project.
 #if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmismatched-new-delete"

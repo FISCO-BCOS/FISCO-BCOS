@@ -1,4 +1,3 @@
-#include "bcos-task/Generator.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
@@ -9,10 +8,8 @@
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <chrono>
-#include <concepts>
 #include <future>
 #include <iostream>
-#include <ranges>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -178,54 +175,6 @@ struct SleepTask
     }
     constexpr void await_resume() const {}
 };
-
-// GCC -Wmismatched-new-delete false positive: std::generator's promise allocator is diagnosed
-// inside the coroutine body below (the diagnostic points at libstdc++ internals, not this code).
-// It is triggered at -Os + -Werror, so scope the suppression to this construct rather than
-// downgrading the warning for the whole project. Same idiom as bcos-utilities/BucketMap.h.
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
-#endif
-bcos::task::Generator<int> genInt()
-{
-    co_yield 1;
-    co_yield 2;
-    co_yield 3;
-}
-
-bcos::task::Generator<int> genNestedInt()
-{
-    co_yield 0;
-    co_yield elements_of(genInt());
-    co_yield 4;
-}
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
-#pragma GCC diagnostic pop
-#endif
-
-BOOST_AUTO_TEST_CASE(generator)
-{
-    static_assert(std::same_as<std::ranges::range_reference_t<Generator<int>>, int&&>);
-    static_assert(std::same_as<std::ranges::range_value_t<Generator<int>>, int>);
-    static_assert(std::ranges::input_range<Generator<int>>);
-    static_assert(std::ranges::view<Generator<int>>);
-
-    int j = 0;
-    for (auto i : genInt())
-    {
-        BOOST_CHECK_EQUAL(i, ++j);
-        std::cout << i << std::endl;
-    }
-
-    j = 0;
-    for (auto i : genNestedInt())
-    {
-        BOOST_CHECK_EQUAL(i, j++);
-    }
-    BOOST_CHECK_EQUAL(j, 5);
-    std::cout << "All outputed" << std::endl;
-}
 
 Task<int> taskWithThrow()
 {

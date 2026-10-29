@@ -18,7 +18,8 @@
 
 #include <version>
 
-#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
+#if !defined(BCOS_TASK_FORCE_GENERATOR_FALLBACK) && defined(__cpp_lib_generator) && \
+    __cpp_lib_generator >= 202207L
 #include <generator>
 #include <ranges>
 namespace bcos::task
@@ -342,6 +343,10 @@ public:
 
     Iterator begin()
     {
+        if (!m_active)
+        {
+            m_active = std::make_unique<detail::GeneratorState<yielded> >();
+        }
         auto& state = *m_active;
         m_coroutine.promise().m_state = &state;
         state.coroutines.push_back(m_coroutine);
@@ -357,7 +362,7 @@ private:
     friend detail::GeneratorAccess;
 
     explicit Generator(std::coroutine_handle<promise_type> coroutine) noexcept
-      : m_coroutine(coroutine), m_active(new detail::GeneratorState<yielded>())
+      : m_coroutine(coroutine)
     {}
 
     std::coroutine_handle<promise_type> m_coroutine;
@@ -416,7 +421,7 @@ class GeneratorAccess
 public:
     template <typename Ref, typename Value, typename Allocator, typename Yielded>
     static std::coroutine_handle<> start(
-        Generator<Ref, Value, Allocator>& generator, GeneratorState<Yielded>& state) noexcept
+        Generator<Ref, Value, Allocator>& generator, GeneratorState<Yielded>& state)
     {
         auto coroutine = generator.m_coroutine;
         coroutine.promise().m_state = &state;
@@ -443,7 +448,7 @@ struct Generator<Ref, Value, Allocator>::promise_type::yield_sequence_awaiter
 
     bool await_ready() const noexcept { return false; }
 
-    std::coroutine_handle<> await_suspend(std::coroutine_handle<promise_type> handle) noexcept
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<promise_type> handle)
     {
         return detail::GeneratorAccess::start(m_generator, *handle.promise().m_state);
     }
