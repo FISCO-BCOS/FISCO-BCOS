@@ -409,6 +409,16 @@ BOOST_AUTO_TEST_CASE(dataCallbackFaultIsRecordedNotFatal)
     // catch-and-answer without the record would leave it a silent zero.
     BOOST_CHECK_THROW(host.throwIfHostFault(), bcos::executor::HostContextFault);
 
+    // An already-faulted frame must stop driving storage, even when a later operation
+    // could succeed. Check the actual transient state, not only the callback answer.
+    evmc_bytes32 key{}, value{};
+    value.bytes[31] = 7;
+    interface->set_transient_storage(host.hostCtx(), &helloworldAddress, &key, &value);
+    auto afterFault = syncWait(host.getTransientStorage(&key));
+    BOOST_CHECK_EQUAL(afterFault.bytes[31], 0);
+    BOOST_CHECK_EQUAL(interface->get_nonce(host.hostCtx(), &helloworldAddress),
+        std::numeric_limits<uint64_t>::max());
+
     // The first fault wins: a second recording attempt does not overwrite the message
     // that decided the frame's failure.
     host.recordHostFault("second fault");

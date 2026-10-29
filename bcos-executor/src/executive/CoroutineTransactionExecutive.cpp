@@ -122,7 +122,7 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
     try
     {
         for (auto it = ::ranges::begin(*getPullMessage()); it != ::ranges::end(*getPullMessage());
-            ++it)
+             ++it)
         {
             if (*it)
             {
@@ -183,8 +183,9 @@ void CoroutineTransactionExecutive::onExternalCallResume(CallParameters& output)
 
 void CoroutineTransactionExecutive::normalizeExternalCallResult(CallParameters& output) const
 {
-    // PR #5689 F1: preserve the child host-fault signal through legacy revert
-    // normalization (including DELEGATECALL), so the parent can fail the whole frame.
+    // Preserve the intermediate 321c53273 producer's marker through normalization
+    // (including DELEGATECALL). Current producers use the error channel instead;
+    // see HostContext::externalRequest for the source-history boundary.
     if (output.evmStatus == EVMC_INTERNAL_ERROR &&
         output.status == (int32_t)bcos::protocol::TransactionStatus::RevertInstruction)
     {

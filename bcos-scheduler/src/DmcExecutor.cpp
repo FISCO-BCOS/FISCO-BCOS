@@ -356,18 +356,25 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
 
     auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
 
+    bcos::Error::UniquePtr stampError;
     m_executivePool.forEachAndClear(MessageHint::NEED_SEND,
-        [this, messages](int64_t contextID, ExecutiveState::Ptr executiveState) {
+        [this, messages, &stampError](int64_t contextID, ExecutiveState::Ptr executiveState) {
             auto& message = executiveState->message;
             if (!message)
             {
                 return true;
             }
-            // Structural guard for the schedulerSeq sentinel: every response sent to
-            // an executor resumes an existing frame, so a missing stamp is a producer
-            // bug. Record it in every build; the executor rejects the missing stamp
-            // when deriving an address. Debug tests must be able to inspect the record.
-            (void)checkSchedulerStamp(*message);
+            // Reject an invalid producer response before dispatching any of this batch.
+            // This guard cannot negotiate capabilities with an old scheduler service.
+            if (!checkSchedulerStamp(*message))
+            {
+                if (!stampError)
+                {
+                    stampError = BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::EXECUTE_ERROR,
+                        "DMC resume message carries no schedulerSeq hand-back");
+                }
+                return true;
+            }
 
             auto keyLocks = m_keyLocks->getKeyLocksNotHoldingByContext(message->to(), contextID);
             message->setKeyLocks(std::move(keyLocks));
@@ -378,6 +385,12 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
 
             return true;
         });
+
+    if (stampError)
+    {
+        callback(std::move(stampError), ERROR);
+        return;
+    }
 
     // record all send message for debug
     m_dmcRecorder->recordSends(m_contractAddress, *messages);

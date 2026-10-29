@@ -1890,6 +1890,128 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_checkpoint_off_nested_call)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(TE_FC_created_address_warmth_after_creator_revert)
+{
+    for (bool fixedWarmth : {false, true})
+        for (bool prewarmInCreator : {false, true})
+            for (bool initReverts : {false, true})
+                for (bool create2 : {false, true})
+                {
+                    CompatTEHostFixture f;
+                    bcos::ledger::Features features;
+                    features.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION);
+                    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+                    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+                    if (fixedWarmth)
+                        features.set(
+                            bcos::ledger::Features::Flag::bugfix_evm2929_created_address_warm);
+                    std::cout << "created_address_warm_flag=" << fixedWarmth << "\n";
+                    auto state = std::make_shared<bcos::executor::Eip2929AccessState>();
+                    evmc_address a{}, b{};
+                    a.bytes[19] = 0xa1;
+                    b.bytes[19] =
+                        0xd0 + fixedWarmth * 8 + prewarmInCreator * 4 + initReverts * 2 + create2;
+                    auto host = f.makeHost(features,
+                        static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION), a, a,
+                        EVMC_CALL, {}, 0, 2000000, state);
+                    // PUSH5 initcode, MSTORE, CREATE/CREATE2, POP, then revert the creator.
+                    std::string const initHex = initReverts ? "60006000fd" : "6000600000";
+                    const auto init = bcos::fromHex(initHex);
+                    evmc_bytes32 salt{};
+                    auto target =
+                        create2 ? decltype(host)::unhexAddress(bcos::newCreate2EVMAddress(
+                                      *f.hashImpl, bcos::toHex(bcos::bytesConstRef(b.bytes, 20)),
+                                      bcos::bytesConstRef(init.data(), init.size()),
+                                      bcos::fromEvmC(salt))) :
+                                  decltype(host)::unhexAddress(bcos::newEVMAddress(
+                                      *f.hashImpl, f.blockHeader.number(), 0, f.seq + 2));
+                    auto code = bcos::fromHex(
+                        "64" + initHex +
+                        (create2 ? "5f525f6005601b5ff5505f5ffd" : "5f526005601b5ff0505f5ffd"));
+                    if (prewarmInCreator)
+                    {
+                        auto access = eip2929::warmAccountExtCodeSizeBytecode(target);
+                        access.push_back(0x50);  // POP the EXTCODESIZE result before CREATE.
+                        code.insert(code.begin(), access.begin(), access.end());
+                    }
+                    syncWait([&]() -> Task<void> {
+                        bcos::ledger::account::EVMAccount account(
+                            f.rollbackableStorage, b, bcos::ledger::account::AddressTableMode::Hex);
+                        co_await account.create();
+                        co_await account.setBalance(1000000);
+                        co_await account.setCode(code, "",
+                            f.hashImpl->hash(bcos::bytesConstRef(code.data(), code.size())));
+                        co_await host.prepare();
+                        co_return;
+                    }());
+                    std::cout << "target=" << bcos::toHex(bcos::bytesConstRef(target.bytes, 20))
+                              << "\n";
+                    state->pushCheckpoint();
+                    evmc_message call{.kind = EVMC_CALL,
+                        .depth = 1,
+                        .gas = 1000000,
+                        .recipient = b,
+                        .sender = a,
+                        .code_address = b};
+                    auto result = syncWait(host.externalCall(call));
+                    BOOST_REQUIRE_EQUAL(result.status_code, EVMC_REVERT);
+                    BOOST_CHECK_EQUAL(f.seq, 2);
+                    auto status =
+                        state->containsAddress(target) ? EVMC_ACCESS_WARM : EVMC_ACCESS_COLD;
+                    std::cout << "F1 kind=" << (create2 ? "CREATE2" : "CREATE")
+                              << " prewarmInCreator=" << prewarmInCreator
+                              << " initReverts=" << initReverts
+                              << " parentRevert=" << result.status_code
+                              << " createdAccess=" << status << " (0=cold,1=warm) seq=" << f.seq
+                              << "\n";
+                    bool const legacyWarm = !prewarmInCreator || !initReverts;
+                    BOOST_CHECK_EQUAL(
+                        status, !fixedWarmth && legacyWarm ? EVMC_ACCESS_WARM : EVMC_ACCESS_COLD);
+
+                    // BASE 0.21 order: ordinary access (if any), then child checkpoint pin.
+                    bcos::executor::Eip2929AccessState oldOrder;
+                    oldOrder.pushCheckpoint();
+                    oldOrder.pushCheckpoint();
+                    if (prewarmInCreator)
+                        oldOrder.warmUpAddress(target);
+                    oldOrder.pushCheckpoint();
+                    oldOrder.setCreateRollbackPin(target);
+                    if (initReverts)
+                        oldOrder.rollbackCheckpoint();
+                    else
+                        oldOrder.commitCheckpoint();
+                    oldOrder.rollbackCheckpoint();
+                    BOOST_CHECK_EQUAL(oldOrder.containsAddress(target), legacyWarm);
+                    evmc_address probeRunner{};
+                    probeRunner.bytes[19] =
+                        0xe0 + fixedWarmth * 8 + prewarmInCreator * 4 + initReverts * 2 + create2;
+                    auto probeCode = eip2929::warmAccountExtCodeSizeBytecode(target);
+                    probeCode.push_back(0);
+                    syncWait([&]() -> Task<void> {
+                        bcos::ledger::account::EVMAccount account(f.rollbackableStorage,
+                            probeRunner, bcos::ledger::account::AddressTableMode::Hex);
+                        co_await account.create();
+                        co_await account.setCode(probeCode, "",
+                            f.hashImpl->hash(
+                                bcos::bytesConstRef(probeCode.data(), probeCode.size())));
+                        co_return;
+                    }());
+                    evmc_message probeCall{.kind = EVMC_CALL,
+                        .depth = 1,
+                        .gas = 100000,
+                        .recipient = probeRunner,
+                        .sender = a,
+                        .code_address = probeRunner};
+                    auto probeResult = syncWait(host.externalCall(probeCall));
+                    BOOST_REQUIRE_EQUAL(probeResult.status_code, EVMC_SUCCESS);
+                    std::cout << "F1 actualExtcodesizeGas=" << (100000 - probeResult.gas_left)
+                              << "\n";
+                    BOOST_CHECK_EQUAL(
+                        100000 - probeResult.gas_left, status == EVMC_ACCESS_COLD ? 2603 : 103);
+                    state->rollbackCheckpoint();
+                }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::test

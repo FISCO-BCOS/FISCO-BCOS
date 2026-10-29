@@ -350,7 +350,9 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     auto response = m_executive->externalCall(std::move(request));
 
-    // Recognize the fault marker returned by legacy child producers across DMC.
+    // Compatibility consumer for this PR's intermediate producer (321c53273,
+    // TransactionExecutive::go); 117c2911d replaced that writer with an error channel.
+    // No released/deployed producer is established by this source history.
     // Abort this frame through the executor error channel before a receipt is built.
     if (response->evmStatus == (int32_t)EVMC_INTERNAL_ERROR &&
         response->status == (int32_t)bcos::protocol::TransactionStatus::RevertInstruction)

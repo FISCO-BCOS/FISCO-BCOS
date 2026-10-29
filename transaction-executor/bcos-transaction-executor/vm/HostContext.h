@@ -384,8 +384,25 @@ public:
         return out;
     }
 
-    // Same fault translation as the data callbacks (F10): the derivations are pure
-    // computation (hash + hex), so a throw is an allocation/crypto-level fault; the
+    void pinLegacyCreatedAddress(evmc_address const& address)
+    {
+        // 0.21 warmed only in the child checkpoint, whose pin survived creator rollback.
+        // Pin a cold address before 0.24's access to retain historical v2 behavior.
+        // An ordinary creator access already in its journal must remain revertible.
+        // With the fix enabled, the creator journals the access and can revert it.
+        if (m_eip2929Access && executor::eip2929Enabled(m_revision, m_ledgerConfig.get()) &&
+            !m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_evm2929_created_address_warm))
+        {
+            if (!m_eip2929Access->containsAddress(address))
+            {
+                m_eip2929Access->setCreateRollbackPin(address);
+            }
+        }
+    }
+
+    // Same fault translation as the data callbacks: derivation and the legacy
+    // warm-state pin may allocate, so a throw is an allocation/crypto-level fault; the
     // zero address is a fail-closed answer that never commits — throwIfHostFault()
     // fails the whole frame right after the VM returns.
     static evmc_address createAddressHook(
@@ -394,7 +411,9 @@ public:
         auto& hostContext = *reinterpret_cast<HostContext*>(context);
         try
         {
-            return hostContext.createAddressForOpcode(*sender, nonce);
+            auto address = hostContext.createAddressForOpcode(*sender, nonce);
+            hostContext.pinLegacyCreatedAddress(address);
+            return address;
         }
         catch (...)
         {
@@ -409,8 +428,10 @@ public:
         auto& hostContext = *reinterpret_cast<HostContext*>(context);
         try
         {
-            return hostContext.create2AddressForOpcode(
+            auto address = hostContext.create2AddressForOpcode(
                 *sender, *salt, bytesConstRef(init_code, init_code_size));
+            hostContext.pinLegacyCreatedAddress(address);
+            return address;
         }
         catch (...)
         {
@@ -819,13 +840,26 @@ public:
         std::optional<bcos::executor::Eip2929CheckpointGuard> checkpointGuard;
         if (m_eip2929Access && executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
         {
-            checkpointGuard.emplace(m_eip2929Access);
+            std::optional<evmc_address> createdAddress;
+            bool const fixedWarmth = m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_evm2929_created_address_warm);
             if (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2)
             {
-                // EVM CREATE passes empty code_address; pin must match getMessage() resolution.
                 auto const resolved = getMessage(m_web3Tx, message, m_blockHeader.get().number(),
                     m_contextID, m_seq, nonce, m_hashImpl);
-                m_eip2929Access->setCreateRollbackPin(resolved.code_address);
+                createdAddress = resolved.code_address;
+                if (fixedWarmth)
+                {
+                    // Direct host calls need the same creator-scope insertion as the opcode.
+                    // Do not pin the child: a successful initcode must not propagate a pin
+                    // into the creator and defeat its later rollback.
+                    m_eip2929Access->warmUpAddress(*createdAddress);
+                }
+            }
+            checkpointGuard.emplace(m_eip2929Access);
+            if (createdAddress && !fixedWarmth)
+            {
+                m_eip2929Access->setCreateRollbackPin(*createdAddress);
             }
         }
 

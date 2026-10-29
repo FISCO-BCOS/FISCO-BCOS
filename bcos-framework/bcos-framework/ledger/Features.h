@@ -123,7 +123,7 @@ public:
                                                // hasher's hash("") (keccak on a non-SM
                                                // chain) for a code-less live account, 0 for
                                                // an absent/empty one; was true / 0.
-        bugfix_evm2929_created_address_warm,   // v1 lane, chains with feature_evm_eip2929:
+        bugfix_evm2929_created_address_warm,   // Chains with feature_evm_eip2929, v1 lane:
                                                // evmone 0.24's create_impl warms the created
                                                // address (access_account on msg.recipient);
                                                // 0.21 never called it, so on the base the
@@ -133,6 +133,9 @@ public:
                                                // creation-time query answers cold without
                                                // inserting, and the first genuine touch pays
                                                // the cold fee and turns the address warm.
+                                               // v2 OFF retains historical creation pins
+                                               // across creator rollback; ON journals
+                                               // creation warmth in the creator's scope.
     };
 
     // magic_enum reflects values in its default range [-128, 127]; a flag past it would drop out

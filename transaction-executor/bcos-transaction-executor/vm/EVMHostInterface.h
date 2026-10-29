@@ -48,48 +48,55 @@ struct EVMHostInterface
     // HostContextFault through the executor error channel, before receipt creation.
     // Deterministic VM results (including a negative gas budget) retain their status.
 
-    static bool accountExists(evmc_host_context* context, const evmc_address* addr) noexcept
+    template <typename Result, typename Function>
+    static Result translateHostFault(
+        HostContextType& hostContext, Result fallback, Function&& function) noexcept
     {
-        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
+        if (hostContext.hasHostFault())
+        {
+            return fallback;
+        }
         try
         {
-            return syncWait(hostContext.exists(*addr));
+            return function();
         }
         catch (...)
         {
             hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return false;
+            return fallback;
         }
+    }
+
+    template <typename Function>
+    static void translateHostFault(HostContextType& hostContext, Function&& function) noexcept
+    {
+        translateHostFault(hostContext, false, [&]() {
+            function();
+            return true;
+        });
+    }
+
+    static bool accountExists(evmc_host_context* context, const evmc_address* addr) noexcept
+    {
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
+        return translateHostFault(
+            hostContext, false, [&]() -> bool { return syncWait(hostContext.exists(*addr)); });
     }
 
     static evmc_bytes32 getStorage(evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
-            return syncWait(hostContext.get(key));
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return {};
-        }
+        return translateHostFault(hostContext, evmc_bytes32{},
+            [&]() -> evmc_bytes32 { return syncWait(hostContext.get(key)); });
     }
 
     static evmc_bytes32 getTransientStorage(evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
-            return syncWait(hostContext.getTransientStorage(key));
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return {};
-        }
+        return translateHostFault(hostContext, evmc_bytes32{},
+            [&]() -> evmc_bytes32 { return syncWait(hostContext.getTransientStorage(key)); });
     }
 
     static evmc_storage_status setStorage(evmc_host_context* context,
@@ -98,8 +105,7 @@ struct EVMHostInterface
     {
         assert(!concepts::bytebuffer::equalTo(addr->bytes, executor::EMPTY_EVM_ADDRESS.bytes));
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
+        return translateHostFault(hostContext, EVMC_STORAGE_ASSIGNED, [&]() -> evmc_storage_status {
             bool newIsZero =
                 concepts::bytebuffer::equalTo(value->bytes, executor::EMPTY_EVM_BYTES32.bytes);
 
@@ -136,14 +142,7 @@ struct EVMHostInterface
 
             syncWait(hostContext.set(key, value));
             return status;
-        }
-        catch (...)
-        {
-            // The status is gas metadata for a frame that is about to fail; ASSIGNED
-            // (no refund) is the neutral fail-closed choice.
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return EVMC_STORAGE_ASSIGNED;
-        }
+        });
     }
 
     static void setTransientStorage(evmc_host_context* context,
@@ -151,88 +150,45 @@ struct EVMHostInterface
         const evmc_bytes32* value) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
-            syncWait(hostContext.setTransientStorage(key, value));
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-        }
+        translateHostFault(
+            hostContext, [&]() { syncWait(hostContext.setTransientStorage(key, value)); });
     }
 
     static evmc_bytes32 getBalance(evmc_host_context* context, const evmc_address* addr) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
+        return translateHostFault(hostContext, evmc_bytes32{}, [&]() -> evmc_bytes32 {
             auto balance = syncWait(hostContext.balance(*addr));
             return toEvmC(balance);
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return {};
-        }
+        });
     }
 
     static uint64_t getNonce(evmc_host_context* context, const evmc_address* addr)
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
-            return syncWait(hostContext.nonce(*addr));
-        }
-        catch (...)
-        {
-            // A storage/parse fault. It cannot be left to propagate (review F1): an
-            // exception cannot cross the VM — evmc::VM::execute is noexcept
-            // (evmc.hpp:722) and the unwind dies inside evmone's instruction frames
-            // (letting one through aborts the process) — so answer fail-closed per
-            // EIP-2681 (MAX_NONCE makes evmone reject the CREATE) and record the fault:
-            // executeCall/executeCreate rethrow it right after the VM returns, landing in
-            // execute()'s FIB-88/92 arm (status Unknown) instead of a node fault
-            // masquerading as a legitimate max-nonce rejection the contract's own logic
-            // converts to a revert.
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return std::numeric_limits<uint64_t>::max();
-        }
+        return translateHostFault(hostContext, std::numeric_limits<uint64_t>::max(),
+            [&]() -> uint64_t { return syncWait(hostContext.nonce(*addr)); });
     }
 
     static size_t getCodeSize(evmc_host_context* context, const evmc_address* addr) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
-            return syncWait(hostContext.codeSizeAt(*addr));
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return 0;
-        }
+        return translateHostFault(hostContext, size_t{0},
+            [&]() -> size_t { return syncWait(hostContext.codeSizeAt(*addr)); });
     }
 
     static evmc_bytes32 getCodeHash(evmc_host_context* context, const evmc_address* addr) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
-            return toEvmC(syncWait(hostContext.codeHashAt(*addr)));
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return {};
-        }
+        return translateHostFault(hostContext, evmc_bytes32{},
+            [&]() -> evmc_bytes32 { return toEvmC(syncWait(hostContext.codeHashAt(*addr))); });
     }
 
     static size_t copyCode(evmc_host_context* context, const evmc_address* address,
         size_t codeOffset, uint8_t* bufferData, size_t bufferSize) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
+        return translateHostFault(hostContext, size_t{0}, [&]() -> size_t {
             auto codeEntry = syncWait(hostContext.code(*address));
 
             // Handle "big offset" edge case.
@@ -246,26 +202,16 @@ struct EVMHostInterface
             size_t numToCopy = std::min(maxToCopy, bufferSize);
             std::copy_n(&(code[codeOffset]), numToCopy, bufferData);
             return numToCopy;
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return 0;
-        }
+        });
     }
 
     static bool selfdestruct(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr,
         [[maybe_unused]] const evmc_address* beneficiary) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
+        translateHostFault(hostContext, [&]() {
             hostContext.suicide();  // FISCO BCOS has no _beneficiary
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-        }
+        });
         // EIP-3529 (London): SELFDESTRUCT gas refund is removed entirely.
         // EIP-6780 (Cancun+): account deletion only when created in same tx;
         //   no gas refund in either case ("Note that no refund is given since EIP-3529").
@@ -278,8 +224,7 @@ struct EVMHostInterface
         size_t dataSize, const evmc_bytes32 topics[], size_t numTopics) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
+        translateHostFault(hostContext, [&]() {
             h256s hashTopics;
             hashTopics.reserve(numTopics);
             for (auto i : ::ranges::views::iota(0LU, numTopics))
@@ -287,48 +232,29 @@ struct EVMHostInterface
                 hashTopics.emplace_back(topics[i].bytes, sizeof(evmc_bytes32));
             }
             hostContext.log(*addr, std::move(hashTopics), bytesConstRef{data, dataSize});
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-        }
+        });
     }
 
     static evmc_access_status accessAccount(
         evmc_host_context* context, const evmc_address* addr) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
-            return hostContext.accessAccount(*addr);
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return EVMC_ACCESS_WARM;
-        }
+        return translateHostFault(hostContext, EVMC_ACCESS_WARM,
+            [&]() -> evmc_access_status { return hostContext.accessAccount(*addr); });
     }
 
     static evmc_access_status accessStorage(
         evmc_host_context* context, const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
-            return hostContext.accessStorage(*addr, *key);
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return EVMC_ACCESS_WARM;
-        }
+        return translateHostFault(hostContext, EVMC_ACCESS_WARM,
+            [&]() -> evmc_access_status { return hostContext.accessStorage(*addr, *key); });
     }
 
     static evmc_tx_context getTxContext(evmc_host_context* context) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
+        return translateHostFault(hostContext, evmc_tx_context{}, [&]() -> evmc_tx_context {
             evmc_tx_context result = {
                 .tx_gas_price = toEvmC(hostContext.gasPrice()),
                 .tx_origin = hostContext.origin(),
@@ -348,26 +274,14 @@ struct EVMHostInterface
                                          // this chain.
             };
             return result;
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return {};
-        }
+        });
     }
 
     static evmc_bytes32 getBlockHash(evmc_host_context* context, int64_t number) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        try
-        {
-            return toEvmC(syncWait(hostContext.blockHash(number)));
-        }
-        catch (...)
-        {
-            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            return {};
-        }
+        return translateHostFault(hostContext, evmc_bytes32{},
+            [&]() -> evmc_bytes32 { return toEvmC(syncWait(hostContext.blockHash(number))); });
     }
 
     static evmc_result call(evmc_host_context* context, const evmc_message* message)

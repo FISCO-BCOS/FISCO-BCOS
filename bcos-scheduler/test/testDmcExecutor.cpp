@@ -610,7 +610,14 @@ BOOST_AUTO_TEST_CASE(schedulerStampViolationIsRecordedInAllBuilds)
         state->message->setType(protocol::ExecutionMessage::FINISHED);
         state->message->setSchedulerSeq(-1);
     });
-    dmc->go([](bcos::Error::UniquePtr, DmcExecutor::Status) {});
+    bool completed = false;
+    dmc->go([&](bcos::Error::UniquePtr error, DmcExecutor::Status status) {
+        completed = true;
+        BOOST_REQUIRE(error);
+        BOOST_CHECK(error->errorMessage().find("no schedulerSeq hand-back") != std::string::npos);
+        BOOST_CHECK(status == DmcExecutor::ERROR);
+    });
+    BOOST_CHECK(completed);
     BOOST_CHECK_EQUAL(dmcRecorder->schedulerStampViolations(), 1);
 }
 
