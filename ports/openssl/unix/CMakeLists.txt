@@ -197,9 +197,6 @@ if(NOT IOS)
                 no-zlib
                 no-tests)
 
-        if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
-            list(APPEND DISABLES no-asm)
-        endif()
     endif()
 endif()
 

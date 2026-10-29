@@ -119,12 +119,13 @@ bool originalOrderSwapped(STACK_OF(X509) * chain, const CertificateRoles& roles)
     return signIndex > encIndex;
 }
 
-bool verifyCertificate(X509_STORE_CTX* context, SSL* ssl, X509* leaf)
+bool verifyCertificate(X509_STORE_CTX* context, SSL* ssl, X509* leaf, bool invokeCallback)
 {
     CertificateStack chain(sk_X509_new_null());
     if (!chain || sk_X509_push(chain.get(), leaf) == 0)
     {
-        return fail(context, X509_V_ERR_OUT_OF_MEM, "unable to allocate certificate chain");
+        fail(context, X509_V_ERR_OUT_OF_MEM, "unable to allocate certificate chain");
+        return false;
     }
     auto* untrusted = X509_STORE_CTX_get0_untrusted(context);
     for (int i = 0; i < sk_X509_num(untrusted); ++i)
@@ -132,32 +133,39 @@ bool verifyCertificate(X509_STORE_CTX* context, SSL* ssl, X509* leaf)
         auto* cert = sk_X509_value(untrusted, i);
         if (X509_check_ca(cert) > 0 && sk_X509_push(chain.get(), cert) == 0)
         {
-            return fail(context, X509_V_ERR_OUT_OF_MEM, "unable to copy certificate chain");
+            fail(context, X509_V_ERR_OUT_OF_MEM, "unable to copy certificate chain");
+            return false;
         }
     }
 
     StoreContext verifyContext(X509_STORE_CTX_new(), &X509_STORE_CTX_free);
     if (!verifyContext)
     {
-        return fail(context, X509_V_ERR_OUT_OF_MEM, "unable to allocate verification context");
+        fail(context, X509_V_ERR_OUT_OF_MEM, "unable to allocate verification context");
+        return false;
     }
     if (X509_STORE_CTX_init(
             verifyContext.get(), X509_STORE_CTX_get0_store(context), leaf, chain.get()) != 1)
     {
         const auto error = X509_STORE_CTX_get_error(verifyContext.get());
-        return fail(context, error == X509_V_OK ? X509_V_ERR_UNSPECIFIED : error,
+        fail(context, error == X509_V_OK ? X509_V_ERR_UNSPECIFIED : error,
             "unable to initialize certificate verification");
+        return false;
     }
     if (X509_STORE_CTX_set_ex_data(
             verifyContext.get(), SSL_get_ex_data_X509_STORE_CTX_idx(), ssl) != 1 ||
         X509_VERIFY_PARAM_set1(X509_STORE_CTX_get0_param(verifyContext.get()),
             X509_STORE_CTX_get0_param(context)) != 1)
     {
-        return fail(context, X509_V_ERR_OUT_OF_MEM, "unable to configure certificate verification");
+        fail(context, X509_V_ERR_OUT_OF_MEM, "unable to configure certificate verification");
+        return false;
     }
-    if (auto callback = SSL_get_verify_callback(ssl))
+    if (invokeCallback)
     {
-        X509_STORE_CTX_set_verify_cb(verifyContext.get(), callback);
+        if (auto callback = SSL_get_verify_callback(ssl))
+        {
+            X509_STORE_CTX_set_verify_cb(verifyContext.get(), callback);
+        }
     }
     if (X509_verify_cert(verifyContext.get()) <= 0)
     {
@@ -166,13 +174,15 @@ bool verifyCertificate(X509_STORE_CTX* context, SSL* ssl, X509* leaf)
             context, X509_STORE_CTX_get_error_depth(verifyContext.get()));
         X509_STORE_CTX_set_current_cert(
             context, X509_STORE_CTX_get_current_cert(verifyContext.get()));
-        return fail(context, error == X509_V_OK ? X509_V_ERR_UNSPECIFIED : error,
+        fail(context, error == X509_V_OK ? X509_V_ERR_UNSPECIFIED : error,
             "certificate chain validation failed");
+        return false;
     }
     auto* verifiedChain = X509_STORE_CTX_get1_chain(verifyContext.get());
     if (!verifiedChain)
     {
-        return fail(context, X509_V_ERR_OUT_OF_MEM, "unable to retain verified certificate chain");
+        fail(context, X509_V_ERR_OUT_OF_MEM, "unable to retain verified certificate chain");
+        return false;
     }
     X509_STORE_CTX_set0_verified_chain(context, verifiedChain);
     return true;
@@ -230,7 +240,8 @@ int verifyLegacyNtlsChain(X509_STORE_CTX* context, void*)
     const auto state = reinterpret_cast<uintptr_t>(SSL_get_ex_data(ssl, index));
     const bool second = state != 0;
     const bool swapped = second ? state == 2 : originalOrderSwapped(chain, roles);
-    if (!verifyCertificate(context, ssl, roles.enc) || !verifyCertificate(context, ssl, roles.sign))
+    if (!verifyCertificate(context, ssl, roles.enc, false) ||
+        !verifyCertificate(context, ssl, roles.sign, true))
     {
         return 0;
     }

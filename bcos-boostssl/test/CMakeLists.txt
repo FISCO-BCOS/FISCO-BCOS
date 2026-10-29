@@ -23,8 +23,10 @@ add_subdirectory(exec)
 
 # cmake settings
 set(TEST_BINARY_NAME test-boostssl)
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/unittests/data/sm_ca" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/data")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
+target_compile_definitions(${TEST_BINARY_NAME} PRIVATE BCOS_NTLS_TEST_CERT_DIR="${CMAKE_CURRENT_BINARY_DIR}/data/sm_ca/")
 # WsConfigTest.cpp defines BOOST_TEST_MAIN (generates init_unit_test_suite for the static
 # boost UTF); in a unity batch the define lands after the first unit_test.hpp inclusion and
 # the symbol is lost, so keep it out of the batch.

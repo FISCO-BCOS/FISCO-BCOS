@@ -29,7 +29,7 @@ using namespace bcos::boostssl::context;
 
 namespace
 {
-constexpr const char* CERT_DIR = "../bcos-boostssl/test/unittests/data/sm_ca/";
+constexpr const char* CERT_DIR = BCOS_NTLS_TEST_CERT_DIR;
 
 ContextConfig makeConfig(bool content)
 {

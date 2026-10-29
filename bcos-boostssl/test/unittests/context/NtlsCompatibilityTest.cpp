@@ -27,7 +27,7 @@ using namespace bcos::boostssl::context;
 
 namespace
 {
-constexpr const char* NTLS_CERT_DIR = "../bcos-boostssl/test/unittests/data/sm_ca/";
+constexpr const char* NTLS_CERT_DIR = BCOS_NTLS_TEST_CERT_DIR;
 
 struct NtlsSslDeleter
 {
@@ -80,10 +80,15 @@ struct VerifyFixture
 
 int callbackCalls = 0;
 X509* lastCertificate = nullptr;
+std::vector<X509*> callbackLeaves;
 int recordCallback(int preverified, X509_STORE_CTX* context)
 {
     ++callbackCalls;
     lastCertificate = X509_STORE_CTX_get_current_cert(context);
+    if (X509_STORE_CTX_get_error_depth(context) == 0)
+    {
+        callbackLeaves.push_back(lastCertificate);
+    }
     return preverified;
 }
 
@@ -204,10 +209,16 @@ BOOST_AUTO_TEST_CASE(invokesExistingVerifyCallback)
     VerifyFixture fixture;
     callbackCalls = 0;
     lastCertificate = nullptr;
+    callbackLeaves.clear();
     SSL_set_verify(fixture.ssl.get(), SSL_VERIFY_PEER, recordCallback);
     verifyRoundTrip(fixture, {sign.get(), ca.get(), enc.get()}, sign.get(), enc.get());
     BOOST_CHECK_GT(callbackCalls, 0);
     BOOST_CHECK_EQUAL(lastCertificate, sign.get());
+    BOOST_REQUIRE(!callbackLeaves.empty());
+    for (auto* certificate : callbackLeaves)
+    {
+        BOOST_CHECK_EQUAL(certificate, sign.get());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

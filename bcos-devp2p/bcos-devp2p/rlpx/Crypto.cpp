@@ -23,6 +23,7 @@
 #include <bcos-crypto/encrypt/AesCtrCipher.h>
 #include <bcos-crypto/encrypt/HmacSha256.h>
 #include <bcos-crypto/hash/Sha256.h>
+#include <bcos-crypto/hasher/Keccak256.h>
 #include <bcos-crypto/random/CryptoRandom.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Ecdh.h>
@@ -42,9 +43,7 @@ struct Sha3Hasher::Impl
 {
     Impl() : state(EVP_MD_CTX_new(), &EVP_MD_CTX_free)
     {
-        static const std::unique_ptr<EVP_MD, decltype(&EVP_MD_free)> md(
-            EVP_MD_fetch(nullptr, "KECCAK-256", nullptr), &EVP_MD_free);
-        if (!state || !md || EVP_DigestInit(state.get(), md.get()) != 1)
+        if (!state || EVP_DigestInit(state.get(), bcos::crypto::hasher::keccak256MD()) != 1)
         {
             throw std::runtime_error("RLPx Keccak-256 initialization failed");
         }

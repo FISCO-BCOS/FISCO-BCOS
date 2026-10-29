@@ -2,6 +2,7 @@
 
 #include "../TrivialObject.h"
 #include "Hasher.h"
+#include "Keccak256.h"
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -116,13 +117,7 @@ public:
         }
         else if constexpr (hasherType == HasherType::Keccak256)
         {
-            static const std::unique_ptr<EVP_MD, decltype(&EVP_MD_free)> md(
-                EVP_MD_fetch(nullptr, "KECCAK-256", nullptr), &EVP_MD_free);
-            if (!md) [[unlikely]]
-            {
-                BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_MD_fetch KECCAK-256 error!"});
-            }
-            return md.get();
+            return bcos::crypto::hasher::keccak256MD();
         }
         else
         {

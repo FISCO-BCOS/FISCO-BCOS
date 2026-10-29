@@ -21,6 +21,7 @@
 
 #include "bcos-gateway/GatewayFactory.h"
 #include "bcos-gateway/GatewayConfig.h"
+#include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-boostssl/context/ContextBuilder.h>
@@ -97,10 +98,17 @@ BOOST_AUTO_TEST_SUITE_END()
 namespace
 {
 namespace context = bcos::boostssl::context;
+struct TestHost : Host
+{
+    using Host::Host;
+    using Host::newVerifyCallback;
+};
+
 struct NodeIdProbe
 {
-    std::function<bool(X509*, std::string&)> handler;
-    std::string pubHex;
+    std::function<bool(bool, boost::asio::ssl::verify_context&)> callback;
+    std::vector<X509*> depth0Certificates;
+    std::shared_ptr<std::string> nodeId;
 };
 
 int nodeIdProbeIndex()
@@ -114,12 +122,12 @@ int captureNodeId(int preverified, X509_STORE_CTX* storeContext)
     auto* ssl = static_cast<SSL*>(
         X509_STORE_CTX_get_ex_data(storeContext, SSL_get_ex_data_X509_STORE_CTX_idx()));
     auto* probe = static_cast<NodeIdProbe*>(SSL_get_ex_data(ssl, nodeIdProbeIndex()));
-    auto* cert = X509_STORE_CTX_get_current_cert(storeContext);
-    if (probe && cert)
+    if (probe && X509_STORE_CTX_get_error_depth(storeContext) == 0)
     {
-        probe->handler(cert, probe->pubHex);
+        probe->depth0Certificates.push_back(X509_STORE_CTX_get_current_cert(storeContext));
     }
-    return preverified;
+    boost::asio::ssl::verify_context verifyContext(storeContext);
+    return probe && probe->callback(preverified != 0, verifyContext) ? 1 : 0;
 }
 
 using Ssl = std::unique_ptr<SSL, decltype(&SSL_free)>;
@@ -136,9 +144,9 @@ Certificate loadCertificate(context::ContextBuilder& builder, const std::string&
     return Certificate(bcos::boostssl::toX509(builder.readFileContent(path).c_str()), &X509_free);
 }
 
-std::string verifyLegacyNodeId(const std::vector<X509*>& certificates)
+std::string verifyLegacyNodeId(const std::vector<X509*>& certificates, X509* sign)
 {
-    const std::string dir = "../../../bcos-boostssl/test/unittests/data/sm_ca/";
+    const std::string dir = BCOS_NTLS_TEST_CERT_DIR;
     context::ContextBuilder builder;
     context::ContextConfig::SMCertConfig cert;
     cert.caCert = dir + "sm_ca.crt";
@@ -154,7 +162,16 @@ std::string verifyLegacyNodeId(const std::vector<X509*>& certificates)
     auto sslContext = builder.buildSslContext(true, config);
 
     GatewayFactory factory("", "");
-    NodeIdProbe probe{factory.sslContextPubHandler(), {}};
+    auto host = std::make_shared<TestHost>(nullptr, nullptr, nullptr);
+    host->setSSLContextPubHandler(factory.sslContextPubHandler());
+    host->setSSLContextPubHandlerWithoutExtInfo(factory.sslContextPubHandlerWithoutExtInfo());
+    host->setEnableSslVerify(true);
+    std::string signingNodeId;
+    BOOST_REQUIRE(factory.sslContextPubHandlerWithoutExtInfo()(sign, signingNodeId));
+    host->setPeerWhitelist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Whitelist,
+        std::set<std::string>{boost::to_upper_copy(signingNodeId)}, true));
+    auto nodeId = std::make_shared<std::string>();
+    NodeIdProbe probe{host->newVerifyCallback(nodeId), {}, nodeId};
     Ssl ssl(SSL_new(sslContext->native_handle()), &SSL_free);
     BOOST_REQUIRE(ssl);
     BOOST_REQUIRE_GT(nodeIdProbeIndex(), -1);
@@ -181,7 +198,12 @@ std::string verifyLegacyNodeId(const std::vector<X509*>& certificates)
     BOOST_REQUIRE_EQUAL(context::verifyLegacyNtlsChain(storeContext.get(), nullptr), 1);
     BOOST_REQUIRE(sk_X509_unshift(chain.get(), sk_X509_pop(chain.get())) != 0);
     BOOST_REQUIRE_EQUAL(context::verifyLegacyNtlsChain(storeContext.get(), nullptr), 1);
-    return probe.pubHex;
+    BOOST_REQUIRE(!probe.depth0Certificates.empty());
+    for (auto* certificate : probe.depth0Certificates)
+    {
+        BOOST_CHECK_EQUAL(certificate, sign);
+    }
+    return *probe.nodeId;
 }
 }  // namespace
 
@@ -190,7 +212,7 @@ BOOST_FIXTURE_TEST_SUITE(GatewayFactoryLegacyNtlsTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(nodeIdComesFromSigningCertificate)
 {
     context::ContextBuilder builder;
-    const std::string dir = "../../../bcos-boostssl/test/unittests/data/sm_ca/";
+    const std::string dir = BCOS_NTLS_TEST_CERT_DIR;
     auto sign = loadCertificate(builder, dir + "sm_sdk.crt");
     auto enc = loadCertificate(builder, dir + "sm_ensdk.crt");
     auto ca = loadCertificate(builder, dir + "sm_ca.crt");
@@ -204,9 +226,9 @@ BOOST_AUTO_TEST_CASE(nodeIdComesFromSigningCertificate)
     for (const auto& certificates : {std::vector<X509*>{sign.get(), ca.get(), enc.get()},
              std::vector<X509*>{ca.get(), enc.get(), sign.get()}})
     {
-        const auto nodeId = verifyLegacyNodeId(certificates);
-        BOOST_CHECK_EQUAL(nodeId, expected);
-        BOOST_CHECK_NE(nodeId, encNodeId);
+        const auto nodeId = verifyLegacyNodeId(certificates, sign.get());
+        BOOST_CHECK(nodeId.starts_with(expected));
+        BOOST_CHECK(!nodeId.starts_with(encNodeId));
     }
 }
 
