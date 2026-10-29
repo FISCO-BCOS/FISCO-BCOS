@@ -708,12 +708,12 @@ exit_with_clean()
 
 check_openssl()
 {
-    # Notice: The OpenSSL path is specified, OpenSSL 1.1.x is required
     local openssl_cmd="${1}"
-    [ ! -z "$(${openssl_cmd} version | grep 1.1)" ] || {
-        LOG_FALT "Openssl 1.1.x is required, you should install openssl first Or use \"openssl version\" command to check whether the openssl version is suitable."
-       #echo "download openssl from https://www.openssl.org."
-      exit 1
+    local openssl_version="$(${openssl_cmd} version)"
+    [[ "${openssl_version}" == *"OpenSSL 1.1"* || "${openssl_version}" == *"OpenSSL 3."* ||
+        "${openssl_version}" == *"Tongsuo"* ]] || {
+        LOG_FALT "OpenSSL 1.1, OpenSSL 3 or Tongsuo is required; got: ${openssl_version}"
+        exit 1
     }
 }
 
@@ -848,7 +848,7 @@ Usage:
     -i <Input>                          [Optional] optional input params
     -d <ca cert path>                   [Optional] ca certificate path, specify ca certificate path to generate node/sdk certificate
     -l <IP list>                        [Optional] list of ip for generate certificate or private key, working with generate_node_cert/generate_private_key
-    -O <OpenSSL path>                   [Optional] specify the OpenSSL path(Notice: OpenSSL 1.1.x is required), default download TASSL 1.1.1b to local dir ~/.fisco/tassl-1.1.1b
+    -O <OpenSSL path>                   [Optional] specify an OpenSSL 1.1/3.x or Tongsuo executable, default download TASSL 1.1.1b to local dir ~/.fisco/tassl-1.1.1b
     -n <node path>                      [Optional] set the path of the node modified to multi ca mode
     -m <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -p <additional params>              [Optional] additional arguments for some command

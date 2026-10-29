@@ -31,9 +31,9 @@ string(REGEX REPLACE "(^| )-Z7($| )" " " VCPKG_COMBINED_CXX_FLAGS_RELEASE "${VCP
 string(REGEX REPLACE "(^| )-Z7($| )" " " VCPKG_COMBINED_CXX_FLAGS_DEBUG "${VCPKG_COMBINED_CXX_FLAGS_DEBUG}")
 
 set(CONFIGURE_OPTIONS
+    enable-ntls
     enable-static-engine
     enable-capieng
-    no-ssl2
     no-tests
     ${OPENSSL_SHARED}
 )

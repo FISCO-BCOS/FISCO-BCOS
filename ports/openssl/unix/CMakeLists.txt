@@ -113,7 +113,7 @@ if(BUILD_SHARED_LIBS)
     #string(REGEX REPLACE "^(SHLIB_VERSION=)(.*)$" "\\2"
     #    SHLIB_VERSION "${SHLIB_VERSION}")
 
-    set (SHLIB_VERSION "1.1")
+    set (SHLIB_VERSION "3")
     if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
         set(LIB_EXT dylib)
         set(LIB_EXTS ${SHLIB_VERSION}.${LIB_EXT})
@@ -188,16 +188,11 @@ if(NOT IOS)
                 )
     else()
         list(APPEND DISABLES
+                enable-ntls
                 enable-static-engine
                 no-zlib
-                no-ssl2
-                no-idea
-                no-cast
-                no-seed
-                no-md2
                 no-tests)
 
-        # clang integrated assembler rejects generated OpenSSL asm CFI in this TASSL branch.
         if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
             list(APPEND DISABLES no-asm)
         endif()

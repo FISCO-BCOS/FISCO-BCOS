@@ -5,6 +5,7 @@
 
 #include "bcos-gateway/GatewayFactory.h"
 #include "bcos-boostssl/context/Common.h"
+#include "bcos-boostssl/context/NtlsCompatibility.h"
 #include "bcos-crypto/signature/key/KeyFactoryImpl.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-gateway/GatewayConfig.h"
@@ -181,7 +182,7 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
         int type = EVP_PKEY_base_id(pKey);
         if (EVP_PKEY_RSA == type || EVP_PKEY_RSA2 == type)
         {
-            RSA* rsa = EVP_PKEY_get0_RSA(pKey);
+            const RSA* rsa = EVP_PKEY_get0_RSA(pKey);
             if (nullptr == rsa)
             {
                 GATEWAY_FACTORY_LOG(ERROR)
@@ -201,7 +202,7 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
         }
         else if (EVP_PKEY_EC == type)
         {
-            ec_key_st* ecPublicKey = EVP_PKEY_get0_EC_KEY(pKey);
+            const ec_key_st* ecPublicKey = EVP_PKEY_get0_EC_KEY(pKey);
             if (nullptr == ecPublicKey)
             {
                 GATEWAY_FACTORY_LOG(ERROR)
@@ -360,19 +361,23 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
 boost::asio::ssl::context GatewayFactory::buildSSLContext(
     bool _server, uint8_t sslMode, const GatewayConfig::SMCertConfig& _smCertConfig)
 {
-    SSL_CTX* ctx = nullptr;
-    if (_server)
+    const SSL_METHOD* meth = _server ? NTLS_server_method() : NTLS_client_method();
+    SSL_CTX* ctx = SSL_CTX_new(meth);
+    if (!ctx)
     {
-        const SSL_METHOD* meth = SSLv23_server_method();
-        ctx = SSL_CTX_new(meth);
-        SSL_CTX_set_cipher_list(ctx,
-            "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-"
-            "SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECC-SM4-SM3:ECDHE-SM4-SM3");
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_new failed"));
     }
-    else
+    SSL_CTX_enable_ntls(ctx);
+    if (_smCertConfig.enableLegacyChain)
     {
-        const SSL_METHOD* meth = CNTLS_client_method();
-        ctx = SSL_CTX_new(meth);
+        bcos::boostssl::context::enableLegacyNtlsChain(ctx);
+    }
+    if (_server && SSL_CTX_set_cipher_list(ctx,
+                       "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-"
+                       "SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECC-SM2-SM4-CBC-SM3:ECDHE-SM2-SM4-CBC-SM3") <= 0)
+    {
+        SSL_CTX_free(ctx);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_set_cipher_list failed"));
     }
 
     boost::asio::ssl::context sslContext(ctx);
@@ -382,11 +387,11 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
     if (_smCertConfig.nodeCert)
     {
         /* Load the server certificate into the SSL_CTX structure */
-        if (SSL_CTX_use_certificate_file(
+        if (SSL_CTX_use_sign_certificate_file(
                 sslContext.native_handle(), _smCertConfig.nodeCert->c_str(), SSL_FILETYPE_PEM) <= 0)
         {
             ERR_print_errors_fp(stderr);
-            BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file failed"));
+            BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_sign_certificate_file failed"));
         }
     }
 
@@ -435,9 +440,15 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                 InvalidParameter() << errinfo_comment(
                     "buildSSLContext: unable read content of key: " + *_smCertConfig.nodeKey));
         }
-        // nodekey
-        boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
-        sslContext.use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+        std::string nodeKeyStr((const char*)keyContent.data(), keyContent.size());
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> signKey(
+            toEvpPkey(nodeKeyStr.c_str()), &EVP_PKEY_free);
+        if (!signKey || SSL_CTX_use_sign_PrivateKey(sslContext.native_handle(), signKey.get()) <= 0)
+        {
+            GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_sign_PrivateKey failed");
+            BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                      "SSL_CTX_use_sign_PrivateKey failed"));
+        }
 
         /* Check if the server certificate and private-key matches */
         if (!SSL_CTX_check_private_key(sslContext.native_handle()))
@@ -503,13 +514,19 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
                     "buildSSLContext: unable read content of key: " + *_smCertConfig.enNodeKey));
         }
         std::string enNodeKeyStr((const char*)enNodeKeyContent.data(), enNodeKeyContent.size());
-        if (SSL_CTX_use_enc_PrivateKey(
-                sslContext.native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <= 0)
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> encKey(
+            toEvpPkey(enNodeKeyStr.c_str()), &EVP_PKEY_free);
+        if (!encKey || SSL_CTX_use_enc_PrivateKey(sslContext.native_handle(), encKey.get()) <= 0)
         {
             GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey failed");
             BOOST_THROW_EXCEPTION(
                 InvalidParameter() << errinfo_comment("GatewayFactory::buildSSLContext "
                                                       "SSL_CTX_use_enc_PrivateKey failed"));
+        }
+        if (!SSL_CTX_check_private_key(sslContext.native_handle()))
+        {
+            ERR_print_errors_fp(stderr);
+            BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed"));
         }
     }
 

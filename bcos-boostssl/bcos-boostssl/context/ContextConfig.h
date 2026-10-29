@@ -38,6 +38,7 @@ public:
         std::string nodeKey;
         std::string enNodeCert;
         std::string enNodeKey;
+        bool enableLegacyChain = false;
     };
 
 public:

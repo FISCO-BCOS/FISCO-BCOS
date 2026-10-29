@@ -2033,13 +2033,15 @@ void NodeConfig::loadCertConfig(boost::property_tree::ptree const& _pt)
     m_smNodeKey = smNodeKeyFile;
     m_enSmNodeCert = smEnNodeCertFile;
     m_enSmNodeKey = smEnNodeKeyFile;
+    m_enableLegacySmCertChain = _pt.get<bool>("cert.enable_legacy_sm_cert_chain", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadCertConfig") << LOG_KV("ca_path", m_certPath)
                          << LOG_KV("sm_ca_cert", smCaCertFile)
                          << LOG_KV("sm_node_cert", smNodeCertFile)
                          << LOG_KV("sm_node_key", smNodeKeyFile)
                          << LOG_KV("sm_ennode_cert", smEnNodeCertFile)
-                         << LOG_KV("sm_ennode_key", smEnNodeKeyFile);
+                         << LOG_KV("sm_ennode_key", smEnNodeKeyFile)
+                         << LOG_KV("enable_legacy_sm_cert_chain", m_enableLegacySmCertChain);
 
     // load cert
     std::string caCertFile = m_certPath + "/" + _pt.get<std::string>("cert.ca_cert", "ca.crt");
@@ -3434,6 +3436,11 @@ const std::string& NodeConfig::smNodeCert() const
 void NodeConfig::setSmNodeCert(const std::string& _smNodeCert)
 {
     m_smNodeCert = _smNodeCert;
+}
+
+bool NodeConfig::enableLegacySmCertChain() const
+{
+    return m_enableLegacySmCertChain;
 }
 
 const std::string& NodeConfig::smNodeKey() const
