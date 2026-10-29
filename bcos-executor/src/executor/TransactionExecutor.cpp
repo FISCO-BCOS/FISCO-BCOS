@@ -55,6 +55,7 @@
 #include "../vm/Precompiled.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
+#include <bcos-framework/executor/HostContextFault.h>
 
 #include <array>
 #include <cstring>
@@ -2842,6 +2843,10 @@ void TransactionExecutor::executeTransactionsWithCriticals(
                                          << LOG_KV("codeAddress", output->codeAddress);
             }
             executionResults[id] = toExecutionResult(*executive, std::move(output));
+        }
+        catch (bcos::executor::HostContextFault const&)
+        {
+            throw;
         }
         catch (std::exception& e)
         {

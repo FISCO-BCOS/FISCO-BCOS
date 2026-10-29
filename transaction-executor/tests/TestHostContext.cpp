@@ -238,6 +238,104 @@ BOOST_AUTO_TEST_CASE(executeAndCall)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(precompiledWrapperPreservesNestedHostFault)
+{
+    class CallingPrecompiled : public bcos::precompiled::Precompiled
+    {
+    public:
+        using Precompiled::Precompiled;
+        bcos::precompiled::PrecompiledExecResult::Ptr call(
+            std::shared_ptr<bcos::executor::TransactionExecutive> executive,
+            bcos::precompiled::PrecompiledExecResult::Ptr params) override
+        {
+            auto input = std::make_unique<bcos::executor::CallParameters>(
+                bcos::executor::CallParameters::MESSAGE);
+            input->senderAddress = params->m_sender;
+            input->receiveAddress = params->m_codeAddress;
+            input->codeAddress = params->m_codeAddress;
+            input->gas = params->m_gasLeft;
+            executive->externalCall(std::move(input));
+            return params;
+        }
+    };
+    auto contract = std::make_shared<CallingPrecompiled>(hashImpl);
+    Precompiled precompiled(contract);
+    evmc_message message{};
+    message.kind = EVMC_CALL;
+    message.gas = 1'000'000;
+    for (bool flag : {false, true})
+    {
+        bcos::ledger::Features features;
+        if (flag)
+        {
+            features.set(bcos::ledger::Features::Flag::bugfix_v1_error_handling);
+        }
+        auto externalCaller = [](evmc_message const&) -> EVMCResult {
+            throw bcos::executor::HostContextFault("nested precompiled host fault sentinel");
+        };
+        BOOST_CHECK_EXCEPTION(
+            callPrecompiled(precompiled, rollbackableStorage, blockHeader, message, evmc_address{},
+                externalCaller, *precompiledManager, 0, 0, false, features),
+            bcos::executor::HostContextFault, [](auto const& e) {
+                return std::string(e.what()) == "nested precompiled host fault sentinel";
+            });
+        auto ordinaryFailure = [](evmc_message const&) -> EVMCResult {
+            throw std::runtime_error("ordinary nested precompiled failure");
+        };
+        auto result = callPrecompiled(precompiled, rollbackableStorage, blockHeader, message,
+            evmc_address{}, ordinaryFailure, *precompiledManager, 0, 0, false, features);
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_REVERT);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(builtinWrapperPreservesHostFaultAndOrdinaryErrorMapping)
+{
+    evmc_message message{};
+    message.kind = EVMC_CALL;
+    message.gas = 1'000'000;
+    auto externalCaller = [](evmc_message const&) -> EVMCResult {
+        throw std::runtime_error("unused external call");
+    };
+    for (bool flag : {false, true})
+    {
+        bcos::ledger::Features features;
+        if (flag)
+        {
+            features.set(bcos::ledger::Features::Flag::bugfix_v1_error_handling);
+        }
+        for (bool hostFault : {false, true})
+        {
+            Precompiled precompiled(bcos::executor::PrecompiledContract(
+                0, 0, [hostFault](bcos::bytesConstRef) -> std::pair<bool, bcos::bytes> {
+                    if (hostFault)
+                    {
+                        throw bcos::executor::HostContextFault("builtin host fault sentinel");
+                    }
+                    throw std::runtime_error("ordinary builtin error");
+                }));
+            auto invoke = [&] {
+                return callPrecompiled(precompiled, rollbackableStorage, blockHeader, message,
+                    evmc_address{}, externalCaller, *precompiledManager, 0, 0, false, features);
+            };
+            if (hostFault)
+            {
+                BOOST_CHECK_EXCEPTION(
+                    invoke(), bcos::executor::HostContextFault, [](auto const& e) {
+                        return std::string(e.what()) == "builtin host fault sentinel";
+                    });
+            }
+            else if (flag)
+            {
+                BOOST_CHECK_EQUAL(invoke().status_code, EVMC_INTERNAL_ERROR);
+            }
+            else
+            {
+                BOOST_CHECK_THROW(invoke(), std::runtime_error);
+            }
+        }
+    }
+}
+
 // [F2 v2 mirror regression] A fault inside a noexcept EVMC callback must fail
 // the WHOLE frame after the VM returns, not masquerade as a legitimate
 // EIP-2681 nonce rejection the parent frame survives. EVERY faulting callback

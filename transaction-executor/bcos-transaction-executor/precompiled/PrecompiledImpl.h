@@ -8,6 +8,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-utilities/Overloaded.h"
+#include <bcos-framework/executor/HostContextFault.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
@@ -152,6 +153,10 @@ inline EVMCResult callBcosPrecompiled(
             protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, errorGas(), e.what(),
             features.get(ledger::Features::Flag::bugfix_v1_error_handling));
     }
+    catch (bcos::executor::HostContextFault const&)
+    {
+        throw;
+    }
     catch (std::exception& e)
     {
         PRECOMPILE_LOG(WARNING) << "Precompiled execute error: "
@@ -188,6 +193,10 @@ inline constexpr struct
                             precompiledManager, contextID, seq, authCheck, features);
                     }},
                 precompiled.m_precompiled);
+        }
+        catch (bcos::executor::HostContextFault const&)
+        {
+            throw;
         }
         catch (std::exception& e)
         {

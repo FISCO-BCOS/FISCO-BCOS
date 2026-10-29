@@ -9,6 +9,9 @@
  */
 
 #include "dag/DAG.h"
+#include "dag/CriticalFields.h"
+#include "dag/TxDAG2.h"
+#include <bcos-framework/executor/HostContextFault.h>
 #include <boost/test/unit_test.hpp>
 #include <set>
 
@@ -81,6 +84,17 @@ BOOST_AUTO_TEST_CASE(clearIsSafeAfterGenerate)
     dag.generate();
     // clear() releases the internal vertex/edge state without crashing.
     BOOST_REQUIRE_NO_THROW(dag.clear());
+}
+
+BOOST_AUTO_TEST_CASE(hostFaultEscapesFlowGraph)
+{
+    auto criticals = std::make_shared<critical::CriticalFields>(1);
+    criticals->put(0, std::make_shared<critical::CriticalFields::CriticalField>());
+    TxDAG2 dag;
+    dag.setExecuteTxFunc([](ID) { throw HostContextFault("dag host fault sentinel"); });
+    dag.init(criticals);
+    BOOST_CHECK_EXCEPTION(dag.run(2), HostContextFault,
+        [](auto const& e) { return std::string(e.what()) == "dag host fault sentinel"; });
 }
 
 BOOST_AUTO_TEST_SUITE_END()
