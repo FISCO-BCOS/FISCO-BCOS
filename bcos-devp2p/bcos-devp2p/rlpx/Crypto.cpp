@@ -50,8 +50,8 @@ Sha3Hasher::~Sha3Hasher()
 
 void Sha3Hasher::update(bytesConstRef _data)
 {
-    m_impl->state.update(std::span<const std::byte>(
-        reinterpret_cast<const std::byte*>(_data.data()), _data.size()));
+    m_impl->state.update(
+        std::span<const std::byte>(reinterpret_cast<const std::byte*>(_data.data()), _data.size()));
 }
 
 bcos::bytes Sha3Hasher::hash()

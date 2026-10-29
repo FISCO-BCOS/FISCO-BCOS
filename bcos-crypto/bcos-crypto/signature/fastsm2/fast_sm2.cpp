@@ -24,14 +24,14 @@
 #include <bcos-utilities/LogStream.h>
 #include <openssl/bn.h>
 #include <openssl/ec.h>
+#include <openssl/ecdsa.h>
 #include <openssl/evp.h>
 #include <openssl/obj_mac.h>
-#include <openssl/ecdsa.h>
 
 using namespace bcos;
 using namespace bcos::crypto;
 
-const char* c_userId = "1234567812345678";
+constexpr char c_userId[] = "1234567812345678";
 const int c_R_FIELD_LEN = 32;
 const int c_S_FIELD_LEN = 32;
 const int c_PRIVATEKEY_LEN = 32;
@@ -134,7 +134,7 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
     }
     EVP_MD_CTX_set_pkey_ctx(mdCtx, evpKeyCtx);
     if (EVP_DigestSignInit(mdCtx, NULL, EVP_sm3(), NULL, evpKey) != 1 ||
-        EVP_PKEY_CTX_set1_id(evpKeyCtx, c_userId, static_cast<int>(strlen(c_userId))) != 1 ||
+        EVP_PKEY_CTX_set1_id(evpKeyCtx, c_userId, sizeof(c_userId) - 1) != 1 ||
         EVP_DigestSignUpdate(mdCtx, raw_message_hash->data, raw_message_hash->len) != 1 ||
         EVP_DigestSignFinal(mdCtx, NULL, &derSigLen) != 1)
     {
@@ -319,7 +319,7 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
         goto done;
     }
     if (EVP_DigestVerifyInit(mdCtx, NULL, EVP_sm3(), NULL, evpKey) != 1 ||
-        EVP_PKEY_CTX_set1_id(evpKeyCtx, c_userId, static_cast<int>(strlen(c_userId))) != 1 ||
+        EVP_PKEY_CTX_set1_id(evpKeyCtx, c_userId, sizeof(c_userId) - 1) != 1 ||
         EVP_DigestVerifyUpdate(mdCtx, raw_message_hash->data, raw_message_hash->len) != 1)
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error initializing EVP verification";

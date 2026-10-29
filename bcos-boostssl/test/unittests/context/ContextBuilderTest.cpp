@@ -1,7 +1,7 @@
 #include <bcos-boostssl/context/ContextBuilder.h>
-#include <boost/test/unit_test.hpp>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+#include <boost/test/unit_test.hpp>
 #include <array>
 #include <cstring>
 #include <memory>

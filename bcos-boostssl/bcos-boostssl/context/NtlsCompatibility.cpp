@@ -15,7 +15,7 @@ constexpr uint32_t ENC_USAGE =
 using StoreContext = std::unique_ptr<X509_STORE_CTX, decltype(&X509_STORE_CTX_free)>;
 struct StackDeleter
 {
-    void operator()(STACK_OF(X509)* stack) const { sk_X509_free(stack); }
+    void operator()(STACK_OF(X509) * stack) const { sk_X509_free(stack); }
 };
 using CertificateStack = std::unique_ptr<STACK_OF(X509), StackDeleter>;
 
@@ -29,9 +29,8 @@ int stateIndex()
 {
     static std::once_flag once;
     static int index = -1;
-    std::call_once(once, []() {
-        index = SSL_get_ex_new_index(0, nullptr, nullptr, nullptr, nullptr);
-    });
+    std::call_once(
+        once, []() { index = SSL_get_ex_new_index(0, nullptr, nullptr, nullptr, nullptr); });
     return index;
 }
 
@@ -41,7 +40,7 @@ int fail(X509_STORE_CTX* context, int error)
     return 0;
 }
 
-bool findRoles(STACK_OF(X509)* chain, CertificateRoles& roles)
+bool findRoles(STACK_OF(X509) * chain, CertificateRoles& roles)
 {
     size_t endEntityCount = 0;
     for (int i = 0; i < sk_X509_num(chain); ++i)
@@ -77,7 +76,7 @@ bool findRoles(STACK_OF(X509)* chain, CertificateRoles& roles)
     return endEntityCount == 2 && roles.sign && roles.enc && roles.sign != roles.enc;
 }
 
-bool originalOrderSwapped(STACK_OF(X509)* chain, const CertificateRoles& roles)
+bool originalOrderSwapped(STACK_OF(X509) * chain, const CertificateRoles& roles)
 {
     // Undo Tongsuo's first left rotation to recover the order sent by the peer.
     const auto count = sk_X509_num(chain);
@@ -117,10 +116,10 @@ bool verifyCertificate(X509_STORE_CTX* context, SSL* ssl, X509* leaf)
 
     StoreContext verifyContext(X509_STORE_CTX_new(), &X509_STORE_CTX_free);
     if (!verifyContext ||
-        X509_STORE_CTX_init(verifyContext.get(), X509_STORE_CTX_get0_store(context), leaf,
-            chain.get()) != 1 ||
-        X509_STORE_CTX_set_ex_data(verifyContext.get(), SSL_get_ex_data_X509_STORE_CTX_idx(), ssl) !=
-            1 ||
+        X509_STORE_CTX_init(
+            verifyContext.get(), X509_STORE_CTX_get0_store(context), leaf, chain.get()) != 1 ||
+        X509_STORE_CTX_set_ex_data(
+            verifyContext.get(), SSL_get_ex_data_X509_STORE_CTX_idx(), ssl) != 1 ||
         X509_VERIFY_PARAM_set1(X509_STORE_CTX_get0_param(verifyContext.get()),
             X509_STORE_CTX_get0_param(context)) != 1)
     {
@@ -133,7 +132,8 @@ bool verifyCertificate(X509_STORE_CTX* context, SSL* ssl, X509* leaf)
     if (X509_verify_cert(verifyContext.get()) <= 0)
     {
         X509_STORE_CTX_set_error(context, X509_STORE_CTX_get_error(verifyContext.get()));
-        X509_STORE_CTX_set_error_depth(context, X509_STORE_CTX_get_error_depth(verifyContext.get()));
+        X509_STORE_CTX_set_error_depth(
+            context, X509_STORE_CTX_get_error_depth(verifyContext.get()));
         X509_STORE_CTX_set_current_cert(
             context, X509_STORE_CTX_get_current_cert(verifyContext.get()));
         return false;
@@ -147,7 +147,7 @@ bool verifyCertificate(X509_STORE_CTX* context, SSL* ssl, X509* leaf)
     return true;
 }
 
-bool reorderCertificates(STACK_OF(X509)* chain, X509* first, X509* second)
+bool reorderCertificates(STACK_OF(X509) * chain, X509* first, X509* second)
 {
     CertificateStack reordered(sk_X509_new_null());
     if (!reordered || sk_X509_push(reordered.get(), first) == 0 ||

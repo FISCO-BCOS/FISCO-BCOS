@@ -127,9 +127,10 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
     {
         enableLegacyNtlsChain(ctx);
     }
-    if (_server && SSL_CTX_set_cipher_list(ctx,
-                       "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-"
-                       "SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECC-SM2-SM4-CBC-SM3:ECDHE-SM2-SM4-CBC-SM3") <= 0)
+    if (_server &&
+        SSL_CTX_set_cipher_list(ctx,
+            "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-"
+            "SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECC-SM2-SM4-CBC-SM3:ECDHE-SM2-SM4-CBC-SM3") <= 0)
     {
         SSL_CTX_free(ctx);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_set_cipher_list failed"));
@@ -245,9 +246,10 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
     {
         enableLegacyNtlsChain(ctx);
     }
-    if (_server && SSL_CTX_set_cipher_list(ctx,
-                       "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-"
-                       "SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECC-SM2-SM4-CBC-SM3:ECDHE-SM2-SM4-CBC-SM3") <= 0)
+    if (_server &&
+        SSL_CTX_set_cipher_list(ctx,
+            "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-"
+            "SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECC-SM2-SM4-CBC-SM3:ECDHE-SM2-SM4-CBC-SM3") <= 0)
     {
         SSL_CTX_free(ctx);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_set_cipher_list failed"));
@@ -260,8 +262,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
 
     std::unique_ptr<X509, decltype(&X509_free)> signCert(
         toX509(_smCertConfig.nodeCert.c_str()), &X509_free);
-    if (!signCert || SSL_CTX_use_sign_certificate(
-                         sslContext->native_handle(), signCert.get()) <= 0)
+    if (!signCert || SSL_CTX_use_sign_certificate(sslContext->native_handle(), signCert.get()) <= 0)
     {
         ERR_print_errors_fp(stderr);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_sign_certificate failed"));
@@ -269,8 +270,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
 
     std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> signKey(
         toEvpPkey(_smCertConfig.nodeKey.c_str()), &EVP_PKEY_free);
-    if (!signKey || SSL_CTX_use_sign_PrivateKey(
-                        sslContext->native_handle(), signKey.get()) <= 0)
+    if (!signKey || SSL_CTX_use_sign_PrivateKey(sslContext->native_handle(), signKey.get()) <= 0)
     {
         ERR_print_errors_fp(stderr);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_sign_PrivateKey failed"));
@@ -284,8 +284,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
 
     std::unique_ptr<X509, decltype(&X509_free)> encCert(
         toX509(_smCertConfig.enNodeCert.c_str()), &X509_free);
-    if (!encCert || SSL_CTX_use_enc_certificate(
-                        sslContext->native_handle(), encCert.get()) <= 0)
+    if (!encCert || SSL_CTX_use_enc_certificate(sslContext->native_handle(), encCert.get()) <= 0)
     {
         ERR_print_errors_fp(stderr);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate failed"));

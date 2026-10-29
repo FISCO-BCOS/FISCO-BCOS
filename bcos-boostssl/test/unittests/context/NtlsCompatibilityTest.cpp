@@ -19,7 +19,7 @@ using SslPtr = std::unique_ptr<SSL, NtlsSslDeleter>;
 using StoreContext = std::unique_ptr<X509_STORE_CTX, decltype(&X509_STORE_CTX_free)>;
 struct StackDeleter
 {
-    void operator()(STACK_OF(X509)* stack) const { sk_X509_free(stack); }
+    void operator()(STACK_OF(X509) * stack) const { sk_X509_free(stack); }
 };
 using CertificateStack = std::unique_ptr<STACK_OF(X509), StackDeleter>;
 using Certificate = std::unique_ptr<X509, decltype(&X509_free)>;
@@ -27,7 +27,8 @@ using Certificate = std::unique_ptr<X509, decltype(&X509_free)>;
 Certificate loadCertificate(const char* file)
 {
     return Certificate(
-        bcos::boostssl::toX509(ContextBuilder().readFileContent(std::string(NTLS_CERT_DIR) + file).c_str()),
+        bcos::boostssl::toX509(
+            ContextBuilder().readFileContent(std::string(NTLS_CERT_DIR) + file).c_str()),
         &X509_free);
 }
 
@@ -68,8 +69,8 @@ int recordCallback(int preverified, X509_STORE_CTX* context)
     return preverified;
 }
 
-void verifyRoundTrip(VerifyFixture& fixture, std::vector<X509*> certificates, X509* sign,
-    X509* enc, bool expectSwapped = false, bool expectSuccess = true)
+void verifyRoundTrip(VerifyFixture& fixture, std::vector<X509*> certificates, X509* sign, X509* enc,
+    bool expectSwapped = false, bool expectSuccess = true)
 {
     CertificateStack chain(sk_X509_new_null());
     BOOST_REQUIRE(chain);
@@ -81,14 +82,13 @@ void verifyRoundTrip(VerifyFixture& fixture, std::vector<X509*> certificates, X5
 
     StoreContext context(X509_STORE_CTX_new(), &X509_STORE_CTX_free);
     BOOST_REQUIRE(context);
-    BOOST_REQUIRE_EQUAL(X509_STORE_CTX_init(context.get(), SSL_CTX_get_cert_store(
-                                              fixture.sslContext->native_handle()),
+    BOOST_REQUIRE_EQUAL(X509_STORE_CTX_init(context.get(),
+                            SSL_CTX_get_cert_store(fixture.sslContext->native_handle()),
                             sk_X509_value(chain.get(), 0), chain.get()),
         1);
     BOOST_REQUIRE_EQUAL(X509_STORE_CTX_set_default(context.get(), "ssl_server"), 1);
-    BOOST_REQUIRE_EQUAL(
-        X509_STORE_CTX_set_ex_data(context.get(), SSL_get_ex_data_X509_STORE_CTX_idx(),
-            fixture.ssl.get()),
+    BOOST_REQUIRE_EQUAL(X509_STORE_CTX_set_ex_data(
+                            context.get(), SSL_get_ex_data_X509_STORE_CTX_idx(), fixture.ssl.get()),
         1);
 
     const auto firstResult = verifyLegacyNtlsChain(context.get(), nullptr);
@@ -152,7 +152,8 @@ BOOST_AUTO_TEST_CASE(rejectsUntrustedChainAndAmbiguousCertificates)
     BOOST_REQUIRE(sign && enc && ca);
 
     VerifyFixture untrusted(false);
-    verifyRoundTrip(untrusted, {ca.get(), enc.get(), sign.get()}, sign.get(), enc.get(), false, false);
+    verifyRoundTrip(
+        untrusted, {ca.get(), enc.get(), sign.get()}, sign.get(), enc.get(), false, false);
 
     VerifyFixture ambiguous;
     verifyRoundTrip(ambiguous, {sign.get(), sign.get()}, sign.get(), enc.get(), false, false);

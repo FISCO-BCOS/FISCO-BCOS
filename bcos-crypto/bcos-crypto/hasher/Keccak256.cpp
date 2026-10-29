@@ -8,22 +8,82 @@ namespace bcos::crypto::hasher
 namespace
 {
 constexpr std::array<uint64_t, 24> ROUND_CONSTANTS = {
-    0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808aULL,
-    0x8000000080008000ULL, 0x000000000000808bULL, 0x0000000080000001ULL,
-    0x8000000080008081ULL, 0x8000000000008009ULL, 0x000000000000008aULL,
-    0x0000000000000088ULL, 0x0000000080008009ULL, 0x000000008000000aULL,
-    0x000000008000808bULL, 0x800000000000008bULL, 0x8000000000008089ULL,
-    0x8000000000008003ULL, 0x8000000000008002ULL, 0x8000000000000080ULL,
-    0x000000000000800aULL, 0x800000008000000aULL, 0x8000000080008081ULL,
-    0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL,
+    0x0000000000000001ULL,
+    0x0000000000008082ULL,
+    0x800000000000808aULL,
+    0x8000000080008000ULL,
+    0x000000000000808bULL,
+    0x0000000080000001ULL,
+    0x8000000080008081ULL,
+    0x8000000000008009ULL,
+    0x000000000000008aULL,
+    0x0000000000000088ULL,
+    0x0000000080008009ULL,
+    0x000000008000000aULL,
+    0x000000008000808bULL,
+    0x800000000000008bULL,
+    0x8000000000008089ULL,
+    0x8000000000008003ULL,
+    0x8000000000008002ULL,
+    0x8000000000000080ULL,
+    0x000000000000800aULL,
+    0x800000008000000aULL,
+    0x8000000080008081ULL,
+    0x8000000000008080ULL,
+    0x0000000080000001ULL,
+    0x8000000080008008ULL,
 };
 constexpr std::array<int, 24> ROTATIONS = {
-    1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14,
-    27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44,
+    1,
+    3,
+    6,
+    10,
+    15,
+    21,
+    28,
+    36,
+    45,
+    55,
+    2,
+    14,
+    27,
+    41,
+    56,
+    8,
+    25,
+    43,
+    62,
+    18,
+    39,
+    61,
+    20,
+    44,
 };
 constexpr std::array<int, 24> PI_LANES = {
-    10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4,
-    15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1,
+    10,
+    7,
+    11,
+    17,
+    18,
+    3,
+    5,
+    16,
+    8,
+    21,
+    24,
+    4,
+    15,
+    23,
+    19,
+    13,
+    12,
+    2,
+    20,
+    14,
+    22,
+    9,
+    6,
+    1,
 };
 
 constexpr uint64_t rotateLeft(uint64_t value, int shift) noexcept
@@ -96,8 +156,8 @@ void Keccak256State::update(std::span<const std::byte> input)
     if (m_buffered != 0)
     {
         const size_t copied = std::min(input.size(), RATE - m_buffered);
-        std::copy_n(input.begin(), static_cast<std::ptrdiff_t>(copied), m_buffer.begin() +
-                static_cast<std::ptrdiff_t>(m_buffered));
+        std::copy_n(input.begin(), static_cast<std::ptrdiff_t>(copied),
+            m_buffer.begin() + static_cast<std::ptrdiff_t>(m_buffered));
         m_buffered += copied;
         input = input.subspan(copied);
         if (m_buffered == RATE)
