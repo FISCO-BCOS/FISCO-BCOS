@@ -20,11 +20,14 @@
 #pragma once
 
 #include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/protocol/BlobSchedule.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-task/Task.h>
+#include <evmc/evmc.h>
 #include <json/json.h>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
