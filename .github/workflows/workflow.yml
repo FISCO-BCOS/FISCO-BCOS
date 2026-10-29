@@ -615,7 +615,7 @@ jobs:
           path: ${{ github.workspace }}/.ccache
           # Daily bucket + prefix restore, same as the build matrix: at most one entry per
           # day, warming from the previous day's otherwise. v2: the Configure step moved
-          # to Debug/-O0 without -g and non-unity sources, so no v1 object can hit.
+          # to -O0 without -g and non-unity sources, so no v1 object can hit.
           key: ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v2-${{ steps.ccache-bucket.outputs.day }}
           restore-keys: |
             ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v2-
@@ -640,18 +640,20 @@ jobs:
           # workflow, so the time it spends building is time it is exposed to a
           # runner preemption - a shutdown signal here has already killed it at
           # 89% once.
-          # Debug + UNITY_BUILD=OFF + WITH_BENCHMARK=OFF: the instrumented build
-          # has to fit the 16 GB runner at --parallel 3. With RelWithDebInfo
-          # (-O2 -g) and unity batches of 8 test files per TU, every run from
-          # 2026-10-22 to 2026-10-29 died at the same point of the graph with
-          # the runner's own shutdown signal (exit 143 after ~3 minutes of
-          # silence), which is what memory exhaustion looks like on a hosted
-          # runner. -O0 without -g is also the right build for gcov: it reads
-          # .gcno/.gcda, not DWARF, and -O2 inlining misattributes line counters
-          # (the COVERAGE block in cmake/CompilerSettings.cmake sets the Debug flags).
-          # Benchmarks are never run by ctest, so building them instrumented
-          # produces no coverage data.
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DUNITY_BUILD=OFF -DWITH_BENCHMARK=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          # UNITY_BUILD=OFF + WITH_BENCHMARK=OFF, and COVERAGE=ON turns the
+          # RelWithDebInfo flags into -O0 (see the COVERAGE block in
+          # cmake/CompilerSettings.cmake): the instrumented build has to fit the
+          # 16 GB runner at --parallel 3. With -O2 -g and unity batches of 8 test
+          # files per TU, every run from 2026-10-22 to 2026-10-29 died at the
+          # same point of the graph with the runner's own shutdown signal (exit
+          # 143 after ~3 minutes of silence), which is what memory exhaustion
+          # looks like on a hosted runner. -O0 without -g is also the right build
+          # for gcov: it reads .gcno/.gcda, not DWARF, and -O2 inlining
+          # misattributes line counters. The build type stays RelWithDebInfo
+          # because Debug makes vcpkg link the debug/ dependency variants, which
+          # the x64-linux-release triplet does not build. Benchmarks are never
+          # run by ctest, so building them instrumented produces no coverage data.
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DUNITY_BUILD=OFF -DWITH_BENCHMARK=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       # vcpkg installs during Configure, so save right after it (same reasoning as the
       # build matrix): a later flake must not discard a freshly built dependency tree.
       - name: Save vcpkg cache

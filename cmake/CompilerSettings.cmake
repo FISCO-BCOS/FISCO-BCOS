@@ -263,11 +263,15 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         # gcov reads the .gcno/.gcda pairs the instrumentation emits, not DWARF, so
         # -g only inflates compile memory and object size. -O0 keeps each line's
         # counter on its own line; -O2 inlining and block merging misattribute
-        # counters and multiply compile memory on template-heavy TUs. Coverage builds
-        # therefore use CMAKE_BUILD_TYPE=Debug (the Coverage CI job does), and Debug
-        # carries no -g here.
-        set(CMAKE_CXX_FLAGS_DEBUG "-O0")
-        set(CMAKE_C_FLAGS_DEBUG "-O0")
+        # counters and multiply compile memory on template-heavy TUs. So a coverage
+        # build replaces the active configuration's flags with -O0, whatever
+        # CMAKE_BUILD_TYPE says. It deliberately does not switch the build type to
+        # Debug: vcpkg maps Debug to the debug/ variant of every dependency, which
+        # the *-release triplets the CI uses do not build.
+        string(TOUPPER "${CMAKE_BUILD_TYPE}" _fisco_coverage_config)
+        set(CMAKE_CXX_FLAGS_${_fisco_coverage_config} "-O0")
+        set(CMAKE_C_FLAGS_${_fisco_coverage_config} "-O0")
+        unset(_fisco_coverage_config)
         if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
             # -fprofile-update=atomic: the tests are multi-threaded, and racing
             # non-atomic counter updates are what lcov's "negative" counts come from.
