@@ -411,10 +411,8 @@ BOOST_AUTO_TEST_CASE(FIB92_FlagOff_InternalErrorUsesOutOfGas)
     BOOST_CHECK_EQUAL(result.status, bcos::protocol::TransactionStatus::OutOfGas);
 }
 
-// Flag ON (bugfix_v1_error_handling, this fixture's MAX_VERSION default): a host
-// fault lands as EVMC_INTERNAL_ERROR / TransactionStatus::Unknown with gas_left = 0
-// (FIB-88 clamp, FIB-92 status).
-BOOST_AUTO_TEST_CASE(FIB88_92_InjectedHostFaultFlagOnUnknownZeroGas)
+// Node-local host faults escape receipt mapping independently of the feature flag.
+BOOST_AUTO_TEST_CASE(FIB88_92_InjectedHostFaultFlagOnAbortsExecution)
 {
     syncWait([this]() -> Task<void> {
         blockHeader.setNumber(seq++);
@@ -443,16 +441,13 @@ BOOST_AUTO_TEST_CASE(FIB88_92_InjectedHostFaultFlagOnUnknownZeroGas)
         co_await hostContext.prepare();
         hostContext.recordHostFault("injected fault for the catch-arm pin");
 
-        auto result = co_await hostContext.execute();
-        BOOST_CHECK_EQUAL(result.status_code, EVMC_INTERNAL_ERROR);
-        BOOST_CHECK_EQUAL(result.status, bcos::protocol::TransactionStatus::Unknown);
-        BOOST_CHECK_EQUAL(result.gas_left, 0);
+        BOOST_CHECK_THROW(
+            bcos::task::syncWait(hostContext.execute()), bcos::executor::HostContextFault);
     }());
 }
 
-// Flag OFF (V3_16_3): the same drive lands as EVMC_INTERNAL_ERROR / OutOfGas with
-// gas_left = ref->gas (the historical accounting receipts hashed on old nodes).
-BOOST_AUTO_TEST_CASE(FIB88_92_InjectedHostFaultFlagOffOutOfGasPreservesGas)
+// Flag OFF (V3_16_3): a node-local fault still must not become a receipt.
+BOOST_AUTO_TEST_CASE(FIB88_92_InjectedHostFaultFlagOffAbortsExecution)
 {
     syncWait([this]() -> Task<void> {
         bcostars::protocol::BlockHeaderImpl oldHeader;
@@ -488,10 +483,8 @@ BOOST_AUTO_TEST_CASE(FIB88_92_InjectedHostFaultFlagOffOutOfGasPreservesGas)
         co_await hostContext.prepare();
         hostContext.recordHostFault("injected fault for the catch-arm pin");
 
-        auto result = co_await hostContext.execute();
-        BOOST_CHECK_EQUAL(result.status_code, EVMC_INTERNAL_ERROR);
-        BOOST_CHECK_EQUAL(result.status, bcos::protocol::TransactionStatus::OutOfGas);
-        BOOST_CHECK_EQUAL(result.gas_left, GAS_LIMIT);
+        BOOST_CHECK_THROW(
+            bcos::task::syncWait(hostContext.execute()), bcos::executor::HostContextFault);
     }());
 }
 

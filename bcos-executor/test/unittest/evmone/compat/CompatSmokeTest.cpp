@@ -100,6 +100,7 @@ BOOST_AUTO_TEST_CASE(hostCallbacksStopMutatingAfterRecordedFault)
             host.recordHostFault("injected storage fault", /*halting=*/false);
         }
 
+        BOOST_CHECK_EQUAL(host.hostInterface->account_exists(context, &address), !faulted);
         host.hostInterface->set_transient_storage(context, &address, &key, &value);
         auto stored = host.getTransientStorage(&key);
         BOOST_CHECK_EQUAL(stored.bytes[31], faulted ? 0 : 1);

@@ -103,11 +103,12 @@ void translateHostFault(HostContext& hostContext, Fn&& fn)
     }
 }
 
-bool accountExists(evmc_host_context* _context, const evmc_address* _addr) noexcept
+bool accountExists(evmc_host_context* _context, const evmc_address* /*addr*/) noexcept
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-    auto addr = fromEvmC(*_addr);
-    return translateHostFault(hostContext, [&] { return hostContext.exists(addr); }, false);
+    // The legacy FISCO host treats every account as existing. Preserve that
+    // policy while refusing further host work after a recorded fault.
+    return !hostContext.hasHostFault();
 }
 
 evmc_bytes32 getStorage(

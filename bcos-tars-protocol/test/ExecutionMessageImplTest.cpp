@@ -89,6 +89,24 @@ BOOST_AUTO_TEST_CASE(schedulerHandbackWireRoundTrip)
     }
 }
 
+// Tars' Char is plain char. Unsigned-char targets zero-extend a compact negative
+// byte when reading an Int32; exercise those decoded values on every platform.
+BOOST_AUTO_TEST_CASE(compactNegativeEvmStatusIsSignExtended)
+{
+    bcostars::ExecutionMessage wire;
+    ExecutionMessageImpl decoded([&wire] { return &wire; });
+    for (int32_t status : {-1, -2, -3})
+    {
+        wire.evmStatus = static_cast<uint8_t>(status);
+        BOOST_CHECK_EQUAL(decoded.evmStatus(), status);
+    }
+    for (int32_t status : {0, 1, 2, 17})
+    {
+        wire.evmStatus = status;
+        BOOST_CHECK_EQUAL(decoded.evmStatus(), status);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(boolFlagsRoundTrip)
 {
     ExecutionMessageFactoryImpl factory;
