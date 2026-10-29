@@ -419,7 +419,7 @@ BOOST_AUTO_TEST_CASE(testEd25519VerifyShortSignature)
 
 // positive control for the sizeof(in) fix: a real hash‖pub‖r‖s buffer must verify and
 // recover the signing key's address (reverting to sizeof(_input) turns this red);
-// a truncated input leaves the tail zero-filled and fails verification deterministically
+// a truncated input must be rejected before verification
 BOOST_AUTO_TEST_CASE(testEd25519RecoverAddressFromInput)
 {
     auto signatureCrypto = std::make_shared<Ed25519Crypto>();
