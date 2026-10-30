@@ -14,6 +14,7 @@ target_link_libraries(bcos-devp2p PUBLIC
     codec
     bcos-utilities
     bcos-protocol
+    bcos-network
     rlp-protocol
     OpenSSL::Crypto
     jsoncpp_static)

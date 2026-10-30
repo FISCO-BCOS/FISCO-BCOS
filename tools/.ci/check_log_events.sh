@@ -22,7 +22,7 @@ declare -A MODULE_DIRS=(
     [EXECUTOR]="bcos-executor/src"
     [LEDGER]="bcos-ledger"
     [RPC]="bcos-rpc/bcos-rpc"
-    [GATEWAY]="bcos-gateway/bcos-gateway"
+    [GATEWAY]="bcos-gateway/bcos-gateway bcos-network/bcos-network"
     [FRONT]="bcos-front/bcos-front"
 )
 ALL_DIRS="${MODULE_DIRS[PBFT]} ${MODULE_DIRS[TXPOOL]} ${MODULE_DIRS[SYNC]} ${MODULE_DIRS[SCHEDULER]} ${MODULE_DIRS[EXECUTOR]} ${MODULE_DIRS[LEDGER]} ${MODULE_DIRS[RPC]} ${MODULE_DIRS[GATEWAY]} ${MODULE_DIRS[FRONT]}"

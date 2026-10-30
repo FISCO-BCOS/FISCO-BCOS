@@ -23,9 +23,9 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::protocol;
 
-ProGatewayNodeManager::ProGatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
-    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface,
-    boost::asio::io_context& _ioContext)
+ProGatewayNodeManager::ProGatewayNodeManager(std::string const& _uuid,
+    bcos::network::P2pID const& _nodeID, std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory,
+    Service::Ptr _p2pInterface, boost::asio::io_context& _ioContext)
   : GatewayNodeManager(_uuid, _nodeID, _keyFactory, _p2pInterface, _ioContext)
 {
     m_nodeAliveDetector =

@@ -506,4 +506,67 @@ BOOST_AUTO_TEST_CASE(test_sessionCapsFromConfig)
     }
 }
 
+BOOST_AUTO_TEST_CASE(test_dispatchBudgetConfig)
+{
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        config->initP2PConfig(pt, false);
+        auto dispatchConfig = config->dispatchBudgetConfig();
+        BOOST_CHECK_EQUAL(
+            dispatchConfig.globalBytes, DispatchBudgetConfig::DEFAULT_GLOBAL_IN_FLIGHT_BYTES);
+        BOOST_CHECK_EQUAL(
+            dispatchConfig.globalCount, DispatchBudgetConfig::DEFAULT_GLOBAL_IN_FLIGHT_COUNT);
+        BOOST_CHECK_EQUAL(
+            dispatchConfig.peerBytes, DispatchBudgetConfig::DEFAULT_PEER_IN_FLIGHT_BYTES);
+        BOOST_CHECK_EQUAL(
+            dispatchConfig.peerCount, DispatchBudgetConfig::DEFAULT_PEER_IN_FLIGHT_COUNT);
+    }
+
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        pt.put("p2p.dispatch_global_in_flight_bytes", 32 * 1024 * 1024);
+        pt.put("p2p.dispatch_global_in_flight_count", 128);
+        pt.put("p2p.dispatch_peer_in_flight_bytes", 8 * 1024 * 1024);
+        pt.put("p2p.dispatch_peer_in_flight_count", 32);
+        config->initP2PConfig(pt, false);
+        auto dispatchConfig = config->dispatchBudgetConfig();
+        BOOST_CHECK_EQUAL(dispatchConfig.globalBytes, 32 * 1024 * 1024);
+        BOOST_CHECK_EQUAL(dispatchConfig.globalCount, 128);
+        BOOST_CHECK_EQUAL(dispatchConfig.peerBytes, 8 * 1024 * 1024);
+        BOOST_CHECK_EQUAL(dispatchConfig.peerCount, 32);
+    }
+
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        pt.put("p2p.dispatch_peer_in_flight_bytes", 0);
+        BOOST_CHECK_THROW(config->initP2PConfig(pt, false), bcos::InvalidParameter);
+    }
+
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        pt.put("p2p.dispatch_peer_in_flight_count", 0);
+        BOOST_CHECK_THROW(config->initP2PConfig(pt, false), bcos::InvalidParameter);
+    }
+
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        pt.put("p2p.dispatch_global_in_flight_bytes", 1024);
+        pt.put("p2p.dispatch_peer_in_flight_bytes", 1024);
+        BOOST_CHECK_THROW(config->initP2PConfig(pt, false), bcos::InvalidParameter);
+    }
+
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        pt.put("p2p.dispatch_global_in_flight_count", 256);
+        pt.put("p2p.dispatch_peer_in_flight_count", 256);
+        BOOST_CHECK_THROW(config->initP2PConfig(pt, false), bcos::InvalidParameter);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

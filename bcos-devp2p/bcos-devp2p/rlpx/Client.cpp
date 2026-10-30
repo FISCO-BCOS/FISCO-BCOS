@@ -14,7 +14,8 @@
  *  limitations under the License.
  *
  * @file Client.cpp
- * @brief RLPx client/server implementation: handshake + Hello + eth Status.
+ * @brief RLPx client/server implementation over the bcos-network async
+ *        transport: handshake + Hello + eth Status.
  * @date 2026/8/18
  */
 #include "Client.h"
@@ -23,8 +24,17 @@
 #include "Framing.h"
 #include "Messages.h"
 #include <bcos-codec/rlp/Result.h>
+#include <bcos-network/Common.h>
+#include <bcos-task/Deadline.h>
+#include <bcos-task/Wait.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/LogStream.h>
+#include <boost/asio/post.hpp>
+#include <boost/asio/steady_timer.hpp>
+#include <atomic>
 #include <cctype>
+#include <chrono>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -33,8 +43,121 @@ namespace bcos::devp2p::rlpx
 {
 namespace
 {
-// Build the framing cipher from the handshake keys and wrap a session.
-Session makeSession(Socket&& _socket, AuthKeys const& _keys, bool _isInitiator)
+// Behaviour-compatible timeouts of the old blocking implementation.
+constexpr uint32_t kConnectTimeoutMs = 5000;
+constexpr uint32_t kIoTimeoutMs = 15000;
+
+// Process-wide IO pool shared by every devp2p client/server (the old
+// implementation spent one std::thread per connection on a blocking loop).
+// Leaky singleton: never destroyed, avoiding static-destruction-order issues
+// at process exit. The pool's worker threads start in its constructor.
+bcos::IOServicePool::Ptr ioPool()
+{
+    static auto* pool = new bcos::IOServicePool(2, "devp2p");
+    // Non-owning shared_ptr: satisfies ASIOInterface's Ptr parameter without
+    // ever running the destructor.
+    return bcos::IOServicePool::Ptr(pool, [](bcos::IOServicePool*) {});
+}
+
+// One Host per client connection; the server keeps one Host for its lifetime.
+// The recv buffer size is the grow CEILING (initial allocation stays small) and
+// must cover the largest frame — bcos-network's own convention is
+// 2 * allowMaxMsgSize. allowMaxMsgSize leaves headroom over the 16MiB codec
+// limit for the 32B header + 16B padding + 16B MAC wire overhead.
+NetHostPtr makeHost(std::shared_ptr<bcos::network::ASIOInterface> _asio)
+{
+    constexpr uint32_t kAllowMaxMsgSize = MessageCodec::kMaxFrameSize + 64 * 1024;
+    auto factory = std::make_shared<
+        bcos::network::BasicSessionFactory<RlpxFrameDecoder, bcos::network::PlainSocket>>(
+        2 * kAllowMaxMsgSize, kAllowMaxMsgSize, 64 * 1024, 1024 * 1024);
+    // The Host's accept loop must agree with the acceptor, so derive it from the interface: a
+    // pure client (ASIOInterface built with listen = false) has no acceptor and must run no
+    // accept loop — RlpxClient never calls acceptSession(), so accepted connections would queue
+    // undrained for the connection's lifetime.
+    const bool listen = _asio->listening();
+    auto host = std::make_shared<NetHost>(std::move(_asio), std::move(factory));
+    host->setListen(listen);
+    return host;
+}
+
+// Handshake-phase read-full with a total deadline (the session read loop is
+// not running yet, so setReadTimeoutMs does not apply). The deadline is
+// bcos::task::Deadline: the timer is armed on the socket's io_context and its
+// handler cancels the pending read; expired() is read while the operation's
+// result is still in hand and disarm() then closes the late-expiry window.
+bcos::bytes readExactWithTimeout(bcos::network::ASIOInterface& _asio,
+    std::shared_ptr<bcos::network::PlainSocket> const& _socket, size_t _size, uint32_t _timeoutMs)
+{
+    bcos::task::Deadline deadline(_socket->ioService(), _timeoutMs);
+    deadline.arm([socket = _socket](boost::system::error_code) {
+        boost::system::error_code cancelEc;
+        // NOLINTNEXTLINE(bugprone-unused-return-value) delivered via the ec out-param
+        socket->ref().cancel(cancelEc);
+    });
+    bcos::bytes buffer(_size, 0);
+    boost::system::error_code ec;
+    try
+    {
+        auto result = task::syncWait(
+            _asio.awaitableRead(_socket, boost::asio::buffer(buffer.data(), buffer.size())));
+        ec = std::get<0>(result);
+    }
+    catch (...)
+    {
+        deadline.disarm();  // disarm throws nothing; ~Deadline would cancel anyway
+        throw;
+    }
+    const bool timedOut = deadline.expired();
+    deadline.disarm();
+    if (timedOut && ec == boost::asio::error::operation_aborted)
+    {
+        throw std::runtime_error("rlpx handshake: read timed out");
+    }
+    if (ec)
+    {
+        throw std::runtime_error("rlpx handshake: read failed: " + ec.message());
+    }
+    return buffer;
+}
+
+// Handshake-phase write-full with a total deadline.
+void sendAllWithTimeout(bcos::network::ASIOInterface& _asio,
+    std::shared_ptr<bcos::network::PlainSocket> const& _socket, bytesConstRef _data,
+    uint32_t _timeoutMs)
+{
+    bcos::task::Deadline deadline(_socket->ioService(), _timeoutMs);
+    deadline.arm([socket = _socket](boost::system::error_code) {
+        boost::system::error_code cancelEc;
+        // NOLINTNEXTLINE(bugprone-unused-return-value) delivered via the ec out-param
+        socket->ref().cancel(cancelEc);
+    });
+    boost::system::error_code ec;
+    try
+    {
+        auto result = task::syncWait(
+            _asio.awaitableWrite(_socket, boost::asio::buffer(_data.data(), _data.size())));
+        ec = std::get<0>(result);
+    }
+    catch (...)
+    {
+        deadline.disarm();
+        throw;
+    }
+    const bool timedOut = deadline.expired();
+    deadline.disarm();
+    if (timedOut && ec == boost::asio::error::operation_aborted)
+    {
+        throw std::runtime_error("rlpx handshake: write timed out");
+    }
+    if (ec)
+    {
+        throw std::runtime_error("rlpx handshake: write failed: " + ec.message());
+    }
+}
+
+// Derive the framing key material from the completed handshake (the old
+// makeSession logic).
+FramingCipher::KeyMaterial makeKeyMaterial(AuthKeys const& _keys, bool _isInitiator)
 {
     FramingCipher::KeyMaterial keyMaterial;
     keyMaterial.ephemeralSharedSecret = EciesCipher::computeSharedSecret(
@@ -45,7 +168,7 @@ Session makeSession(Socket&& _socket, AuthKeys const& _keys, bool _isInitiator)
     keyMaterial.recipientNonce = _keys.recipientNonce;
     keyMaterial.initiatorFirstMessageData = _keys.initiatorFirstMessageData;
     keyMaterial.recipientFirstMessageData = _keys.recipientFirstMessageData;
-    return Session(std::move(_socket), FramingCipher(keyMaterial));
+    return keyMaterial;
 }
 
 // Unwraps an RlpResult at the handshake boundary (once per connection, so the
@@ -192,6 +315,34 @@ EstablishedSession exchangeHandshake(
     }
     return EstablishedSession(std::move(session), std::move(peerHello), std::move(peerStatus));
 }
+
+// Run the RLPx encrypted handshake over a not-yet-started network session,
+// then arm it for data traffic and wrap it in the synchronous facade.
+Session establishSession(NetHostPtr const& _host, NetSessionPtr const& _netSession,
+    std::shared_ptr<bcos::network::ASIOInterface> const& _asio, EccKeyPair const& _keyPair,
+    bool _isInitiator, bytesConstRef _recipientPublicKey, bool _ownsHost)
+{
+    auto socket = _netSession->socket();
+    IoChannel io;
+    io.sendAll = [_asio, socket](bytesConstRef _data) {
+        sendAllWithTimeout(*_asio, socket, _data, kIoTimeoutMs);
+    };
+    io.recvFixed = [_asio, socket](size_t _size) {
+        return readExactWithTimeout(*_asio, socket, _size, kIoTimeoutMs);
+    };
+
+    Handshake handshake(_keyPair, _isInitiator, _recipientPublicKey);
+    auto authKeys = handshake.execute(io);
+    auto keyMaterial = makeKeyMaterial(authKeys, _isInitiator);
+
+    // Inject the ingress cipher into the session decoder BEFORE start(): the
+    // read loop only begins consuming bytes there.
+    _netSession->m_decoder.initCipher(keyMaterial);
+    _netSession->setReadTimeoutMs(kIoTimeoutMs);  // 15s read timeout, session stays alive
+    _netSession->setIdleTimeInterval(0);          // no idle-drop (matches the old behaviour)
+    _netSession->start();
+    return Session(_host, _netSession, FramingCipher(keyMaterial), _ownsHost);
+}
 }  // namespace
 
 RlpxClient::RlpxClient(EccKeyPair _keyPair, PeerConfig _config)
@@ -200,35 +351,93 @@ RlpxClient::RlpxClient(EccKeyPair _keyPair, PeerConfig _config)
 
 EstablishedSession RlpxClient::connect()
 {
-    Socket socket;
-    socket.connect(m_config.host, m_config.port);
+    // Pure client: listen = false, so no acceptor is created at all. An outbound sync
+    // connection must not expose an unauthenticated listening socket — PlainSocket sessions
+    // have no PeerIdentity gate, and nothing here drains accepted sessions.
+    auto asio = std::make_shared<bcos::network::ASIOInterface>(
+        ioPool(), "0.0.0.0", 0, /* listen = */ false);
+    auto host = makeHost(asio);
+    host->setConnectTimeout(kConnectTimeoutMs);
+    host->start();
 
-    Handshake handshake(m_keyPair, /* isInitiator = */ true,
-        bytesConstRef(m_config.peerPublicKey.data(), m_config.peerPublicKey.size()));
-    auto authKeys = handshake.execute(socket);
+    auto [error, token, netSession] =
+        task::syncWait(host->connect(bcos::network::NodeIPEndpoint(m_config.host, m_config.port)));
+    if (!netSession)
+    {
+        host->stop();
+        throw std::runtime_error("RlpxClient: failed to connect to " + m_config.host + ":" +
+                                 std::to_string(m_config.port) + ": " + error.what());
+    }
 
-    auto session = makeSession(std::move(socket), authKeys, /* isInitiator = */ true);
-    return exchangeHandshake(std::move(session), m_keyPair, m_config);
+    try
+    {
+        auto session = establishSession(host, netSession, asio, m_keyPair, /* isInitiator = */ true,
+            bytesConstRef(m_config.peerPublicKey.data(), m_config.peerPublicKey.size()),
+            /* ownsHost = */ true);
+        return exchangeHandshake(std::move(session), m_keyPair, m_config);
+    }
+    catch (...)
+    {
+        netSession->drop(bcos::network::DisconnectReason::DisconnectRequested);
+        host->stop();
+        throw;
+    }
 }
 
 RlpxServer::RlpxServer(EccKeyPair _keyPair, uint16_t _port, PeerConfig _config)
-  : m_keyPair(std::move(_keyPair)), m_config(std::move(_config)), m_listener(_port)
+  : m_keyPair(std::move(_keyPair)),
+    m_config(std::move(_config)),
+    m_asio(std::make_shared<bcos::network::ASIOInterface>(ioPool(), "0.0.0.0", _port)),
+    m_host(makeHost(m_asio))
 {}
+
+RlpxServer::~RlpxServer()
+{
+    try
+    {
+        m_host->stop();
+    }
+    catch (...)
+    {}
+}
 
 EstablishedSession RlpxServer::accept()
 {
-    auto socket = m_listener.accept();
+    std::call_once(m_startOnce, [this] { m_host->start(); });
 
-    Handshake handshake(m_keyPair, /* isInitiator = */ false);
-    auto authKeys = handshake.execute(socket);
-
-    auto session = makeSession(std::move(socket), authKeys, /* isInitiator = */ false);
-
-    if (m_config.clientId.empty())
+    NetSessionPtr netSession;
+    try
     {
-        m_config.clientId = "FISCO-BCOS-devp2p-server/v0.1.0";
+        auto accepted = task::syncWait(m_host->acceptSession());
+        netSession = std::move(accepted.session);
     }
-    return exchangeHandshake(std::move(session), m_keyPair, m_config);
+    catch (bcos::network::NetworkException const& e)
+    {
+        throw std::runtime_error(std::string("RlpxServer: accept failed: ") + e.what());
+    }
+    if (!netSession)
+    {
+        throw std::runtime_error("RlpxServer: accept failed: no session");
+    }
+
+    try
+    {
+        // ownsHost = false: RlpxServer keeps m_host for its whole lifetime and must keep serving
+        // further clients after this session dies.
+        auto session = establishSession(m_host, netSession, m_asio, m_keyPair,
+            /* isInitiator = */ false, {}, /* ownsHost = */ false);
+        if (m_config.clientId.empty())
+        {
+            m_config.clientId = "FISCO-BCOS-devp2p-server/v0.1.0";
+        }
+        return exchangeHandshake(std::move(session), m_keyPair, m_config);
+    }
+    catch (...)
+    {
+        // The host stays up: the server may accept another client.
+        netSession->drop(bcos::network::DisconnectReason::DisconnectRequested);
+        throw;
+    }
 }
 
 }  // namespace bcos::devp2p::rlpx

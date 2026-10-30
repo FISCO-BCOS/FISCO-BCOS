@@ -21,7 +21,7 @@
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-gateway/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-tars-protocol/client/FrontServiceClient.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-task/Wait.h>

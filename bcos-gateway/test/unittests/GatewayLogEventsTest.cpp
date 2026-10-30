@@ -17,14 +17,15 @@
  *        Host's own (rate-limited) event at INFO
  * @file GatewayLogEventsTest.cpp
  */
-#include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libp2p/Service.h"
+#include "bcos-network/Common.h"
 #include <bcos-framework/testutils/LogCapture.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;
+using namespace bcos::network;
 using namespace bcos::test;
 
 BOOST_FIXTURE_TEST_SUITE(GatewayLogEventsTest, TestPromptFixture)
@@ -49,7 +50,7 @@ BOOST_AUTO_TEST_CASE(failedConnectPrintsNothingAtInfo)
     auto service = std::make_shared<Service>(info);
     setModuleLogLevel(LogModule::GATEWAY, LogLevel::INFO);
     LogCapture capture;
-    service->onConnect(NetworkException(ConnectError, "Connect failed"), P2PInfo{}, nullptr);
+    service->onConnect(makeNetworkException(ConnectError, "Connect failed"), nullptr, nullptr);
     auto text = capture.text();
     resetModuleLogLevel(LogModule::GATEWAY);
     BOOST_CHECK_MESSAGE(text.find("onConnect") == std::string::npos, text);

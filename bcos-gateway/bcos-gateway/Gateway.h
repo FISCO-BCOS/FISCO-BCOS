@@ -31,6 +31,8 @@
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-utilities/LogStream.h"
 #include "filter/ReadOnlyFilter.h"
+#include <cstddef>
+#include <mutex>
 #include <range/v3/range/concepts.hpp>
 
 
@@ -40,10 +42,11 @@ class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gat
 {
 public:
     using Ptr = std::shared_ptr<Gateway>;
-    Gateway(GatewayConfig::Ptr _gatewayConfig, P2PInterface::Ptr _p2pInterface,
+    Gateway(GatewayConfig::Ptr _gatewayConfig, Service::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
-        std::string _gatewayServiceName = "localGateway");
+        std::string _gatewayServiceName = "localGateway",
+        DispatchBudgetConfig _dispatchConfig = {});
     ~Gateway() override;
 
     void start() override;
@@ -98,7 +101,13 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID, Message _msg,
         ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
-    P2PInterface::Ptr p2pInterface() const;
+    // Awaitable form of the dispatch above, for callers that are themselves coroutines and must
+    // keep `_msg` (and therefore its payload view) alive across the dispatch. The void overload
+    // stays for the existing non-coroutine/test callers.
+    virtual task::Task<bcos::Error::Ptr> dispatchToFrontService(const std::string& _groupID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID, Message _msg);
+
+    Service::Ptr p2pInterface() const;
     GatewayNodeManager::Ptr gatewayNodeManager();
     /**
      * @brief receive the latest group information notification from the GroupManagerInterface
@@ -133,8 +142,12 @@ public:
 protected:
     // for UT
     Gateway() = default;
-    virtual void onReceiveP2PMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, Message _msg);
+    // Coroutine: it awaits the response send on every path that replies (rate-limit reject and
+    // the front-service completion). A caller that must not wait on remote I/O — the node-wide
+    // per-type inbound pump — detaches it per message via task::wait without awaiting a permit.
+    // Service acquires the origin session's peer/global permits before queueing; the detached
+    // frame owns _msg and those permits for the whole dispatch.
+    virtual task::Task<void> onReceiveP2PMessage(P2PSession::Ptr _session, Message _msg);
 
     /**
      * @brief: receive group broadcast message
@@ -143,8 +156,7 @@ protected:
      * @param _payload: message content
      * @return void
      */
-    virtual void onReceiveBroadcastMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, Message _msg);
+    virtual void onReceiveBroadcastMessage(P2PSession::Ptr _session, Message _msg);
 
     bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
@@ -152,7 +164,7 @@ private:
     std::string m_gatewayServiceName;
     GatewayConfig::Ptr m_gatewayConfig;
     // p2p service interface
-    P2PInterface::Ptr m_p2pInterface;
+    Service::Ptr m_p2pInterface;
     // GatewayNodeManager
     GatewayNodeManager::Ptr m_gatewayNodeManager;
     bcos::amop::AMOPImpl::Ptr m_amop;
@@ -160,5 +172,11 @@ private:
     // For rate limit
     ratelimiter::GatewayRateLimiter::Ptr m_gatewayRateLimiter;
     std::optional<ReadOnlyFilter> m_readonlyFilter;
+    struct DispatchState
+    {
+        std::mutex mutex;
+        bool stopped = false;
+    };
+    std::shared_ptr<DispatchState> m_dispatchState = std::make_shared<DispatchState>();
 };
 }  // namespace bcos::gateway

@@ -23,8 +23,7 @@
 #include "bcos-front/FrontMessage.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/gateway/GatewayMessageExtAttributes.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/LogStream.h"
@@ -32,6 +31,7 @@
 #include <bcos-task/Wait.h>
 #include <boost/lexical_cast.hpp>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace bcos;
@@ -65,11 +65,12 @@ void Gateway::start()
 
 void Gateway::stop()
 {
-    // erase the registered handler
+    {
+        std::lock_guard lock(m_dispatchState->mutex);
+        m_dispatchState->stopped = true;
+    }
     if (m_p2pInterface)
     {
-        m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::PeerToPeerMessage);
-        m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::BroadcastMessage);
         m_p2pInterface->stop();
     }
     if (m_amop)
@@ -179,7 +180,7 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
         try
         {
             auto respMessage = co_await m_p2pInterface->sendMessageByNodeID(
-                p2pID, message, _payloads, Options{c_gatewaySendTimeoutMs, true});
+                p2pID, message, _payloads, bcos::network::Options{c_gatewaySendTimeoutMs, true});
             if (!respMessage)
             {
                 // No response means nothing was sent (e.g. the target session is inactive or the
@@ -219,22 +220,22 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
                                << LOG_KV("moduleID", _moduleID) << LOG_KV("code", respCode)
                                << LOG_KV("message", "respCode != SUCCESS, try another gateway");
         }
-        catch (NetworkException const& e)
+        catch (bcos::network::NetworkException const& e)
         {
-            if (e.errorCode() == P2PExceptionType::OutBWOverflow)
+            if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::OutBWOverflow)
             {
                 co_return BCOS_ERROR_PTR(
                     bcos::protocol::CommonError::GatewayBandwidthOverFlow, e.what());
             }
-            if (e.errorCode() == P2PExceptionType::InQPSOverflow)
+            if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::InQPSOverflow)
             {
                 co_return BCOS_ERROR_PTR(bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
             }
             GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
                                << LOG_DESC("network callback")
                                << LOG_KV("dstP2P", printShortP2pID(p2pID))
-                               << LOG_KV("code", e.errorCode()) << LOG_KV("moduleID", _moduleID)
-                               << LOG_KV("message", e.what());
+                               << LOG_KV("code", bcos::network::errorCodeOf(e))
+                               << LOG_KV("moduleID", _moduleID) << LOG_KV("message", e.what());
             // try another gateway
         }
         catch (std::exception const& e)
@@ -259,50 +260,6 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
  * @param _callback: callback
  * @return void
  */
-void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNodeID,
-    NodeIDPtr _dstNodeID, Message _msg, ErrorRespFunc _errorRespFunc)
-{
-    auto frontService =
-        m_gatewayNodeManager->localRouterTable()->getFrontService(_groupID, _dstNodeID);
-    if (!frontService)
-    {
-        GATEWAY_LOG(ERROR) << LOG_DESC(
-                                  "onReceiveP2PMessage unable to find front "
-                                  "service to dispatch this message")
-                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
-                           << LOG_KV("dstNodeID", _dstNodeID->hex());
-
-        auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceDispatchMsg,
-            "unable to find front service dispatch message to "
-            "groupID:" +
-                _groupID + " ,nodeID:" + _dstNodeID->hex());
-
-        if (_errorRespFunc)
-        {
-            _errorRespFunc(errorPtr);
-        }
-        return;
-    }
-
-    // zero-copy: the owning Message is held by this coroutine frame for the whole (possibly
-    // deferred) dispatch, so the payload view into it stays valid until the task completes
-    task::wait([](FrontServiceInfo::Ptr _frontServiceInfo, std::string _groupID,
-                   NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, Message _msg,
-                   ErrorRespFunc _errorRespFunc) -> task::Task<void> {
-        auto error = co_await _frontServiceInfo->frontService()->onReceiveMessage(
-            _groupID, _srcNodeID, _msg.payload());
-        if (_errorRespFunc)
-        {
-            _errorRespFunc(error);
-        }
-        GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveP2PMessage callback")
-                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
-                           << LOG_KV("dstNodeID", _dstNodeID->hex())
-                           << LOG_KV("code", (error ? error->errorCode() : 0))
-                           << LOG_KV("msg", (error ? error->errorMessage() : ""));
-    }(frontService, _groupID, _srcNodeID, _dstNodeID, std::move(_msg), std::move(_errorRespFunc)));
-}
-
 bool Gateway::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
 {
     // check the serviceName
@@ -333,16 +290,69 @@ bcos::task::Task<Error::Ptr> Gateway::notifyGroupInfo(bcos::group::GroupInfo::Pt
     co_return nullptr;
 }
 
-void Gateway::onReceiveP2PMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
+task::Task<bcos::Error::Ptr> Gateway::dispatchToFrontService(
+    const std::string& _groupID, NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, Message _msg)
 {
-    if (_e.errorCode())
+    auto frontService =
+        m_gatewayNodeManager->localRouterTable()->getFrontService(_groupID, _dstNodeID);
+    if (!frontService)
     {
-        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveP2PMessage error")
-                             << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
-        return;
+        GATEWAY_LOG(ERROR) << LOG_DESC(
+                                  "onReceiveP2PMessage unable to find front "
+                                  "service to dispatch this message")
+                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("dstNodeID", _dstNodeID->hex());
+
+        auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceDispatchMsg,
+            "unable to find front service dispatch message to "
+            "groupID:" +
+                _groupID + " ,nodeID:" + _dstNodeID->hex());
+        GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveP2PMessage callback")
+                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("dstNodeID", _dstNodeID->hex())
+                           << LOG_KV("code", errorPtr->errorCode())
+                           << LOG_KV("msg", errorPtr->errorMessage());
+        co_return errorPtr;
     }
 
+    // zero-copy: `_msg` is owned by this coroutine frame for the whole (possibly deferred)
+    // dispatch, so the payload view into it stays valid until the co_await returns.
+    auto error = co_await frontService->frontService()->onReceiveMessage(
+        _groupID, _srcNodeID, _msg.payload());
+    GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveP2PMessage callback") << LOG_KV("groupID", _groupID)
+                       << LOG_KV("srcNodeID", _srcNodeID->hex())
+                       << LOG_KV("dstNodeID", _dstNodeID->hex())
+                       << LOG_KV("code", (error ? error->errorCode() : 0))
+                       << LOG_KV("msg", (error ? error->errorMessage() : ""));
+    co_return error;
+}
+
+void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNodeID,
+    NodeIDPtr _dstNodeID, Message _msg, ErrorRespFunc _errorRespFunc)
+{
+    // Thin synchronous adapter over the coroutine form: the message is moved into the frame, so the
+    // deferred dispatch keeps its own copy of the payload (the old shape moved it into a detached
+    // task). See dispatchToFrontService for the awaitable entry point.
+    auto self = std::static_pointer_cast<Gateway>(shared_from_this());
+    task::wait(
+        [](std::shared_ptr<Gateway> _self, std::string _groupID, NodeIDPtr _srcNodeID,
+            NodeIDPtr _dstNodeID, Message _msg, ErrorRespFunc _errorRespFunc) -> task::Task<void> {
+            auto error = co_await _self->dispatchToFrontService(
+                _groupID, _srcNodeID, _dstNodeID, std::move(_msg));
+            if (_errorRespFunc)
+            {
+                _errorRespFunc(std::move(error));
+            }
+        }(self, _groupID, _srcNodeID, _dstNodeID, std::move(_msg), std::move(_errorRespFunc)));
+}
+
+task::Task<void> Gateway::onReceiveP2PMessage(P2PSession::Ptr _session, Message _msg)
+{
+    // COROUTINE: the whole dispatch plus the reply are awaited on this frame, so the response
+    // payload rides as a VIEW into _msg instead of a copy. The registered channel handler detaches
+    // one frame per message via task::wait (see the constructor): this body awaits remote I/O —
+    // the front-service dispatch and the response write — which the node-wide per-type pump must
+    // never wait on.
     const auto& options = _msg.options();
     auto msgPayload = _msg.payload();
     auto payload = bytesConstRef(msgPayload.data(), msgPayload.size());
@@ -350,7 +360,6 @@ void Gateway::onReceiveP2PMessage(
     auto groupID = options.groupID();
     // moduleID
     auto moduleID = options.moduleID();
-
 
     // Notice: moduleID not set the previous version, try to decode from front message
     if (moduleID == 0)
@@ -370,9 +379,7 @@ void Gateway::onReceiveP2PMessage(
     if (m_readonlyFilter && !filter(*m_readonlyFilter, groupID, moduleID, {}))
     {
         GATEWAY_LOG(WARNING) << "P2PMessage moduleID: " << moduleID << " filter by readOnlyFilter";
-
-        // Drop the message
-        return;
+        co_return;  // Drop the message
     }
 
     if (m_gatewayRateLimiter)
@@ -384,10 +391,12 @@ void Gateway::onReceiveP2PMessage(
         if (result.has_value())
         {
             auto errorCode = std::to_string((int)protocol::CommonError::GatewayQPSOverFlow);
-            m_p2pInterface->sendRespMessageBySession(
-                bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg.seq(),
-                _msg.srcP2PNodeID(), _session);
-            return;
+            // co_await: the rejection goes out on this frame. The bytes are moved into the
+            // response, so the std::string above only has to live across the argument conversion.
+            co_await m_p2pInterface->sendRespMessageBySession(
+                bcos::bytes(errorCode.begin(), errorCode.end()), _msg.seq(), _msg.srcP2PNodeID(),
+                _session);
+            co_return;
         }
     }
 
@@ -401,51 +410,36 @@ void Gateway::onReceiveP2PMessage(
         GATEWAY_LOG(WARNING) << LOG_BADGE("onReceiveP2PMessage")
                              << LOG_DESC("empty dstNodeIDs, drop") << LOG_KV("groupID", groupID)
                              << LOG_KV("moduleID", moduleID) << LOG_KV("seq", _msg.seq());
-        return;
+        co_return;
     }
     auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(srcNodeID);
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(dstNodeIDs[0]);
-    auto gateway = std::weak_ptr<Gateway>(shared_from_this());
-    // the response only needs the request's seq and srcP2PNodeID, so capture those by value and
-    // move the message itself into the dispatch below
+    // the response only needs the request's seq and srcP2PNodeID
     auto seq = _msg.seq();
     auto srcP2PNodeID = _msg.srcP2PNodeID();
-    onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, std::move(_msg),
-        [groupID, moduleID, srcNodeIDPtr, dstNodeIDPtr, _session, seq, srcP2PNodeID, gateway](
-            Error::Ptr _error) {
-            auto gatewayPtr = gateway.lock();
-            if (!gatewayPtr)
-            {
-                return;
-            }
 
-            auto errorCode =
-                std::to_string(_error ? _error->errorCode() : (int)protocol::CommonError::SUCCESS);
-            if (_error)
-            {
-                GATEWAY_LOG(TRACE)
-                    << LOG_BADGE("onReceiveP2PMessage") << "callback failed"
-                    << LOG_KV("code", _error->errorCode())
-                    << LOG_KV("message", _error->errorMessage()) << LOG_KV("group", groupID)
-                    << LOG_KV("moduleID", moduleID) << LOG_KV("src", srcNodeIDPtr->shortHex())
-                    << LOG_KV("dst", dstNodeIDPtr->shortHex());
-            }
-            gatewayPtr->m_p2pInterface->sendRespMessageBySession(
-                bytesConstRef((byte*)errorCode.data(), errorCode.size()), seq, srcP2PNodeID,
-                _session);
-        });
+    // Await the front-service dispatch, then the reply, both on this frame. `_msg` is owned here
+    // for the whole dispatch, so the payload view stays valid and the response can be sent straight
+    // from it (the old shape detached a task, which forced a payload copy).
+    auto error =
+        co_await dispatchToFrontService(groupID, srcNodeIDPtr, dstNodeIDPtr, std::move(_msg));
+    if (error)
+    {
+        GATEWAY_LOG(TRACE) << LOG_BADGE("onReceiveP2PMessage") << "callback failed"
+                           << LOG_KV("code", error->errorCode())
+                           << LOG_KV("message", error->errorMessage()) << LOG_KV("group", groupID)
+                           << LOG_KV("moduleID", moduleID)
+                           << LOG_KV("src", srcNodeIDPtr->shortHex())
+                           << LOG_KV("dst", dstNodeIDPtr->shortHex());
+    }
+    auto errorCode =
+        std::to_string(error ? error->errorCode() : (int)protocol::CommonError::SUCCESS);
+    co_await m_p2pInterface->sendRespMessageBySession(
+        bcos::bytes(errorCode.begin(), errorCode.end()), seq, std::move(srcP2PNodeID), _session);
 }
 
-void Gateway::onReceiveBroadcastMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
+void Gateway::onReceiveBroadcastMessage(P2PSession::Ptr _session, Message _msg)
 {
-    if (_e.errorCode() != 0)
-    {
-        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage failed")
-                             << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
-        return;
-    }
-
     const auto& options = _msg.options();
     auto payload = _msg.payload();
 
@@ -536,9 +530,11 @@ bcos::task::Task<void> bcos::gateway::Gateway::broadcastMessage(uint16_t type,
     co_await m_gatewayNodeManager->peersRouterTable()->broadcastMessage(
         type, groupID, moduleID, message, std::move(payloads));
 }
-bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, P2PInterface::Ptr _p2pInterface,
+
+bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, Service::Ptr _p2pInterface,
     GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
-    ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter, std::string _gatewayServiceName)
+    ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter, std::string _gatewayServiceName,
+    DispatchBudgetConfig _dispatchConfig)
   : m_gatewayServiceName(std::move(_gatewayServiceName)),
     m_gatewayConfig(std::move(_gatewayConfig)),
     m_p2pInterface(std::move(_p2pInterface)),
@@ -546,24 +542,59 @@ bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, P2PInterface:
     m_amop(std::move(_amop)),
     m_gatewayRateLimiter(std::move(_gatewayRateLimiter))
 {
-    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
-        [this](const NetworkException& networkException, std::shared_ptr<P2PSession> p2pSession,
-            Message p2pMessage) {
-            onReceiveP2PMessage(networkException, std::move(p2pSession), std::move(p2pMessage));
+    m_p2pInterface->setDispatchBudgetConfig(std::move(_dispatchConfig));
+    m_p2pInterface->subscribeHandler(GatewayMessageType::PeerToPeerMessage,
+        [this, dispatchState = m_dispatchState](
+            bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
+            // Service has already acquired the origin session's permits. This node-wide pump only
+            // detaches; it never waits on a budget or remote I/O.
+            std::shared_ptr<Gateway> self;
+            {
+                std::lock_guard lock(dispatchState->mutex);
+                if (dispatchState->stopped)
+                {
+                    co_return false;
+                }
+                self = weak_from_this().lock();
+                if (!self)
+                {
+                    co_return false;
+                }
+            }
+            task::wait([](std::shared_ptr<Gateway> _self, P2PSession::Ptr _session, Message _msg,
+                           DispatchPermit _permit) -> task::Task<void> {
+                try
+                {
+                    co_await _self->onReceiveP2PMessage(std::move(_session), std::move(_msg));
+                }
+                catch (std::exception const& e)
+                {
+                    GATEWAY_LOG(WARNING) << LOG_BADGE("onReceiveP2PMessage")
+                                         << LOG_DESC("detached dispatch exception")
+                                         << LOG_KV("what", boost::diagnostic_information(e));
+                }
+                catch (...)
+                {
+                    GATEWAY_LOG(WARNING)
+                        << LOG_BADGE("onReceiveP2PMessage")
+                        << LOG_DESC("detached dispatch exception")
+                        << LOG_KV("what", boost::current_exception_diagnostic_information());
+                }
+            }(self, std::move(inbound.session), std::move(inbound.message),
+                                                       std::move(inbound.dispatchPermit)));
+            co_return true;
         });
-
-    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::BroadcastMessage,
-        [this](const NetworkException& networkException, std::shared_ptr<P2PSession> p2pSession,
-            Message p2pMessage) {
-            onReceiveBroadcastMessage(
-                networkException, std::move(p2pSession), std::move(p2pMessage));
+    m_p2pInterface->subscribeHandler(GatewayMessageType::BroadcastMessage,
+        [this](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
+            onReceiveBroadcastMessage(std::move(inbound.session), std::move(inbound.message));
+            co_return true;
         });
 }
 bcos::gateway::Gateway::~Gateway()
 {
     stop();
 }
-bcos::gateway::P2PInterface::Ptr bcos::gateway::Gateway::p2pInterface() const
+bcos::gateway::Service::Ptr bcos::gateway::Gateway::p2pInterface() const
 {
     return m_p2pInterface;
 }

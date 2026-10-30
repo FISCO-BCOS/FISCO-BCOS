@@ -18,7 +18,7 @@
  * @date 2021-05-04
  */
 #pragma once
-#include "libnetwork/Common.h"
+#include "bcos-network/Common.h"
 #include <bcos-utilities/LogStream.h>
 
 #define GATEWAY_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[Gateway][Gateway]"

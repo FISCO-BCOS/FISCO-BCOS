@@ -8,8 +8,8 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
-#include <bcos-gateway/libnetwork/Host.h>
-#include <bcos-gateway/libnetwork/PeerBlackWhitelist.h>
+#include <bcos-gateway/libp2p/P2PIdentity.h>
+#include <bcos-gateway/libp2p/PeerBlackWhitelist.h>
 #include <boost/test/unit_test.hpp>
 #include <set>
 #include <string>
@@ -77,14 +77,15 @@ BOOST_AUTO_TEST_CASE(blacklistDisabledMatchesNone)
     BOOST_CHECK(!bl.has(kNodeA));  // disabled → nobody is blacklisted
 }
 
-BOOST_AUTO_TEST_CASE(hostDefaultListsMatchRemovedNullptrGuards)
+BOOST_AUTO_TEST_CASE(identityDefaultListsMatchRemovedNullptrGuards)
 {
-    // A freshly built Host's default (disabled, empty) lists must behave like the nullptr guards
-    // that used to short-circuit the verify callback: blacklist blocks no one, whitelist passes
-    // everyone — a swapped Type default here would only surface as rejected live handshakes.
-    Host host(nullptr, nullptr, nullptr);
-    BOOST_CHECK(!host.peerBlacklist().has(kNodeA));
-    BOOST_CHECK(host.peerWhitelist().has(kNodeA));
+    // A freshly built P2PPeerIdentity's default (disabled, empty) lists must behave like the
+    // nullptr guards that used to short-circuit the verify callback: blacklist blocks no one,
+    // whitelist passes everyone — a swapped Type default here would only surface as rejected
+    // live handshakes.
+    P2PPeerIdentity identity(nullptr, nullptr, nullptr);
+    BOOST_CHECK(!identity.peerBlacklist().has(kNodeA));
+    BOOST_CHECK(identity.peerWhitelist().has(kNodeA));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

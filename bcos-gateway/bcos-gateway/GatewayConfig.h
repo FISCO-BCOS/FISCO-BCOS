@@ -8,6 +8,7 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
+#include "bcos-gateway/libp2p/DispatchBudget.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/asio/ssl/context.hpp>
 #include <boost/property_tree/ini_parser.hpp>
@@ -160,6 +161,7 @@ public:
     CertConfig certConfig() const;
     SMCertConfig smCertConfig() const;
     RateLimiterConfig rateLimiterConfig() const;
+    DispatchBudgetConfig dispatchBudgetConfig() const;
 
     const std::set<NodeIPEndpoint>& connectedNodes() const;
 
@@ -313,6 +315,7 @@ private:
     SMCertConfig m_smCertConfig;
 
     RateLimiterConfig m_rateLimiterConfig;
+    DispatchBudgetConfig m_dispatchBudgetConfig;
 
     std::string m_certPath;
     std::string m_nodePath;

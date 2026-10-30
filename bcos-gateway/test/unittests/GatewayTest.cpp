@@ -22,15 +22,25 @@
 #include "bcos-gateway/Gateway.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-crypto/signature/key/KeyFactoryImpl.h"
+#include "bcos-framework/front/FrontServiceInterface.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
+#include "bcos-gateway/gateway/LocalRouterTable.h"
 #include "bcos-gateway/libamop/AMOPImpl.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/Service.h"
+#include "bcos-network/test/unittests/utils/TestAsioInterface.h"
+#include "bcos-network/test/unittests/utils/TestSessionSocket.h"
+#include "bcos-task/OneShot.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
 #include <fakeit.hpp>
 #include <memory>
+#include <optional>
+#include <thread>
+#include <utility>
+#include <vector>
 
 using namespace fakeit;
 using namespace bcos;
@@ -43,7 +53,6 @@ using namespace bcos::group;
 // Forward declarations for interfaces we'll mock
 namespace bcos::gateway
 {
-class P2PInterface;
 class GatewayNodeManager;
 }  // namespace bcos::gateway
 namespace bcos::amop
@@ -185,8 +194,8 @@ BOOST_AUTO_TEST_CASE(testFakeItWithInterfaces)
     // Test fakeit usage similar to testBaselineScheduler.cpp
     // Create mocks for Gateway dependencies
 
-    // Mock P2PInterface for testing P2P operations
-    fakeit::Mock<P2PInterface> mockP2PInterface;
+    // Mock Service for testing P2P operations
+    fakeit::Mock<Service> mockP2PInterface;
 
     // Setup mock behaviors using When().AlwaysDo() pattern like in testBaselineScheduler
     fakeit::When(Method(mockP2PInterface, start)).AlwaysDo([]() {
@@ -198,7 +207,7 @@ BOOST_AUTO_TEST_CASE(testFakeItWithInterfaces)
     });
 
     // Test that we can call the mocked methods
-    P2PInterface& p2pRef = mockP2PInterface.get();
+    Service& p2pRef = mockP2PInterface.get();
 
     // These should not throw since we've mocked them
     BOOST_CHECK_NO_THROW(p2pRef.start());
@@ -270,9 +279,9 @@ BOOST_AUTO_TEST_CASE(testNodeIDOperations)
 
 BOOST_AUTO_TEST_CASE(testGatewayP2PInterfaceMock)
 {
-    // Test P2PInterface mocking similar to testBaselineScheduler pattern
-    // P2PInterface is polymorphic and can be mocked
-    fakeit::Mock<P2PInterface> mockP2PInterface;
+    // Test Service mocking similar to testBaselineScheduler pattern
+    // Service is polymorphic and can be mocked
+    fakeit::Mock<Service> mockP2PInterface;
 
     // Setup mock behaviors using When().AlwaysDo() pattern
     fakeit::When(Method(mockP2PInterface, start)).AlwaysDo([]() {
@@ -283,7 +292,7 @@ BOOST_AUTO_TEST_CASE(testGatewayP2PInterfaceMock)
     });
 
     // Test the mocked P2P interface
-    P2PInterface& p2pRef = mockP2PInterface.get();
+    Service& p2pRef = mockP2PInterface.get();
 
     // These should not throw since we've mocked them
     BOOST_CHECK_NO_THROW(p2pRef.start());
@@ -375,7 +384,7 @@ BOOST_AUTO_TEST_CASE(testComplexGatewayScenario)
     // This demonstrates how to build comprehensive tests similar to testBaselineScheduler.cpp
 
     // Create multiple mocks for a complete Gateway test
-    fakeit::Mock<P2PInterface> mockP2PInterface;
+    fakeit::Mock<Service> mockP2PInterface;
     fakeit::Mock<GatewayNodeManager> mockGatewayNodeManager;
     fakeit::Mock<bcos::amop::AMOPImpl> mockAMOP;
 
@@ -402,7 +411,7 @@ BOOST_AUTO_TEST_CASE(testComplexGatewayScenario)
         });
 
     // Test the complex scenario
-    P2PInterface& p2pRef = mockP2PInterface.get();
+    Service& p2pRef = mockP2PInterface.get();
     GatewayNodeManager& nodeManagerRef = mockGatewayNodeManager.get();
     bcos::amop::AMOPImpl& amopRef = mockAMOP.get();
 
@@ -495,6 +504,990 @@ BOOST_AUTO_TEST_CASE(testErrorHandlingScenarios)
 
     // Verify both calls were made
     fakeit::Verify(Method(mockAMOP, sendMessageByTopic)).Exactly(2);
+}
+
+namespace
+{
+// Round-3 review (F1) fixtures. ParkedSendService makes the response WRITE block until the test
+// releases it: the fake parks inside sendRespMessageBySession exactly where production parks —
+// the session's write queue behind a stalled peer's socket.
+class ParkedSendService : public Service
+{
+public:
+    ParkedSendService()
+      : Service([] {
+            P2PInfo info;
+            info.rawP2pID = "selfRawP2pID";
+            info.p2pID = "selfP2pID";
+            return info;
+        }())
+    {}
+
+    task::Task<void> sendRespMessageBySession(bcos::bytes /*payload*/, uint32_t /*seq*/,
+        std::string /*srcP2PNodeID*/, P2PSession::Ptr /*session*/) override
+    {
+        auto gate = std::make_shared<task::OneShot<bool>>();
+        sendGates.push_back(gate);
+        ++sendStarted;
+        co_await *gate;  // outstanding until the test releases it
+        ++sendReleased;
+    }
+
+    void releaseOne(std::size_t index) { sendGates.at(index)->complete(true); }
+
+    void releaseAll()
+    {
+        auto gates = std::move(sendGates);
+        sendGates.clear();
+        for (auto& gate : gates)
+        {
+            gate->complete(true);
+        }
+    }
+
+    std::vector<std::shared_ptr<task::OneShot<bool>>> sendGates;
+    int sendStarted = 0;
+    int sendReleased = 0;
+};
+
+class QueuedChannelService : public ParkedSendService
+{
+public:
+    std::shared_ptr<InboundChannel> subscribeChannel(
+        uint16_t type, InboundChannel::Poster /*poster*/, std::size_t capacity) override
+    {
+        std::lock_guard lock(x_channels);
+        auto& slot = m_channels.at(type);
+        if (!slot)
+        {
+            slot = std::make_shared<InboundChannel>(
+                [this](std::function<void()> wake) { wakes.push_back(std::move(wake)); }, capacity,
+                DEFAULT_INBOUND_QUEUE_BYTES, inboundMessageBytes);
+        }
+        return slot;
+    }
+
+    std::vector<std::function<void()>> wakes;
+};
+
+class RunningTestHost
+  : public bcos::network::Host<P2PDecoder, bcos::network::test::TestSessionSocket>
+{
+public:
+    using bcos::network::Host<P2PDecoder, bcos::network::test::TestSessionSocket>::Host;
+
+    void setRunning() { this->m_run = true; }
+};
+
+// Minimal P2PSession fake: onMessage needs a lockable weak_ptr<P2PSession> and a p2pID for
+// logging; no socket is involved.
+class FakePeerSession : public P2PSession
+{
+public:
+    explicit FakePeerSession(std::string id) : m_id(std::move(id))
+    {
+        auto info = mutableP2pInfo();
+        info->rawP2pID = m_id;
+        info->p2pID = m_id;
+    }
+    bcos::network::P2pID p2pID() override { return m_id; }
+    std::string printP2pID() override { return m_id; }
+    std::string m_id;
+};
+
+// The UT GatewayNodeManager constructor (uuid, keyFactory, p2pInterface) skips the io_context the
+// production one drives timers with; this test never starts those timers.
+class TestGatewayNodeManager : public GatewayNodeManager
+{
+public:
+    TestGatewayNodeManager(bcos::crypto::KeyFactory::Ptr keyFactory, Service::Ptr service)
+      : GatewayNodeManager("", std::move(keyFactory), std::move(service))
+    {}
+};
+
+// Records every front-service dispatch; onReceiveMessage completes inline.
+class RecordingFrontService : public bcos::front::FrontServiceInterface
+{
+public:
+    void start() override {}
+    void stop() override {}
+    task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo()
+        override
+    {
+        co_return std::make_tuple(Error::Ptr(nullptr), bcos::gateway::GroupNodeInfo::Ptr(nullptr));
+    }
+    task::Task<Error::Ptr> onReceiveGroupNodeInfo(
+        std::string, bcos::gateway::GroupNodeInfo::Ptr) override
+    {
+        co_return nullptr;
+    }
+    task::Task<Error::Ptr> onReceiveMessage(
+        std::string groupID, bcos::crypto::NodeIDPtr nodeID, bytesConstRef data) override
+    {
+        received.emplace_back(std::move(groupID),
+            std::string(reinterpret_cast<const char*>(data.data()), data.size()));
+        co_return nullptr;
+    }
+    task::Task<Error::Ptr> onReceiveBroadcastMessage(
+        std::string, bcos::crypto::NodeIDPtr, bytesConstRef) override
+    {
+        co_return nullptr;
+    }
+    task::Task<Error::Ptr> sendResponse(
+        std::string, int, bcos::crypto::NodeIDPtr, bytesConstRef) override
+    {
+        co_return nullptr;
+    }
+    task::Task<void> broadcastMessage(
+        uint16_t, int, ::ranges::any_view<bytesConstRef, ::ranges::category::forward>) override
+    {
+        co_return;
+    }
+    task::Task<bcos::front::SendResult> sendMessageByNodeID(int, bcos::crypto::NodeIDPtr,
+        ::ranges::any_view<bytesConstRef, ::ranges::category::forward>, uint32_t) override
+    {
+        co_return bcos::front::SendResult{};
+    }
+
+    std::vector<std::pair<std::string, std::string>> received;
+};
+
+Message makeP2PRequest(uint32_t seq, bcos::crypto::NodeIDPtr const& dstNodeID,
+    std::size_t payloadSize = 1)
+{
+    Message message;
+    message.setPacketType(GatewayMessageType::PeerToPeerMessage);
+    message.setSeq(seq);
+    message.setPayload(bytes(payloadSize, 'p'));
+    P2PMessageOptions options;
+    options.setGroupID("group0");
+    options.setSrcNodeID(bytes(32, 0x1));
+    options.mutableDstNodeIDs().push_back(dstNodeID->encode());
+    message.setOptions(std::move(options));
+    return message;
+}
+
+Message makeBroadcastRequest(uint32_t seq)
+{
+    Message message;
+    message.setPacketType(GatewayMessageType::BroadcastMessage);
+    message.setSeq(seq);
+    message.setExt(bcos::protocol::NodeType::CONSENSUS_NODE);
+    message.setPayload(bytes{'b'});
+    P2PMessageOptions options;
+    options.setGroupID("group0");
+    options.setSrcNodeID(bytes(32, 0x3));
+    message.setOptions(std::move(options));
+    return message;
+}
+
+void closeP2PChannels(Service& service)
+{
+    for (uint16_t type : {GatewayMessageType::Handshake, GatewayMessageType::Heartbeat,
+             GatewayMessageType::PeerToPeerMessage, GatewayMessageType::BroadcastMessage})
+    {
+        if (auto channel = service.inboundChannel(type))
+        {
+            channel->close();
+        }
+    }
+}
+}  // namespace
+
+// Round-3 review (F1): the node-wide per-type PeerToPeerMessage pump must never await remote I/O.
+// Peer A's response write is outstanding (parked in the fake above, exactly where production
+// parks behind a stalled peer's write queue); a message from peer B must still reach the front
+// service. The pre-fix handler co_awaited the response send on the pump, so B would have queued
+// behind A until the inbound channel back-pressured.
+BOOST_AUTO_TEST_CASE(p2pMessageDispatchNotBlockedByOutstandingResponseWrite)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<ParkedSendService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+
+    auto gateway = std::make_shared<Gateway>(nullptr, service, nodeManager, nullptr, nullptr);
+
+    // No host is wired, so the channel poster wakes the pump inline: every step below completes
+    // on this thread, deterministically.
+    auto peerA = std::make_shared<FakePeerSession>("peerA");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(1, dstNodeID), peerA));
+    BOOST_REQUIRE_EQUAL(front->received.size(), 1u);  // A's dispatch ran
+    BOOST_REQUIRE_EQUAL(service->sendStarted, 1);     // A's response write is outstanding
+    BOOST_REQUIRE_EQUAL(service->sendReleased, 0);
+
+    // B's message is dispatched while A's response write is STILL outstanding.
+    auto peerB = std::make_shared<FakePeerSession>("peerB");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(2, dstNodeID), peerB));
+    BOOST_CHECK_EQUAL(front->received.size(), 2u);
+    BOOST_CHECK_EQUAL(service->sendStarted, 2);
+    BOOST_CHECK_EQUAL(service->sendReleased, 0);
+
+    service->releaseAll();
+    BOOST_CHECK_EQUAL(service->sendReleased, 2);
+    closeP2PChannels(*service);
+}
+
+BOOST_AUTO_TEST_CASE(peerDispatchBackpressureIsIsolatedBySession)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<ParkedSendService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+    const auto messageBytes = makeP2PRequest(0, dstNodeID).ownedStorageBytes();
+    DispatchBudgetConfig config;
+    config.globalBytes = 4 * messageBytes;
+    config.globalCount = 8;
+    config.peerBytes = 2 * messageBytes;
+    config.peerCount = 2;
+    auto gateway = std::make_shared<Gateway>(
+        nullptr, service, nodeManager, nullptr, nullptr, "localGateway", config);
+
+    auto peerA = std::make_shared<FakePeerSession>("peerA");
+    auto peerB = std::make_shared<FakePeerSession>("peerB");
+    auto peerC = std::make_shared<FakePeerSession>("peerC");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(1, dstNodeID), peerA));
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(2, dstNodeID), peerA));
+    BOOST_REQUIRE_EQUAL(front->received.size(), 2u);
+    BOOST_REQUIRE_EQUAL(service->sendStarted, 2);
+
+    bool thirdCompleted = false;
+    task::wait([](Service& service, P2PSession::Ptr peer, bcos::crypto::NodeIDPtr dstNodeID,
+                   bool& completed) -> task::Task<void> {
+        co_await service.onMessage(bcos::network::NetworkException{}, nullptr,
+            makeP2PRequest(3, dstNodeID), std::move(peer));
+        completed = true;
+    }(*service, peerA, dstNodeID, thirdCompleted));
+    BOOST_REQUIRE(!thirdCompleted);
+
+    // A is over its own share. B still gets a global permit and C needs no dispatch permit.
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(4, dstNodeID), peerB));
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeBroadcastRequest(5), peerC));
+    BOOST_REQUIRE_EQUAL(front->received.size(), 4u);
+    BOOST_CHECK_EQUAL(front->received.back().second, "b");
+    BOOST_CHECK_EQUAL(service->sendStarted, 3);
+    BOOST_CHECK(!thirdCompleted);
+
+    service->releaseOne(0);
+    BOOST_REQUIRE(thirdCompleted);
+    BOOST_REQUIRE_EQUAL(front->received.size(), 5u);
+    BOOST_CHECK_EQUAL(front->received.back().second, "p");
+    BOOST_REQUIRE_EQUAL(service->sendStarted, 4);
+    service->releaseAll();
+    BOOST_CHECK_EQUAL(service->sendReleased, 4);
+    closeP2PChannels(*service);
+}
+
+BOOST_AUTO_TEST_CASE(p2pMessageDispatchBudgetWaitIsCancelledByStop)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<ParkedSendService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+    std::vector<std::function<void()>> dispatchWakes;
+    const auto messageBytes = makeP2PRequest(0, dstNodeID).ownedStorageBytes();
+    DispatchBudgetConfig config;
+    config.globalBytes = 2 * messageBytes;
+    config.globalCount = 8;
+    config.peerBytes = messageBytes;
+    config.peerCount = 1;
+    config.poster = [&dispatchWakes](
+                        std::function<void()> wake) { dispatchWakes.push_back(std::move(wake)); };
+    auto gateway = std::make_shared<Gateway>(
+        nullptr, service, nodeManager, nullptr, nullptr, "localGateway", config);
+
+    auto peerA = std::make_shared<FakePeerSession>("peerA");
+    auto peerB = std::make_shared<FakePeerSession>("peerB");
+    auto peerC = std::make_shared<FakePeerSession>("peerC");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(1, dstNodeID), peerA));
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(2, dstNodeID), peerB));
+    bool thirdCompleted = false;
+    task::wait([](Service& service, P2PSession::Ptr peer, bcos::crypto::NodeIDPtr dstNodeID,
+                   bool& completed) -> task::Task<void> {
+        co_await service.onMessage(bcos::network::NetworkException{}, nullptr,
+            makeP2PRequest(3, dstNodeID), std::move(peer));
+        completed = true;
+    }(*service, peerC, dstNodeID, thirdCompleted));
+    BOOST_REQUIRE(!thirdCompleted);
+    BOOST_REQUIRE_EQUAL(front->received.size(), 2u);
+    BOOST_REQUIRE_EQUAL(service->sendStarted, 2);
+
+    std::weak_ptr<Gateway> weakGateway = gateway;
+    gateway->stop();
+    BOOST_REQUIRE_EQUAL(dispatchWakes.size(), 1);
+    gateway.reset();
+    service->releaseAll();
+    BOOST_REQUIRE(weakGateway.expired());
+    BOOST_CHECK_EQUAL(service->sendReleased, 2);
+
+    for (auto& wake : dispatchWakes)
+    {
+        wake();
+    }
+    BOOST_CHECK(thirdCompleted);
+    BOOST_CHECK_EQUAL(front->received.size(), 2u);
+    BOOST_CHECK_EQUAL(service->sendStarted, 2);
+    closeP2PChannels(*service);
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetSupportsConcurrentAcquirers)
+{
+    DispatchBudget budget(1, 8, [](std::function<void()> wake) { wake(); });
+    auto initial = task::syncWait(budget.acquire(1));
+    BOOST_REQUIRE(initial);
+
+    std::optional<DispatchBudget::Permit> first;
+    std::optional<DispatchBudget::Permit> second;
+    bool firstDone = false;
+    bool secondDone = false;
+    auto acquire = [](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
+                       bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(1);
+        done = true;
+    };
+    task::wait(acquire(budget, first, firstDone));
+    task::wait(acquire(budget, second, secondDone));
+    auto usage = budget.usage();
+    BOOST_CHECK_EQUAL(usage.waiting, 2);
+    BOOST_CHECK_EQUAL(usage.parks, 2);
+
+    initial.reset();
+    BOOST_REQUIRE(firstDone);
+    BOOST_REQUIRE(first.has_value());
+    BOOST_CHECK(!secondDone);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 1);
+
+    first.reset();
+    BOOST_REQUIRE(secondDone);
+    BOOST_REQUIRE(second.has_value());
+    second.reset();
+    usage = budget.usage();
+    BOOST_CHECK_EQUAL(usage.usedBytes, 0);
+    BOOST_CHECK_EQUAL(usage.usedCount, 0);
+    BOOST_CHECK_EQUAL(usage.waiting, 0);
+    BOOST_CHECK_EQUAL(usage.parks, 2);
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetWakesNextWaiterAfterAcquire)
+{
+    DispatchBudget budget(100, 8, [](std::function<void()> wake) { wake(); });
+    auto initial = task::syncWait(budget.acquire(100));
+    BOOST_REQUIRE(initial);
+
+    std::optional<DispatchBudget::Permit> first;
+    std::optional<DispatchBudget::Permit> second;
+    bool firstDone = false;
+    bool secondDone = false;
+    auto acquire = [](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
+                       bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(10);
+        done = true;
+    };
+    task::wait(acquire(budget, first, firstDone));
+    task::wait(acquire(budget, second, secondDone));
+
+    initial.reset();
+    BOOST_REQUIRE(firstDone);
+    BOOST_REQUIRE(secondDone);
+    BOOST_REQUIRE(first.has_value());
+    BOOST_REQUIRE(second.has_value());
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 20);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
+
+    first.reset();
+    second.reset();
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 0);
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetDoesNotBypassReadyWaiter)
+{
+    std::vector<std::function<void()>> wakes;
+    DispatchBudget budget(
+        100, 8, [&wakes](std::function<void()> wake) { wakes.push_back(std::move(wake)); });
+    auto initial = task::syncWait(budget.acquire(100));
+    BOOST_REQUIRE(initial);
+
+    std::optional<DispatchBudget::Permit> first;
+    std::optional<DispatchBudget::Permit> second;
+    bool firstDone = false;
+    bool secondDone = false;
+    auto acquire = [](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
+                       bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(10);
+        done = true;
+    };
+    task::wait(acquire(budget, first, firstDone));
+    initial.reset();
+    BOOST_REQUIRE_EQUAL(wakes.size(), 1);
+    BOOST_CHECK(!firstDone);
+
+    // A later acquirer cannot bypass the ready waiter even though capacity is available.
+    task::wait(acquire(budget, second, secondDone));
+    BOOST_CHECK(!secondDone);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 2);
+    for (std::size_t i = 0; i < wakes.size(); ++i)
+    {
+        wakes[i]();
+    }
+    BOOST_REQUIRE(firstDone);
+    BOOST_REQUIRE(secondDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 20);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
+    first.reset();
+    second.reset();
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitSkipsUnsatisfiedWaiter)
+{
+    DispatchBudget budget(100, 8, [](std::function<void()> wake) { wake(); },
+        DispatchBudget::WaitPolicy::FirstFit);
+    auto initial = task::syncWait(budget.acquire(90));
+    BOOST_REQUIRE(initial);
+
+    std::optional<DispatchBudget::Permit> large;
+    std::optional<DispatchBudget::Permit> small;
+    std::optional<DispatchBudget::Permit> later;
+    bool largeDone = false;
+    bool smallDone = false;
+    bool laterDone = false;
+    auto acquire = [](DispatchBudget& budget, std::size_t bytes,
+                       std::optional<DispatchBudget::Permit>& out, bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(bytes);
+        done = true;
+    };
+    task::wait(acquire(budget, 20, large, largeDone));
+    task::wait(acquire(budget, 10, small, smallDone));
+    BOOST_REQUIRE(smallDone);
+    BOOST_CHECK(!largeDone);
+
+    task::wait(acquire(budget, 10, later, laterDone));
+    BOOST_CHECK(!laterDone);
+    small.reset();
+    BOOST_REQUIRE(laterDone);
+    BOOST_CHECK(!largeDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 100);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 1);
+
+    later.reset();
+    initial.reset();
+    BOOST_REQUIRE(largeDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 20);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
+    large.reset();
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitAgesHeadWaiter)
+{
+    DispatchBudget budget(
+        100, 8, [](std::function<void()> wake) { wake(); }, DispatchBudget::WaitPolicy::FirstFit,
+        std::chrono::milliseconds{0});
+    auto initial = task::syncWait(budget.acquire(85));
+    auto extra = task::syncWait(budget.acquire(5));
+    BOOST_REQUIRE(initial);
+    BOOST_REQUIRE(extra);
+
+    std::optional<DispatchBudget::Permit> large;
+    std::optional<DispatchBudget::Permit> small;
+    bool largeDone = false;
+    bool smallDone = false;
+    auto acquire = [](DispatchBudget& budget, std::size_t bytes,
+                       std::optional<DispatchBudget::Permit>& out, bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(bytes);
+        done = true;
+    };
+    task::wait(acquire(budget, 20, large, largeDone));
+    task::wait(acquire(budget, 10, small, smallDone));
+    BOOST_CHECK(!largeDone);
+    BOOST_CHECK(!smallDone);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 2);
+
+    extra.reset();
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 85);
+    BOOST_CHECK(!largeDone);
+    BOOST_CHECK(!smallDone);
+
+    initial.reset();
+    BOOST_REQUIRE(largeDone);
+    BOOST_REQUIRE(smallDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 30);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
+    large.reset();
+    small.reset();
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitReservesReadyBytes)
+{
+    std::vector<std::function<void()>> wakes;
+    DispatchBudget budget(100, 8,
+        [&wakes](std::function<void()> wake) { wakes.push_back(std::move(wake)); },
+        DispatchBudget::WaitPolicy::FirstFit);
+    auto initial = task::syncWait(budget.acquire(90));
+    BOOST_REQUIRE(initial);
+
+    std::optional<DispatchBudget::Permit> large;
+    bool largeDone = false;
+    task::wait([](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
+                   bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(20);
+        done = true;
+    }(budget, large, largeDone));
+    initial.reset();
+    BOOST_REQUIRE_EQUAL(wakes.size(), 1);
+    BOOST_CHECK(!largeDone);
+
+    auto small = task::syncWait(budget.acquire(70));
+    BOOST_REQUIRE(small);
+    std::optional<DispatchBudget::Permit> next;
+    bool nextDone = false;
+    task::wait([](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
+                   bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(20);
+        done = true;
+    }(budget, next, nextDone));
+    BOOST_CHECK(!nextDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 70);
+
+    wakes[0]();
+    BOOST_REQUIRE(largeDone);
+    BOOST_CHECK(!nextDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 90);
+
+    small.reset();
+    BOOST_REQUIRE_EQUAL(wakes.size(), 2);
+    wakes[1]();
+    BOOST_REQUIRE(nextDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 40);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
+    large.reset();
+    next.reset();
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitReservesReadyCount)
+{
+    std::vector<std::function<void()>> wakes;
+    DispatchBudget budget(3, 2,
+        [&wakes](std::function<void()> wake) { wakes.push_back(std::move(wake)); },
+        DispatchBudget::WaitPolicy::FirstFit);
+    auto initial = task::syncWait(budget.acquire(1));
+    auto other = task::syncWait(budget.acquire(1));
+    BOOST_REQUIRE(initial);
+    BOOST_REQUIRE(other);
+
+    std::optional<DispatchBudget::Permit> first;
+    bool firstDone = false;
+    auto acquire = [](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
+                       bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(1);
+        done = true;
+    };
+    task::wait(acquire(budget, first, firstDone));
+    initial.reset();
+    BOOST_REQUIRE_EQUAL(wakes.size(), 1);
+    other.reset();
+
+    std::optional<DispatchBudget::Permit> second;
+    bool secondDone = false;
+    task::wait(acquire(budget, second, secondDone));
+    BOOST_REQUIRE(secondDone);
+    std::optional<DispatchBudget::Permit> third;
+    bool thirdDone = false;
+    task::wait(acquire(budget, third, thirdDone));
+    BOOST_CHECK(!thirdDone);
+
+    wakes[0]();
+    BOOST_REQUIRE(firstDone);
+    BOOST_CHECK(!thirdDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedCount, 2);
+
+    second.reset();
+    BOOST_REQUIRE_EQUAL(wakes.size(), 2);
+    wakes[1]();
+    BOOST_REQUIRE(thirdDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedCount, 2);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
+    first.reset();
+    third.reset();
+    BOOST_CHECK_EQUAL(budget.usage().usedCount, 0);
+}
+
+BOOST_AUTO_TEST_CASE(globalDispatchBackpressureAllowsFittingPeerAndBroadcast)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<ParkedSendService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+
+    const auto smallBytes = makeP2PRequest(0, dstNodeID).ownedStorageBytes();
+    const auto mediumBytes = makeP2PRequest(0, dstNodeID, 4 * smallBytes).ownedStorageBytes();
+    const auto largeBytes = makeP2PRequest(0, dstNodeID, 8 * smallBytes).ownedStorageBytes();
+    BOOST_REQUIRE(3 * mediumBytes > largeBytes);
+    BOOST_REQUIRE(2 * largeBytes >= 3 * mediumBytes + smallBytes);
+    DispatchBudgetConfig config;
+    config.globalBytes = 2 * largeBytes;
+    config.globalCount = 16;
+    config.peerBytes = largeBytes;
+    config.peerCount = 2;
+    auto gateway = std::make_shared<Gateway>(
+        nullptr, service, nodeManager, nullptr, nullptr, "localGateway", config);
+
+    auto peerA = std::make_shared<FakePeerSession>("peerA");
+    auto peerB = std::make_shared<FakePeerSession>("peerB");
+    auto peerC = std::make_shared<FakePeerSession>("peerC");
+    task::syncWait(service->onMessage(bcos::network::NetworkException{}, nullptr,
+        makeP2PRequest(1, dstNodeID, 4 * smallBytes), peerA));
+    task::syncWait(service->onMessage(bcos::network::NetworkException{}, nullptr,
+        makeP2PRequest(2, dstNodeID, 4 * smallBytes), peerB));
+    task::syncWait(service->onMessage(bcos::network::NetworkException{}, nullptr,
+        makeP2PRequest(3, dstNodeID, 4 * smallBytes), peerC));
+
+    auto receive = [](Service& service, P2PSession::Ptr peer, Message message,
+                       bool& completed) -> task::Task<void> {
+        co_await service.onMessage(
+            bcos::network::NetworkException{}, nullptr, std::move(message), std::move(peer));
+        completed = true;
+    };
+    auto peerD = std::make_shared<FakePeerSession>("peerD");
+    bool largeCompleted = false;
+    task::wait(receive(*service, peerD, makeP2PRequest(4, dstNodeID, 8 * smallBytes),
+        largeCompleted));
+    BOOST_REQUIRE(!largeCompleted);
+
+    auto peerE = std::make_shared<FakePeerSession>("peerE");
+    bool smallCompleted = false;
+    task::wait(receive(*service, peerE, makeP2PRequest(5, dstNodeID), smallCompleted));
+    BOOST_REQUIRE(smallCompleted);
+    auto peerF = std::make_shared<FakePeerSession>("peerF");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeBroadcastRequest(6), peerF));
+    BOOST_REQUIRE_EQUAL(front->received.size(), 5u);
+    BOOST_CHECK_EQUAL(front->received.back().second, "b");
+    BOOST_CHECK_EQUAL(service->sendStarted, 4);
+    BOOST_CHECK(!largeCompleted);
+
+    service->releaseAll();
+    BOOST_REQUIRE(largeCompleted);
+    BOOST_CHECK_EQUAL(front->received.size(), 6u);
+    BOOST_CHECK_EQUAL(service->sendStarted, 5);
+    service->releaseAll();
+    BOOST_CHECK_EQUAL(service->sendReleased, 5);
+    closeP2PChannels(*service);
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetAbandonedWaiterUnregisters)
+{
+    DispatchBudget budget(100, 8, [](std::function<void()> wake) { wake(); });
+    auto initial = task::syncWait(budget.acquire(100));
+    BOOST_REQUIRE(initial);
+    {
+        auto abandoned = budget.acquire(10);
+        abandoned.start();
+    }
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
+
+    std::optional<DispatchBudget::Permit> next;
+    bool nextDone = false;
+    task::wait([](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
+                   bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(10);
+        done = true;
+    }(budget, next, nextDone));
+    BOOST_REQUIRE(!nextDone);
+    initial.reset();
+    BOOST_REQUIRE(nextDone);
+    BOOST_REQUIRE(next.has_value());
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 10);
+    next.reset();
+}
+
+BOOST_AUTO_TEST_CASE(cancelledWaitersAreNotRevivedByRelease)
+{
+    std::vector<std::function<void()>> wakes;
+    DispatchBudget budget(
+        100, 8, [&wakes](std::function<void()> wake) { wakes.push_back(std::move(wake)); });
+    auto initial = task::syncWait(budget.acquire(100));
+    BOOST_REQUIRE(initial);
+
+    std::optional<DispatchBudget::Permit> first;
+    std::optional<DispatchBudget::Permit> second;
+    bool firstDone = false;
+    bool secondDone = false;
+    auto acquire = [](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
+                       bool& done) -> task::Task<void> {
+        out = co_await budget.acquire(10);
+        done = true;
+    };
+    task::wait(acquire(budget, first, firstDone));
+    task::wait(acquire(budget, second, secondDone));
+    budget.cancelWaiters();
+    initial.reset();
+    for (auto& wake : wakes)
+    {
+        wake();
+    }
+    BOOST_REQUIRE(firstDone);
+    BOOST_REQUIRE(secondDone);
+    BOOST_CHECK(!*first);
+    BOOST_CHECK(!*second);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 0);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetAbandonedAfterWakeDoesNotResume)
+{
+    std::vector<std::function<void()>> wakes;
+    DispatchBudget budget(
+        100, 8, [&wakes](std::function<void()> wake) { wakes.push_back(std::move(wake)); });
+    auto initial = task::syncWait(budget.acquire(100));
+    BOOST_REQUIRE(initial);
+    {
+        auto abandoned = budget.acquire(10);
+        abandoned.start();
+        initial.reset();
+        BOOST_REQUIRE_EQUAL(wakes.size(), 1);
+    }
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
+    for (auto& wake : wakes)
+    {
+        BOOST_CHECK_NO_THROW(wake());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetIsSharedAcrossSessionGenerations)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<ParkedSendService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+    const auto messageBytes = makeP2PRequest(0, dstNodeID).ownedStorageBytes();
+    DispatchBudgetConfig config;
+    config.globalBytes = 2 * messageBytes;
+    config.globalCount = 8;
+    config.peerBytes = messageBytes;
+    config.peerCount = 1;
+    auto gateway = std::make_shared<Gateway>(
+        nullptr, service, nodeManager, nullptr, nullptr, "localGateway", config);
+
+    auto oldConnection = std::make_shared<FakePeerSession>("samePeer");
+    auto newConnection = std::make_shared<FakePeerSession>("samePeer");
+    auto otherPeer = std::make_shared<FakePeerSession>("otherPeer");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(1, dstNodeID), oldConnection));
+
+    bool secondCompleted = false;
+    task::wait([](Service& service, P2PSession::Ptr peer, bcos::crypto::NodeIDPtr dstNodeID,
+                   bool& completed) -> task::Task<void> {
+        co_await service.onMessage(bcos::network::NetworkException{}, nullptr,
+            makeP2PRequest(2, dstNodeID), std::move(peer));
+        completed = true;
+    }(*service, newConnection, dstNodeID, secondCompleted));
+    BOOST_REQUIRE(!secondCompleted);
+
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(3, dstNodeID), otherPeer));
+    BOOST_REQUIRE_EQUAL(front->received.size(), 2u);
+    BOOST_REQUIRE(!secondCompleted);
+    service->releaseOne(0);
+    BOOST_REQUIRE(secondCompleted);
+    BOOST_REQUIRE_EQUAL(front->received.size(), 3u);
+    service->releaseAll();
+    closeP2PChannels(*service);
+}
+
+BOOST_AUTO_TEST_CASE(peerDisconnectCancelsGlobalWait)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<ParkedSendService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+    const auto messageBytes = makeP2PRequest(0, dstNodeID).ownedStorageBytes();
+    DispatchBudgetConfig config;
+    config.globalBytes = 2 * messageBytes;
+    config.globalCount = 8;
+    config.peerBytes = messageBytes;
+    config.peerCount = 1;
+    auto gateway = std::make_shared<Gateway>(
+        nullptr, service, nodeManager, nullptr, nullptr, "localGateway", config);
+
+    auto peerA = std::make_shared<FakePeerSession>("peerA");
+    auto peerB = std::make_shared<FakePeerSession>("peerB");
+    auto peerC = std::make_shared<FakePeerSession>("peerC");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(1, dstNodeID), peerA));
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(2, dstNodeID), peerB));
+    bool thirdCompleted = false;
+    task::wait([](Service& service, P2PSession::Ptr peer, bcos::crypto::NodeIDPtr dstNodeID,
+                   bool& completed) -> task::Task<void> {
+        co_await service.onMessage(bcos::network::NetworkException{}, nullptr,
+            makeP2PRequest(3, dstNodeID), std::move(peer));
+        completed = true;
+    }(*service, peerC, dstNodeID, thirdCompleted));
+    BOOST_REQUIRE(!thirdCompleted);
+
+    auto duplicate = std::make_shared<FakePeerSession>("peerC");
+    duplicate->setService(service);
+    duplicate->setDispatchOwner(999999);
+    duplicate->stop(bcos::network::DuplicatePeer);
+    BOOST_REQUIRE(!thirdCompleted);
+
+    peerC->stop(bcos::network::UserReason);
+    BOOST_REQUIRE(thirdCompleted);
+    BOOST_CHECK_EQUAL(front->received.size(), 2u);
+    BOOST_CHECK_EQUAL(service->sendStarted, 2);
+    service->releaseAll();
+    closeP2PChannels(*service);
+}
+
+BOOST_AUTO_TEST_CASE(transportDropCancelsGlobalWait)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<ParkedSendService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+    const auto messageBytes = makeP2PRequest(0, dstNodeID).ownedStorageBytes();
+    DispatchBudgetConfig config;
+    config.globalBytes = 2 * messageBytes;
+    config.globalCount = 8;
+    config.peerBytes = messageBytes;
+    config.peerCount = 1;
+    auto gateway = std::make_shared<Gateway>(
+        nullptr, service, nodeManager, nullptr, nullptr, "localGateway", config);
+
+    auto peerA = std::make_shared<FakePeerSession>("peerA");
+    auto peerB = std::make_shared<FakePeerSession>("peerB");
+    auto peerC = std::make_shared<FakePeerSession>("peerC");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(1, dstNodeID), peerA));
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(2, dstNodeID), peerB));
+    bool thirdCompleted = false;
+    task::wait([](Service& service, P2PSession::Ptr peer, bcos::crypto::NodeIDPtr dstNodeID,
+                   bool& completed) -> task::Task<void> {
+        co_await service.onMessage(bcos::network::NetworkException{}, nullptr,
+            makeP2PRequest(3, dstNodeID), std::move(peer));
+        completed = true;
+    }(*service, peerC, dstNodeID, thirdCompleted));
+    BOOST_REQUIRE(!thirdCompleted);
+
+    auto asio = std::make_shared<bcos::network::test::TestAsioInterface>(
+        1, "TransportDropCancelsGlobalWait", true);
+    auto host = std::make_shared<RunningTestHost>(asio, nullptr);
+    host->setRunning();
+    auto socket = std::make_shared<bcos::network::test::TestSessionSocket>(true, true);
+    auto transport = std::make_shared<
+        bcos::network::BasicSession<P2PDecoder, bcos::network::test::TestSessionSocket>>(
+        socket, *host, 1024, true);
+    auto owner = peerC->dispatchOwner();
+    transport->setDropHandler(
+        [weakService = std::weak_ptr<Service>(service), p2pID = peerC->p2pID(), owner] {
+            if (auto service = weakService.lock())
+            {
+                service->cancelDispatch(p2pID, owner);
+            }
+        });
+    transport->drop(bcos::network::TCPError);
+    for (int i = 0; i < 500 && !thirdCompleted; ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    BOOST_REQUIRE(thirdCompleted);
+    BOOST_CHECK_EQUAL(front->received.size(), 2u);
+    BOOST_CHECK_EQUAL(service->sendStarted, 2);
+    service->releaseAll();
+    closeP2PChannels(*service);
+}
+
+BOOST_AUTO_TEST_CASE(queuedPeerMessageIsNotDispatchedAfterStop)
+{
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    auto service = std::make_shared<QueuedChannelService>();
+    auto nodeManager = std::make_shared<TestGatewayNodeManager>(keyFactory, service);
+    auto front = std::make_shared<RecordingFrontService>();
+    auto dstNodeID = keyFactory->createKey(bytes(32, 0x2));
+    BOOST_REQUIRE(nodeManager->localRouterTable()->insertNode("group0", dstNodeID,
+        bcos::protocol::NodeType::CONSENSUS_NODE, front,
+        std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)));
+    auto gateway = std::make_shared<Gateway>(nullptr, service, nodeManager, nullptr, nullptr);
+    auto peer = std::make_shared<FakePeerSession>("peerQueued");
+    task::syncWait(service->onMessage(
+        bcos::network::NetworkException{}, nullptr, makeP2PRequest(1, dstNodeID), peer));
+    auto channel = service->inboundChannel(GatewayMessageType::PeerToPeerMessage);
+    BOOST_REQUIRE(channel);
+    BOOST_REQUIRE(front->received.empty());
+    BOOST_REQUIRE(!service->wakes.empty());
+
+    std::weak_ptr<Gateway> weakGateway = gateway;
+    gateway->stop();
+    gateway.reset();
+    BOOST_REQUIRE(weakGateway.expired());
+    for (auto& wake : service->wakes)
+    {
+        wake();
+    }
+    BOOST_CHECK(front->received.empty());
+    BOOST_CHECK_EQUAL(service->sendStarted, 0);
+    service->wakes.clear();
+    closeP2PChannels(*service);
+    for (auto& wake : service->wakes)
+    {
+        wake();
+    }
+}
+
+BOOST_AUTO_TEST_CASE(dispatchBudgetConfigRejectsPeerDominatedGlobal)
+{
+    auto service = std::make_shared<ParkedSendService>();
+    DispatchBudgetConfig config;
+    config.globalBytes = 1024;
+    config.globalCount = 2;
+    config.peerBytes = 1024;
+    config.peerCount = 1;
+    BOOST_CHECK_THROW(service->setDispatchBudgetConfig(config), bcos::InvalidParameter);
+    closeP2PChannels(*service);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

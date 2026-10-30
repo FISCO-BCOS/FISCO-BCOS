@@ -12,18 +12,18 @@
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/gateway/ProGatewayNodeManager.h"
 #include "bcos-gateway/libamop/AirTopicManager.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
-#include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/SessionCallback.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
+#include "bcos-gateway/libp2p/P2PIdentity.h"
+#include "bcos-gateway/libp2p/PeerBlackWhitelist.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-gateway/libp2p/ServiceV2.h"
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Common.h"
+#include "bcos-network/Host.h"
+#include "bcos-network/Session.h"
 #include "bcos-tars-protocol/protocol/GroupInfoCodecImpl.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
@@ -685,31 +685,33 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
                                   "GatewayFactory: IOServicePool must be provided from outside!"));
     }
     auto ioServicePool = m_ioServicePool;
-    auto asioInterface =
-        std::make_shared<ASIOInterface>(ioServicePool, _config->listenIP(), _config->listenPort());
+    auto asioInterface = std::make_shared<bcos::network::ASIOInterface>(
+        ioServicePool, _config->listenIP(), _config->listenPort());
     asioInterface->setSrvContext(std::move(srvCtx));
     asioInterface->setClientContext(std::move(clientCtx));
-    asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
     auto nodeIDHash = _config->calculateShortNodeID(pubHex);
     P2PInfo selfInfo(nodeIDHash, pubHex);
-    // Session Factory
-    auto sessionFactory = std::make_shared<SessionFactory>(selfInfo,
-        _config->sessionRecvBufferSize(), _config->allowMaxMsgSize(), _config->maxReadDataSize(),
-        _config->maxSendDataSize(), _config->enableCompress());
+    // Session Factory: the gateway's wire format is the P2P one (see libp2p/P2PDecoder.h).
+    auto sessionFactory = std::make_shared<P2PSessionFactory>(_config->sessionRecvBufferSize(),
+        _config->allowMaxMsgSize(), _config->maxReadDataSize(), _config->maxSendDataSize());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
     // init Host
-    auto host = std::make_shared<Host>(_config->hashImpl(), asioInterface, sessionFactory);
+    auto host = std::make_shared<P2PHost>(asioInterface, sessionFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
-    host->setSSLContextPubHandler(m_sslContextPubHandler);
-    host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
+    // Identity seam (libp2p/P2PIdentity.h): FISCO-BCOS cert → node-id extraction and cert
+    // black/white-list admission, injected into the generic Host. The identity object owns the
+    // admission lists; Service keeps a reference for config-reload updates.
+    auto peerIdentity = std::make_shared<P2PPeerIdentity>(
+        _config->hashImpl(), m_sslContextPubHandler, m_sslContextPubHandlerWithoutExtInfo);
     // init peer black/white list
-    host->setPeerBlacklist(PeerBlackWhitelist(
+    peerIdentity->setPeerBlacklist(PeerBlackWhitelist(
         PeerBlackWhitelist::Type::Blacklist, _config->peerBlacklist(), _config->enableBlacklist()));
-    host->setPeerWhitelist(PeerBlackWhitelist(
+    peerIdentity->setPeerWhitelist(PeerBlackWhitelist(
         PeerBlackWhitelist::Type::Whitelist, _config->peerWhitelist(), _config->enableWhitelist()));
+    host->setPeerIdentity(peerIdentity);
     host->setEnableSslVerify(_config->enableSSLVerify());
     // FIB-184: apply the configured inbound-session caps (no longer hardcoded in Host)
     host->setMaxConcurrentSessions(_config->maxConcurrentSessions());
@@ -718,22 +720,18 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setMaxPendingHandshakes(_config->maxPendingHandshakes());
     host->setHandshakeTimeout(_config->handshakeTimeout());
     host->setMaxConnectionsPerSecond(_config->maxConnectionsPerSecond());
-    // init Service
+    // init Service (the optional router module is enabled by passing a RouterTableFactory)
     bool enableRIPProtocol = _config->enableRIPProtocol();
-    Service::Ptr service = nullptr;
-    if (enableRIPProtocol)
-    {
-        auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        service = std::make_shared<ServiceV2>(
-            selfInfo, routerTableFactory, *ioServicePool->getIOService());
-    }
-    else
-    {
-        service = std::make_shared<Service>(selfInfo);
-    }
+    Service::Ptr service = std::make_shared<Service>(selfInfo,
+        enableRIPProtocol ?
+            std::shared_ptr<RouterTableFactory>(std::make_shared<RouterTableFactoryImpl>()) :
+            nullptr,
+        enableRIPProtocol ? ioServicePool->getIOService().get() : nullptr);
 
     service->setHost(host);
+    service->setPeerIdentity(peerIdentity);
     service->setStaticNodes(_config->connectedNodes());
+    service->setEnableCompress(_config->enableCompress());
 
     GatewayP2PReloadHandler::config = _config;
     GatewayP2PReloadHandler::service = service;
@@ -800,14 +798,14 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             }
             else
             {
-                // register a null amop message handler
-                service->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
-                    [](const bcos::gateway::NetworkException& _e,
-                        const bcos::gateway::P2PSession::Ptr& session,
-                        const bcos::gateway::Message& message) {
+                // Read-only mode: subscribe AMOP and drop every message. This must still
+                // SUBSCRIBE (not merely skip registration) so the type is recognised — an
+                // unsubscribed type falls through to the "Unrecognized message type" error path.
+                service->subscribeHandler(GatewayMessageType::AMOPMessageType,
+                    [](bcos::gateway::InboundMessage&& /*inbound*/) -> task::Task<bool> {
                         // 只读模式下, 不处理其它节点的amop消息
                         // In read-only mode, AMOP messages from other nodes are not processed
-                        return;
+                        co_return true;
                     });
             }
         }
@@ -820,8 +818,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         }
 
         // init Gateway
-        auto gateway = std::make_shared<Gateway>(
-            _config, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
+        auto gateway = std::make_shared<Gateway>(_config, service, gatewayNodeManager, amop,
+            gatewayRateLimiter, _gatewayServiceName, _config->dispatchBudgetConfig());
         if (_config->readonly())
         {
             gateway->enableReadOnlyMode();
@@ -830,9 +828,10 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // register disconnect handler
         service->registerDisconnectHandler(
             [gatewayNodeManagerWeakPtr, serviceWeakPtr = std::weak_ptr<Service>(service)](
-                NetworkException e, P2PSession::Ptr p2pSession) {
-                if (e.errorCode() == P2PExceptionType::DuplicateSession ||
-                    e.errorCode() == P2PExceptionType::Success)
+                bcos::network::NetworkException e, P2PSession::Ptr p2pSession) {
+                if (bcos::network::errorCodeOf(e) ==
+                        bcos::network::P2PExceptionType::DuplicateSession ||
+                    bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::Success)
                 {
                     return;
                 }
@@ -875,7 +874,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             auto gatewayRateLimiterWeakPtr =
                 std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
             service->setBeforeMessageHandler(
-                [gatewayRateLimiterWeakPtr](SessionFace& _session, const Message& _msg,
+                [gatewayRateLimiterWeakPtr](Session& _session, const Message& _msg,
                     uint32_t _wireLength) -> std::optional<bcos::Error> {
                     auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
                     if (!gatewayRateLimiter)
@@ -899,15 +898,15 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                         auto result = gatewayRateLimiter->checkOutGoing(
                             endpoint, pkgType, groupID, moduleID, msgLength);
                         return result ? std::make_optional(bcos::Error::buildError(
-                                            "", OutBWOverflow, result.value())) :
+                                            "", bcos::network::OutBWOverflow, result.value())) :
                                         std::nullopt;
                     }
                     return {};
                 });
 
             service->setOnMessageHandler(
-                [gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
-                    const Message& _message) -> std::optional<bcos::Error> {
+                [gatewayRateLimiterWeakPtr](
+                    Session::Ptr _session, const Message& _message) -> std::optional<bcos::Error> {
                     auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
                     if (!gatewayRateLimiter)
                     {
@@ -920,10 +919,15 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
                     auto result =
                         gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
+                    // The whole buildError(...) call must be parenthesised, exactly as in the
+                    // checkOutGoing branch above. Without the parentheses the comma inside the
+                    // argument list binds as the comma OPERATOR, so the true branch collapses to
+                    // make_optional(result.value()) — the overload check fails, and the rejection
+                    // reason is lost. The trailing `return std::nullopt;` this replaces was
+                    // unreachable.
                     return result ? std::make_optional(bcos::Error::buildError(
-                                        "", InQPSOverflow, result.value())) :
+                                        "", bcos::network::InQPSOverflow, result.value())) :
                                     std::nullopt;
-                    return std::nullopt;
                 });
         }
 
@@ -993,29 +997,27 @@ void GatewayFactory::initFailOver(
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
-    P2PInterface::Ptr _network, P2pID const& _p2pNodeID)
+    Service::Ptr _network, bcos::network::P2pID const& _p2pNodeID)
 {
     auto topicManager = std::make_shared<TopicManager>(m_rpcServiceName, _network);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
 
-    auto service = std::dynamic_pointer_cast<Service>(_network);
-    registerAMOPHandlers(service, topicManager);
+    registerAMOPHandlers(_network, topicManager);
 
     return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
         _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
-    P2PInterface::Ptr _network, P2pID const& _p2pNodeID)
+    Service::Ptr _network, bcos::network::P2pID const& _p2pNodeID)
 {
     // Note: must set rpc to the topicManager before start the amop
     auto topicManager = std::make_shared<LocalTopicManager>(m_rpcServiceName, _network);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
 
-    auto service = std::dynamic_pointer_cast<Service>(_network);
-    registerAMOPHandlers(service, topicManager);
+    registerAMOPHandlers(_network, topicManager);
 
     return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
         _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
@@ -1027,19 +1029,19 @@ void GatewayFactory::registerAMOPHandlers(
     GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("registerAMOPHandlers");
     auto weakTopicManager = std::weak_ptr<TopicManager>(topicManager);
     // register disconnect handler
-    service->registerDisconnectHandler(
-        [weakTopicManager](NetworkException e, P2PSession::Ptr p2pSession) {
-            if (e.errorCode() == P2PExceptionType::DuplicateSession ||
-                e.errorCode() == P2PExceptionType::Success)
-            {
-                return;
-            }
-            auto topicMgr = weakTopicManager.lock();
-            if (topicMgr && p2pSession)
-            {
-                topicMgr->onDisconnect(p2pSession->p2pID());
-            }
-        });
+    service->registerDisconnectHandler([weakTopicManager](bcos::network::NetworkException e,
+                                           P2PSession::Ptr p2pSession) {
+        if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::DuplicateSession ||
+            bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::Success)
+        {
+            return;
+        }
+        auto topicMgr = weakTopicManager.lock();
+        if (topicMgr && p2pSession)
+        {
+            topicMgr->onDisconnect(p2pSession->p2pID());
+        }
+    });
 
     service->registerUnreachableHandler([weakTopicManager](std::string const& _unreachableNode) {
         auto topicMgr = weakTopicManager.lock();
