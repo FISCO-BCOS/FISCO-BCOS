@@ -58,6 +58,13 @@ enum class ChainKind : std::uint8_t
     L1,
 };
 
+/// The least gas a sealed transaction spends from the block budget: Ethereum's intrinsic
+/// minimum (21000, TX_BASE_COST). Every admitted Web3 transaction already carries at least
+/// this much, so the floor changes nothing on the L1/OP lanes; it exists for the lanes that
+/// do not meter gas (FISCO transactions may declare gasLimit 0), where a budget that never
+/// decreased would let one seal take the whole pool into one block.
+inline constexpr int64_t c_minSealGas = 21000;
+
 struct MemPoolConfig
 {
     ChainKind chainKind = ChainKind::L2;
@@ -436,11 +443,17 @@ public:
     std::vector<std::optional<engine::BlobItem>> blobsByVersionedHashes(
         std::span<const crypto::HashType> versionedHashes) const;
 
-    void seal(int64_t limit,
+    /// Pick the block's transactions against a GAS budget, not a count: @p gasLimit is the
+    /// block gasLimit the header will carry and every emitted transaction's gasLimit() is
+    /// debited from it, so the block the executor is handed already fits (geth's
+    /// commitTransactions over its gasPool). A transaction that does not fit ends its
+    /// sender's run for this block — the later nonces cannot follow it — and the walk goes on
+    /// with the other senders; nothing is dropped from the pool.
+    void seal(int64_t gasLimit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
         std::output_iterator<protocol::Transaction::Ptr> auto out)
     {
-        int64_t count = 0;
+        int64_t gasLeft = gasLimit;
         std::unique_lock lock(m_mutex);
         evictExpiredLocked();
         auto& senderNonceIndex = m_transactions.get<0>();
@@ -454,6 +467,10 @@ public:
         std::unordered_set<std::string_view> sealedSenders;
         for (const auto& data : senderIndex)
         {
+            if (gasLeft <= 0)
+            {
+                break;
+            }
             auto sender = data.sender();
             if (!sealedSenders.emplace(sender).second)
             {
@@ -472,18 +489,15 @@ public:
                 nonceIt->nonce() == currentNonce;
                 ++nonceIt)
             {
-                ++currentNonce;
-                ++count;
-                *out++ = nonceIt->m_transaction;
-
-                if (count >= limit)
+                auto const gas =
+                    std::max<int64_t>(nonceIt->m_transaction->gasLimit(), c_minSealGas);
+                if (gas > gasLeft)
                 {
-                    break;
+                    break;  // this sender's run ends here; other senders may still fit
                 }
-            }
-            if (count >= limit)
-            {
-                break;
+                gasLeft -= gas;
+                ++currentNonce;
+                *out++ = nonceIt->m_transaction;
             }
         }
     }
@@ -494,12 +508,14 @@ public:
     /// nonces, and a heap picks the best cursor head by (effectivePriorityTip desc, hash
     /// asc). @p baseFee is the block's base fee; transactions whose fee cap does not
     /// cover it sort last with tip 0 (they are not dropped — admission already enforces
-    /// FeeCapLessThanBaseFee against its own base fee).
-    void seal(int64_t limit,
+    /// FeeCapLessThanBaseFee against its own base fee). @p gasLimit is the block gas budget,
+    /// debited per emitted transaction as in seal() above; a head that does not fit pops its
+    /// sender for this block (geth's txs.Pop()) and the heap moves on.
+    void seal(int64_t gasLimit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
         std::output_iterator<protocol::Transaction::Ptr> auto out, u256 const& baseFee)
     {
-        int64_t count = 0;
+        int64_t gasLeft = gasLimit;
         std::unique_lock lock(m_mutex);
         evictExpiredLocked();
         auto& senderNonceIndex = m_transactions.get<0>();
@@ -549,12 +565,17 @@ public:
             }
         }
 
-        while (!heap.empty() && count < limit)
+        while (!heap.empty() && gasLeft > 0)
         {
             auto cursor = heap.top();
             heap.pop();
+            auto const gas = std::max<int64_t>(cursor.it->m_transaction->gasLimit(), c_minSealGas);
+            if (gas > gasLeft)
+            {
+                continue;  // pops the sender: its later nonces cannot follow a skipped head
+            }
+            gasLeft -= gas;
             *out++ = cursor.it->m_transaction;
-            ++count;
             // Advance the cursor inside the same sender's gapless prefix; a nonce gap
             // stops this sender for the block, exactly like seal()'s prefix walk.
             auto next = std::next(cursor.it);

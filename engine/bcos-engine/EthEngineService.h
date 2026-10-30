@@ -165,7 +165,6 @@ public:
         ExecutorType& executor, SchedulerType& scheduler,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
-        int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
         std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr,
         bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr,
@@ -179,7 +178,6 @@ public:
         m_scheduler(scheduler),
         m_blockFactory(std::move(blockFactory)),
         m_ledger(std::move(ledger)),
-        m_blockTxCountLimit(blockTxCountLimit),
         m_maxEngineVersion(maxEngineVersion),
         m_commitObserver(commitObserver ? std::move(commitObserver) :
                                           std::make_shared<ledger::mpt::NoopCommitObserver>()),
@@ -270,7 +268,16 @@ private:
     {
         bcos::protocol::EthBlockHeaderData parentHeader;
         engine_common::ExternalL1Context l1Context;
+        /// The block gasLimit (deriveL1GasLimit): the seal's gas budget and the header field.
+        u256 gasLimit = 0;
     };
+
+    /// The block gas limit for the child of @p parentHeader: the parent's limit by default,
+    /// pulled toward the optional c_l1GasLimitTargetKey SYS_CONFIG target by strictly less
+    /// than parent/1024 (the consensus bound), clamped to the 5000 minimum. Derived before
+    /// the seal so the pool is filled against the limit the header will carry.
+    task::Task<u256> deriveL1GasLimit(
+        ViewType& view, bcos::protocol::EthBlockHeaderData const& parentHeader) const;
 
     bool isForkchoiceVersionSupported(std::uint32_t version) const
     {
@@ -312,7 +319,6 @@ private:
     SchedulerType& m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    int64_t m_blockTxCountLimit;
     std::uint32_t m_maxEngineVersion;
     /// The pruning observer the newPayload commit path fires (NoopCommitObserver unless the
     /// wiring injected an MPTPruner). Dereferenced only under m_commitMutex; also consulted at

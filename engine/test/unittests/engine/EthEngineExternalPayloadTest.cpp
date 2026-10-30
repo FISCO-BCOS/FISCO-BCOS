@@ -249,8 +249,8 @@ struct ExternalPayloadFixture
 
     ExternalPayloadFixture()
       : service(memPool, storageFixture.storage, executor, scheduler, blockFactory,
-            /*ledger=*/nullptr, engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+            /*ledger=*/nullptr, static_cast<std::uint32_t>(ApiVersion::V4),
+            /*commitObserver=*/nullptr,
             /*ledgerConfigState=*/nullptr, mockVerifier, clSync)
     {}
 

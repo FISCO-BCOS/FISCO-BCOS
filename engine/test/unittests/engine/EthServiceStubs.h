@@ -203,6 +203,10 @@ void writeEthExecutorConfig(Backend& backend, evmc_revision rev = EVMC_CANCUN,
 {
     writeRawSysConfig(backend, magic_enum::enum_name(ledger::SystemConfig::executor_version),
         std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+    // The v1 lanes stamp tx_gas_limit as the block gasLimit and seal against it; a genesis
+    // always writes the row, so the fixture does too (30M, the usual chain value).
+    writeRawSysConfig(
+        backend, magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit), "30000000");
     if (writeEvmcRevision)
     {
         writeRawSysConfig(backend, ledger::SYSTEM_KEY_EVMC_REVISION,

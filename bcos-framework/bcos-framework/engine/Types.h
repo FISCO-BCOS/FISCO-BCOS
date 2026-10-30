@@ -33,10 +33,6 @@
 namespace bcos::engine
 {
 
-/// Default maximum number of transactions per block when building a payload.
-/// Used as the fallback blockTxCountLimit in EngineServiceImpl and EngineServiceInitializer.
-inline constexpr int64_t c_defaultBlockTxCountLimit = 1000;
-
 enum class ApiVersion : std::uint8_t
 {
     V1 = 1,
