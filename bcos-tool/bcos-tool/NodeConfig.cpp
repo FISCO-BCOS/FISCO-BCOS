@@ -1364,6 +1364,9 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; storage.mpt_prune_window=-1 (archive), for the same reason as [web3_rpc]
         ; enable_debug_api above.
         ; enable_debug_api=false
+        ; OP lane only: how many blocks newPayload may run ahead of the finalized (backend)
+        ; tip before answering SYNCING, in [16, 100000]
+        ; unfinalized_window=1024
     */
     m_engineRpc.listenIP = _pt.get<std::string>("engine_rpc.listen_ip", "127.0.0.1");
     m_engineRpc.listenPort = _pt.get<int>("engine_rpc.listen_port", 8551);
@@ -1374,6 +1377,16 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
     m_engineRpc.clockSkewSecs = _pt.get<int32_t>("engine_rpc.clock_skew_secs", 60);
     m_engineRpc.enableMinerApi = _pt.get<bool>("engine_rpc.enable_miner_api", false);
     m_engineRpc.enableDebugApi = _pt.get<bool>("engine_rpc.enable_debug_api", false);
+    // Unfinalized window (D1 方案 A). Default 1024 ≈ 34 min at 2 s/block, covering op-node's
+    // ~12.8 min L1 finality delay plus batcher lag. Below 16 a healthy op-node could never keep
+    // its unsafe head ahead of finalized; above 100000 the window is no bound at all.
+    m_engineRpc.unfinalizedWindow = _pt.get<int64_t>("engine_rpc.unfinalized_window", 1024);
+    if (m_engineRpc.unfinalizedWindow < 16 || m_engineRpc.unfinalizedWindow > 100'000)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "engine_rpc.unfinalized_window must be in [16, 100000], got " +
+                                  std::to_string(m_engineRpc.unfinalizedWindow)));
+    }
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadEngineRpcConfig")
                          << LOG_KV("listenIP", m_engineRpc.listenIP)
@@ -1383,7 +1396,8 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("jwtSecretFile", m_engineRpc.jwtSecretFile)
                          << LOG_KV("clockSkewSecs", m_engineRpc.clockSkewSecs)
                          << LOG_KV("enableMinerApi", m_engineRpc.enableMinerApi)
-                         << LOG_KV("enableDebugApi", m_engineRpc.enableDebugApi);
+                         << LOG_KV("enableDebugApi", m_engineRpc.enableDebugApi)
+                         << LOG_KV("unfinalizedWindow", m_engineRpc.unfinalizedWindow);
 }
 
 void NodeConfig::loadDebugConfig(boost::property_tree::ptree const& _pt)
@@ -3344,6 +3358,11 @@ bool NodeConfig::enableMinerApi() const
 bool NodeConfig::engineApiDebugApi() const
 {
     return m_engineRpc.enableDebugApi;
+}
+
+std::int64_t NodeConfig::opUnfinalizedWindow() const
+{
+    return m_engineRpc.unfinalizedWindow;
 }
 
 bool NodeConfig::enableDebugApi() const
