@@ -34,6 +34,7 @@
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <boost/test/unit_test.hpp>
+#include <filesystem>
 #include <future>
 
 namespace bcos::test
@@ -54,10 +55,14 @@ BOOST_AUTO_TEST_CASE(builtSchedulerExecutesBlockOnTheGivenPool)
         std::make_shared<bcostars::protocol::TransactionFactoryImpl>(suite),
         std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite));
 
+    // Drop a database left in the working directory by older revisions of this test.
+    std::filesystem::remove_all("./unittestdb-scheduler-factory");
+    auto dbPath = std::filesystem::temp_directory_path() / "unittestdb-scheduler-factory";
+    std::filesystem::remove_all(dbPath);
     rocksdb::DB* db = nullptr;
     rocksdb::Options options;
     options.create_if_missing = true;
-    BOOST_REQUIRE(rocksdb::DB::Open(options, "./unittestdb-scheduler-factory", &db).ok());
+    BOOST_REQUIRE(rocksdb::DB::Open(options, dbPath.string(), &db).ok());
     auto storage =
         std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
 
@@ -82,6 +87,8 @@ BOOST_AUTO_TEST_CASE(builtSchedulerExecutesBlockOnTheGivenPool)
 
     scheduler.reset();
     ioServicePool.reset();
+    storage.reset();
+    std::filesystem::remove_all(dbPath);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
