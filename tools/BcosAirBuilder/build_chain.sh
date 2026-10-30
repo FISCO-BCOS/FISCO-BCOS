@@ -29,7 +29,7 @@ x86_64_arch="false"
 arm64_arch="false"
 sm2_params="sm_sm2.param"
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
-OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
+OPENSSL_CMD="${OPENSSL_CMD:-openssl}"
 nodeid_list=""
 nodeid_list_from_path=""
 file_dir="./"
@@ -153,7 +153,7 @@ generate_random_num(){
     num=`${OPENSSL_CMD} rand -hex 4`
     echo $num
 }
-randNum=$(generate_random_num)
+randNum=""
 
 generate_sm_sm2_param() {
     local output=$1
@@ -300,6 +300,7 @@ default_md = sha256
 [req]
 distinguished_name = req_distinguished_name
 req_extensions = v3_req
+x509_extensions = v3_ca
 
 [req_distinguished_name]
 countryName = CN
@@ -313,6 +314,10 @@ organizationalUnitName_default = FISCO-BCOS
 commonName =  Organizational  commonName (eg, FISCO-BCOS)
 commonName_default = FISCO-BCOS
 commonName_max = 64
+
+[ v3_ca ]
+basicConstraints = CA:true
+keyUsage = cRLSign, keyCertSign
 
 [ v3_req ]
 basicConstraints = CA:FALSE
@@ -515,7 +520,7 @@ gen_sm_chain_cert() {
     dir_must_exists "$chaindir"
 
     "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$chaindir/sm_ca.key" 2>/dev/null
-    "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS-${randNum}/O=FISCO-BCOS-${randNum}/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt" 2>/dev/null
+    "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -sigopt distid:1234567812345678 -days "${days}" -subj "/CN=FISCO-BCOS-${randNum}/O=FISCO-BCOS-${randNum}/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt" 2>/dev/null
     if [ ! -f "${chaindir}/${sm_cert_conf}" ];then
         cp "${sm_cert_conf}" "${chaindir}"
     fi
@@ -537,9 +542,9 @@ gen_sm_node_cert_with_ext() {
     file_must_not_exists "$ndpath/sm_${type}.key"
 
     "$OPENSSL_CMD" genpkey -paramfile "$capath/${sm2_params}" -out "$certpath/sm_${type}.key" 2> /dev/null
-    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr" 2> /dev/null
+    "$OPENSSL_CMD" req -new -sigopt distid:1234567812345678 -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr" 2> /dev/null
 
-    "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions" 2> /dev/null
+    "$OPENSSL_CMD" x509 -sm3 -req -sigopt distid:1234567812345678 -vfyopt distid:1234567812345678 -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions" 2> /dev/null
 
     rm -f "$certpath/sm_${type}.csr"
 }
@@ -578,6 +583,7 @@ air
     -e <fisco-bcos exec>                [Optional] fisco-bcos binary exec
     -t <mtail exec>                     [Optional] mtail binary exec
     -o <output dir>                     [Optional] output directory, default ./nodes
+    -O <OpenSSL path>                   [Optional] specify an OpenSSL executable, default is the system openssl
     -p <Start port>                     [Optional] Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
     -H <HSM model>                      [Optional] Whether to use HSM(Hardware secure module), default is false
@@ -656,7 +662,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zDshHmEn:R:a:N:u:y:r:V:6T:" option; do
+    while getopts "l:C:c:o:O:e:t:p:d:g:G:L:v:i:I:M:k:zDshHmEn:R:a:N:u:y:r:V:6T:" option; do
         case $option in
         6) use_ipv6="true" && default_listen_ip="::"
         ;;
@@ -676,6 +682,9 @@ parse_params() {
             service_output_dir="$OPTARG"
             expand_dir="$OPTARG"
             cert_conf="${output_dir}/cert.cnf"
+            ;;
+        O)
+            OPENSSL_CMD="$OPTARG"
             ;;
         e)
             use_exist_binary="true"
@@ -1845,54 +1854,25 @@ exit_with_clean() {
     exit 1
 }
 
-check_and_install_tassl(){
-    if [ -f "${OPENSSL_CMD}" ];then
-        return
-    fi
-    # https://en.wikipedia.org/wiki/Uname#Examples
-    local x86_64_name="x86_64"
-    local arm_name="aarch64"
-    local tassl_mid_name="linux"
-    if [[ -n "${macOS}" ]];then
-        x86_64_name="x86_64"
-        arm_name="arm64"
-        tassl_mid_name="macOS"
-    fi
-
-    local tassl_post_fix="x86_64"
-    local platform="$(uname -m)"
-    if [[ "${platform}" == "${arm_name}" ]];then
-        tassl_post_fix="aarch64"
-    elif [[ "${platform}" == "${x86_64_name}" ]];then
-        tassl_post_fix="x86_64"
-    else
-        LOG_FATAL "Unsupported platform ${platform} for ${tassl_mid_name}"
+check_openssl(){
+    if ! command -v "${OPENSSL_CMD}" >/dev/null 2>&1; then
+        LOG_FATAL "OpenSSL executable not found: ${OPENSSL_CMD}"
         exit 1
     fi
-    local tassl_package_name="tassl-1.1.1b-${tassl_mid_name}-${tassl_post_fix}"
-    local tassl_tgz_name="${tassl_package_name}.tar.gz"
-    # local tassl_link_prefix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.1.1b/${tassl_tgz_name}"
-    local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.1.1b/${tassl_tgz_name}"
-    local github_link="https://github.com/FISCO-BCOS/TASSL/releases/download/V_1.4/${tassl_tgz_name}"
-    # the binary can obtained from the cos
-    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
-        # try cdn_link
-        echo "=============="
-        echo "Downloading tassl binary from ${Download_Link}"
-        curl -#LO "${Download_Link}"
-    else
-        echo "Downloading tassl binary from ${github_link}"
-        curl -#LO "${github_link}"
+    if ! "${OPENSSL_CMD}" version >/dev/null 2>&1; then
+        LOG_FATAL "Failed to execute OpenSSL: ${OPENSSL_CMD}"
+        exit 1
     fi
-    # wget --no-check-certificate  "${tassl_link_prefix}"
-    tar zxvf ${tassl_tgz_name} && rm ${tassl_tgz_name}
-    if [[ -n "${macOS}" ]];then
-        xattr -d com.apple.quarantine ${tassl_package_name}
-        # xattr -d com.apple.macl ${tassl_package_name}
+    if [[ "${sm_mode}" == "true" ]]; then
+        if ! "${OPENSSL_CMD}" genpkey -algorithm SM2 -out /dev/null >/dev/null 2>&1; then
+            LOG_FATAL "OpenSSL with SM2 support is required in SM mode: ${OPENSSL_CMD}"
+            exit 1
+        fi
+        if ! "${OPENSSL_CMD}" dgst -sm3 </dev/null >/dev/null 2>&1; then
+            LOG_FATAL "OpenSSL with SM3 support is required in SM mode: ${OPENSSL_CMD}"
+            exit 1
+        fi
     fi
-    chmod u+x ${tassl_package_name}
-    mkdir -p "${HOME}"/.fisco
-    mv ${tassl_package_name} "${HOME}"/.fisco/tassl-1.1.1b
 }
 
 generate_node_account()
@@ -2507,7 +2487,7 @@ modify_node_ca_setting(){
 }
 
 modify_multiple_ca_node(){
-    check_and_install_tassl
+    check_openssl
     subject_hash=`${OPENSSL_CMD} x509 -hash -noout -in ${multi_ca_path} 2>/dev/null`
     if [[ ! "${multi_ca_path}" || ! "${modify_node_path}" ]];then
         LOG_FATAL "multi_ca_path and modify_node_path are required!"
@@ -2899,8 +2879,9 @@ expand_pro_max(){
 
 main() {
     check_env
-    check_and_install_tassl
     parse_params "$@"
+    check_openssl
+    randNum=$(generate_random_num)
     if [[ "${chain_version}" == "air" ]]; then
     if [[ "${command}" == "deploy" ]]; then
         deploy_nodes

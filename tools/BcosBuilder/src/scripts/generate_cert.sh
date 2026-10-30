@@ -21,7 +21,7 @@ keccak_256_bin="${fisco_path}/keccak-256sum"
 keccak_256_tar="${fisco_path}/keccak-256sum.tgz"
 sm3_bin="${fisco_path}/sm3"
 sm3_tar="${fisco_path}/sm3.tgz"
-OPENSSL_CMD="${fisco_path}/tassl-1.1.1b"
+OPENSSL_CMD="${OPENSSL_CMD:-openssl}"
 
 # params for command
 ca_cert_path=""
@@ -90,7 +90,7 @@ generate_random_num(){
     num=`${OPENSSL_CMD} rand -hex 4`
     echo $num
 }
-randNum=$(generate_random_num)
+randNum=""
 
 generate_sm_sm2_param() {
     local output=$1
@@ -236,6 +236,7 @@ default_md = sha256
 [req]
 distinguished_name = req_distinguished_name
 req_extensions = v3_req
+x509_extensions = v3_ca
 [req_distinguished_name]
 countryName = CN
 countryName_default = CN
@@ -248,6 +249,10 @@ organizationalUnitName_default = FISCO-BCOS
 commonName =  Organizational  commonName (eg, FISCO-BCOS)
 commonName_default = FISCO-BCOS
 commonName_max = 64
+
+[ v3_ca ]
+basicConstraints = CA:true
+keyUsage = cRLSign, keyCertSign
 
 [ v3_req ]
 basicConstraints = CA:FALSE
@@ -383,7 +388,7 @@ gen_sm_chain_cert() {
     dir_must_exists "$chaindir"
 
     "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$chaindir/sm_ca.key"
-    "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS-${randNum}/O=FISCO-BCOS-${randNum}/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt"
+    "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -sigopt distid:1234567812345678 -days "${days}" -subj "/CN=FISCO-BCOS-${randNum}/O=FISCO-BCOS-${randNum}/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt"
     if [ ! -f "${chaindir}/${sm_cert_conf}" ];then
         cp "${sm_cert_conf}" "${chaindir}"
     fi
@@ -402,7 +407,7 @@ gen_sm_node_private_and_csr() {
     mkdir -p "$ndpath"
 
     "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$ndpath/sm_${type}.key"
-    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=${type}" -key "$ndpath/sm_${type}.key" -config "${sm_cert_conf}" -out "$ndpath/sm_${type}.csr"
+    "$OPENSSL_CMD" req -new -sigopt distid:1234567812345678 -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=${type}" -key "$ndpath/sm_${type}.key" -config "${sm_cert_conf}" -out "$ndpath/sm_${type}.csr"
 
     # nodeid is pubkey
     "$OPENSSL_CMD" ec -in "$ndpath/sm_${type}.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}' | cat > "$ndpath/sm_${type}.nodeid"
@@ -422,7 +427,7 @@ sign_sm_node_private_and_csr() {
     file_must_not_exists "$ndpath/sm_${type}.crt"
 
     echo "use $(basename "$capath") to sign $(basename $ndpath) ${type}"
-    "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$ndpath/sm_${type}.csr" -out "$ndpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions"
+    "$OPENSSL_CMD" x509 -sm3 -req -sigopt distid:1234567812345678 -vfyopt distid:1234567812345678 -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$ndpath/sm_${type}.csr" -out "$ndpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions"
     cp "$capath/sm_ca.crt" "$ndpath"
 }
 
@@ -439,10 +444,10 @@ gen_sm_node_cert_with_ext() {
     file_must_not_exists "$ndpath/sm_${type}.key"
 
     "$OPENSSL_CMD" genpkey -paramfile "$capath/${sm2_params}" -out "$certpath/sm_${type}.key"
-    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr"
+    "$OPENSSL_CMD" req -new -sigopt distid:1234567812345678 -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr"
 
     echo "use $(basename "$capath") to sign $(basename $certpath) ${type}"
-    "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions"
+    "$OPENSSL_CMD" x509 -sm3 -req -sigopt distid:1234567812345678 -vfyopt distid:1234567812345678 -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions"
 
     #nodeid is pubkey
     "$OPENSSL_CMD" ec -in "$ndpath/sm_${type}.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}' | cat > "$ndpath/sm_${type}.nodeid"
@@ -709,12 +714,27 @@ exit_with_clean()
 check_openssl()
 {
     local openssl_cmd="${1}"
-    local openssl_version="$(${openssl_cmd} version)"
+    if ! command -v "${openssl_cmd}" >/dev/null 2>&1; then
+        LOG_FALT "OpenSSL executable not found: ${openssl_cmd}"
+        exit 1
+    fi
+    local openssl_version
+    openssl_version="$(${openssl_cmd} version 2>/dev/null)"
     [[ "${openssl_version}" == *"OpenSSL 1.1"* || "${openssl_version}" == *"OpenSSL 3."* ||
         "${openssl_version}" == *"Tongsuo"* ]] || {
         LOG_FALT "OpenSSL 1.1, OpenSSL 3 or Tongsuo is required; got: ${openssl_version}"
         exit 1
     }
+    if [[ "${sm_mode}" == "true" ]]; then
+        if ! "${openssl_cmd}" genpkey -algorithm SM2 -out /dev/null >/dev/null 2>&1; then
+            LOG_FALT "OpenSSL with SM2 support is required in SM mode: ${openssl_cmd}"
+            exit 1
+        fi
+        if ! "${openssl_cmd}" dgst -sm3 </dev/null >/dev/null 2>&1; then
+            LOG_FALT "OpenSSL with SM3 support is required in SM mode: ${openssl_cmd}"
+            exit 1
+        fi
+    fi
 }
 
 prepare_sm3()
@@ -848,7 +868,7 @@ Usage:
     -i <Input>                          [Optional] optional input params
     -d <ca cert path>                   [Optional] ca certificate path, specify ca certificate path to generate node/sdk certificate
     -l <IP list>                        [Optional] list of ip for generate certificate or private key, working with generate_node_cert/generate_private_key
-    -O <OpenSSL path>                   [Optional] specify an OpenSSL 1.1/3.x or Tongsuo executable, default download TASSL 1.1.1b to local dir ~/.fisco/tassl-1.1.1b
+    -O <OpenSSL path>                   [Optional] specify an OpenSSL 1.1/3.x or Tongsuo executable, default is the system openssl
     -n <node path>                      [Optional] set the path of the node modified to multi ca mode
     -m <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -p <additional params>              [Optional] additional arguments for some command
@@ -1050,7 +1070,7 @@ modify_node_ca_setting(){
 }
 
 modify_multiple_ca_node(){
-    check_and_install_tassl
+    check_openssl "${OPENSSL_CMD}"
     subject_hash=`${OPENSSL_CMD} x509 -hash -noout -in ${multi_ca_path} 2>/dev/null`
     if [[ ! "${multi_ca_path}" || ! "${modify_node_path}" ]];then
         LOG_FATAL "multi_ca_path and modify_node_path are required!"
@@ -1058,44 +1078,10 @@ modify_multiple_ca_node(){
     modify_node_ca_setting "${subject_hash}"
 }
 
-check_and_install_tassl(){
-    if [ -f "${OPENSSL_CMD}" ];then
-        return
-    fi
-    # https://en.wikipedia.org/wiki/Uname#Examples
-    local x86_64_name="x86_64"
-    local arm_name="aarch64"
-    local tassl_mid_name="linux"
-    if [[ -n "${macOS}" ]];then
-        x86_64_name="x86_64"
-        arm_name="arm64"
-        tassl_mid_name="macOS"
-    fi
-
-    local tassl_post_fix="x86_64"
-    local platform="$(uname -m)"
-    if [[ "${platform}" == "${arm_name}" ]];then
-        tassl_post_fix="aarch64"
-    elif [[ "${platform}" == "${x86_64_name}" ]];then
-        tassl_post_fix="x86_64"
-    else
-        LOG_FATAL "Unsupported platform ${platform} for ${tassl_mid_name}"
-        exit 1
-    fi
-    local tassl_package_name="tassl-1.1.1b-${tassl_mid_name}-${tassl_post_fix}"
-    local tassl_tgz_name="${tassl_package_name}.tar.gz"
-    local tassl_link_prefix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.1.1b/${tassl_tgz_name}"
-    LOG_INFO "Downloading tassl binary from ${tassl_link_prefix}..."
-    wget --no-check-certificate  "${tassl_link_prefix}"
-    tar zxvf ${tassl_tgz_name} && rm ${tassl_tgz_name}
-    chmod u+x ${tassl_package_name}
-    mkdir -p "${HOME}"/.fisco
-    mv ${tassl_package_name} "${HOME}"/.fisco/tassl-1.1.1b
-}
-
 main() {
     parse_params "$@"
-    prepare_tassl
+    check_openssl "${OPENSSL_CMD}"
+    randNum=$(generate_random_num)
     prepare_keccak256
     prepare_sm3
     cert_conf="${output_dir}/cert.cnf"
