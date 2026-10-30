@@ -73,6 +73,32 @@ Generator<int, int> genValue()
     int value = 8;
     co_yield value;
 }
+
+template <typename T>
+class MemberGenerator
+{
+public:
+    Generator<T&> values(bool& destroyed) const
+    {
+        FrameGuard guard{destroyed};
+        for (auto& value : m_values)
+        {
+            co_yield value;
+        }
+    }
+
+private:
+    struct FrameGuard
+    {
+        explicit FrameGuard(bool& destroyed) : m_destroyed(destroyed) {}
+
+        ~FrameGuard() { m_destroyed = true; }
+
+        bool& m_destroyed;
+    };
+
+    mutable std::array<T, 2> m_values{1, 2};
+};
 #if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
 #pragma GCC diagnostic pop
 #endif
@@ -90,6 +116,7 @@ BOOST_AUTO_TEST_CASE(generator)
     {
         BOOST_CHECK_EQUAL(i, ++j);
     }
+    BOOST_CHECK_EQUAL(j, 3);
 
     j = 0;
     for (auto i : genNestedInt())
@@ -138,14 +165,37 @@ BOOST_AUTO_TEST_CASE(referenceAndCopy)
     BOOST_CHECK_EQUAL(values[0], 8);
     BOOST_CHECK_EQUAL(values[1], 10);
 
+    int count = 0;
     for (auto value : genCopy())
     {
         BOOST_CHECK_EQUAL(value, 7);
+        ++count;
     }
+    BOOST_CHECK_EQUAL(count, 1);
+
+    count = 0;
     for (auto value : genValue())
     {
         BOOST_CHECK_EQUAL(value, 8);
+        ++count;
     }
+    BOOST_CHECK_EQUAL(count, 1);
+}
+
+BOOST_AUTO_TEST_CASE(memberCoroutineEarlyBreak)
+{
+    MemberGenerator<int> generator;
+    bool destroyed = false;
+    int count = 0;
+    for (auto& value : generator.values(destroyed))
+    {
+        BOOST_CHECK_EQUAL(value, 1);
+        BOOST_CHECK(!destroyed);
+        ++count;
+        break;
+    }
+    BOOST_CHECK_EQUAL(count, 1);
+    BOOST_CHECK(destroyed);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -18,6 +18,8 @@
 
 #include <version>
 
+// Test-only: changes public generator types. All translation units that use these types in one
+// program must select the same branch to avoid ODR violations.
 #if !defined(BCOS_TASK_FORCE_GENERATOR_FALLBACK) && defined(__cpp_lib_generator) && \
     __cpp_lib_generator >= 202207L
 #include <generator>

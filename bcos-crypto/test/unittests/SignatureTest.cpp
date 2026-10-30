@@ -446,6 +446,29 @@ BOOST_AUTO_TEST_CASE(testEd25519RecoverAddressFromInput)
     BOOST_CHECK(addrShort.empty());
 }
 
+BOOST_AUTO_TEST_CASE(testEd25519RecoverRejectsZeroTailTruncation)
+{
+    auto signatureCrypto = std::make_shared<Ed25519Crypto>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto input = fromHex(
+        "0500000000000000000000000000000000000000000000000000000000000000"
+        "a7925dff013f517b09d9f3a53c9991b6a931f54e9407acc1c231348711c72626"
+        "d431a62e3d72a5372ef8d9c5849e54b8e6777196c8a34376b8f9604da7b75d09"
+        "d0e1e39073ac36dfe17f381d3428ce34689f9c69752c850210800d8c14eb2400");
+    BOOST_REQUIRE_EQUAL(input.size(), 128U);
+    BOOST_REQUIRE_EQUAL(input.back(), 0);
+
+    auto [ok, addr] = signatureCrypto->recoverAddress(hashImpl, ref(input));
+    BOOST_REQUIRE(ok);
+    BOOST_REQUIRE_EQUAL(addr.size(), 20U);
+
+    // Zero-initialisation would otherwise restore the missing zero byte and accept this prefix.
+    input.pop_back();
+    auto [okTruncated, addrTruncated] = signatureCrypto->recoverAddress(hashImpl, ref(input));
+    BOOST_CHECK(!okTruncated);
+    BOOST_CHECK(addrTruncated.empty());
+}
+
 
 BOOST_AUTO_TEST_CASE(testED25519SignAndVerify)
 {

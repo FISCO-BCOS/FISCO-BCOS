@@ -141,7 +141,7 @@ std::pair<bool, bytes> bcos::crypto::ed25519Recover(Hash::Ptr _hashImpl, bytesCo
     {
         return {false, {}};
     }
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(in)));
+    memcpy(&in, _input.data(), sizeof(in));
     // verify the signature
     auto signatureData = std::make_shared<SignatureDataWithPub>(in.r, in.s, in.pub.ref());
     try
