@@ -162,12 +162,10 @@ public:
         ExecutorType& executor, SchedulerType& scheduler,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
-        int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
         bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr,
         std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
       : m_memPool(std::ref(memPool)),
         m_globalStateStorage(std::ref(globalStateStorage)),
-        m_blockTxCountLimit(blockTxCountLimit),
         m_executor(std::ref(executor)),
         m_scheduler(std::ref(scheduler)),
         m_blockFactory(std::move(blockFactory)),
@@ -329,7 +327,9 @@ public:
         if (!payloadAttributes->noTxPool.value_or(false))
         {
             m_memPool.get().remove(view);
-            m_memPool.get().seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+            m_memPool.get().seal(co_await engine_common::legacyBlockGasLimit(
+                                     view, *headBlockNumber, *m_blockFactory),
+                view, std::back_inserter(sealedTxs));
         }
 
         // Step 3: Build the payload on the executed view (already mutable above).
@@ -833,6 +833,12 @@ private:
                 [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
             std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
         }
+        // The block's transactions are executed now: drop them from the pool so the sender's
+        // pending-cost budget stops charging for them before the next build prunes.
+        {
+            auto committed = m_globalStateStorage.get().fork();
+            m_memPool.get().remove(committed);
+        }
 
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
@@ -1227,7 +1233,6 @@ private:
     std::mutex m_commitMutex;
     std::reference_wrapper<MemPoolType> m_memPool;
     std::reference_wrapper<GlobalStateStorageType> m_globalStateStorage;
-    int64_t m_blockTxCountLimit;
     std::reference_wrapper<ExecutorType> m_executor;
     std::reference_wrapper<SchedulerType> m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

@@ -355,6 +355,10 @@ public:
     // pool holds and how many minutes one lives before expiry. Defaults 5120 / 30.
     size_t ethereumMempoolCapacity() const;
     std::int64_t ethereumMempoolTxLifetimeMinutes() const;
+    // [ethereum] mempool_max_txs_per_sender: how many of one sender's transactions the
+    // engine mempool holds at once; 0 = unlimited. Default 64 (geth has no such cap on
+    // executable transactions; its AccountQueue bounds gapped ones at 64).
+    size_t ethereumMempoolMaxTxsPerSender() const;
 
     // config for cert
     const std::string& certPath();
@@ -687,6 +691,7 @@ private:
     // (EL mode only; see ethereumMempoolCapacity()).
     size_t m_ethereumMempoolCapacity = 5120;
     std::int64_t m_ethereumMempoolTxLifetimeMinutes = 30;
+    size_t m_ethereumMempoolMaxTxsPerSender = 64;
     // EIP-6110 deposit contract ([ethereum] deposit_contract_address in config.ini) for the
     // Prague+ requestsHash cross-check. Defaults to the Ethereum mainnet deposit contract —
     // the same address scheduler_v1::c_mainnetDepositContractAddress pins (Sepolia:

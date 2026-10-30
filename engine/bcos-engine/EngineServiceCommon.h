@@ -24,6 +24,7 @@
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
@@ -404,6 +405,19 @@ GetPayloadResult assembleGetPayloadData(const EntryT& entry, std::uint32_t versi
                                  std::nullopt,
         .parentBeaconBlockRoot = entry.parentBeaconBlockRoot,
     });
+}
+
+/// Block gas budget for the FISCO-executor (v1) build lanes: buildPayload stamps
+/// `std::get<0>(ledgerConfig.gasLimit())` of the parent's LedgerConfig (the tx_gas_limit
+/// row) as the block gasLimit, so the seal reads it through the same getLedgerConfig call
+/// and fills the block up to exactly the limit the header will carry.
+template <class View>
+task::Task<int64_t> legacyBlockGasLimit(View& view, bcos::protocol::BlockNumber parentNumber,
+    bcos::protocol::BlockFactory& blockFactory)
+{
+    ledger::LedgerConfig ledgerConfig;
+    co_await ledger::getLedgerConfig(view, ledgerConfig, parentNumber, blockFactory);
+    co_return static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
 }
 
 namespace op

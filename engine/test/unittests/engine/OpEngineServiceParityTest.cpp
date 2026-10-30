@@ -125,16 +125,35 @@ struct StubMemPool
     {
         removed.insert(removed.end(), hashes.begin(), hashes.end());
     }
+    /// remove(state) calls: one per build and, since the commit lanes prune too, one per
+    /// committed external newPayload.
+    int removeCalls = 0;
     template <class View>
     void remove(View&)
-    {}
-    template <class View, class OutputIt>
-    void seal(int64_t limit, View&, OutputIt out)
     {
-        auto const n = std::min<int64_t>(limit, static_cast<int64_t>(pool.size()));
-        for (int64_t i = 0; i < n; ++i)
+        ++removeCalls;
+    }
+    /// The gas budget the service handed the last seal() (the attributes' gasLimit minus
+    /// the forced envelopes' gas), and what that seal emitted.
+    int64_t lastSealGasLimit = -1;
+    std::vector<bcos::protocol::Transaction::Ptr> lastSealed;
+    template <class View, class OutputIt>
+    void seal(int64_t gasLimit, View&, OutputIt out)
+    {
+        lastSealGasLimit = gasLimit;
+        lastSealed.clear();
+        int64_t gasLeft = gasLimit;
+        for (auto const& tx : pool)
         {
-            *out++ = pool[static_cast<std::size_t>(i)];
+            // The helper transactions carry no tars gasLimit (0): an exhausted budget still
+            // seals nothing, as the real pool's loop guard does.
+            if (gasLeft <= 0 || tx->gasLimit() > gasLeft)
+            {
+                break;
+            }
+            gasLeft -= tx->gasLimit();
+            lastSealed.push_back(tx);
+            *out++ = tx;
         }
     }
 };
@@ -464,14 +483,13 @@ static_assert(bcos::engine::EngineServiceConcept<OpEngine>);
 // OpLedgerConfigRepublish.h). The lane's holder is republished from the ledger by the notifier
 // the initializer installs instead, pinned at runtime by
 // OpLedgerConfigRepublishTest/commit_republish_keeps_the_holder_complete.
-static_assert(
-    std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
-        bcos::protocol::BlockFactory::Ptr, int64_t, bcos::scheduler::SchedulerInterface::Ptr,
-        std::shared_ptr<bcos::engine::DACaps>, bool>,
+static_assert(std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
+                  bcos::protocol::BlockFactory::Ptr, bcos::scheduler::SchedulerInterface::Ptr,
+                  std::shared_ptr<bcos::engine::DACaps>, bool>,
     "positive control: the OP engine is constructible at its documented arity");
 static_assert(
     !std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
-        bcos::protocol::BlockFactory::Ptr, int64_t, bcos::scheduler::SchedulerInterface::Ptr,
+        bcos::protocol::BlockFactory::Ptr, bcos::scheduler::SchedulerInterface::Ptr,
         std::shared_ptr<bcos::engine::DACaps>, bool, bcos::ledger::LedgerConfigState::Ptr>,
     "OpEngineService must not take a LedgerConfigState: the only configuration its commit "
     "callback can publish is the delegate's number+timestamp stub, which fail-closes EIP-155 "
@@ -686,8 +704,8 @@ struct OpServicePair
         bcos::ledger::OpForkSchedule forkSchedule = {})
       : scheduler(forkSchedule, {}),
         delegate(std::move(delegateIn)),
-        service(memPool, storage, scheduler, blockFactory, bcos::engine::c_defaultBlockTxCountLimit,
-            delegate, std::move(daCapsIn), allowSynthesizedL1Attributes)
+        service(memPool, storage, scheduler, blockFactory, delegate, std::move(daCapsIn),
+            allowSynthesizedL1Attributes)
     {}
 };
 
@@ -711,8 +729,7 @@ struct SharedForkchoicePair
 
     SharedForkchoicePair()
       : legacy(legacyMemPool, legacyStorage, legacyExecutor, legacyScheduler, blockFactory),
-        op(opMemPool, opStorage, opScheduler, blockFactory,
-            bcos::engine::c_defaultBlockTxCountLimit, nullptr)
+        op(opMemPool, opStorage, opScheduler, blockFactory, nullptr)
     {}
 };
 
@@ -1074,6 +1091,52 @@ BOOST_AUTO_TEST_CASE(op_fcu_missing_parent_header_is_invalid)
     BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
     BOOST_CHECK(result.payloadStatus.validationError->find("parent") != std::string::npos);
     BOOST_CHECK(result.payloadStatus.validationError->find("header") != std::string::npos);
+}
+
+// The pool's seal budget is the attributes' gasLimit minus the forced envelopes' gas
+// (op-geth debits deposits from the same gasPool before the pool is touched): with one
+// forced 21000-gas envelope the pool sees gasLimit - 21000, and when the forced envelope
+// alone fills the block the pool sees 0 and seals nothing.
+BOOST_AUTO_TEST_CASE(forcedEnvelopeGasIsDebitedFromTheSealBudget)
+{
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto forced = makeDecodableWeb3Tx(1);
+    auto pooled = makeDecodableWeb3Tx(2);
+    pair.memPool.pool.push_back(pooled.tx);
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.noTxPool = false;
+    attrs.transactions = std::vector<std::string>{forced.rawHex};
+    attrs.gasLimit = 30'000'000;
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    // makeDecodableWeb3Tx signs gasLimit 21000 into the envelope (the service decodes the
+    // envelope, not the helper's tars object, which carries no gasLimit).
+    BOOST_CHECK_EQUAL(pair.memPool.lastSealGasLimit, 30'000'000 - 21000);
+    BOOST_CHECK_EQUAL(pair.memPool.lastSealed.size(), 1);
+    // One build = one candidate execution plus the canonical (verify) execution of the
+    // final block; sealing against the budget leaves no capacity fault, so no culprit
+    // eviction and no third run (the retry loop would add one executeBlock per round).
+    BOOST_CHECK_EQUAL(delegate->executeCalls, 2);
+
+    // The forced envelope alone fills the block: nothing is left for the pool.
+    attrs.gasLimit = 21000;
+    attrs.timestamp += 2000;
+    result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    BOOST_CHECK_EQUAL(pair.memPool.lastSealGasLimit, 0);
+    BOOST_CHECK(pair.memPool.lastSealed.empty());
+    BOOST_CHECK_EQUAL(delegate->executeCalls, 4);  // candidate + canonical, no retry again
 }
 
 static void driveBuildWithCulprit(bool capacityReject)
@@ -1464,6 +1527,8 @@ BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip)
     BOOST_REQUIRE_EQUAL(static_cast<int>(built.payloadStatus.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_REQUIRE(built.payloadId.has_value());
+    // noTxPool attributes: the build seals nothing from the pool and skips its prune.
+    BOOST_CHECK_EQUAL(pair.memPool.removeCalls, 0);
 
     auto payload = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
     BOOST_REQUIRE(payload);
@@ -1479,6 +1544,9 @@ BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip)
     BOOST_CHECK_EQUAL(static_cast<int>(status.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_REQUIRE(pair.service.lastExecutedHeader());
+    // Committing the built payload prunes the pool: its transactions are executed now and
+    // must stop counting against the sender's pending budget before the next build.
+    BOOST_CHECK_EQUAL(pair.memPool.removeCalls, 1);
 }
 
 BOOST_AUTO_TEST_CASE(op_newpayload_failure_keeps_last_executed_header)
@@ -1708,6 +1776,9 @@ BOOST_AUTO_TEST_CASE(op_newpayload_built_header_commit_failure_falls_through_to_
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_CHECK_EQUAL(delegate->commitCalls, 2);
     BOOST_CHECK_GE(delegate->executeCalls, 1);
+    // The failed built-header commit pruned nothing; the full execute+commit lane (the
+    // verifier's path for blocks it did not build) pruned once after its commit.
+    BOOST_CHECK_EQUAL(pair.memPool.removeCalls, 1);
 }
 
 BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal_error)

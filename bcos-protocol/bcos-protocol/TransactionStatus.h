@@ -95,6 +95,9 @@ enum class TransactionStatus : int32_t
     /// and a `to` address. The empty-hashes case is also what normalize reports for a blob
     /// envelope that decodes without any hashes.
     BlobTxMissingHashes = 10025,
+    /// The sender already holds the pool's per-sender maximum of pooled transactions (a new
+    /// (sender, nonce) slot was asked for; replacing a held nonce is not counted).
+    SenderTxLimitExceeded = 10026,
 };
 
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
@@ -241,6 +244,9 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
         break;
     case TransactionStatus::BlobTxMissingHashes:
         _out << "BlobTxMissingHashes";
+        break;
+    case TransactionStatus::SenderTxLimitExceeded:
+        _out << "SenderTxLimitExceeded";
         break;
     case TransactionStatus::AlreadyInTxPoolAndAccept:
         _out << "AlreadyInTxPoolAndAccept";

@@ -267,15 +267,6 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
 
     requireDelegate();
 
-    auto sealView = m_globalStateStorage.fork();
-    std::vector<protocol::Transaction::Ptr> sealedTxs;
-    if (!payloadAttributes.noTxPool.value_or(false))
-    {
-        sealView.newMutable();
-        m_memPool.remove(sealView);
-        m_memPool.seal(m_blockTxCountLimit, sealView, std::back_inserter(sealedTxs));
-    }
-
     std::vector<bytes> forcedEnvelopes;
     // Reached only when tests set allowSynthesizedL1Attributes. In production the
     // OP lane's [engine_rpc] never invents this envelope (op-geth does not either).
@@ -292,6 +283,36 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         forcedEnvelopes.insert(forcedEnvelopes.end(),
             std::make_move_iterator(decodedForcedTxs.begin()),
             std::make_move_iterator(decodedForcedTxs.end()));
+    }
+
+    auto sealView = m_globalStateStorage.fork();
+    std::vector<protocol::Transaction::Ptr> sealedTxs;
+    if (!payloadAttributes.noTxPool.value_or(false))
+    {
+        // The pool fills what the forced transactions leave of the block gas limit: the
+        // attributes' gasLimit (the header field) minus the forced envelopes' gas, which
+        // op-geth's state transition debits from the same gasPool before the pool is
+        // touched (preCheck: "gas used by deposits may not be used by other txs"); a
+        // system deposit is skipped here regardless of fork (op-geth's preCheck leaves it
+        // unmetered pre-Regolith and rejects it from Regolith on, so the fork makes no
+        // difference to the budget). Undecodable forced envelopes count 0 here; the
+        // candidate execution below rejects them.
+        auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
+        int64_t forcedGas = 0;
+        for (auto const& env : forcedEnvelopes)
+        {
+            if (auto tarsTx = engine_common::op::opEnvelopeToTars(
+                    env, hashImpl.hash(env), /*allowDeposit=*/true);
+                tarsTx.has_value() && !tarsTx->isSystemTransaction)
+            {
+                forcedGas += tarsTx->data.gasLimit;
+            }
+        }
+        auto const blockGasLimit = static_cast<int64_t>(payloadAttributes.gasLimit.value());
+        sealView.newMutable();
+        m_memPool.remove(sealView);
+        m_memPool.seal(std::max<int64_t>(blockGasLimit - forcedGas, 0), sealView,
+            std::back_inserter(sealedTxs));
     }
 
     std::vector<std::pair<crypto::HashType, bytes>> sealedEnvelopes;
@@ -484,9 +505,12 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         auto culprit = executeError ? culpritTxHashFromError(*executeError) :
                                       std::optional<crypto::HashType>{};
         // A block-gas capacity fault means the tx is VALID but does not fit this
-        // candidate (mempool seals by count only). OpRejectIsCapacity's contract is
-        // "skip this build, do not evict": the tx must stay in the mempool for a later
-        // block, so the eviction loop only excludes it from this candidate.
+        // candidate. The pool already seals against the gas budget (every pooled
+        // transaction's gasLimit fits), so this branch is the backstop for forced
+        // envelopes the seal could not account for (undecodable here, counted as 0 gas).
+        // OpRejectIsCapacity's contract is "skip this build, do not evict": the tx must
+        // stay in the mempool for a later block, so the eviction loop only excludes it
+        // from this candidate.
         bool const isCapacityReject =
             executeError != nullptr &&
             boost::get_error_info<bcos::engine::OpRejectIsCapacity>(*executeError) != nullptr;
@@ -690,6 +714,13 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
                 });
             if (!commitError)
             {
+                // The block's transactions are executed now: drop them from the pool so
+                // the sender's pending-cost budget stops charging for them before the
+                // next build (which would prune them itself).
+                {
+                    auto committed = m_globalStateStorage.fork();
+                    m_memPool.remove(committed);
+                }
                 std::lock_guard lock(m_lastExecutedHeaderMutex);
                 m_lastExecutedHeader = builtHeader;
                 co_return makeStatus(
@@ -879,6 +910,13 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     if (commitError)
     {
         co_return mapDelegateError(*commitError, latestValidHash);
+    }
+    // The committed block's transactions leave the pool here as they do after a build:
+    // a verifier node never builds, and without this its pool would keep charging the
+    // sender (pending-cost budget) for transactions the sequencer already executed.
+    {
+        auto committed = m_globalStateStorage.fork();
+        m_memPool.remove(committed);
     }
 
     {

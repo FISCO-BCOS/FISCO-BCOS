@@ -36,6 +36,10 @@ DERIVE_BCOS_EXCEPTION(InvalidBlobTransaction);
 /// not something to report back as a transaction status.
 DERIVE_BCOS_EXCEPTION(NullTransaction);
 
+/// The pool's nonce form: a "0x" hex (Web3) or decimal (BCOS) string to int64; nullopt when
+/// the string is neither.
+std::optional<int64_t> parseNonce(std::string_view nonce);
+
 struct TransactionData
 {
     protocol::Transaction::Ptr m_transaction;
@@ -58,6 +62,13 @@ enum class ChainKind : std::uint8_t
     L1,
 };
 
+/// The least gas a sealed transaction spends from the block budget: Ethereum's intrinsic
+/// minimum (21000, TX_BASE_COST). Every admitted Web3 transaction already carries at least
+/// this much, so the floor changes nothing on the L1/OP lanes; it exists for the lanes that
+/// do not meter gas (FISCO transactions may declare gasLimit 0), where a budget that never
+/// decreased would let one seal take the whole pool into one block.
+inline constexpr int64_t c_minSealGas = 21000;
+
 struct MemPoolConfig
 {
     ChainKind chainKind = ChainKind::L2;
@@ -67,6 +78,12 @@ struct MemPoolConfig
     /// Milliseconds a transaction may sit in the pool before it is evicted; 0 = never
     /// expires (the L2 default).
     int64_t txLifetimeMs = 0;
+    /// Max pooled transactions per sender, executable and gapped alike; 0 = unlimited (the
+    /// L2 default). A new (sender, nonce) slot past the cap is refused with
+    /// SenderTxLimitExceeded; replacing a held nonce does not count. Stricter than geth,
+    /// which has no per-account cap on executable transactions (AccountSlots 16 is a
+    /// guaranteed minimum under global pressure; AccountQueue 64 bounds gapped ones only).
+    std::size_t maxTxsPerSender = 0;
     /// EIP-4844: max blob versioned hashes one transaction may carry (L1 only).
     std::size_t maxBlobsPerTransaction = 6;
     /// When set (EL mode), the per-transaction blob limit resolves dynamically instead of
@@ -395,6 +412,24 @@ public:
     protocol::TransactionStatus tryAdd(protocol::Transaction::Ptr transaction,
         std::optional<engine::BlobTxSidecar> sidecar = std::nullopt);
 
+    /// The most the sender's pooled transactions can cost together (Σ protocol::costAt on
+    /// @p basis, 512-bit), leaving out the one at @p excludeNonce (the slot an incoming transaction
+    /// would replace). The pending balance budget: admission charges a new transaction
+    /// against this on top of its own cost (geth's ValidateTransactionWithState +
+    /// list.totalcost), so a sender cannot pool more than its balance funds.
+    /// Two differences from geth, both on the conservative side: every pooled nonce counts
+    /// (geth sums the executable list only, so a transaction that fills a nonce gap here is
+    /// budgeted against the gapped ones already pooled), and the figure is read before
+    /// tryAdd() takes the lock, so two concurrent submissions from one sender can both pass
+    /// against the same figure and together exceed the budget (the surplus fails at
+    /// execution, as every pooled transaction did before the budget existed); folding the
+    /// check into insertLocked() is a follow-up.
+    /// @p basis is the chain's cost basis (protocol::CostBasis): the full maxCost where gas is
+    /// charged, the value alone on a free-gas chain -- the same basis admission charges the new
+    /// transaction on. No default: the validator decides the basis once, callers forward it.
+    u512 pendingCost(
+        std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis) const;
+
     /// The sidecar of a pooled blob transaction, or nullopt when the transaction is not
     /// pooled or carries none.
     std::optional<engine::BlobTxSidecar> blobSidecar(crypto::HashType const& txHash) const
@@ -436,11 +471,17 @@ public:
     std::vector<std::optional<engine::BlobItem>> blobsByVersionedHashes(
         std::span<const crypto::HashType> versionedHashes) const;
 
-    void seal(int64_t limit,
+    /// Pick the block's transactions against a GAS budget, not a count: @p gasLimit is the
+    /// block gasLimit the header will carry and every emitted transaction's gasLimit() is
+    /// debited from it, so the block the executor is handed already fits (geth's
+    /// commitTransactions over its gasPool). A transaction that does not fit ends its
+    /// sender's run for this block — the later nonces cannot follow it — and the walk goes on
+    /// with the other senders; nothing is dropped from the pool.
+    void seal(int64_t gasLimit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
         std::output_iterator<protocol::Transaction::Ptr> auto out)
     {
-        int64_t count = 0;
+        int64_t gasLeft = gasLimit;
         std::unique_lock lock(m_mutex);
         evictExpiredLocked();
         auto& senderNonceIndex = m_transactions.get<0>();
@@ -454,6 +495,10 @@ public:
         std::unordered_set<std::string_view> sealedSenders;
         for (const auto& data : senderIndex)
         {
+            if (gasLeft <= 0)
+            {
+                break;
+            }
             auto sender = data.sender();
             if (!sealedSenders.emplace(sender).second)
             {
@@ -472,18 +517,15 @@ public:
                 nonceIt->nonce() == currentNonce;
                 ++nonceIt)
             {
-                ++currentNonce;
-                ++count;
-                *out++ = nonceIt->m_transaction;
-
-                if (count >= limit)
+                auto const gas =
+                    std::max<int64_t>(nonceIt->m_transaction->gasLimit(), c_minSealGas);
+                if (gas > gasLeft)
                 {
-                    break;
+                    break;  // this sender's run ends here; other senders may still fit
                 }
-            }
-            if (count >= limit)
-            {
-                break;
+                gasLeft -= gas;
+                ++currentNonce;
+                *out++ = nonceIt->m_transaction;
             }
         }
     }
@@ -494,12 +536,14 @@ public:
     /// nonces, and a heap picks the best cursor head by (effectivePriorityTip desc, hash
     /// asc). @p baseFee is the block's base fee; transactions whose fee cap does not
     /// cover it sort last with tip 0 (they are not dropped — admission already enforces
-    /// FeeCapLessThanBaseFee against its own base fee).
-    void seal(int64_t limit,
+    /// FeeCapLessThanBaseFee against its own base fee). @p gasLimit is the block gas budget,
+    /// debited per emitted transaction as in seal() above; a head that does not fit pops its
+    /// sender for this block (geth's txs.Pop()) and the heap moves on.
+    void seal(int64_t gasLimit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
         std::output_iterator<protocol::Transaction::Ptr> auto out, u256 const& baseFee)
     {
-        int64_t count = 0;
+        int64_t gasLeft = gasLimit;
         std::unique_lock lock(m_mutex);
         evictExpiredLocked();
         auto& senderNonceIndex = m_transactions.get<0>();
@@ -549,12 +593,17 @@ public:
             }
         }
 
-        while (!heap.empty() && count < limit)
+        while (!heap.empty() && gasLeft > 0)
         {
             auto cursor = heap.top();
             heap.pop();
+            auto const gas = std::max<int64_t>(cursor.it->m_transaction->gasLimit(), c_minSealGas);
+            if (gas > gasLeft)
+            {
+                continue;  // pops the sender: its later nonces cannot follow a skipped head
+            }
+            gasLeft -= gas;
             *out++ = cursor.it->m_transaction;
-            ++count;
             // Advance the cursor inside the same sender's gapless prefix; a nonce gap
             // stops this sender for the block, exactly like seal()'s prefix walk.
             auto next = std::next(cursor.it);
