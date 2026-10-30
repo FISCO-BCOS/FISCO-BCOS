@@ -84,6 +84,53 @@ void DmcExecutor::setIsCall(bool isCall)
     m_isCall = isCall;
 }
 
+bool DmcExecutor::requiresSchedulerStamp(protocol::ExecutionMessage const& message)
+{
+    switch (message.type())
+    {
+    case protocol::ExecutionMessage::FINISHED:
+    case protocol::ExecutionMessage::REVERT:
+    case protocol::ExecutionMessage::PRE_FINISH:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool DmcExecutor::hasRequiredSchedulerStamp(protocol::ExecutionMessage const& message)
+{
+    return !requiresSchedulerStamp(message) || message.schedulerSeq() >= 0;
+}
+
+bool DmcExecutor::checkSchedulerStamp(protocol::ExecutionMessage const& message)
+{
+    if (hasRequiredSchedulerStamp(message))
+    {
+        return true;
+    }
+    DMC_LOG(ERROR) << LOG_BADGE("DmcExecutor") << LOG_DESC("resume message lost the hand-back")
+                   << LOG_KV("contract", m_contractAddress) << LOG_KV("seq", message.seq())
+                   << LOG_KV("type", static_cast<int>(message.type()));
+    if (m_dmcRecorder)
+    {
+        m_dmcRecorder->recordSchedulerStampViolation(
+            m_contractAddress, message.seq(), static_cast<int>(message.type()));
+    }
+    return false;
+}
+
+void DmcExecutor::recordScheduleOut(scheduler::ExecutiveState::Ptr const& executiveState)
+{
+    if (!m_dmcRecorder || !executiveState || !executiveState->message)
+    {
+        return;
+    }
+    auto const& message = *executiveState->message;
+    m_dmcRecorder->recordScheduleOut(m_contractAddress, executiveState->contextID, message.seq(),
+        message.schedulerSeq(), executiveState->currentSeq, message.to(), message.create(),
+        message.type());
+}
+
 void DmcExecutor::setEnablePreFinishType(bool enable)
 {
     m_enablePreFinishType = enable;
@@ -210,6 +257,15 @@ bool DmcExecutor::detectLockAndRevert()
                 message->setType(protocol::ExecutionMessage::REVERT);
                 message->setCreate(false);
                 message->setKeyLocks({});
+                // [R11 F2] This REVERT resumes a live frame, so it carries the same
+                // hand-back value as the seven handleExecutiveMessage arms: the
+                // tx-context's last-consumed seq (currentSeq - 1) — the documented
+                // meaning of the field, kept uniform across writers. Inert here by
+                // design (the key-lock resume point, externalAcquireKeyLocks, never
+                // adopts it). currentSeq >= 1 holds in production: a KEY_LOCK exists
+                // only for a live frame, and every path that makes a frame live
+                // increments currentSeq first.
+                message->setSchedulerSeq(executiveState->currentSeq - 1);
 
                 m_executivePool.markAs(contextID, MessageHint::NEED_SEND);
                 DMC_LOG(TRACE) << " 3.AfterPrepare: \t [..] " << executiveState->toString()
@@ -300,11 +356,23 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
 
     auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
 
+    bcos::Error::UniquePtr stampError;
     m_executivePool.forEachAndClear(MessageHint::NEED_SEND,
-        [this, messages](int64_t contextID, ExecutiveState::Ptr executiveState) {
+        [this, messages, &stampError](int64_t contextID, ExecutiveState::Ptr executiveState) {
             auto& message = executiveState->message;
             if (!message)
             {
+                return true;
+            }
+            // Reject an invalid producer response before dispatching any of this batch.
+            // This guard cannot negotiate capabilities with an old scheduler service.
+            if (!checkSchedulerStamp(*message))
+            {
+                if (!stampError)
+                {
+                    stampError = BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::EXECUTE_ERROR,
+                        "DMC resume message carries no schedulerSeq hand-back");
+                }
                 return true;
             }
 
@@ -317,6 +385,12 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
 
             return true;
         });
+
+    if (stampError)
+    {
+        callback(std::move(stampError), ERROR);
+        return;
+    }
 
     // record all send message for debug
     m_dmcRecorder->recordSends(m_contractAddress, *messages);
@@ -433,8 +507,12 @@ void DmcExecutor::handleCreateMessage(
             auto newSeq = currentSeq;
             if (message->createSalt())
             {
-                message->setTo(newCreate2EVMAddress(
-                    message->from(), message->data(), *(message->createSalt())));
+                // A producer still speaking the pre-0.24 protocol hands the salt down
+                // and expects the EIP-1014 address: derive it with the shared helper
+                // (the same formula the host-side create2 hook uses) instead of
+                // silently re-addressing the create with the legacy formula.
+                message->setTo(bcos::newCreate2EVMAddress(
+                    m_hashImpl, message->from(), message->data(), *(message->createSalt())));
             }
             else
             {
@@ -459,6 +537,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
 
     if (f_getAddr(message->to()) != m_contractAddress)
     {
+        recordScheduleOut(executiveState);
         return MessageHint::NEED_SCHEDULE_OUT;
     }
 
@@ -518,6 +597,8 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
     case protocol::ExecutionMessage::FINISHED:
     case protocol::ExecutionMessage::REVERT:
     {
+        // V1 getCode / empty delegate-code replies return NEED_PREPARE first;
+        // this second prepare pass stamps them before they can be sent to a parent.
         executiveState->callStack.pop();
         if (executiveState->callStack.empty())
         {
@@ -527,6 +608,10 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         }
 
         message->setSeq(executiveState->callStack.top());
+        // R5 F1: hand the tx-context's last consumed seq to the resumed parent, so its
+        // CREATE hook derives the next nested-create address from the same counter the
+        // scheduler-side empty-to arm used before the hook took over the derivation.
+        message->setSchedulerSeq(executiveState->currentSeq - 1);
         message->setCreate(false);
         return MessageHint::NEED_SEND;
     }
@@ -564,6 +649,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
 
     if (f_getAddr(message->to()) != m_contractAddress)
     {
+        recordScheduleOut(executiveState);
         return MessageHint::NEED_SCHEDULE_OUT;
     }
 
@@ -584,6 +670,10 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
                            << LOG_KV("codeSize", code.size());
             executiveState->message->setData(code);
             executiveState->message->setType(protocol::ExecutionMessage::PRE_FINISH);
+            // R6 F1: this response resumes a live frame, so it must carry the
+            // tx-context's last-consumed seq like the five resume arms below — an
+            // unstamped reply would poison the frame's schedulerSeq sentinel.
+            executiveState->message->setSchedulerSeq(executiveState->currentSeq - 1);
 
             executiveState->isRevertStackMessage = true;
 
@@ -616,6 +706,10 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
                 message->setStatus((int32_t)protocol::TransactionStatus::CallAddressError);
                 message->setCreate(false);
                 message->setKeyLocks({});
+                // R6 F1: this REVERT is handed back to a live frame, so it must carry
+                // the tx-context's last-consumed seq like the five resume arms below —
+                // an unstamped reply would poison the frame's schedulerSeq sentinel.
+                message->setSchedulerSeq(executiveState->currentSeq - 1);
 
                 executiveState->isRevertStackMessage = true;
 
@@ -649,6 +743,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
         assert(!executiveState->callStack.empty());
 
         message->setSeq(executiveState->callStack.top());
+        message->setSchedulerSeq(executiveState->currentSeq - 1);
         message->setCreate(false);
         return MessageHint::NEED_SEND;
     }
@@ -675,6 +770,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
         executiveState->revertStack.pop();
         executiveState->isRevertStackMessage = true;
         message->setSeq(seq);
+        message->setSchedulerSeq(executiveState->currentSeq - 1);
         message->setFrom(std::string(message->to()));  // record parent address
         message->setTo(std::string(to));
         message->setCreate(false);
@@ -698,6 +794,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
                 executiveState->revertStack.pop();
                 executiveState->isRevertStackMessage = true;
                 message->setSeq(seq);
+                message->setSchedulerSeq(executiveState->currentSeq - 1);
                 message->setFrom(std::string(message->to()));  // record parent address
                 message->setTo(std::string(to));
                 message->setCreate(false);
@@ -719,6 +816,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
         }
 
         message->setSeq(executiveState->callStack.top());
+        message->setSchedulerSeq(executiveState->currentSeq - 1);
         message->setCreate(false);
         return MessageHint::NEED_SEND;
     }
@@ -775,6 +873,7 @@ void DmcExecutor::handleExecutiveOutputs(
         else
         {
             m_executivePool.markAs(contextID, MessageHint::NEED_SCHEDULE_OUT);
+            recordScheduleOut(executiveState);
             scheduleOut(executiveState);
         }
     }
@@ -788,10 +887,4 @@ void DmcExecutor::scheduleOut(ExecutiveState::Ptr executiveState)
 std::string DmcExecutor::newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq)
 {
     return bcos::newEVMAddress(m_hashImpl, blockNumber, contextID, seq);
-}
-
-std::string DmcExecutor::newCreate2EVMAddress(
-    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
-{
-    return bcos::newCreate2EVMAddress(m_hashImpl, _sender, _init, _salt);
 }

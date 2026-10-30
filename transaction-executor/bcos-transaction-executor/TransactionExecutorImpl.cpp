@@ -18,12 +18,12 @@ evmc_message bcos::executor_v1::newEVMCMessage(protocol::BlockNumber blockNumber
         .flags = 0,
         .depth = 0,
         .gas = gasLimit,
+        .state_gas = {},
         .recipient = recipientAddress,
         .sender = origin,
         .input_data = transaction.input().data(),
         .input_size = transaction.input().size(),
         .value = toEvmC(transaction.value()),
-        .create2_salt = {},
         .code_address = recipientAddress,
         .code = nullptr,
         .code_size = 0};

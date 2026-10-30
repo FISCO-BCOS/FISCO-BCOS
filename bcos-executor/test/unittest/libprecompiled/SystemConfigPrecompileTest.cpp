@@ -10,6 +10,7 @@
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/SystemConfigPrecompiled.h"
 #include "precompiled/common/PrecompiledResult.h"
+#include <bcos-framework/executor/HostContextFault.h>
 #include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>
 
@@ -55,6 +56,85 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
 };
 
 BOOST_FIXTURE_TEST_SUITE(SystemConfigPrecompiledTest, SystemConfigPrecompiledFixture)
+
+BOOST_AUTO_TEST_CASE(dagExecutorPreservesHostFault)
+{
+    class FaultingPrecompiled : public Precompiled
+    {
+    public:
+        using Precompiled::Precompiled;
+        bool isParallelPrecompiled() override { return true; }
+        std::vector<std::string> getParallelTag(bytesConstRef) override { return {}; }
+        PrecompiledExecResult::Ptr call(
+            std::shared_ptr<TransactionExecutive>, PrecompiledExecResult::Ptr) override
+        {
+            throw HostContextFault("dag executor host fault sentinel");
+        }
+    };
+    class DagExecutor : public TransactionExecutor
+    {
+    public:
+        using TransactionExecutor::dagExecuteTransactionsInternal;
+        using TransactionExecutor::TransactionExecutor;
+        void configure(std::shared_ptr<BlockContext> context, Precompiled::Ptr precompiled)
+        {
+            m_blockContext = std::move(context);
+            m_precompiled->insert("000000000000000000000000000000000000f123", precompiled);
+        }
+    };
+    prepareEnv(false, false);
+    auto dagExecutor = std::make_shared<DagExecutor>(ledger, txpool, nullptr, storage,
+        std::make_shared<NativeExecutionMessageFactory>(),
+        std::make_shared<storage::StateStorageFactory>(0), hashImpl, false, nullptr, nullptr,
+        "host-fault-test", nullptr);
+    dagExecutor->configure(blockContext, std::make_shared<FaultingPrecompiled>(hashImpl));
+    std::vector<CallParameters::UniquePtr> inputs;
+    auto input = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    input->codeAddress = "000000000000000000000000000000000000f123";
+    input->receiveAddress = input->codeAddress;
+    input->gas = 1'000'000;
+    input->data = bytes(4, 0);
+    inputs.push_back(std::move(input));
+    bool callbackCalled = false;
+    dagExecutor->dagExecuteTransactionsInternal(inputs,
+        [&](Error::UniquePtr error, std::vector<protocol::ExecutionMessage::UniquePtr> results) {
+            callbackCalled = true;
+            BOOST_REQUIRE(error);
+            BOOST_CHECK(error->errorMessage().find("dag executor host fault sentinel") !=
+                        std::string::npos);
+            BOOST_CHECK(results.empty());
+        });
+    BOOST_CHECK(callbackCalled);
+}
+
+BOOST_AUTO_TEST_CASE(governorLookupPreservesHostFault)
+{
+    class FaultingExecutive : public MockTransactionExecutive
+    {
+    public:
+        using MockTransactionExecutive::MockTransactionExecutive;
+        CallParameters::UniquePtr externalCall(CallParameters::UniquePtr) override
+        {
+            throw HostContextFault("governor host fault sentinel");
+        }
+    };
+    auto context =
+        std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
+            static_cast<uint32_t>(protocol::BlockVersion::V3_6_VERSION), false, backendStorage);
+    auto faultingExecutive = std::make_shared<FaultingExecutive>(*context, "", 100, 0);
+    faultingExecutive->setStorageWrapper();
+    SystemConfigPrecompiled precompiled(hashImpl);
+    CodecWrapper codec(hashImpl);
+    ledger::Features features;
+    features.set(ledger::Features::Flag::feature_balance);
+    context->setFeatures(std::move(features));
+    auto input = codec.encodeWithSig("setValueByKey(string,string)",
+        std::string(SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH), std::string("1"));
+    auto params = std::make_shared<PrecompiledExecResult>();
+    params->m_input = bcos::ref(input);
+    BOOST_CHECK_EXCEPTION(precompiled.call(faultingExecutive, params), HostContextFault,
+        [](auto const& e) { return std::string(e.what()) == "governor host fault sentinel"; });
+}
 
 BOOST_AUTO_TEST_CASE(getAndSetFeature)
 {

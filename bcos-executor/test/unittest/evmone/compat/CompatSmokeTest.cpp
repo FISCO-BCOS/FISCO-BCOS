@@ -59,7 +59,69 @@ BOOST_AUTO_TEST_CASE(FC_S_cancun_only_legacy_gas_smoke)
         "FC-A/TE-FC. Run --run_test=CompatEip2929 for account/storage warm behaviour.");
 }
 
+// recordHostFault("", halting) must still fail the frame (review F5): the record's
+// presence is a separate flag, not the message's emptiness — an Error built with only
+// a code (empty diagnostic) is a real node fault. Both directions pinned: non-empty
+// control throws, empty message throws too. (The pre-fix code silently recorded
+// nothing and the frame committed.)
+BOOST_AUTO_TEST_CASE(recordHostFaultEmptyMessageStillFailsFrame)
+{
+    using compat::CompatFeatureProfile;
+    {
+        auto host = makeCompatHostContext(*this, CompatFeatureProfile::cancunOnly());
+        host.recordHostFault("storage I/O fault", /*halting=*/true);
+        BOOST_CHECK_THROW(host.throwIfHostFault(), std::runtime_error);
+    }
+    {
+        auto host = makeCompatHostContext(*this, CompatFeatureProfile::cancunOnly());
+        host.recordHostFault("", /*halting=*/true);
+        BOOST_CHECK_THROW(host.throwIfHostFault(), std::runtime_error);
+    }
+}
+
+
+BOOST_AUTO_TEST_CASE(hostCallbacksStopMutatingAfterRecordedFault)
+{
+    using compat::CompatFeatureProfile;
+    // The healthy frame is a negative control: each callback must still do its work.
+    for (bool faulted : {false, true})
+    {
+        CompatHostContextFixture fixture;
+        auto host = makeCompatHostContext(fixture, CompatFeatureProfile::cancunOnly());
+        auto* context = reinterpret_cast<evmc_host_context*>(&host);
+        evmc_address address{};
+        address.bytes[19] = 2;  // makeCompatHostContext's storage owner
+        evmc_bytes32 key{};
+        evmc_bytes32 value{};
+        value.bytes[31] = 1;
+        const uint8_t data = 0xab;
+        if (faulted)
+        {
+            host.recordHostFault("injected storage fault", /*halting=*/false);
+        }
+
+        BOOST_CHECK_EQUAL(host.hostInterface->account_exists(context, &address), !faulted);
+        host.hostInterface->set_transient_storage(context, &address, &key, &value);
+        auto stored = host.getTransientStorage(&key);
+        BOOST_CHECK_EQUAL(stored.bytes[31], faulted ? 0 : 1);
+
+        host.hostInterface->emit_log(context, &address, &data, 1, &key, 1);
+        host.hostInterface->selfdestruct(context, &address, &address);
+        BOOST_CHECK_EQUAL(host.getTransactionExecutive()->hasContractTableChanged(), !faulted);
+        auto params = host.takeCallParameters();
+        BOOST_CHECK_EQUAL(params->logEntries.size(), faulted ? 0U : 1U);
+        BOOST_CHECK_EQUAL(host.hasHostFault(), faulted);
+        if (faulted)
+        {
+            BOOST_CHECK_EQUAL(host.hostFault(), "injected storage fault");
+            BOOST_CHECK_THROW(host.throwIfHostFault(), bcos::Error);
+        }
+    }
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()  // CompatSmoke
+
 BOOST_AUTO_TEST_SUITE_END()  // Compat (shared with other compat/*.cpp)
 
 }  // namespace bcos::test

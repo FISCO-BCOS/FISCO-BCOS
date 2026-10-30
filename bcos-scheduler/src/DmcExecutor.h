@@ -116,9 +116,23 @@ protected:
 
     void handleCreateMessage(ExecutiveState::Ptr executive);
     std::string newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq);
-    std::string newCreate2EVMAddress(
-        const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
     bool isCall();
+
+public:
+    /// A response handed back to an executor always resumes the frame that produced
+    /// the request: FINISHED/REVERT/PRE_FINISH are never the first message of a
+    /// transaction. Such a message must carry the tx-context's last-consumed seq, or
+    /// the executor's createDerivationSeq() sentinel halts the node. Keeping the rule
+    /// here — instead of relying on every arm to remember it — lets new arms be
+    /// checked by one predicate.
+    static bool requiresSchedulerStamp(protocol::ExecutionMessage const& message);
+    static bool hasRequiredSchedulerStamp(protocol::ExecutionMessage const& message);
+
+    /// Send-path enforcement. Returns false (and records the violation) when a resume
+    /// message reaches the executor without the hand-back. Always compiled, so release
+    /// builds log and count the defect instead of silently resuming.
+    bool checkSchedulerStamp(protocol::ExecutionMessage const& message);
+    void recordScheduleOut(scheduler::ExecutiveState::Ptr const& executiveState);
 
 protected:
     std::string m_name;

@@ -419,7 +419,7 @@ BOOST_AUTO_TEST_CASE(testEd25519VerifyShortSignature)
 
 // positive control for the sizeof(in) fix: a real hash‖pub‖r‖s buffer must verify and
 // recover the signing key's address (reverting to sizeof(_input) turns this red);
-// a truncated input leaves the tail zero-filled and fails verification deterministically
+// omitting the public key and signature leaves them zero-filled and fails verification
 BOOST_AUTO_TEST_CASE(testEd25519RecoverAddressFromInput)
 {
     auto signatureCrypto = std::make_shared<Ed25519Crypto>();
@@ -440,7 +440,9 @@ BOOST_AUTO_TEST_CASE(testEd25519RecoverAddressFromInput)
     BOOST_CHECK(ok);
     BOOST_CHECK(addr == calculateAddress(hashImpl, keyPair->publicKey()).asBytes());
 
-    auto truncated = bytes(input.begin(), input.end() - 1);
+    // Dropping just the last byte is not an invalid-input guarantee: that byte
+    // may already be zero, and recoverAddress right-pads missing bytes with zeros.
+    auto truncated = bytes(input.begin(), input.begin() + HashType::SIZE);
     auto [okShort, addrShort] = signatureCrypto->recoverAddress(hashImpl, ref(truncated));
     BOOST_CHECK(!okShort);
     BOOST_CHECK(addrShort.empty());

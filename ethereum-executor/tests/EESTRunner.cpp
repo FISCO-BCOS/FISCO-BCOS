@@ -32,6 +32,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/log/core.hpp>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -43,6 +44,7 @@
 #include <memory>
 #include <mutex>
 #include <range/v3/algorithm/equal.hpp>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -53,6 +55,11 @@ using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::executor_v1;
 namespace fs = std::filesystem;
+
+// Fixtures that failed to load or parse. Declared here rather than beside the
+// other run counters below: the loaders that bump it are defined inside the
+// namespace blocks that follow, so the definition has to precede them.
+std::atomic<int> g_loadFailures{0};
 
 // =============================================================================
 //  Fixture loader — out-of-line definitions of the functions declared in
@@ -386,6 +393,9 @@ std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
         {
             std::cerr << "Warning: Failed to parse fixture '" << it.key().asString()
                       << "': " << e.what() << std::endl;
+            // Count, never swallow: a parser regression must shrink the reported corpus
+            // loudly — the pass-rate denominator is only honest if rejects are counted.
+            ++g_loadFailures;
         }
     }
 
@@ -558,58 +568,100 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
         {
             std::cerr << "Warning: Failed to parse blockchain fixture '" << it.key().asString()
                       << "': " << e.what() << std::endl;
+            // Same accounting as the state-test parse catch above: counted, never swallowed.
+            ++g_loadFailures;
         }
     }
 
     return fixtures;
 }
 
-evmc_revision forkNameToRevision(std::string const& forkName)
+std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
 {
     // Normalize: lowercase
     auto lower = forkName;
     boost::algorithm::to_lower(lower);
 
-    if (lower == "frontier")
-        return EVMC_FRONTIER;
-    if (lower == "homestead")
-        return EVMC_HOMESTEAD;
-    if (lower == "tangerine whistle" || lower == "tangerinewhistle" || lower == "eip150")
-        return EVMC_TANGERINE_WHISTLE;
-    if (lower == "spurious dragon" || lower == "spuriousdragon" || lower == "eip158")
-        return EVMC_SPURIOUS_DRAGON;
-    if (lower == "byzantium")
-        return EVMC_BYZANTIUM;
-    if (lower == "constantinople")
-        return EVMC_CONSTANTINOPLE;
-    if (lower == "constantinoplefix" || lower == "petersburg")
-        return EVMC_PETERSBURG;
-    if (lower == "istanbul")
-        return EVMC_ISTANBUL;
-    // Muir Glacier (EIP-2384) only delays the difficulty bomb; it changes no
-    // EVM semantics over Istanbul. Mapping it to Berlin would wrongly activate
-    // EIP-2929 access-list gas for MuirGlacier fixtures.
-    if (lower == "muir glacier" || lower == "muirglacier")
-        return EVMC_ISTANBUL;
-    if (lower == "berlin")
-        return EVMC_BERLIN;
-    if (lower == "london")
-        return EVMC_LONDON;
-    if (lower == "paris" || lower == "merge")
-        return EVMC_PARIS;
-    if (lower == "shanghai")
-        return EVMC_SHANGHAI;
-    if (lower == "cancun")
-        return EVMC_CANCUN;
-    if (lower == "prague")
-        return EVMC_PRAGUE;
-    if (lower == "osaka")
-        return EVMC_OSAKA;
+    // The plain-name table below is an explicit run/skip contract. Transition names are
+    // parsed by their To/AtTime shape further down (lowercased substring search), so
+    // the "no substring shape" rule applies to plain-name admission, not to the
+    // transition parser.
+    struct ForkName
+    {
+        std::string_view name;
+        evmc_revision revision;
+    };
+    static constexpr ForkName c_forks[] = {
+        {"frontier", EVMC_FRONTIER},
+        {"homestead", EVMC_HOMESTEAD},
+        {"tangerine whistle", EVMC_TANGERINE_WHISTLE},
+        {"tangerinewhistle", EVMC_TANGERINE_WHISTLE},
+        {"eip150", EVMC_TANGERINE_WHISTLE},
+        {"spurious dragon", EVMC_SPURIOUS_DRAGON},
+        {"spuriousdragon", EVMC_SPURIOUS_DRAGON},
+        {"eip158", EVMC_SPURIOUS_DRAGON},
+        {"byzantium", EVMC_BYZANTIUM},
+        {"petersburg", EVMC_PETERSBURG},
+        {"constantinoplefix", EVMC_PETERSBURG},
+        {"istanbul", EVMC_ISTANBUL},
+        // Muir Glacier (EIP-2384) only delays the difficulty bomb; it changes no
+        // EVM semantics over Istanbul. Mapping it to Berlin would wrongly activate
+        // EIP-2929 access-list gas for MuirGlacier fixtures.
+        {"muir glacier", EVMC_ISTANBUL},
+        {"muirglacier", EVMC_ISTANBUL},
+        {"berlin", EVMC_BERLIN},
+        {"london", EVMC_LONDON},
+        {"paris", EVMC_PARIS},
+        {"merge", EVMC_PARIS},
+        {"shanghai", EVMC_SHANGHAI},
+        {"cancun", EVMC_CANCUN},
+        {"prague", EVMC_PRAGUE},
+        {"osaka", EVMC_OSAKA},
+    };
+    for (auto const& fork : c_forks)
+    {
+        if (lower == fork.name)
+            return fork.revision;
+    }
 
-    // Unknown fork → default to the latest handled revision so a future fork
-    // is not silently mis-executed as Cancun (which would produce false
-    // pass/fail outcomes in the compliance suite).
-    return EVMC_OSAKA;
+    // Refused exactly: evmone 0.23 removed the Constantinople revision — Petersburg is
+    // Constantinople minus the reverted EIP-1283 (SSTORE net gas metering), so running
+    // those fixtures under Petersburg charges different gas and yields a wrong post-state
+    // — and `amsterdam` needs the state_gas (EIP-8037/8038) pricing this binary does not
+    // have. nullopt is the skip signal (an exception here aborted the whole runner,
+    // exit 134, wherever the call was not wrapped in a try/catch); the caller counts and
+    // reports the skip.
+    static constexpr std::string_view c_refusedForks[] = {"constantinople", "amsterdam"};
+    for (auto const& refused : c_refusedForks)
+    {
+        if (lower == refused)
+            return std::nullopt;
+    }
+
+    // Transition names configureFork's parser resolves: `<From>To<To>AtTime<Suffix>`,
+    // both endpoints looked up in the tables above, so a transition naming a refused
+    // endpoint (…ToAmsterdamAtTime…) fails the parser's endpoint guard there. A
+    // transition-SHAPED name without the AtTime marker (the legacy block-number format,
+    // e.g. FrontierToHomesteadAt5) cannot be resolved to a schedule: report it and skip,
+    // never pattern-match it into either outcome.
+    if (lower.find("to") != std::string::npos)
+    {
+        if (lower.find("attime") != std::string::npos)
+            return EVMC_OSAKA;  // carrier value only; configureFork installs the schedule
+        std::cerr << "Info: fork name '" << forkName
+                  << "' is transition-shaped without an AtTime marker; skipping its fixtures"
+                  << std::endl;
+        return std::nullopt;
+    }
+
+    // A plain name outside the tables cannot be resolved to a schedule this binary
+    // knows: executing it under the newest revision would silently pass or fail
+    // fixtures under wrong rules and still count them in the pass-rate denominator.
+    // Skip and count instead — a future fork's fixtures stay unexecuted (visible as
+    // skips) until this binary learns the schedule.
+    std::cerr << "Info: unknown fork name '" << forkName
+              << "'; skipping its fixtures (no schedule in this binary)" << std::endl;
+    return std::nullopt;
 }
 }  // namespace bcos::test
 
@@ -646,7 +698,7 @@ std::atomic<int> g_unexpectedFailure{0};
 // transaction_tests) or failed to load/parse — kept so the summary's 100%
 // carries its domain and a loader regression can't silently raise the pass rate.
 std::atomic<int> g_skippedFiles{0};
-std::atomic<int> g_loadFailures{0};
+std::atomic<int> g_skippedTests{0};  // fixtures whose fork has no revision here
 
 // Failure details for summary
 struct FailureDetail
@@ -795,21 +847,35 @@ public:
                 -> evmc::bytes32 { return blockHashes->get_block_hash(blockNumber); })
     {}
 
-    void configureFork(std::string const& forkName)
+    /// Returns false when the fork has no executable revision in this binary
+    /// (e.g. Constantinople) — the caller must skip the fixture instead of running it
+    /// under a different gas schedule.
+    bool configureFork(std::string const& forkName)
     {
         auto const rev = test::forkNameToRevision(forkName);
-        m_currentRevision = rev;
-        m_ledgerConfig.setEVMCRevision(rev);
+        if (!rev)
+        {
+            return false;
+        }
+        m_currentRevision = *rev;
+        m_ledgerConfig.setEVMCRevision(*rev);
         m_forkTransition.reset();
 
-        // Detect fork transition names like "CancunToPragueAtTime15k"
-        auto toPos = forkName.find("To");
-        auto atPos = forkName.find("AtTime");
+        // Detect fork transition names like "CancunToPragueAtTime15k". The parse runs
+        // on the LOWERCASED name — the skip gate above reasons on lowercased
+        // substrings, and a gate that admits a name the parser (case-sensitive "To"/
+        // "AtTime", toPos < atPos, numeric suffix) then cannot resolve would execute
+        // the whole case at the default revision with no transition: one notion of
+        // "resolvable" on both sides, or skip.
+        auto lowerName = forkName;
+        boost::algorithm::to_lower(lowerName);
+        auto toPos = lowerName.find("to");
+        auto atPos = lowerName.find("attime");
         if (toPos != std::string::npos && atPos != std::string::npos && toPos < atPos)
         {
-            auto fromFork = forkName.substr(0, toPos);
-            auto toFork = forkName.substr(toPos + 2, atPos - toPos - 2);
-            auto timeStr = forkName.substr(atPos + 6);  // "AtTime" = 6 chars
+            auto fromFork = lowerName.substr(0, toPos);
+            auto toFork = lowerName.substr(toPos + 2, atPos - toPos - 2);
+            auto timeStr = lowerName.substr(atPos + 6);  // "attime" = 6 chars
             try
             {
                 // Handle 'k' suffix meaning ×1000 (e.g., "15k" = 15000)
@@ -822,14 +888,49 @@ public:
                 {
                     transitionTime = std::stoll(timeStr);
                 }
-                m_forkTransition = ForkTransition{test::forkNameToRevision(fromFork),
-                    test::forkNameToRevision(toFork), transitionTime};
+                auto const from = test::forkNameToRevision(fromFork);
+                auto const to = test::forkNameToRevision(toFork);
+                if (!from || !to)
+                {
+                    // A transition endpoint with no executable revision (e.g.
+                    // ...ToConstantinopleFixAtTime5) must skip the fixture the same
+                    // way the plain name does: falling through would silently run the
+                    // whole case at the default revision with no transition — the
+                    // wrong-schedule execution the refusal exists to prevent (a probe
+                    // fixture named this way executed and bogusly passed under Osaka
+                    // rules before this branch existed). Report it: the skip removes
+                    // fixtures from the denominator (review F6).
+                    std::cerr << "Info: transition endpoint of '" << forkName
+                              << "' has no executable revision; skipping its fixtures" << std::endl;
+                    return false;
+                }
+                m_forkTransition = ForkTransition{*from, *to, transitionTime};
             }
             catch (...)
             {
+                // A name the gate admitted but the numeric parse failed on (e.g. a
+                // non-numeric AtTime suffix) must skip, not run whole-case at the
+                // default revision — reset-and-continue is the wrong-schedule
+                // execution the refusal exists to prevent. Reported for the same
+                // reason as the endpoint guard above (review F6).
+                std::cerr << "Info: cannot parse the transition suffix of '" << forkName
+                          << "'; skipping its fixtures" << std::endl;
                 m_forkTransition.reset();
+                return false;
             }
         }
+        else if (toPos != std::string::npos && atPos != std::string::npos)
+        {
+            // Both markers present but in the wrong order (AtTime before To): the gate
+            // admitted the name, and the transition parser cannot resolve it, so running
+            // it whole-case at the default revision would be the wrong-schedule execution
+            // the refusal exists to prevent. Skip it like every other unresolvable shape.
+            std::cerr << "Info: fork name '" << forkName
+                      << "' has its AtTime marker before To; skipping its fixtures" << std::endl;
+            m_forkTransition.reset();
+            return false;
+        }
+        return true;
     }
 
     /// Get the EVMC revision for a block given its timestamp (handles fork transitions).
@@ -984,12 +1085,18 @@ public:
     bcostars::protocol::BlockHeaderImpl buildBlockHeader(test::EESTEnvironment const& env)
     {
         bcostars::protocol::BlockHeaderImpl header;
+        // The header version must follow the schedule THIS block executes under —
+        // for transition-named fixtures m_currentRevision stays at the full-name
+        // default (Osaka), so gate on revisionForBlock(ts) like the execution
+        // path does (review F6; two notions of one revision otherwise).
+        auto tsSec = test::hexToTimestamp(env.timestamp);
+        auto const blockRev = revisionForBlock(tsSec);
         uint32_t blockVer;
-        if (m_currentRevision >= EVMC_CANCUN)
+        if (blockRev >= EVMC_CANCUN)
         {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
         }
-        else if (m_currentRevision >= EVMC_PARIS)
+        else if (blockRev >= EVMC_PARIS)
         {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
         }
@@ -1000,7 +1107,6 @@ public:
         header.setVersion(blockVer);
         header.setNumber(test::hexToInt64(env.number));
 
-        auto tsSec = test::hexToTimestamp(env.timestamp);
         header.setTimestamp(tsSec * 1000);
         header.setSealer(0);
 
@@ -1314,14 +1420,107 @@ public:
 
         }  // end for loop over expected accounts
 
+        // Surplus/undeleted detection: enumerate every account table this storage
+        // holds and flag any that the expected post-state does not name — the
+        // expected-only loop above cannot see an account the executor created (or
+        // failed to delete).
+        {
+            std::set<std::string> expectedAddrs;
+            for (auto const& [addrHex, unused] : expected)
+            {
+                auto b = test::hexToBytes(addrHex);
+                if (b.size() == sizeof(evmc_address))
+                {
+                    std::string lower;
+                    boost::algorithm::hex_lower(b, std::back_inserter(lower));
+                    expectedAddrs.insert(std::move(lower));
+                }
+            }
+            // Partition the unnamed account tables: every one is a candidate, and
+            // one holding a nonzero storage slot already carries state. A
+            // balance-only account is a fee/deposit artifact the harness
+            // legitimately creates for the block's beneficiary; an empty table or
+            // a table whose only slots are zero is EIP-161-prunable. Neither must
+            // trip the gate.
+            std::set<std::string> surplusCandidates;
+            std::set<std::string> surplusAddrs;
+            auto iterator = task::tbb::syncWait(storage2::range(storage));
+            while (auto item = task::tbb::syncWait(iterator.next()))
+            {
+                auto const& [key, value] = *item;
+                std::string_view table(key.m_tableAndKey.data(), key.m_split);
+                if (!ledger::account::isHexAccountTableName(table))
+                {
+                    continue;
+                }
+                auto addrHex = std::string(table.substr(ledger::account::APPS_PREFIX.size()));
+                if (expectedAddrs.count(addrHex))
+                {
+                    continue;
+                }
+                surplusCandidates.insert(addrHex);
+
+                // Storage slots are exactly 32-byte keys; account metadata fields
+                // (nonce, balance, codeHash, ...) use shorter names. A zero-valued
+                // slot is indistinguishable from an absent one at the EVM level.
+                auto const slotKey = std::string_view(key.m_tableAndKey.data() + key.m_split + 1,
+                    key.m_tableAndKey.size() - key.m_split - 1);
+                auto const* entry = std::get_if<storage::Entry>(std::addressof(value));
+                if (entry != nullptr && slotKey.size() == sizeof(evmc_bytes32))
+                {
+                    auto const field = entry->get();
+                    if (std::any_of(
+                            field.begin(), field.end(), [](char byte) { return byte != 0; }))
+                    {
+                        surplusAddrs.insert(std::move(addrHex));
+                    }
+                }
+            }
+
+            // Code-bearing surplus accounts: the expected map cannot name them
+            // either, and a legacy row may keep the code in the table's code field
+            // rather than a code-hash row, so inspect the account itself.
+            for (auto const& addrHex : surplusCandidates)
+            {
+                if (surplusAddrs.count(addrHex) != 0)
+                {
+                    continue;
+                }
+                auto addrBytes = test::hexToBytes(addrHex);
+                evmc_address addr{};
+                std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
+                auto surplusAcct = bcos::executor_v1::eth::ethViewAccount(storage, addr);
+                auto const carriesState = task::tbb::syncWait([&]() -> task::Task<bool> {
+                    auto codeEntry = co_await surplusAcct.code();
+                    co_return codeEntry.has_value() && !codeEntry->get().empty();
+                }());
+                if (carriesState)
+                {
+                    surplusAddrs.insert(addrHex);
+                }
+            }
+
+            for (auto const& addrHex : surplusAddrs)
+            {
+                errors << "    SURPLUS " << addrHex
+                       << ": present in storage (code/storage) but not in the expected "
+                          "post-state\n";
+            }
+        }
+
         return errors.str();
     }
 
-    /// Run a single fixture test case. Returns true if passed.
-    bool runFixture(::test::EESTFixture const& fixture, std::string const& forkName,
+    /// Run a single fixture test case. Returns nullopt when the fixture is skipped
+    /// (fork has no executable revision), else pass/fail.
+    std::optional<bool> runFixture(::test::EESTFixture const& fixture, std::string const& forkName,
         ::test::EESTForkPost const& post)
     {
-        configureFork(forkName);
+        if (!configureFork(forkName))
+        {
+            ++g_skippedTests;
+            return std::nullopt;
+        }
         m_chainId = fixture.chainId;
         m_ledgerConfig.setChainId(evmc::bytes32{static_cast<uint64_t>(m_chainId)});
         configureEnvironment(fixture.env);
@@ -1354,6 +1553,14 @@ public:
         }
 
         auto blockHeader = buildBlockHeader(fixture.env);
+        // Transition-named fixtures execute under the schedule their timestamp selects,
+        // the same rule the blockchain path applies via revisionForBlock — not the
+        // full-name default revision configureFork had to set while parsing.
+        if (m_forkTransition.has_value())
+        {
+            m_ledgerConfig.setEVMCRevision(
+                revisionForBlock(test::hexToTimestamp(fixture.env.timestamp)));
+        }
         auto tx =
             buildTransaction(fixture.transaction, post.dataIndex, post.gasIndex, post.valueIndex);
 
@@ -1385,6 +1592,23 @@ public:
             !executionThrew && receipt &&
             (receipt->status() == 0 ||
                 receipt->status() == static_cast<int32_t>(protocol::TransactionStatus::None));
+
+        // Vacuity guard (review F8): the verdict below only inspects post.state
+        // accounts. A fixture whose post entry carries ONLY the state root ("hash")
+        // has no accounts to compare, so an empty loop would score ANY non-throwing
+        // run as a pass. Refuse to score that shape: count it as a load failure so a
+        // corpus/format drift that drops per-account posts is loud, never green.
+        if (post.state.empty() && !post.stateRoot.empty())
+        {
+            std::ostringstream oss;
+            oss << "SKIP-REJECT: " << fixture.name << " [" << forkName
+                << "] post entry has only the state root (expected " << post.stateRoot
+                << ") and no per-account state — verdict would be vacuous";
+            printLine(oss.str());
+            g_failureDetails.push_back({fixture.name, forkName, "vacuous post (root-only)"});
+            ++g_loadFailures;
+            return false;
+        }
 
         // When expectException is empty but the transaction failed, the test
         // may still be correct if the post-state matches (transaction reverted
@@ -1491,12 +1715,16 @@ public:
     bcostars::protocol::BlockHeaderImpl buildBlockHeader(test::EESTBlockHeader const& bh)
     {
         bcostars::protocol::BlockHeaderImpl header;
+        // Same revisionForBlock keying as the env-based buildBlockHeader above
+        // (review F6): the version follows the schedule the block runs under.
+        auto tsSec = test::hexToTimestamp(bh.timestamp);
+        auto const blockRev = revisionForBlock(tsSec);
         uint32_t blockVer;
-        if (m_currentRevision >= EVMC_CANCUN)
+        if (blockRev >= EVMC_CANCUN)
         {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
         }
-        else if (m_currentRevision >= EVMC_PARIS)
+        else if (blockRev >= EVMC_PARIS)
         {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
         }
@@ -1507,7 +1735,6 @@ public:
         header.setVersion(blockVer);
 
         header.setNumber(test::hexToInt64(bh.number));
-        auto tsSec = test::hexToTimestamp(bh.timestamp);
         header.setTimestamp(tsSec * 1000);
         header.setSealer(0);
         if (!bh.coinbase.empty())
@@ -1622,15 +1849,19 @@ public:
 
     /// Run a blockchain test fixture: execute blocks sequentially,
     /// apply block rewards via finalize(), then verify postState.
-    /// Returns true if passed.
-    bool runBlockchainFixture(test::EESTBlockchainFixture const& fixture)
+    /// Returns nullopt when the fixture is skipped, else pass/fail.
+    std::optional<bool> runBlockchainFixture(test::EESTBlockchainFixture const& fixture)
     {
         auto forkName = extractForkFromName(fixture.name);
         if (forkName.empty())
         {
             forkName = "Cancun";  // default
         }
-        configureFork(forkName);
+        if (!configureFork(forkName))
+        {
+            ++g_skippedTests;
+            return std::nullopt;
+        }
         m_chainId = fixture.chainId;
         m_ledgerConfig.setChainId(evmc::bytes32{static_cast<uint64_t>(m_chainId)});
 
@@ -2002,8 +2233,13 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
         for (auto const& fixture : bcFixtures)
         {
             ++g_totalTests;
-            bool passed = runner.runBlockchainFixture(fixture);
-            if (passed)
+            auto outcome = runner.runBlockchainFixture(fixture);
+            if (!outcome)
+            {
+                --g_totalTests;
+                continue;
+            }
+            if (*outcome)
             {
                 ++g_totalPassed;
                 ++result.passed;
@@ -2046,9 +2282,13 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
             {
                 ++g_totalTests;
                 auto const& post = posts[i];
-                bool passed = runner.runFixture(fixture, forkName, post);
-
-                if (passed)
+                auto outcome = runner.runFixture(fixture, forkName, post);
+                if (!outcome)
+                {
+                    --g_totalTests;
+                    continue;
+                }
+                if (*outcome)
                 {
                     ++g_totalPassed;
                     ++result.passed;
@@ -2245,6 +2485,8 @@ int main(int argc, char* argv[])
               << "\n";
     std::cout << "  Files:         " << totalFiles << "\n";
     std::cout << "  Skipped files: " << g_skippedFiles.load() << "\n";
+    std::cout << "  Skipped tests:  " << g_skippedTests.load()
+              << " (forks with no executable revision, e.g. Constantinople)\n";
     std::cout << "  Load failures: " << g_loadFailures.load() << "\n";
     std::cout << "  Elapsed:       " << elapsed << "s\n";
 

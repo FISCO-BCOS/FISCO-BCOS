@@ -30,6 +30,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
+#include <bcos-framework/executor/HostContextFault.h>
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/string.hpp>
 #include <range/v3/algorithm/find.hpp>
@@ -559,6 +560,10 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
     try
     {
         governorAddress = getGovernorList(_executive, _callParameters, codec);
+    }
+    catch (bcos::executor::HostContextFault const&)
+    {
+        throw;
     }
     catch (std::exception const& e)
     {

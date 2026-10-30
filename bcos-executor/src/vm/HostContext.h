@@ -28,6 +28,7 @@
 #include "Eip2929Util.h"
 #include "VMInstance.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include <bcos-framework/executor/HostContextFault.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <list>
@@ -42,6 +43,10 @@ class TransactionExecutive;
 /// Host-provided hash for the KECCAK256 opcode; dispatches via GlobalHashImpl::g_hashImpl
 /// (SM3 on SM chains). Installed on evmone::VM by VMInstance.
 evmc_bytes32 evm_hash_fn(evmc_host_context* context, const uint8_t* data, size_t size);
+evmc_address evm_create_address_fn(
+    evmc_host_context* context, const evmc_address* sender, uint64_t nonce);
+evmc_address evm_create2_address_fn(evmc_host_context* context, const evmc_address* sender,
+    const evmc_bytes32* salt, const uint8_t* init_code, size_t init_code_size);
 
 class HostContext
 {
@@ -113,6 +118,26 @@ public:
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
+    /// EVMC callbacks cannot unwind through the VM's noexcept host adapter.
+    /// Record the first diagnostic and stop further host requests. Node-local faults
+    /// escape receipt mapping through HostContextFault; only a scheduler DEAD_LOCK
+    /// cancellation may use the non-halting path. A later fatal fault cannot soften.
+    void recordHostFault(std::string message, bool halting)
+    {
+        if (!m_hasHostFault)
+        {
+            m_hostFault = std::move(message);
+            m_hasHostFault = true;
+        }
+        m_hostFaultHalting = m_hostFaultHalting || halting;
+    }
+
+    /// R6 F3 read-side: a frame that already recorded a host fault stops driving
+    /// the host and the scheduler (translateHostFault / call short-circuit on it).
+    bool hasHostFault() const { return m_hasHostFault; }
+    std::string const& hostFault() const { return m_hostFault; }
+    void throwIfHostFault() const;
+
     virtual std::string_view myAddress() const;
     virtual std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
@@ -144,6 +169,18 @@ public:
     }
 
     evmc_bytes32 getBalance(const evmc_address* _addr);
+    uint64_t getNonce(const evmc_address* _addr);
+    /// CREATE-opcode address for a contract created by THIS contract, via the
+    /// evmone create_address_fn hook: keccak(rlp(sender, nonce)) on
+    /// feature_evm_address chains, the legacy replay-stable FISCO formula
+    /// otherwise (both mirroring TransactionExecutive::externalCall).
+    evmc_address createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const;
+    /// CREATE2 counterpart: the chain hasher over
+    /// 0xff || sender || salt || hash(initcode) — newCreate2EVMAddress's formula, kept
+    /// host-side so the opcode pushes the chain's own address (keccak256 upstream would
+    /// fork SM-crypto chains).
+    evmc_address create2AddressForOpcode(
+        const evmc_address& sender, const evmc_bytes32& salt, bytesConstRef initCode) const;
     bool selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary);
 
     CallParameters::UniquePtr&& takeCallParameters();
@@ -170,6 +207,15 @@ public:
             return EVMC_ACCESS_COLD;
         }
         auto& accessState = eip2929AccessState();
+        // R5 F2, flag off: 0.24's create_impl warms the just-derived address; 0.21
+        // never did. Answer the creation warm-up query cold WITHOUT inserting, so
+        // the first genuine touch pays the cold fee exactly like the base.
+        if (!m_executive->blockContext().features().get(
+                ledger::Features::Flag::bugfix_evm2929_created_address_warm) &&
+            accessState.consumeCreationWarmupQuery(addr))
+        {
+            return EVMC_ACCESS_COLD;
+        }
         return accessState.warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
@@ -204,6 +250,9 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
+    std::string m_hostFault;
+    bool m_hasHostFault = false;
+    bool m_hostFaultHalting = false;
 
     /// Per-transaction warm set; cached at construction to avoid BucketMap lookup on every
     /// accessAccount/accessStorage (same pattern as TE HostContext::m_eip2929Access).

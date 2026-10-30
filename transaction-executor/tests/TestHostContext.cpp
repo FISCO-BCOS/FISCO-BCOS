@@ -3,6 +3,7 @@
 #include "TestBytecode.h"
 #include "TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
@@ -78,12 +79,12 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 300 * 10000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = {},
             .sender = {},
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
             .input_size = helloworldBytecodeBinary.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};
@@ -97,7 +98,7 @@ public:
         auto result = syncWait(hostContext.execute());
         BOOST_REQUIRE_EQUAL(result.status_code, 0);
 
-        helloworldAddress = result.create_address;
+        helloworldAddress = hostContext.message().recipient;
         BCOS_LOG(INFO) << "Hello world address: " << bcos::address2HexString(helloworldAddress);
     }
 
@@ -117,12 +118,12 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 5000000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = address,
             .sender = sender,
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = address,
             .code = nullptr,
             .code_size = 0};
@@ -165,12 +166,12 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = callAddress,
             .sender = {},
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = callAddress,
             .code = nullptr,
             .code_size = 0};
@@ -237,6 +238,291 @@ BOOST_AUTO_TEST_CASE(executeAndCall)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(precompiledWrapperPreservesNestedHostFault)
+{
+    class CallingPrecompiled : public bcos::precompiled::Precompiled
+    {
+    public:
+        using Precompiled::Precompiled;
+        bcos::precompiled::PrecompiledExecResult::Ptr call(
+            std::shared_ptr<bcos::executor::TransactionExecutive> executive,
+            bcos::precompiled::PrecompiledExecResult::Ptr params) override
+        {
+            auto input = std::make_unique<bcos::executor::CallParameters>(
+                bcos::executor::CallParameters::MESSAGE);
+            input->senderAddress = params->m_sender;
+            input->receiveAddress = params->m_codeAddress;
+            input->codeAddress = params->m_codeAddress;
+            input->gas = params->m_gasLeft;
+            executive->externalCall(std::move(input));
+            return params;
+        }
+    };
+    auto contract = std::make_shared<CallingPrecompiled>(hashImpl);
+    Precompiled precompiled(contract);
+    evmc_message message{};
+    message.kind = EVMC_CALL;
+    message.gas = 1'000'000;
+    for (bool flag : {false, true})
+    {
+        bcos::ledger::Features features;
+        if (flag)
+        {
+            features.set(bcos::ledger::Features::Flag::bugfix_v1_error_handling);
+        }
+        auto externalCaller = [](evmc_message const&) -> EVMCResult {
+            throw bcos::executor::HostContextFault("nested precompiled host fault sentinel");
+        };
+        BOOST_CHECK_EXCEPTION(
+            callPrecompiled(precompiled, rollbackableStorage, blockHeader, message, evmc_address{},
+                externalCaller, *precompiledManager, 0, 0, false, features),
+            bcos::executor::HostContextFault, [](auto const& e) {
+                return std::string(e.what()) == "nested precompiled host fault sentinel";
+            });
+        auto ordinaryFailure = [](evmc_message const&) -> EVMCResult {
+            throw std::runtime_error("ordinary nested precompiled failure");
+        };
+        auto result = callPrecompiled(precompiled, rollbackableStorage, blockHeader, message,
+            evmc_address{}, ordinaryFailure, *precompiledManager, 0, 0, false, features);
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_REVERT);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(builtinWrapperPreservesHostFaultAndOrdinaryErrorMapping)
+{
+    evmc_message message{};
+    message.kind = EVMC_CALL;
+    message.gas = 1'000'000;
+    auto externalCaller = [](evmc_message const&) -> EVMCResult {
+        throw std::runtime_error("unused external call");
+    };
+    for (bool flag : {false, true})
+    {
+        bcos::ledger::Features features;
+        if (flag)
+        {
+            features.set(bcos::ledger::Features::Flag::bugfix_v1_error_handling);
+        }
+        for (bool hostFault : {false, true})
+        {
+            Precompiled precompiled(bcos::executor::PrecompiledContract(
+                0, 0, [hostFault](bcos::bytesConstRef) -> std::pair<bool, bcos::bytes> {
+                    if (hostFault)
+                    {
+                        throw bcos::executor::HostContextFault("builtin host fault sentinel");
+                    }
+                    throw std::runtime_error("ordinary builtin error");
+                }));
+            auto invoke = [&] {
+                return callPrecompiled(precompiled, rollbackableStorage, blockHeader, message,
+                    evmc_address{}, externalCaller, *precompiledManager, 0, 0, false, features);
+            };
+            if (hostFault)
+            {
+                BOOST_CHECK_EXCEPTION(
+                    invoke(), bcos::executor::HostContextFault, [](auto const& e) {
+                        return std::string(e.what()) == "builtin host fault sentinel";
+                    });
+            }
+            else if (flag)
+            {
+                BOOST_CHECK_EQUAL(invoke().status_code, EVMC_INTERNAL_ERROR);
+            }
+            else
+            {
+                BOOST_CHECK_THROW(invoke(), std::runtime_error);
+            }
+        }
+    }
+}
+
+// [F2 v2 mirror regression] A fault inside a noexcept EVMC callback must fail
+// the WHOLE frame after the VM returns, not masquerade as a legitimate
+// EIP-2681 nonce rejection the parent frame survives. EVERY faulting callback
+// on this lane now records the fault and answers fail-closed (see
+// dataCallbackFaultIsRecordedNotFatal) — getNonce is the representative here,
+// not the only one. Inject the real fault shape — a corrupt (unparseable)
+// nonce row on the creating contract — then drive its nested CREATE: the
+// callback's parse throws, the catch records the host fault, and execute()
+// rethrows it out of the task for the scheduler-level catch arms to classify.
+// Without the fix the call completes "successfully" with the create merely
+// failed.
+BOOST_AUTO_TEST_CASE(hostFaultEscapesReceiptMapping)
+{
+    syncWait([this]() -> Task<void> {
+        bcos::ledger::account::EVMAccount account(
+            storage, helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+        co_await account.setNonce(std::string("not-a-number"));
+    }());
+    for (bool fixErrorHandling : {false, true})
+    {
+        bcos::ledger::Features features;
+        if (fixErrorHandling)
+        {
+            features.set(bcos::ledger::Features::Flag::bugfix_v1_error_handling);
+        }
+        ledgerConfig.setFeatures(features);
+        BOOST_CHECK_THROW(syncWait([this]() -> Task<void> {
+            co_await call("deployAndCall(int256)", {}, false, bcos::s256(999));
+        }()),
+            bcos::executor::HostContextFault);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(storageFaultInNonceCallbackFailsWholeFrameV2)
+{
+    // Corrupt the deployed contract's own nonce row: helloworld's nested
+    // creates derive their address through getNonce(helloworld), whose parse
+    // of this row throws inside the noexcept callback.
+    syncWait([this]() -> Task<void> {
+        bcos::ledger::account::EVMAccount account(
+            storage, helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+        co_await account.setNonce(std::string("not-a-number"));
+        co_return;
+    }());
+
+    BOOST_CHECK_THROW(syncWait([this]() -> Task<void> {
+        co_await call("deployAndCall(int256)", {}, false, bcos::s256(999));
+    }()),
+        bcos::executor::HostContextFault);
+    syncWait([this]() -> Task<void> {
+        // The executor surface stays usable: repair the row and the same call
+        // succeeds again.
+        bcos::ledger::account::EVMAccount account(
+            storage, helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+        co_await account.setNonce(std::string("0"));
+        auto ok = co_await call("deployAndCall(int256)", {}, false, bcos::s256(999));
+        BOOST_CHECK_EQUAL(ok.status_code, 0);
+    }());
+}
+
+// A child callback fault must escape externalCall and abort the parent execution.
+BOOST_AUTO_TEST_CASE(storageFaultInChildFrameReachesParentRecordV2)
+{
+    syncWait([this]() -> Task<void> {
+        bcos::ledger::account::EVMAccount account(
+            storage, helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+        co_await account.setNonce(std::string("not-a-number"));
+        co_return;
+    }());
+
+    syncWait([this]() -> Task<void> {
+        // The parent frame at an unrelated caller: its own code never runs —
+        // externalCall must propagate the child's execution failure.
+        evmc_address caller{};
+        caller.bytes[19] = 0xC3;
+        evmc_message parentMsg{};
+        parentMsg.kind = EVMC_CALL;
+        parentMsg.depth = 0;
+        parentMsg.gas = 10'000'000;
+        parentMsg.recipient = caller;
+        parentMsg.sender = caller;
+        parentMsg.code_address = caller;
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> parent(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, parentMsg, caller, "",
+            0, seq, *precompiledManager, ledgerConfig, *hashImpl, /*web3Tx=*/false, 0,
+            bcos::task::syncWait);
+        BOOST_CHECK(!parent.hasHostFault());
+
+        // Child frame: CALL helloworld.deployAndCall(999) — its nested CREATE parses
+        // the corrupt nonce row inside the child's getNonce callback.
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(999));
+        evmc_message nested{};
+        nested.kind = EVMC_CALL;
+        nested.depth = 1;
+        nested.gas = 1'000'000;
+        nested.recipient = helloworldAddress;
+        nested.sender = caller;
+        nested.code_address = helloworldAddress;
+        nested.input_data = input.data();
+        nested.input_size = input.size();
+        BOOST_CHECK_THROW(syncWait(parent.externalCall(nested)), bcos::executor::HostContextFault);
+
+        // Repair: later tests in this suite call the same contract.
+        bcos::ledger::account::EVMAccount account(
+            storage, helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+        co_await account.setNonce(std::string("0"));
+    }());
+}
+
+// [F10 translation regression] Every faulting EVMC callback on this lane — not just
+// getNonce — records the fault and answers fail-closed instead of aborting the
+// process. getBalance is the representative data-reading callback: its coroutine
+// parses the balance row (lexical_cast over the stored string), so a corrupt row is
+// the real fault shape. Before the translation a raw throw escaped the noexcept
+// callback into evmone's instruction frames and aborted the process; now the zero
+// answer comes back, the fault is recorded, and throwIfHostFault fails the frame for
+// execute()'s FIB-88/92 arm. The balance row has no string setter (setBalance takes
+// the typed u256), so the corruption writes the raw row the way a torn write would.
+BOOST_AUTO_TEST_CASE(dataCallbackFaultIsRecordedNotFatal)
+{
+    using HostContextType =
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>;
+
+    evmc_message message = {.kind = EVMC_CALL,
+        .flags = 0,
+        .depth = 0,
+        .gas = 300 * 10000,
+        .state_gas = {},  // evmc ABI 19 (EIP-8037)
+        .recipient = helloworldAddress,
+        .sender = {},
+        .input_data = nullptr,
+        .input_size = 0,
+        .value = {},
+        .code_address = helloworldAddress,
+        .code = nullptr,
+        .code_size = 0};
+    evmc_address origin = {};
+    HostContextType host(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+        origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+        bcos::task::syncWait);
+    auto* interface = host.hostInterface();
+
+    // Clean row: the freshly deployed contract has no balance row — the answer is zero
+    // and no fault is recorded.
+    auto clean =
+        interface->get_balance(reinterpret_cast<evmc_host_context*>(&host), &helloworldAddress);
+    BOOST_CHECK(
+        std::all_of(clean.bytes, clean.bytes + sizeof(clean.bytes), [](auto b) { return b == 0; }));
+    host.throwIfHostFault();
+
+    // Corrupt the balance row: the callback's parse throws, the translation answers
+    // fail-closed zero and records the fault.
+    auto tableName = bcos::ledger::account::accountTableName(
+        helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+    syncWait([this, &tableName]() -> Task<void> {
+        co_await bcos::storage2::writeOne(storage,
+            bcos::executor_v1::StateKey{tableName, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE},
+            bcos::storage::Entry{std::string("not-a-number")});
+        co_return;
+    }());
+
+    auto faulted =
+        interface->get_balance(reinterpret_cast<evmc_host_context*>(&host), &helloworldAddress);
+    BOOST_CHECK(std::all_of(
+        faulted.bytes, faulted.bytes + sizeof(faulted.bytes), [](auto b) { return b == 0; }));
+    // The discriminator: the zero answer must ride a recorded fault — without the
+    // translation this line is never reached (the process aborted above), and a
+    // catch-and-answer without the record would leave it a silent zero.
+    BOOST_CHECK_THROW(host.throwIfHostFault(), bcos::executor::HostContextFault);
+
+    // An already-faulted frame must stop driving storage, even when a later operation
+    // could succeed. Check the actual transient state, not only the callback answer.
+    evmc_bytes32 key{}, value{};
+    value.bytes[31] = 7;
+    interface->set_transient_storage(host.hostCtx(), &helloworldAddress, &key, &value);
+    auto afterFault = syncWait(host.getTransientStorage(&key));
+    BOOST_CHECK_EQUAL(afterFault.bytes[31], 0);
+    BOOST_CHECK_EQUAL(interface->get_nonce(host.hostCtx(), &helloworldAddress),
+        std::numeric_limits<uint64_t>::max());
+
+    // The first fault wins: a second recording attempt does not overwrite the message
+    // that decided the frame's failure.
+    host.recordHostFault("second fault");
+    BOOST_CHECK_THROW(host.throwIfHostFault(), bcos::executor::HostContextFault);
+}
+
 BOOST_AUTO_TEST_CASE(contractDeploy)
 {
     syncWait([this]() -> Task<void> {
@@ -273,12 +559,12 @@ BOOST_AUTO_TEST_CASE(emptyCreate)
             .flags = 0,
             .depth = 0,
             .gas = CREATE_GAS,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = {},
             .sender = {},
             .input_data = nullptr,
             .input_size = 0,
             .value = {},  // zero value
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};
@@ -293,7 +579,7 @@ BOOST_AUTO_TEST_CASE(emptyCreate)
         auto result = co_await hostContext.execute();
 
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
-        auto size = co_await hostContext.codeSizeAt(result.create_address);
+        auto size = co_await hostContext.codeSizeAt(hostContext.message().recipient);
         BOOST_CHECK_EQUAL(size, 0);
 
         co_return;
@@ -386,12 +672,12 @@ BOOST_AUTO_TEST_CASE(precompiled)
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = callAddress,
             .sender = {},
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = callAddress,
             .code = nullptr,
             .code_size = 0};
@@ -599,12 +885,12 @@ BOOST_AUTO_TEST_CASE(setStorageStatusWithBugfix)
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = helloworldAddress,
             .sender = {},
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = helloworldAddress,
             .code = nullptr,
             .code_size = 0};
@@ -658,12 +944,12 @@ BOOST_AUTO_TEST_CASE(setStorageStatusLegacy)
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = helloworldAddress,
             .sender = {},
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = helloworldAddress,
             .code = nullptr,
             .code_size = 0};
@@ -982,12 +1268,12 @@ BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
             .flags = 0,
             .depth = 0,
             .gas = 300 * 10000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = {},
             .sender = {},
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
             .input_size = helloworldBytecodeBinary.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = codeAddress,
             .code = nullptr,
             .code_size = 0};
@@ -1048,11 +1334,9 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
         bcostars::protocol::BlockHeaderImpl blockHeader;
         blockHeader.inner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
         // The block number feeds newEVMAddress(blockNumber, contextID, seq) — the stub's
-        // link address. The process-global executable cache (getCacheExecutables) is keyed
-        // by address alone and SHARED across test cases, so the link address must not
-        // collide with any address another case in this binary creates: their creates use
-        // small block numbers (the call() helper's static counter starts at 0), hence a
-        // large, odd one here.
+        // link address. The executable cache is content-addressed ({code hash, revision}),
+        // so a shared address across test cases is no longer a poisoning hazard; the
+        // large, odd block number just keeps this case's link address distinct.
         blockHeader.setNumber(1000003);
         blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
         co_await initBFS(blockHeader, *hashImpl);
@@ -1064,12 +1348,12 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
                 .flags = 0,
                 .depth = 0,
                 .gas = 10000000,
+                .state_gas = {},  // evmc ABI 19 (EIP-8037)
                 .recipient = callAddress,
                 .sender = {},
                 .input_data = input.data(),
                 .input_size = input.size(),
                 .value = {},
-                .create2_salt = {},
                 .code_address = callAddress,
                 .code = nullptr,
                 .code_size = 0};
@@ -1137,6 +1421,226 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
             storage, StateKeyView{bcos::ledger::SYS_TABLES, "/apps/" + linkAddress}));
         co_return;
     }());
+}
+
+// The CREATE2 opcode hook must derive with the CHAIN hasher (0xff||sender||salt||
+// chainHasher(initcode), last 20 bytes): upstream evmone hashes the same preimage with
+// keccak256, which would fork SM-crypto chains whose historical CREATE2 addresses are
+// chain-hash derived. The hook delegates to bcos::newCreate2EVMAddress, so the frozen
+// literals below are the only discriminating cell here — on a keccak chain the hook's
+// output coincides with upstream's, so a revert to keccak derivation turns only the SM3
+// literal red. The wiring itself (patch arm + VMInstance assignment) is pinned end-to-end
+// by create2OpcodeDeploysAtTheHookAddress below.
+BOOST_AUTO_TEST_CASE(create2AddressForOpcodeFollowsTheChainHasher)
+{
+    evmc_address sender{};
+    sender.bytes[19] = 0x2a;
+    evmc_bytes32 salt{};
+    salt.bytes[31] = 0x42;
+    static const bcos::bytes initCode{0x60, 0x42, 0x60, 0x00, 0xf3};
+    bcos::bytesConstRef initCodeRef{initCode.data(), initCode.size()};
+
+    struct HasherCase
+    {
+        const char* name;
+        bcos::crypto::Hash::Ptr hasher;
+        std::string expected;
+    };
+    // Literals frozen from the first run — they are the discriminating cell, not a
+    // parity check (the hook delegates to the same helper that produced them).
+    const std::array<HasherCase, 2> cases{
+        HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>(),
+            "cf68986460c687b1295a1ce12b24c5f4abe9d378"},
+        HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>(),
+            "741d257ae84fd70ae8ce97a8a02c5672516a519e"},
+    };
+
+    for (auto const& hasherCase : cases)
+    {
+        const evmc_message dummy{};
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, dummy,
+                sender, "", 0, seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, false, 0,
+                bcos::task::syncWait);
+        const auto addr = hostContext.create2AddressForOpcode(sender, salt, initCodeRef);
+        const auto addrHex = bcos::toHex(bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)});
+        BOOST_CHECK_EQUAL(addrHex, hasherCase.expected);
+    }
+}
+
+// The CREATE opcode hook must derive the lane's own historical formulas per branch: a
+// FISCO-native (non-web3) tx uses newEVMAddress("<block>_<ctx>_<seq+1>") — the +1 because
+// externalCall increments the shared seq counter BEFORE constructing the nested
+// HostContext — and a web3 tx uses newLegacyEVMAddress(sender, nonce) like upstream.
+// This case pins the hook's branch/seq/nonce WIRING by calling the host method directly;
+// it cannot see the VM-level installation (deleting VMInstance's create_address_fn
+// assignment leaves it green). The VM wiring itself is pinned end-to-end elsewhere in
+// this suite — createTwice and nestConstructor redden without the assignment, and
+// create2OpcodeDeploysAtTheHookAddress does the same for the CREATE2 hook.
+BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
+{
+    static const evmc_message dummy{};
+    const bcos::u256 nonce{7};
+    evmc_address sender{};
+    sender.bytes[19] = 0x2a;
+
+    struct HasherCase
+    {
+        const char* name;
+        bcos::crypto::Hash::Ptr hasher;
+        // Frozen literals (review F17): the expectation must not be computed by the
+        // same helper the hook delegates to — that oracle is self-referential and a
+        // wrong shared formula would pass. Frozen from the first run at 0b9a4d835
+        // (block 0, contextID 0, seq 41 + 1); the sm3 cell is the one that
+        // discriminates against an upstream-keccak revert.
+        std::string_view expected;
+    };
+    const std::array<HasherCase, 2> cases{
+        HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>(),
+            "51ecad688184962f355d19ee5ba27905f06ecd3b"},
+        HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>(),
+            "954a006a3445efe79e69d0f2e5d4c5d6f7dbb23a"},
+    };
+
+    for (auto const& hasherCase : cases)
+    {
+        // Non-web3: the legacy (block, context, seq+1) formula — the branch every
+        // executor_version=2 chain without feature_evm_address executes.
+        int64_t seq = 41;
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> nonWeb3(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, dummy, sender, "", 0,
+            seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, false, 0,
+            bcos::task::syncWait);
+        const auto legacyAddr =
+            nonWeb3.createAddressForOpcode(sender, nonce.convert_to<uint64_t>());
+        BOOST_CHECK_EQUAL(
+            bcos::toHex(bcos::bytesConstRef{legacyAddr.bytes, sizeof(legacyAddr.bytes)}),
+            hasherCase.expected);
+
+        // Web3: the nonce-derived EIP branch, matching upstream's own derivation.
+        int64_t web3Seq = 41;
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> web3(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, dummy, sender, "", 0,
+            web3Seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, true, nonce,
+            bcos::task::syncWait);
+        // Frozen literal (review F17): keccak(rlp(sender, nonce)) is hasher-independent
+        // by definition (EIP-161), so one cell covers both hasher cases — computed
+        // once out-of-tree, never by the helper under test.
+        const auto eipAddr = web3.createAddressForOpcode(sender, nonce.convert_to<uint64_t>());
+        BOOST_CHECK_EQUAL(bcos::toHex(bcos::bytesConstRef{eipAddr.bytes, sizeof(eipAddr.bytes)}),
+            "2d087d4eb4563e34016c39a3b793edc710b44457");
+    }
+}
+
+// CREATE2 through the VM itself (not a direct hook call): a creator contract executes the
+// CREATE2 opcode and the deployed account must sit at the hook-derived address on both a
+// keccak and an SM3 chain. The SM3 cell is the discriminating one — with the hook wiring
+// (patch arm or VMInstance assignment) absent, the opcode pushes upstream's keccak256
+// address and only the keccak cell, whose derivation coincides, would stay green.
+BOOST_AUTO_TEST_CASE(create2OpcodeDeploysAtTheHookAddress)
+{
+    // Inner init: PUSH1 0x2a PUSH1 0 MSTORE PUSH1 0x20 PUSH1 0 RETURN — returns a 32-byte
+    // runtime, so the deployed account's code size is observable.
+    static const bcos::bytes innerInit{0x60, 0x2a, 0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xf3};
+    evmc_bytes32 salt{};
+    salt.bytes[31] = 0x42;
+
+    struct HasherCase
+    {
+        const char* name;
+        bcos::crypto::Hash::Ptr hasher;
+        // Frozen literals (review F17/R9): the expectation must not be computed by
+        // the same helper the hook delegates to — that oracle is self-referential and
+        // a wrong shared formula would pass. These are CREATE2 addresses for
+        // (creator, salt=0x42, innerInit), computed independently as
+        // hash(0xff || creator || salt || hash(initcode))[12:]; the sm3 cell is the
+        // one that discriminates against an upstream-keccak revert.
+        std::string_view expected;
+    };
+    const std::array<HasherCase, 2> cases{
+        HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>(),
+            "3180c619d688ee521b35e938e3dff0a57be39fa9"},
+        HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>(),
+            "dd5c3953fefccc05e25d7435ead48b9cc16b6471"},
+    };
+
+    int64_t hasherIndex = 0;
+    for (auto const& hasherCase : cases)
+    {
+        // Distinct seq per hasher: depth-0 deploy addresses derive from
+        // hash("<block>_<ctx>_<seq>"), so an unchanged seq would land the creator on the
+        // fixture's helloworld address and the call would execute helloworld's code.
+        seq = 700 + hasherIndex;
+
+        // Creator runtime: CODECOPY the inner init into memory, then CREATE2. CODECOPY
+        // pops size, codeOffset, destOffset; evmone's create_impl pops value, offset,
+        // size, salt — so the CREATE2 args are pushed salt (deepest), size, offset,
+        // value (top). The runtime begins at deploy-init offset 12 and the inner init
+        // sits at runtime offset 49 (0x31).
+        bcos::bytes runtime{0x60, 0x0a, 0x60, 0x31, 0x60, 0x00,
+            0x39,   // PUSH1 10 PUSH1 0x31 PUSH1 0 CODECOPY
+            0x7f};  // PUSH32 <salt>
+        runtime.resize(runtime.size() + 32, 0x00);
+        runtime.back() = 0x42;
+        runtime.insert(runtime.end(), {0x60, 0x0a,             // size
+                                          0x60, 0x00,          // offset
+                                          0x60, 0x00,          // value (top)
+                                          0xf5, 0x50, 0x00});  // CREATE2 POP STOP
+        runtime.insert(runtime.end(), innerInit.begin(), innerInit.end());
+        BOOST_REQUIRE_EQUAL(runtime.size(), 59);
+
+        // Deploy init: copy the 59-byte runtime to memory and return it.
+        bcos::bytes deployInit{0x60, 0x3b, 0x60, 0x0c, 0x60, 0x00, 0x39,  // CODECOPY
+            0x60, 0x3b, 0x60, 0x00, 0xf3};                                // RETURN
+        deployInit.insert(deployInit.end(), runtime.begin(), runtime.end());
+
+        evmc_message deploy{};
+        deploy.kind = EVMC_CREATE;
+        deploy.depth = 0;
+        deploy.gas = 5'000'000;
+        deploy.input_data = deployInit.data();
+        deploy.input_size = deployInit.size();
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            deployHost(rollbackableStorage, rollbackableTransientStorage, blockHeader, deploy, {},
+                "", 0, seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, false, 0,
+                bcos::task::syncWait);
+        syncWait(deployHost.prepare());
+        auto deployed = syncWait(deployHost.execute());
+        BOOST_REQUIRE_EQUAL(deployed.status_code, EVMC_SUCCESS);
+        auto const creatorAddr = deployHost.message().recipient;
+        // The call target holds the 59-byte creator runtime, not a fixture collision.
+        BOOST_REQUIRE_EQUAL(syncWait(deployHost.codeSizeAt(creatorAddr)), 59u);
+
+        // Call the creator: its runtime runs CREATE2 and deploys through the hook.
+        evmc_message callMsg{};
+        callMsg.kind = EVMC_CALL;
+        callMsg.depth = 0;
+        callMsg.gas = 5'000'000;
+        callMsg.recipient = creatorAddr;
+        callMsg.sender = creatorAddr;
+        callMsg.code_address = creatorAddr;
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> callHost(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, callMsg, {}, "", 0, seq,
+            *precompiledManager, ledgerConfig, *hasherCase.hasher, false, 0, bcos::task::syncWait);
+        syncWait(callHost.prepare());
+        auto result = syncWait(callHost.execute());
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+
+        // The account the opcode deployed is the one the hook derived: the created
+        // contract holds the 32-byte runtime the inner init returned.
+        auto const expected = callHost.create2AddressForOpcode(
+            creatorAddr, salt, bcos::bytesConstRef{innerInit.data(), innerInit.size()});
+        // The frozen literal is the ORACLE: recomputing through the same hook would be
+        // self-referential, so a wrong-but-consistent formula would pass (the SM3 cell
+        // is the one that discriminates against an upstream-keccak revert).
+        evmc_address frozenExpected{};
+        boost::algorithm::unhex(std::string(hasherCase.expected), frozenExpected.bytes);
+        BOOST_CHECK(std::equal(std::begin(frozenExpected.bytes), std::end(frozenExpected.bytes),
+            std::begin(expected.bytes)));
+        auto size = syncWait(callHost.codeSizeAt(expected));
+        BOOST_CHECK_EQUAL(size, 32u);
+        ++hasherIndex;
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -55,6 +55,7 @@
 #include "../vm/Precompiled.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
+#include <bcos-framework/executor/HostContextFault.h>
 
 #include <array>
 #include <cstring>
@@ -2553,10 +2554,6 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setCreate(params->create);
     message->setInternalCreate(params->internalCreate);
     message->setInternalCall(params->internalCall);
-    if (params->createSalt)
-    {
-        message->setCreateSalt(*params->createSalt);
-    }
 
     message->setEvmStatus(params->evmStatus);
     message->setStatus(params->status);
@@ -2684,6 +2681,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     callParameters->contextID = input.contextID();
     callParameters->seq = input.seq();
+    callParameters->schedulerSeq = input.schedulerSeq();
     constexpr static auto addressSize = Address::SIZE * 2;
     if (staticCall)
     {
@@ -2845,6 +2843,10 @@ void TransactionExecutor::executeTransactionsWithCriticals(
                                          << LOG_KV("codeAddress", output->codeAddress);
             }
             executionResults[id] = toExecutionResult(*executive, std::move(output));
+        }
+        catch (bcos::executor::HostContextFault const&)
+        {
+            throw;
         }
         catch (std::exception& e)
         {

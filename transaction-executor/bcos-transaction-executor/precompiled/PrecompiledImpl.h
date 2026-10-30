@@ -8,6 +8,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-utilities/Overloaded.h"
+#include <bcos-framework/executor/HostContextFault.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
@@ -48,11 +49,10 @@ inline EVMCResult buildBuiltinPrecompiledResult(bool success, auto const& output
             .status_code = success ? EVMC_SUCCESS : EVMC_REVERT,
             .gas_left = gasLeft,
             .gas_refund = 0,
+            .state_gas = {},
             .output_data = buffer.release(),
             .output_size = output.size(),
             .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-            .create_address = {},
-            .padding = {},
         },
         success ? protocol::TransactionStatus::None :
                   protocol::TransactionStatus::RevertInstruction};
@@ -137,11 +137,10 @@ inline EVMCResult callBcosPrecompiled(
                 .status_code = EVMC_SUCCESS,
                 .gas_left = response->m_gasLeft,
                 .gas_refund = 0,
+                .state_gas = {},
                 .output_data = buffer.release(),
                 .output_size = params->m_execResult.size(),
                 .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-                .create_address = {},
-                .padding = {},
             },
             protocol::TransactionStatus::None};
     }
@@ -153,6 +152,10 @@ inline EVMCResult callBcosPrecompiled(
         return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
             protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, errorGas(), e.what(),
             features.get(ledger::Features::Flag::bugfix_v1_error_handling));
+    }
+    catch (bcos::executor::HostContextFault const&)
+    {
+        throw;
     }
     catch (std::exception& e)
     {
@@ -190,6 +193,10 @@ inline constexpr struct
                             precompiledManager, contextID, seq, authCheck, features);
                     }},
                 precompiled.m_precompiled);
+        }
+        catch (bcos::executor::HostContextFault const&)
+        {
+            throw;
         }
         catch (std::exception& e)
         {

@@ -70,21 +70,13 @@ public:
     // coroutine to
     // execute
 
-    // External call request
-    CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input) override;  // call by
-    // hostContext
-
-    // Execute finish and waiting for FINISH or REVERT
-    CallParameters::UniquePtr waitingFinish(CallParameters::UniquePtr input) override;
-
-    // External request key locks, throw exception if dead lock detected
-    void externalAcquireKeyLocks(std::string acquireKeyLock);
-
-
     virtual CallParameters::UniquePtr resume() override;
 
     MessagePromiseSwapper::Ptr getPromiseMessageSwapper();
     void setPromiseMessageSwapper(MessagePromiseSwapper::Ptr swapper);
+
+protected:
+    CallParameters::UniquePtr suspendAndWait(CallParameters::UniquePtr input) override;
 
 private:
     MessagePromiseSwapper::Ptr m_messageSwapper;

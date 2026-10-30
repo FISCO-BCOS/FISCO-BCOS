@@ -88,6 +88,16 @@ public:
     int64_t contextID() const { return m_contextID; }
     int64_t seq() const { return m_seq; }
 
+    /// Nested CREATE address ownership: synchronous execution derives locally from
+    /// m_seq (including sharding); DMC derives from the scheduler's global counter.
+    /// The hook must mirror the owning path's historical feature_evm_address gate.
+    virtual bool usesLocalCreateAddress() const noexcept { return true; }
+
+    /// Seq base for the legacy CREATE formula f(seq + 1). Synchronous child calls
+    /// advance m_seq; DMC coroutine frames keep m_seq as their routing identity and
+    /// instead use the scheduler's last-consumed counter.
+    virtual int64_t createDerivationSeq() const { return m_seq; }
+
     // in delegatecall this is codeAddress
     std::string_view contractAddress() const { return m_contractAddress; }
 

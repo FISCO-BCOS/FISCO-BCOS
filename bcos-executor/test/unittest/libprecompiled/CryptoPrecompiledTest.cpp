@@ -43,12 +43,13 @@ class CryptoPrecompiledFixture : public PrecompiledFixture
 public:
     CryptoPrecompiledFixture()
     {
+        clearName2SelectCache();
         codec = std::make_shared<CodecWrapper>(hashImpl);
         prepareEnv();
         cryptoAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
     }
 
-    virtual ~CryptoPrecompiledFixture() {}
+    ~CryptoPrecompiledFixture() override { clearName2SelectCache(); }
 
     void deployTest()
     {
@@ -225,6 +226,12 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
             });
         auto result2 = executePromise2.get_future().get();
 
+        // A failed call returns an empty result; decoding it blindly over-reads whatever
+        // follows the buffer and compares garbage against the expected hash. Fail loud
+        // first, then decode.
+        BOOST_REQUIRE_EQUAL(result2->status(), 0);
+        BOOST_REQUIRE(result2->type() != ExecutionMessage::REVERT);
+        BOOST_REQUIRE(result2->data().size() >= 32);
         bytes out = result2->data().toBytes();
         string32 decodedHash;
         codec->decode(bytesConstRef(&out), decodedHash);
@@ -270,6 +277,12 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
             });
         auto result2 = executePromise2.get_future().get();
 
+        // A failed call returns an empty result; decoding it blindly over-reads whatever
+        // follows the buffer and compares garbage against the expected hash. Fail loud
+        // first, then decode.
+        BOOST_REQUIRE_EQUAL(result2->status(), 0);
+        BOOST_REQUIRE(result2->type() != ExecutionMessage::REVERT);
+        BOOST_REQUIRE(result2->data().size() >= 32);
         bytes out = result2->data().toBytes();
         string32 decodedHash;
         codec->decode(bytesConstRef(&out), decodedHash);
@@ -400,3 +413,18 @@ BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
+
+BOOST_AUTO_TEST_CASE(cryptoFixtureClearsForeignSelectorCache)
+{
+    bcos::precompiled::clearName2SelectCache();
+    auto sm3 = std::make_shared<bcos::crypto::SM3>();
+    auto keccak = std::make_shared<bcos::crypto::Keccak256>();
+    auto poisoned = bcos::precompiled::getFuncSelector("sm3(bytes)", sm3);
+    auto expected = bcos::precompiled::getFuncSelectorByFunctionName("sm3(bytes)", keccak);
+    BOOST_REQUIRE_NE(poisoned, expected);
+    {
+        bcos::test::CryptoPrecompiledFixture fixture;
+        BOOST_CHECK_EQUAL(bcos::precompiled::getFuncSelector("sm3(bytes)", keccak), expected);
+    }
+    bcos::precompiled::clearName2SelectCache();
+}

@@ -87,6 +87,53 @@ BOOST_AUTO_TEST_CASE(execute)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(hostFaultDoesNotProduceReceipt)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        bcostars::protocol::BlockHeaderImpl header;
+        header.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+        header.calculateHash(*cryptoSuite->hashImpl());
+        bcos::bytes bytecode;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(bytecode));
+        auto deploy = transactionFactory.createTransaction(0, "", bytecode, {}, 0, "", "", 0);
+        auto deployed =
+            co_await executor.executeTransaction(storage, header, *deploy, 0, ledgerConfig, false);
+        BOOST_REQUIRE_EQUAL(deployed->status(), 0);
+        evmc_address address{};
+        boost::algorithm::unhex(deployed->contractAddress(), address.bytes);
+        ledger::account::EVMAccount account(
+            storage, address, ledger::account::AddressTableMode::Hex);
+        co_await account.setNonce(std::string("not-a-number"));
+
+        bcos::codec::abi::ContractABICodec abi(*cryptoSuite->hashImpl());
+        auto input = abi.abiIn("deployAndCall(int256)", bcos::s256(999));
+        auto transaction = transactionFactory.createTransaction(
+            0, std::string(deployed->contractAddress()), input, {}, 0, "", "", 0);
+        protocol::TransactionReceipt::Ptr receipt;
+        for (bool fixErrorHandling : {false, true})
+        {
+            ledger::Features features;
+            if (fixErrorHandling)
+            {
+                features.set(ledger::Features::Flag::bugfix_v1_error_handling);
+            }
+            ledgerConfig.setFeatures(features);
+            bool failed = false;
+            try
+            {
+                receipt = co_await executor.executeTransaction(
+                    storage, header, *transaction, 1, ledgerConfig, false);
+            }
+            catch (bcos::executor::HostContextFault const&)
+            {
+                failed = true;
+            }
+            BOOST_CHECK(failed);
+            BOOST_CHECK(!receipt);
+        }
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(transientStorageTest)
 {
     task::syncWait([this]() mutable -> task::Task<void> {
@@ -305,8 +352,8 @@ BOOST_AUTO_TEST_CASE(revertLogsClearedWithFeature)
         base.output_data = nullptr;
         base.output_size = 0;
         base.release = nullptr;
-        execCtx.m_data->m_evmcResult.emplace(base);
-        execCtx.m_data->m_evmcResult->status = bcos::protocol::TransactionStatus::RevertInstruction;
+        execCtx.m_data->m_evmcResult.emplace(
+            base, bcos::protocol::TransactionStatus::RevertInstruction);
 
         // Finish and verify logs cleared
         auto receipt = co_await execCtx.finish();
@@ -354,8 +401,8 @@ BOOST_AUTO_TEST_CASE(revertLogsRemainWithoutFeature)
         base.output_data = nullptr;
         base.output_size = 0;
         base.release = nullptr;
-        execCtx.m_data->m_evmcResult.emplace(base);
-        execCtx.m_data->m_evmcResult->status = bcos::protocol::TransactionStatus::RevertInstruction;
+        execCtx.m_data->m_evmcResult.emplace(
+            base, bcos::protocol::TransactionStatus::RevertInstruction);
 
         // Finish and verify logs remain (bugfix is off)
         auto receipt = co_await execCtx.finish();
