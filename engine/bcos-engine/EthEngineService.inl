@@ -285,9 +285,17 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
 
     if (l1Input.has_value() && !sealedTxs.empty())
     {
-        // EL mode: two blob-transaction exclusions, each leaving the transaction pooled
+        // EL mode: three blob-transaction exclusions, each leaving the transaction pooled
         // for a later block and skipping the rest of the sender's nonce suffix with it
         // (the executor would reject the nonce gap):
+        //  * Osaka (EIP-7594): getPayloadV5's BlobsBundleV2 carries cell proofs
+        //    (CELLS_PER_EXT_BLOB per blob) and the pool admits v0 sidecars only (one proof
+        //    per blob), so a bundle built from them is not what a CL verifies — blob
+        //    transactions stay pooled until wrapper-v1 sidecar admission lands. Until then
+        //    an Osaka-era node builds no blob transaction at all, and a sender who pooled
+        //    one has its later nonces held back with it (the pool's lifetime eviction is
+        //    the only exit); refusing blob transactions at admission on an Osaka chain is
+        //    the matching follow-up;
         //  * the EIP-4844 sidecar never arrived — the transaction cannot be assembled
         //    into a blobsBundle, so it is unbuildable;
         //  * the block's blob budget is spent — the EIP-7844 schedule's per-block blob
@@ -311,6 +319,16 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
                     static_cast<std::uint8_t>(protocol::TransactionType::Web3Transaction) &&
                 !sealedTx->blobVersionedHashes().empty())
             {
+                if (l1Input->l1Context.revision >= EVMC_OSAKA)
+                {
+                    blobSkippedSenders.insert(std::move(sender));
+                    BCOS_LOG(INFO) << LOG_BADGE("EthEngineService")
+                                   << LOG_DESC(
+                                          "seal: Osaka block; leaving v0-sidecar blob "
+                                          "transaction pooled (no cell proofs)")
+                                   << LOG_KV("hash", sealedTx->hash().hexPrefixed());
+                    continue;
+                }
                 if (!m_memPool.hasBlobSidecar(sealedTx->hash()))
                 {
                     blobSkippedSenders.insert(std::move(sender));
@@ -385,11 +403,18 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     commonEntry->shouldOverrideBuilder = false;
     commonEntry->parentBeaconBlockRoot = payloadAttributes->parentBeaconBlockRoot;
     commonEntry->executionRequests = std::move(built->executionRequests);
-    // getPayloadV3 and V4 both answer a BlobsBundleV1 on an L1 (Cancun/Prague); the OP
-    // lane keeps its historical V3-only present-but-empty bundle.
+    if (l1Input.has_value())
+    {
+        commonEntry->l1Revision = l1Input->l1Context.revision;
+    }
+    // An L1 payload built by FCU V3 carries the blobs bundle and every getPayload version
+    // from V3 on renders it (V3/V4 BlobsBundleV1; V5's BlobsBundleV2 has the same three
+    // arrays). On an Osaka block the seal-time filter above keeps every v0-sidecar blob
+    // transaction pooled, so the V5 bundle is empty until EIP-7594 wrapper-v1 admission
+    // supplies cell proofs. The OP lane keeps its historical V3-only present-but-empty
+    // bundle.
     auto const answersBundle = m_externalPayloadVerifier ?
-                                   (version == static_cast<std::uint32_t>(ApiVersion::V3) ||
-                                       version == static_cast<std::uint32_t>(ApiVersion::V4)) :
+                                   (version >= static_cast<std::uint32_t>(ApiVersion::V3)) :
                                    (version == static_cast<std::uint32_t>(ApiVersion::V3));
     if (answersBundle)
     {
@@ -465,6 +490,17 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     {
         BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                               << bcos::errinfo_comment{"Unsupported Engine API version"});
+    }
+    if (m_externalPayloadVerifier)
+    {
+        // EL mode: the method must match the payload's fork (-38005) BEFORE any shape rule
+        // runs, geth's NewPayloadV2..V4 order. A real Cancun block carries the blob-gas
+        // pair, so a CL that sends it to newPayloadV2 must get the spec's -38005 rather
+        // than an INVALID that blames the block for its blob fields; likewise V3 for a
+        // Prague block and V4 for a Cancun one.
+        engine_common::requireNewPayloadWindow(
+            version, m_externalPayloadVerifier->revisionAt(
+                         static_cast<int64_t>(request.executionPayload.timestamp / 1000)));
     }
     // EL mode validates against the vanilla L1 dialect (validateExecutionPayloadL1);
     // the OP/single-node wiring keeps the OP-flavored gate, lifted for blob envelopes
@@ -570,7 +606,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         // EL mode: a payload this node's forkchoiceUpdated never built belongs to the
         // external lane (CL-pushed L1 blocks, executed+committed via the shared
         // EthereumBlockVerifier). The exclusive tracker lock is released before the
-        // co_await inside newPayloadExternal.
+        // co_await inside newPayloadExternal. The method's fork window was checked at
+        // entry (requireNewPayloadWindow).
         bool builtHere;
         {
             auto guard = m_tracker.lockExclusive();
@@ -649,10 +686,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         co_await ledger::getLedgerConfig(view, missLedgerConfig, parentNumber, *m_blockFactory);
         // The L1 dialect has no evmc_revision row: its era comes from the fork schedule at
         // the payload's timestamp (internal milliseconds).
-        auto const forkVersion = m_externalPayloadVerifier ?
-                                     m_externalPayloadVerifier->forkVersionAt(static_cast<int64_t>(
-                                         request.executionPayload.timestamp / 1000)) :
-                                     detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
+        auto const forkVersion =
+            m_externalPayloadVerifier ?
+                detail::tryEthBlockVersionFor(m_externalPayloadVerifier->revisionAt(
+                    static_cast<int64_t>(request.executionPayload.timestamp / 1000))) :
+                detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
         if (!forkVersion.has_value())
         {
             co_return engine_common::makeStatus(
@@ -1451,7 +1489,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     ViewType& view, L1BuildInput const& l1Input) const
 {
     auto const& l1Context = l1Input.l1Context;
-    auto const forkVersion = l1Context.forkVersion;
+    auto const forkVersion = detail::ethBlockVersionFor(l1Context.revision);
 
     ledger::LedgerConfig ledgerConfig;
     co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);

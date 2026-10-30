@@ -67,6 +67,11 @@ struct BuiltPayload
     /// std::nullopt means "not computed" (pre-Prague or imported payloads), which
     /// getPayloadV4+ reports as the empty list.
     std::optional<std::vector<bytes>> executionRequests = std::nullopt;
+    /// Set on built-here L1 payloads only: the EVM revision the block was built under.
+    /// getPayload gates the L1 method versions by fork window on it (execution-apis:
+    /// V3 = Cancun, V4 = Prague, V5 = Osaka); std::nullopt is the OP lane, whose V4+
+    /// shape is told apart by withdrawalsRoot instead.
+    std::optional<evmc_revision> l1Revision = std::nullopt;
 };
 
 using BuiltPayloadPtr = std::shared_ptr<const BuiltPayload>;
@@ -176,7 +181,10 @@ struct ExternalL1Context
 {
     u256 baseFee = 0;
     u256 excessBlobGas = 0;
-    bcos::protocol::EthBlockVersion forkVersion = bcos::protocol::EthBlockVersion::LONDON;
+    /// The EVM revision the fork schedule assigns to the payload timestamp. The header era
+    /// is derived from it where needed (detail::ethBlockVersionFor); getPayload's per-method
+    /// fork windows (V4 = Prague, V5 = Osaka) read the revision itself.
+    evmc_revision revision = EVMC_LONDON;
 };
 
 /// The block the EL builder assembles for buildL1Block: the Ethereum header with every
@@ -234,12 +242,11 @@ public:
     /// new block's timestamp (SECONDS, the Ethereum wire unit).
     virtual task::Task<ExternalL1Context> deriveL1Context(
         bcos::protocol::EthBlockHeaderData const& parentHeader, int64_t timestampSeconds) = 0;
-    /// The header fork era the L1 fork schedule assigns to a block at @p timestampSeconds
-    /// (a PoS block), or nullopt when this binary maps no era to that revision. The L1 lane
-    /// records no evmc_revision row, so newPayload's cache-miss reconstruction reads the era
-    /// here.
-    virtual std::optional<bcos::protocol::EthBlockVersion> forkVersionAt(
-        int64_t timestampSeconds) const = 0;
+    /// The EVM revision the L1 fork schedule assigns to a block at @p timestampSeconds (a
+    /// PoS block). The L1 lane records no evmc_revision row, so newPayload reads the
+    /// payload's fork here: its method window (requireNewPayloadWindow) and, on the
+    /// cache-miss path, its header era (detail::tryEthBlockVersionFor).
+    virtual evmc_revision revisionAt(int64_t timestampSeconds) const = 0;
     /// Phase 4 (EL block building): execute the assembled block into the caller's view
     /// — block-start system calls, transactions, withdrawals, block-end system calls,
     /// the deterministic roots and the MPT delta — without verifying or committing
@@ -377,8 +384,20 @@ PayloadStatus makeStatus(PayloadValidationStatus status,
     std::optional<std::string> validationError = std::nullopt);
 /// Shared getPayload shape gate. Throws IncompatiblePayloadVersion when the request
 /// version cannot render the stored body.
+/// L1 newPayload method windows: V1 none (shanghai.md adds no -38005 rule and geth's
+/// NewPayloadV1 checks no fork), V2 before Cancun (cancun.md "Update the methods of
+/// previous forks"), V3 Cancun only (prague.md), V4 Prague and Osaka (prague.md; osaka.md
+/// adds no newPayloadV4 rule — geth checkFork(Prague, Osaka, BPO1, BPO2)), V5 never
+/// (Amsterdam, not implemented). Throws UnsupportedFork (-38005) when @p revision — the
+/// fork the payload's timestamp falls in — is outside the window of @p requestVersion.
+void requireNewPayloadWindow(std::uint32_t requestVersion, evmc_revision revision);
+
+/// @param l1Revision the build revision of a built-here L1 payload (BuiltPayload::l1Revision):
+///        selects the execution-apis per-method fork windows instead of the OP-dialect
+///        withdrawalsRoot test for V4+; std::nullopt keeps the OP lane's rules.
 void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,
-    std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion);
+    std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion,
+    std::optional<evmc_revision> l1Revision = std::nullopt);
 /// Supported getPayload API version window.
 inline bool isGetPayloadVersionSupported(std::uint32_t version)
 {

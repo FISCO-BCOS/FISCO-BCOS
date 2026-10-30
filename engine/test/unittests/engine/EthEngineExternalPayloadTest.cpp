@@ -87,11 +87,10 @@ public:
         lastDeriveTimestamp = timestampSeconds;
         co_return l1Context;
     }
-    std::optional<bcos::protocol::EthBlockVersion> forkVersionAt(
-        int64_t timestampSeconds) const override
+    evmc_revision revisionAt(int64_t timestampSeconds) const override
     {
-        forkVersionAtCalls.push_back(timestampSeconds);
-        return l1Context.forkVersion;
+        revisionAtCalls.push_back(timestampSeconds);
+        return l1Context.revision;
     }
     task::Task<engine_common::ExternalBuildResult> buildL1Block(
         RealGlobalStateStorage::ViewType&, engine_common::ExternalBuildBlock const& block) override
@@ -114,8 +113,8 @@ public:
     int64_t lastDeriveTimestamp = 0;
     engine_common::ExternalL1Context l1Context{.baseFee = 7,
         .excessBlobGas = 0,
-        .forkVersion = bcos::protocol::EthBlockVersion::CANCUN};
-    mutable std::vector<int64_t> forkVersionAtCalls;
+        .revision = EVMC_CANCUN};
+    mutable std::vector<int64_t> revisionAtCalls;
     unsigned buildCalls = 0;
     std::optional<engine_common::ExternalBuildBlock> lastBuild;
     engine_common::ExternalBuildResult buildResult;
@@ -410,6 +409,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadValidPath, ExternalPayloadFixture)
     seedHead();
     auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1,
         /*rawTxs=*/{bytes{0x02, 0xc0}}, std::vector<WithdrawalV1>{makeWithdrawal(0, 1, 2)});
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Valid);
     BOOST_REQUIRE(status.latestValidHash.has_value());
@@ -431,6 +431,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadUnknownParentSyncing, ExternalPayloadFixt
     seedHead();
     auto request = makeExternalRequestV2(
         h256("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"), c_headNumber + 1);
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0);
@@ -440,6 +441,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadFutureHeightSyncing, ExternalPayloadFixtu
 {
     seedHead();
     auto request = makeExternalRequestV2(c_headHash, c_headNumber + 3);
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0);
@@ -451,6 +453,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadStaleHeightSyncing, ExternalPayloadFixtur
     // At-or-behind the head but never committed (no HASH_2_NUMBER row): a side fork
     // this node holds no state for.
     auto request = makeExternalRequestV2(c_headHash, c_headNumber);
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0);
@@ -463,6 +466,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadDuplicateIsIdempotentValid, ExternalPaylo
     // The hash is already committed at this block's number (HASH_2_NUMBER row).
     writeHashToNumber(
         storageFixture.backendStorage, request.executionPayload.blockHash, c_headNumber + 1);
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Valid);
     BOOST_REQUIRE(status.latestValidHash.has_value());
@@ -476,6 +480,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadCommittedHashAtOtherNumberInvalid, Extern
     auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1);
     writeHashToNumber(
         storageFixture.backendStorage, request.executionPayload.blockHash, c_headNumber + 2);
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Invalid);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0);
@@ -487,6 +492,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadTamperedBlockHashRejected, ExternalPayloa
     auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1);
     request.executionPayload.blockHash =
         h256("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::InvalidBlockHash);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0);
@@ -498,6 +504,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadVerifierInvalidMapsToInvalid, ExternalPay
     mockVerifier->result = engine_common::ExternalPayloadResult{
         .outcome = engine_common::ExternalPayloadOutcome::Invalid, .error = "stateRoot mismatch"};
     auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1);
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Invalid);
     // The committed head (the parent) is the latest valid hash for forkchoice recovery.
@@ -514,6 +521,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadVerifierStaleMapsToSyncing, ExternalPaylo
     mockVerifier->result = engine_common::ExternalPayloadResult{
         .outcome = engine_common::ExternalPayloadOutcome::StaleOrOutOfOrder, .error = {}};
     auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1);
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 1);
@@ -524,6 +532,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadDepositTransactionInvalid, ExternalPayloa
     seedHead();
     auto request =
         makeExternalRequestV2(c_headHash, c_headNumber + 1, /*rawTxs=*/{bytes{0x7e, 0xc0}});
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Invalid);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0);
@@ -558,6 +567,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadBlobTransactionReachesVerifier, ExternalP
         h256("5555555555555555555555555555555555555555555555555555555555555555");
     request.expectedBlobVersionedHashes = {versionedHash};
     request.executionPayload.blockHash = protocol::ethHeaderHash(expectedEthHeader(request));
+    mockVerifier->l1Context.revision = EVMC_CANCUN;  // a V3 payload is Cancun-era
     auto status = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK(status.status == PayloadValidationStatus::Valid);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 1);
@@ -569,6 +579,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadV4ExecutionRequestsReachVerifier, Externa
     // EL mode: V4 executionRequests must be present and may be non-empty (EIP-7685).
     auto request = makeExternalRequestV4(
         c_headHash, c_headNumber + 1, {bytes{0x00, 0x11}, bytes{0x02, 0x22, 0x33}});
+    mockVerifier->l1Context.revision = EVMC_PRAGUE;  // a V4 payload is Prague-era
     auto status = task::syncWait(service.newPayload(request, 4));
     BOOST_CHECK(status.status == PayloadValidationStatus::Valid);
     BOOST_REQUIRE_EQUAL(mockVerifier->calls, 1);
@@ -584,6 +595,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadHeightGapRequestsBackfill, ExternalPayloa
 {
     seedHead();
     auto request = makeExternalRequestV2(c_headHash, c_headNumber + 3);
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0);
@@ -597,6 +609,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadUnknownParentRequestsBackfill, ExternalPa
     seedHead();
     auto request = makeExternalRequestV2(
         h256("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"), c_headNumber + 1);
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0);
@@ -610,6 +623,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadStaleCommitRequestsBackfill, ExternalPayl
     mockVerifier->result = engine_common::ExternalPayloadResult{
         .outcome = engine_common::ExternalPayloadOutcome::StaleOrOutOfOrder, .error = {}};
     auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1);
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
     BOOST_CHECK_EQUAL(mockVerifier->calls, 1);
@@ -715,7 +729,7 @@ BOOST_FIXTURE_TEST_CASE(fcuAttributesRollbackRefusedAnswersSyncing, ExternalPayl
 
 // newPayload for a payload this node built, whose parent is no longer the forkchoice head
 // (another block at the same height was committed and became the head after the build): the
-// miss path reconstructs the block hash at the era forkVersionAt assigns to the payload
+// miss path reconstructs the block hash at the era revisionAt assigns to the payload
 // timestamp in SECONDS, then answers SYNCING. A different era reconstructs a different hash,
 // so the returned era is the one checked.
 BOOST_FIXTURE_TEST_CASE(builtPayloadParentUnknownReadsEraFromForkSchedule, ExternalPayloadFixture)
@@ -737,17 +751,53 @@ BOOST_FIXTURE_TEST_CASE(builtPayloadParentUnknownReadsEraFromForkSchedule, Exter
     auto request = makeNewPayloadRequestV3(payload->executionPayload);
     // The built header committed to the attributes' beacon root.
     request.parentBeaconBlockRoot = attributes.parentBeaconBlockRoot;
+    mockVerifier->l1Context.revision = EVMC_CANCUN;  // a V3 payload is Cancun-era
     auto status = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
-    BOOST_REQUIRE_EQUAL(mockVerifier->forkVersionAtCalls.size(), 1U);
-    BOOST_CHECK_EQUAL(mockVerifier->forkVersionAtCalls[0],
+    // Two reads of the schedule per call: the method window and the era reconstruction.
+    BOOST_REQUIRE_EQUAL(mockVerifier->revisionAtCalls.size(), 2U);
+    BOOST_CHECK_EQUAL(mockVerifier->revisionAtCalls[0],
         static_cast<int64_t>(payload->executionPayload.timestamp / 1000));
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0U);
 
-    mockVerifier->l1Context.forkVersion = bcos::protocol::EthBlockVersion::PRAGUE;
-    auto mismatched = task::syncWait(service.newPayload(request, 3));
+    // The schedule now says Prague: the Cancun-built payload reconstructs to another hash.
+    // (newPayloadV4 is the Prague method; V3 would be -38005 before the reconstruction.)
+    mockVerifier->l1Context.revision = EVMC_PRAGUE;
+    request.executionRequests = std::vector<bytes>{};
+    auto mismatched = task::syncWait(service.newPayload(request, 4));
     BOOST_CHECK(mismatched.status == PayloadValidationStatus::InvalidBlockHash);
-    BOOST_CHECK_EQUAL(mockVerifier->forkVersionAtCalls.size(), 2U);
+    BOOST_CHECK_EQUAL(mockVerifier->revisionAtCalls.size(), 4U);
+}
+
+// E3: the L1 newPayload method must match the payload's fork (execution-apis "Update the
+// methods of previous forks"): V3 for a Prague block and V4 for a Cancun block are -38005
+// (UnsupportedFork), V2 at Cancun likewise; V4 at Prague and at Osaka pass the window.
+// The mock verifier answers the configured revision for every timestamp.
+BOOST_FIXTURE_TEST_CASE(newPayloadMethodWindowFollowsThePayloadFork, ExternalPayloadFixture)
+{
+    seedHead();
+    auto requestV4 = makeExternalRequestV4(c_headHash, c_headNumber + 1, {});
+    auto requestV2 = makeExternalRequestV2(
+        c_headHash, c_headNumber + 1, /*rawTxs=*/{}, std::vector<WithdrawalV1>{});
+    // A real Cancun block carries the blob-gas pair (and its blockHash no longer matches
+    // the V2 helper's header): the fork window must answer before the shape rule's
+    // INVALID ("blob gas fields are only valid for ExecutionPayloadV3 and later") and
+    // before the hash check's InvalidBlockHash.
+    requestV2.executionPayload.blobGasUsed = u256(0);
+    requestV2.executionPayload.excessBlobGas = u256(0);
+
+    mockVerifier->l1Context.revision = EVMC_CANCUN;
+    BOOST_CHECK_THROW(task::syncWait(service.newPayload(requestV4, 4)), UnsupportedFork);
+    BOOST_CHECK_THROW(task::syncWait(service.newPayload(requestV2, 2)), UnsupportedFork);
+    BOOST_CHECK_EQUAL(mockVerifier->calls, 0U);  // refused before the verifier ran
+
+    mockVerifier->l1Context.revision = EVMC_PRAGUE;
+    BOOST_CHECK_THROW(task::syncWait(service.newPayload(requestV4, 3)), UnsupportedFork);
+    BOOST_CHECK_NO_THROW(task::syncWait(service.newPayload(requestV4, 4)));
+
+    mockVerifier->l1Context.revision = EVMC_OSAKA;  // osaka.md adds no newPayloadV4 rule
+    BOOST_CHECK_NO_THROW(task::syncWait(service.newPayload(requestV4, 4)));
+    BOOST_CHECK_EQUAL(mockVerifier->calls, 2U);  // both V4 calls reached the verifier
 }
 
 BOOST_AUTO_TEST_SUITE_END()
