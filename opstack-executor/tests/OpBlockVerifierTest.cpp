@@ -412,8 +412,9 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
     std::optional<std::string> hashErr;
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<opeth::OpRecentBlockHashes<ViewType>> hashes;
-    bcos::task::syncWait(opeth::preBlockOpEthSteps(view, *header, spec, rawRefs, deposits,
-        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar));
+    evmc::VM vm{evmc_create_evmone()};
+    bcos::task::syncWait(opeth::preBlockOpEthSteps(view, *header, spec, rawRefs, deposits, vm,
+        sharedError, hashes, hashErr, daFootprintGasScalar));
 
     opeth::OpEthBlockContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header->gasLimit()),

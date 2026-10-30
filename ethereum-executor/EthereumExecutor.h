@@ -112,13 +112,8 @@ public:
     /// committed hashes, which are never modified by the block being executed.
     EthereumExecutor(protocol::TransactionReceiptFactory const& receiptFactory,
         BlockHashLookup blockHashLookup = {})
-      : m_receiptFactory(receiptFactory),
-        m_vm(evmc_create_evmone()),
-        m_blockHashLookup(std::move(blockHashLookup))
+      : m_receiptFactory(receiptFactory), m_blockHashLookup(std::move(blockHashLookup))
     {}
-
-    /// Access the EVM instance (needed for system_call functions).
-    evmc::VM& vm() { return m_vm; }
 
     /// Execute a single Ethereum transaction.
     ///
@@ -198,10 +193,8 @@ public:
     //
     // Thread-safety: every mutable execution state is owned by the individual
     // context (never shared between contexts), so the three phases of
-    // different transactions may run in parallel. The only state shared
-    // through the executor is:
-    //   - m_vm              : evmone VM execution is thread-safe (a fresh
-    //                         execution state is created per call).
+    // different transactions may run in parallel. Nothing the executor owns is
+    // mutated during execution; the only objects it shares are:
     //   - m_receiptFactory  : createReceipt allocates a fresh receipt per call.
     //   - m_blockHashLookup : invoked for BLOCKHASH. The production provider
     //                         reads a read-only committed table straight
@@ -209,6 +202,9 @@ public:
     //                         and therefore relies on that Storage's support
     //                         for concurrent reads; an absent provider is
     //                         stateless.
+    // The EVM is not in that list because it is not shared at all: execute()
+    // constructs a VM for the transaction it is about to run, exactly as
+    // bcos-executor does, so no two threads can reach one instance.
     template <class Storage>
     struct ExecuteContext
     {
@@ -444,10 +440,15 @@ public:
                             static_cast<int64_t>(transaction.get().blobVersionedHashes().size()) *
                             static_cast<int64_t>(evm::GAS_PER_BLOB);
                     }
+                    // A VM per transaction, as bcos-executor does. evmone pools ExecutionState
+                    // objects inside the VM and indexes them by call depth, so one VM driven by
+                    // two threads corrupts the pool; owning it here means no other thread can
+                    // reach it, and the cost is one allocation per transaction.
+                    evmc::VM vm{evmc_create_evmone()};
                     m_receipt = co_await runTransaction(state, m_blockInfo,
-                        executor.get().m_blockHashLookup, transaction.get(), m_rev,
-                        executor.get().m_vm, *props, nodeChainId(), m_callParams,
-                        executor.get().m_receiptFactory, blockHeader.get().number());
+                        executor.get().m_blockHashLookup, transaction.get(), m_rev, vm, *props,
+                        nodeChainId(), m_callParams, executor.get().m_receiptFactory,
+                        blockHeader.get().number());
                 }
                 else
                 {
@@ -546,7 +547,6 @@ public:
 
 private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
-    evmc::VM m_vm;
     BlockHashLookup m_blockHashLookup;
 };
 

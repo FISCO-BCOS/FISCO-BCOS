@@ -504,8 +504,9 @@ public:
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<OpRecentBlockHashes<ViewType>> hashes;
-            co_await preBlockOpEthSteps(view, *header, spec, rawTxBytes, deposits, executor.vm(),
-                sharedError, hashes, hashErr, daFootprintGasScalar);
+            evmc::VM vm{evmc_create_evmone()};
+            co_await preBlockOpEthSteps(view, *header, spec, rawTxBytes, deposits, vm, sharedError,
+                hashes, hashErr, daFootprintGasScalar);
 
             OpEthBlockContext ctx{.fee = {},
                 .blockGasLeft =
