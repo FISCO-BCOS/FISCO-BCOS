@@ -12,3 +12,11 @@ target_link_libraries(
 	test-task PUBLIC bcos-task bcos-utilities Boost::unit_test_framework TBB::tbb)
 
 add_test(NAME test-task COMMAND test-task)
+
+foreach(test_name IN ITEMS test-task-generator test-task-generator-fallback)
+    add_executable(${test_name} TestGenerator.cpp main.cpp)
+    target_link_libraries(${test_name} PRIVATE bcos-task Boost::unit_test_framework)
+    add_test(NAME ${test_name} COMMAND ${test_name})
+endforeach()
+target_compile_definitions(
+    test-task-generator-fallback PRIVATE BCOS_TASK_FORCE_GENERATOR_FALLBACK)
