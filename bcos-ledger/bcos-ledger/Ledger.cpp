@@ -426,7 +426,6 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
 
     std::vector<std::string> txsHash(txSize);
     std::vector<bytes> receipts(txSize);
-    std::vector<std::string_view> receiptsView(txSize);
     auto transactions = block->transactions();
     auto blockReceipts = block->receipts();
     tbb::parallel_for(
@@ -436,14 +435,52 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
                 auto hash = blockTxs ? blockTxs->at(i)->hash() : transactions[i]->hash();
                 txsHash[i] = std::string((char*)hash.data(), hash.size());
                 blockReceipts[i]->encode(receipts[i]);
-                receiptsView[i] = std::string_view((char*)receipts[i].data(), receipts[i].size());
             }
         });
     auto promise = std::make_shared<std::promise<bcos::Error::Ptr>>();
-    m_ioServicePool->post([storage = getBlockStorage(), promise, keys = std::move(txsHash),
-                              values = std::move(receiptsView)]() mutable {
-        auto err = storage->setRows(SYS_HASH_2_RECEIPT, keys, values);
-        promise->set_value(err);
+    // The task owns the encoded bytes. Views into the function-local `receipts`
+    // vector dangle when the SYS_HASH_2_TX write fails and this function returns
+    // without waiting for the receipt task.
+    //
+    // dispatch, not post. v0 PBFT runs commitStableCheckPoint on a strand of this
+    // same pool (thread_pool.io_thread_count, valid at 1) and BlockExecutive::asyncCommit
+    // calls here from that worker. post() plus future::get() then waits for a task
+    // queued to the caller's own io_context. With more workers, round-robin can select
+    // that context too, and every worker blocked in this function deadlocks the same
+    // way. Inline execution on a pool worker does not wait for the pool.
+    m_ioServicePool->dispatch([storage = getBlockStorage(), promise, keys = std::move(txsHash),
+                                  receiptBuffers = std::move(receipts)]() mutable {
+        std::vector<std::string_view> values;
+        values.reserve(receiptBuffers.size());
+        for (auto const& receipt : receiptBuffers)
+        {
+            // string_view(nullptr, 0) is undefined. An empty encoding has no bytes.
+            if (receipt.empty())
+            {
+                values.emplace_back();
+            }
+            else
+            {
+                values.emplace_back(reinterpret_cast<char const*>(receipt.data()), receipt.size());
+            }
+        }
+        // IOServicePool::safeExecute swallows a throw from this task. The waiter
+        // below would then block forever, so surface it as a ledger error.
+        bcos::Error::Ptr err;
+        try
+        {
+            err = storage->setRows(SYS_HASH_2_RECEIPT, keys, values);
+        }
+        catch (std::exception const& e)
+        {
+            err = BCOS_ERROR_WITH_PREV_PTR(
+                LedgerError::UnknownError, "ledger write receipts failed", e);
+        }
+        catch (...)
+        {
+            err = BCOS_ERROR_PTR(LedgerError::UnknownError, "ledger write receipts failed");
+        }
+        promise->set_value(std::move(err));
     });
     RecursiveGuard guard(m_mutex);
     // Select + encode the transactions that are not yet persisted (dedup via the

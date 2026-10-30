@@ -123,6 +123,10 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     std::string const& _privateKeyPath, const std::string& _logPath)
 {
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
+    // AirNodeInitializer creates the shared pool for an AIR node; a Pro or MAX NodeService
+    // process (both enter through NodeServiceApp::initNodeService) creates its own before
+    // init() hands it to the executor manager, front, ledger and scheduler
+    m_ioServicePool = std::make_shared<bcos::IOServicePool>(m_nodeConfig->ioThreadCount(), "io");
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
@@ -774,7 +778,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize());
+        m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize(), m_ioServicePool);
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup

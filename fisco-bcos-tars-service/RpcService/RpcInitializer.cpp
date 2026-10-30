@@ -96,6 +96,10 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
         protocolInitializer->keyFactory(),
         protocolInitializer->getKeyEncryptionByType(_nodeConfig->keyEncryptionType()));
     factory->setNodeConfig(_nodeConfig);
+    // RpcFactory serves the websocket RPC from an external pool (AIR hands it the node's shared
+    // pool); the Pro RpcService process owns this one
+    m_ioServicePool = std::make_shared<bcos::IOServicePool>(_nodeConfig->ioThreadCount(), "rpc-io");
+    factory->setIOServicePool(m_ioServicePool);
     RPCSERVICE_LOG(INFO) << LOG_DESC("create rpc factory success")
                          << LOG_KV("withoutTarsFramework", withoutTarsFramework)
                          << LOG_KV("gatewayServiceName", gatewayServiceName);

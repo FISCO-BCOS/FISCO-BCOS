@@ -20,6 +20,7 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string_view>
 
 
@@ -70,10 +71,12 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
     m_schedulerTermId(schedulerTermId),
     m_ioServicePool(std::move(ioServicePool))
 {
-    if (m_ioServicePool)
+    // executeBlock posts to m_exeStrand unconditionally
+    if (!m_ioServicePool)
     {
-        m_exeStrand = std::make_unique<bcos::Strand>(m_ioServicePool);
+        BOOST_THROW_EXCEPTION(std::invalid_argument("SchedulerImpl requires an IOServicePool"));
     }
+    m_exeStrand = std::make_unique<bcos::Strand>(m_ioServicePool);
     start();
 
     if (!m_ledgerConfig)

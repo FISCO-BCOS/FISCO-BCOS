@@ -1,7 +1,9 @@
 #include "SchedulerManager.h"
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/LogStream.h>
+#include <boost/throw_exception.hpp>
 #include <chrono>
+#include <stdexcept>
 
 using namespace bcos::scheduler;
 
@@ -13,10 +15,12 @@ SchedulerManager::SchedulerManager(int64_t schedulerSeq, SchedulerFactory::Ptr f
     m_ioServicePool(std::move(ioServicePool)),
     m_status(INITIALING)
 {
-    if (m_ioServicePool)
+    // asyncSwitchTerm and asyncSelfSwitchTerm post to m_strand unconditionally
+    if (!m_ioServicePool)
     {
-        m_strand = std::make_unique<bcos::Strand>(m_ioServicePool);
+        BOOST_THROW_EXCEPTION(std::invalid_argument("SchedulerManager requires an IOServicePool"));
     }
+    m_strand = std::make_unique<bcos::Strand>(m_ioServicePool);
     m_executorManager->setExecutorChangeHandler([this]() { asyncSelfSwitchTerm(); });
 }
 

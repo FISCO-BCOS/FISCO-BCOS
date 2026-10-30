@@ -9,7 +9,7 @@ class SchedulerManager : public SchedulerInterface
 {
 public:
     SchedulerManager(int64_t schedulerSeq, SchedulerFactory::Ptr factory,
-        ExecutorManager::Ptr executorManager, bcos::IOServicePool::Ptr ioServicePool = nullptr);
+        ExecutorManager::Ptr executorManager, bcos::IOServicePool::Ptr ioServicePool);
 
     // by pbft & sync
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
