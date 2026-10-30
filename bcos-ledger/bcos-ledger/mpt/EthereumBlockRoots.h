@@ -28,6 +28,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
+#include <bcos-framework/protocol/TransactionReceiptNormalize.h>
 #include <bcos-rlp-protocol/EthReceipt.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Bloom.h>
@@ -71,14 +72,19 @@ inline h256 calculateEthereumReceiptsRoot(
     txTypes.reserve(::ranges::size(transactions));
     for (auto const& transaction : transactions)
     {
-        if constexpr (requires { transaction.web3TypedTxKind(); })
-        {
-            txTypes.push_back(transaction.web3TypedTxKind());
-        }
-        else
-        {
-            txTypes.push_back(transaction->web3TypedTxKind());
-        }
+        // Through the shared helper, so this root and debug_getRawReceipts derive the prefix
+        // from the same source (the signed envelope, not the forgeable tars mirror).
+        auto const& tx = [&]() -> protocol::Transaction const& {
+            if constexpr (requires { transaction.web3TypedTxKind(); })
+            {
+                return transaction;
+            }
+            else
+            {
+                return *transaction;
+            }
+        }();
+        txTypes.push_back(receiptLeafTypeByte(tx));
     }
     if (txTypes.size() != ::ranges::size(receipts))
     {
@@ -135,7 +141,11 @@ inline task::Task<EthereumBlockComputation> computeEthereumRoots(
 {
     EthereumBlockComputation computation;
 
-    // Per-receipt cumulativeGasUsed + logsBloom.
+    // Per-receipt cumulativeGasUsed + logsBloom. Deliberately NOT transactionIndex / logIndex:
+    // those are not committed by receiptsRoot, and storing them would make a node that resyncs
+    // from genesis disagree with one upgraded in place (whose historical rows keep the 0 the
+    // field was written with). The RPC layer derives both from the block's own order when it
+    // serves a receipt, so the field has one meaning everywhere and history needs no migration.
     u256 cumulativeGasUsed;
     for (auto& receipt : receipts)
     {

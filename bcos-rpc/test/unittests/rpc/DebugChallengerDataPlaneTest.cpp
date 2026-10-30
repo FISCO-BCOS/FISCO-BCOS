@@ -327,15 +327,17 @@ BOOST_AUTO_TEST_CASE(NonOpLaneIsMethodNotFound)
     auto const unregistered = call1("debug_noSuchMethod", "0x1");
     BOOST_REQUIRE_EQUAL(unregistered["error"]["code"].asInt(), MethodNotFound);
 
-    for (std::optional<int> version : {std::optional<int>{}, std::optional<int>{1},
-             std::optional<int>{ledger::ETHEREUM_EXECUTOR_VERSION}})
+    // Legacy lane only. The debug data plane is not OP-lane-only any more: a node that serves an
+    // OP rollup as its L1 has to answer kona-host, and that node is an Ethereum-lane node.
+    for (std::optional<int> version : {std::optional<int>{}, std::optional<int>{1}})
     {
         if (version)
         {
             setExecutorVersion(*version);
         }
         for (auto const& resp :
-            {call1("debug_getRawHeader", "latest"), dbGet(bcos::bytes(root.begin(), root.end()))})
+            {call1("debug_getRawHeader", "latest"), call1("debug_getRawReceipts", "latest"),
+                dbGet(bcos::bytes(root.begin(), root.end()))})
         {
             BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), MethodNotFound);
             BOOST_CHECK_EQUAL(
@@ -343,6 +345,46 @@ BOOST_AUTO_TEST_CASE(NonOpLaneIsMethodNotFound)
             BOOST_TEST(!resp.isMember("result"));
         }
     }
+}
+
+// The Ethereum lane serves the whole data plane: it is the lane an L1 node runs on, and
+// kona-host reads L1 headers, receipts and trie nodes through exactly these three methods.
+BOOST_AUTO_TEST_CASE(EthereumLaneServesTheDataPlane)
+{
+    auto const root = buildTrie();
+    wireReader();
+    setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+    makeLatestOpHeader();
+
+    // Header: the RLP must hash back to the published block hash (kona-host's own check).
+    auto const header = resultBytes(call1("debug_getRawHeader", "latest"));
+    BOOST_TEST(!header.empty());
+
+    // Receipts: an array, one entry per transaction. Asked of the genesis block because it has
+    // no transactions -- this fixture has no stored receipts for its later blocks, and a missing
+    // receipt is (correctly) a hard error rather than a short array, so this pins the method's
+    // presence, its lane gate and its result shape only.
+    //
+    // The byte contract -- that the returned strings reassemble into the header's receiptsRoot --
+    // is pinned in LedgerTest::ethereumLaneReceiptLeavesRebuildTheCommittedRoot, where block 4242
+    // has real stored receipts and the root they commit to. It is not covered here, and this
+    // comment used to claim otherwise.
+    auto const receipts = call1("debug_getRawReceipts", "0x0");
+    BOOST_REQUIRE_MESSAGE(!receipts.isMember("error"), printJson(receipts));
+    BOOST_REQUIRE_MESSAGE(receipts["result"].isArray(), printJson(receipts));
+    BOOST_CHECK_EQUAL(receipts["result"].size(), 0U);
+
+    // The OP lane is refused: its receipts-trie leaf deliberately omits depositNonce inside one
+    // fork window (EthTrieRoots.cpp), so the leaf is not the receipt's consensus encoding there.
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    auto const onOpLane = call1("debug_getRawReceipts", "0x0");
+    BOOST_REQUIRE_MESSAGE(onOpLane.isMember("error"), printJson(onOpLane));
+    BOOST_CHECK_EQUAL(onOpLane["error"]["code"].asInt(), MethodNotFound);
+    setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+
+    // Trie nodes: the preimage lookup answers on this lane too.
+    auto const node = dbGet(bcos::bytes(root.begin(), root.end()));
+    BOOST_TEST(!node.isMember("error"));
 }
 
 // The rollup genesis ([eth_genesis_header]) is an Ethereum-versioned header whose stored hash is

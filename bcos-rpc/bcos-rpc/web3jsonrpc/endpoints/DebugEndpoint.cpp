@@ -25,6 +25,7 @@
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/LedgerMethods.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>  // encodeReceiptLeaf
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/jsonrpc/Common.h>
@@ -55,7 +56,7 @@ task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& r
     // bytecode (s_code_binary). Content addressing makes either store a valid answer for either
     // shape; the shape only picks which store to try first. A miss answers -32000 "not found"
     // (geth's server-error code); kona-host then retries its code hint with the bare-hash form.
-    co_await requireOpStackLane(*m_nodeService->ledger(), "debug_dbGet");
+    co_await requireEthereumLane(*m_nodeService->ledger(), "debug_dbGet");
     if (request.size() < 1 || !request[0U].isString())
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "debug_dbGet expects one hex key"));
@@ -110,32 +111,31 @@ task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& r
     co_return;
 }
 
-task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::Value& response)
+task::Task<protocol::BlockNumber> DebugEndpoint::resolveRawBlockParameter(
+    const Json::Value& request, std::string_view method)
 {
-    // params: blockNumberOrHash (QTY|TAG|DATA 32B)
-    // result: the RLP-encoded Ethereum header (DATA); keccak256(result) is the block hash
-    // eth_getBlockBy* reports (canonicalBlockHash), which is what kona-host checks.
-    co_await requireOpStackLane(*m_nodeService->ledger(), "debug_getRawHeader");
+    // One block parameter, shared by debug_getRawHeader and debug_getRawReceipts: a block
+    // number, a tag, or a 32-byte block hash (which kona-host uses for preimages).
+    auto const ledger = m_nodeService->ledger();
     if (request.size() < 1 || !request[0U].isString())
     {
         BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "debug_getRawHeader expects one block parameter"));
+            JsonRpcException(InvalidParams, std::string(method) + " expects one block parameter"));
     }
     auto const blockTag = toView(request[0U]);
-    auto const ledger = m_nodeService->ledger();
 
-    // debug_getRawHeader refuses the safe/finalized/pending tags: resolving them here via the
-    // shared tag resolver with the static depth (default 0) would answer the unsafe tip,
-    // contradicting eth_getBlockByNumber on the same node (which fails closed on the engine
-    // lane when the forkchoice tracker is unset). A block number, a hash, and the latest /
-    // earliest tags are accepted, through the same resolver eth_getBlockByNumber uses — on the
-    // fault-proof data plane one node must not answer two different blocks for the same tag.
+    // The safe/finalized/pending tags are refused: resolving them here with the static depth
+    // (default 0) would answer the unsafe tip, contradicting eth_getBlockByNumber on the same
+    // node (which fails closed on the engine lane when the forkchoice tracker is unset). A
+    // block number, a hash, and the latest / earliest tags are accepted, through the same
+    // resolver eth_getBlockByNumber uses -- on the fault-proof data plane one node must not
+    // answer two different blocks for the same tag.
     if (blockTag == bcos::rpc::SafeBlock || blockTag == bcos::rpc::FinalizedBlock ||
         blockTag == bcos::rpc::PendingBlock)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
-            "debug_getRawHeader does not accept the safe/finalized/pending tags; use a block "
-            "number, a block hash, latest or earliest"));
+            std::string(method) + " does not accept the safe/finalized/pending tags; use a block "
+                                  "number, a block hash, latest or earliest"));
     }
 
     protocol::BlockNumber blockNumber = 0;
@@ -180,6 +180,17 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
+    co_return blockNumber;
+}
+
+task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::Value& response)
+{
+    // params: blockNumberOrHash (QTY|TAG|DATA 32B)
+    // result: the RLP-encoded Ethereum header (DATA); keccak256(result) is the block hash
+    // eth_getBlockBy* reports (canonicalBlockHash), which is what kona-host checks.
+    co_await requireEthereumLane(*m_nodeService->ledger(), "debug_getRawHeader");
+    auto const ledger = m_nodeService->ledger();
+    auto const blockNumber = co_await resolveRawBlockParameter(request, "debug_getRawHeader");
     auto const block = co_await ledger::getBlockData(*ledger, blockNumber, ledger::HEADER);
     auto const headerPtr = block ? block->blockHeader() : nullptr;
     if (!headerPtr) [[unlikely]]
@@ -210,6 +221,56 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
             InternalError, "Block " + std::to_string(blockNumber) + " has no Ethereum header"));
     }
     Json::Value result = toHexStringWithPrefix(encoded);
+    buildJsonContent(result, response);
+    co_return;
+}
+
+task::Task<void> DebugEndpoint::getRawReceipts(const Json::Value& request, Json::Value& response)
+{
+    // params: blockNumberOrHash (QTY|TAG|DATA 32B)
+    // result: [DATA] — one RLP-encoded receipt per transaction, in block order.
+    //
+    // kona-host reads the L1 receipts through this method to build the preimages its trace
+    // needs; without it the challenger cannot produce an L1-side trace at all.
+    co_await requireEthereumExecutorLane(*m_nodeService->ledger(), "debug_getRawReceipts");
+    auto const ledger = m_nodeService->ledger();
+    auto const blockNumber = co_await resolveRawBlockParameter(request, "debug_getRawReceipts");
+
+    // TRANSACTIONS (not just their hashes) because the receipts-trie leaf is prefixed with the
+    // transaction's EIP-2718 type byte, which only the transaction carries.
+    auto const block = co_await ledger::getBlockData(*ledger, blockNumber, ledger::TRANSACTIONS);
+    if (!block) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+    }
+
+    Json::Value result(Json::arrayValue);
+    // The receipts are zipped with the transactions by index, so a mismatch would silently
+    // truncate or misalign the response. Fail closed before the loop rather than inside it.
+    if (block->transactionsSize() != block->receiptsSize()) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InternalError, "Block " + std::to_string(blockNumber) + " carries " +
+                               std::to_string(block->transactionsSize()) + " transactions but " +
+                               std::to_string(block->receiptsSize()) + " receipts"));
+    }
+    auto transactions = block->transactions();  // non-const: the view is not const-iterable
+    for (auto anyTx : transactions)             // AnyTransaction::operator-> gives the Transaction
+    {
+        auto const& tx = *anyTx.operator->();
+        auto const receipt = co_await ledger::getReceipt(*ledger, tx.hash());
+        if (!receipt) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InternalError, "Missing receipt for transaction " + tx.hash().hexPrefixed()));
+        }
+        // Exactly the value the block's receipts trie holds (encodeReceiptLeaf): the same
+        // encoding this node committed to, so a client can reassemble the trie from these
+        // bytes and get the header's receiptsRoot back. The type byte comes from the signed
+        // envelope through the same helper the committed root uses, so the two cannot disagree.
+        result.append(toHexStringWithPrefix(bcos::ledger::mpt::encodeReceiptLeaf(
+            *receipt, bcos::ledger::mpt::receiptLeafTypeByte(tx))));
+    }
     buildJsonContent(result, response);
     co_return;
 }

@@ -21,7 +21,9 @@
 #include "TransactionReceipt.h"
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
+#include <concepts>
 #include <cstddef>
+#include <ranges>
 
 namespace bcos::protocol
 {
@@ -40,13 +42,19 @@ namespace bcos::protocol
 ///   differ. Matching the base finishExecute, which also recomputed it unconditionally.
 /// - cumulativeGasUsed is filled when empty; a scheduler-provided value stays (the
 ///   running prefix is a scheduling decision, not a derived field).
-template <class Receipts>
-inline u256 normalizeReceipts(Receipts& receipts)
+/// The numbering/bloom policy, as a reusable cursor, so the entry points below cannot drift.
+///
+/// `apply` takes the element by reference, not the dereferenced receipt: a container of holders
+/// (Block::receipts() yields one holder per receipt by value) must keep that holder alive across
+/// the call, because it is the holder that owns the pointer to the stored receipt.
+struct ReceiptNormalizer
 {
-    u256 cumulativeGasUsed = 0;
+    u256 cumulativeGasUsed{};
     size_t logIndex = 0;
     size_t index = 0;
-    for (auto& receipt : receipts)
+
+    template <class Receipt>
+    void apply(Receipt& receipt)
     {
         receipt->setTransactionIndex(index);
         receipt->setLogIndex(logIndex);
@@ -60,7 +68,24 @@ inline u256 normalizeReceipts(Receipts& receipts)
         }
         ++index;
     }
-    return cumulativeGasUsed;
+};
+
+/// Normalize a range of receipt pointers (the shape every scheduler-path caller has).
+///
+/// Constrained to input ranges so a mistaken non-range argument fails with a clear "constraints
+/// not satisfied" instead of instantiating the body: without it, anything with a `receipts()`
+/// method (a `Block`, say) would bind `Receipts` to that type and only then fail inside the
+/// range-for, pointing at a line the caller never wrote.
+template <class Receipts>
+    requires ::ranges::input_range<Receipts>
+inline u256 normalizeReceipts(Receipts& receipts)
+{
+    ReceiptNormalizer normalizer;
+    for (auto& receipt : receipts)
+    {
+        normalizer.apply(receipt);
+    }
+    return normalizer.cumulativeGasUsed;
 }
 
 }  // namespace bcos::protocol

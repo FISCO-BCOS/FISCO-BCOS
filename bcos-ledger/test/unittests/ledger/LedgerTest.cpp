@@ -32,9 +32,11 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/ReceiptBlockPosition.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/EthereumBlockRoots.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/Exceptions.h"
@@ -2322,6 +2324,199 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
         BOOST_REQUIRE(laneEntry.has_value());
         BOOST_CHECK_EQUAL(std::string(laneEntry->get()), "lane-value");
     }());
+}
+
+// The stored receipt position is not repaired, and the RPC layer no longer reads it: the position
+// is derived from the block when a receipt is served (protocol::stampReceiptBlockPositions).
+//
+// That is what makes the two ways a node can hold the same historical block agree. The stored
+// value is producer-dependent and stays whatever that producer wrote: a block built through
+// BaselineScheduler carries real indices, one written by the serial driver (and one re-executed by
+// a resync) carries the struct default 0. Deriving at read time gives both nodes ONE answer
+// without rewriting a single stored row -- no backfill, no activation marker, no lane predicate.
+//
+// Two properties are pinned here:
+//
+//   1. this write path does not number the receipts it stores (they reach the ledger as the
+//      producer left them), so nothing tries to "repair" history behind the operator's back;
+//   2. the derivation produces the position op-node needs, from the block alone, with literal
+//      expectations rather than values read back off the receipts under test.
+//
+// (1) is why this asserts 0 on the read-back block: if someone reintroduced numbering here, that
+// assertion -- not a client test -- is what would catch it.
+BOOST_AUTO_TEST_CASE(ethereumLaneStoredReceiptsKeepTheirLegacyPosition)
+{
+    initFixture();
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    // A number no other case writes: the ledger dedups a block number it already holds, so
+    // sharing one would make this read the other case's rows instead of its own.
+    header->setNumber(4242);
+    header->setTimestamp(1000);
+    header->setGasLimit(30000000);
+    header->setSealer(0);
+    // Marks the block as Ethereum-lane: only those headers carry the EIP-4844 fields, and only
+    // those block hashes commit to a receiptsRoot that leaves transactionIndex out.
+    header->setExcessBlobGas(0);
+    header->setBlobGasUsed(0);
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+
+    // Three transactions, the first carrying two log entries and the rest one each, so a
+    // per-receipt logIndex restart shows up as a repeated 0.
+    std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    std::vector<protocol::Transaction::Ptr> transactions;
+    std::vector<std::size_t> const logsPerTx{2, 1, 1};
+    for (size_t i = 0; i < logsPerTx.size(); ++i)
+    {
+        auto tx = m_blockFactory->transactionFactory()->createTransaction(i,
+            "0x1000000000000000000000000000000000000000", bcos::bytes{0x60},
+            std::to_string(1000 + i), 1000, "chain0", "group0", 0);
+
+        std::vector<protocol::LogEntry> logs;
+        for (size_t log = 0; log < logsPerTx[i]; ++log)
+        {
+            logs.emplace_back(bcos::bytes(20, 0x10),
+                bcos::h256s{bcos::h256("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+                                       "deadbeefdeadbeef")},
+                bcos::bytes(32, static_cast<bcos::byte>(0xa0 + log)));
+        }
+        auto receipt = m_blockFactory->receiptFactory()->createReceipt2(21000, "", logs, 0,
+            bcos::ref(bcos::bytes{}), 1, "1", protocol::TransactionVersion::V1_VERSION, true);
+        receipts.push_back(receipt);
+        transactions.push_back(tx);
+    }
+
+    // Drive the producer that owns the numbering on this lane. computeEthereumRoots numbers the
+    // receipt pointers it is given (and derives their bloom/cumulativeGasUsed); the block then
+    // receives those same objects, so the write path stores what the producer finalized.
+    std::vector<bcos::bytes> noRawTransactions;
+    task::syncWait(ledger::mpt::computeEthereumRoots(
+        receipts, transactions | ::ranges::views::indirect, noRawTransactions));
+    for (size_t i = 0; i < receipts.size(); ++i)
+    {
+        block->appendTransaction(transactions[i]);
+        block->appendReceipt(receipts[i]);
+    }
+
+    std::promise<bool> prewritePromise;
+    m_ledger->asyncPrewriteBlock(
+        m_storage, nullptr, block,
+        [&](std::string, Error::Ptr&& error) {
+            BOOST_CHECK(!error);
+            prewritePromise.set_value(true);
+        },
+        true, std::nullopt, std::nullopt, true);
+    BOOST_REQUIRE(prewritePromise.get_future().get());
+
+    std::promise<protocol::Block::Ptr> blockPromise;
+    m_ledger->asyncGetBlockDataByNumber(
+        4242, bcos::ledger::RECEIPTS, [&](Error::Ptr error, protocol::Block::Ptr result) {
+            BOOST_CHECK(!error);
+            blockPromise.set_value(std::move(result));
+        });
+    auto readBlock = blockPromise.get_future().get();
+    BOOST_REQUIRE(readBlock != nullptr);
+    BOOST_REQUIRE_EQUAL(readBlock->receiptsSize(), logsPerTx.size());
+
+    // Stored rows keep the legacy value: nothing on the write path numbers them any more.
+    std::size_t receiptIndex = 0;
+    for (auto receipt : readBlock->receipts())
+    {
+        BOOST_CHECK_MESSAGE(receipt->transactionIndex() == 0,
+            "receipt " << receiptIndex << " stored transactionIndex " << receipt->transactionIndex()
+                       << ", expected the untouched 0");
+        BOOST_CHECK_MESSAGE(receipt->logIndex() == 0,
+            "receipt " << receiptIndex << " stored logIndex " << receipt->logIndex()
+                       << ", expected the untouched 0");
+        // Pin the log list itself, so a lost list fails loudly instead of letting the derivation
+        // below collapse to the same wrong answer as a missing row.
+        BOOST_REQUIRE_LT(receiptIndex, logsPerTx.size());
+        BOOST_CHECK_MESSAGE(receipt->logEntries().size() == logsPerTx[receiptIndex],
+            "receipt " << receiptIndex << " stored " << receipt->logEntries().size()
+                       << " logs, expected " << logsPerTx[receiptIndex]);
+        ++receiptIndex;
+    }
+    BOOST_CHECK_EQUAL(receiptIndex, logsPerTx.size());
+
+    // And the derivation the RPC layer publishes is the position op-node needs. Literal
+    // expectations, not values read back off the receipts under test.
+    std::vector<std::size_t> const expectedLogIndex{0, 2, 3};
+    auto const positions = protocol::stampReceiptBlockPositions(*readBlock);
+    BOOST_REQUIRE_EQUAL(positions.size(), logsPerTx.size());
+    for (std::size_t i = 0; i < positions.size(); ++i)
+    {
+        BOOST_CHECK_EQUAL(positions[i].transactionIndex, i);
+        BOOST_CHECK_EQUAL(positions[i].logIndex, expectedLogIndex[i]);
+    }
+}
+
+// The byte contract of the fault-proof data plane: debug_getRawReceipts serves, per transaction,
+// exactly the string a receipt's trie leaf holds -- so a client (kona-host) that reassembles the
+// index-keyed trie from those bytes reproduces the header's receiptsRoot. The endpoint itself is
+// pinned for reachability in DebugChallengerDataPlaneTest; what that fixture cannot do is hold
+// real stored receipts, so the encoding is verified here, against the root the producer committed.
+BOOST_AUTO_TEST_CASE(ethereumLaneReceiptLeavesRebuildTheCommittedRoot)
+{
+    initFixture();
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(4243);
+    header->setTimestamp(1001);
+    header->setGasLimit(30000000);
+    header->setSealer(0);
+    header->setExcessBlobGas(0);
+    header->setBlobGasUsed(0);
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+
+    std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    std::vector<protocol::Transaction::Ptr> transactions;
+    std::vector<std::size_t> const logsPerTx{1, 2};
+    for (size_t i = 0; i < logsPerTx.size(); ++i)
+    {
+        auto tx = m_blockFactory->transactionFactory()->createTransaction(i,
+            "0x1000000000000000000000000000000000000000", bcos::bytes{0x60},
+            std::to_string(2000 + i), 1000, "chain0", "group0", 0);
+        std::vector<protocol::LogEntry> logs;
+        for (size_t log = 0; log < logsPerTx[i]; ++log)
+        {
+            logs.emplace_back(bcos::bytes(20, 0x20), bcos::h256s{bcos::h256(2U)},
+                bcos::bytes(32, static_cast<bcos::byte>(0xb0 + log)));
+        }
+        receipts.push_back(m_blockFactory->receiptFactory()->createReceipt2(21000, "", logs, 0,
+            bcos::ref(bcos::bytes{}), 1, "1", protocol::TransactionVersion::V1_VERSION, true));
+        transactions.push_back(std::move(tx));
+    }
+
+    std::vector<bcos::bytes> noRawTransactions;
+    auto const computation = task::syncWait(ledger::mpt::computeEthereumRoots(
+        receipts, transactions | ::ranges::views::indirect, noRawTransactions));
+
+    // Rebuild the leaf strings exactly as debug_getRawReceipts does, then the trie over them.
+    std::vector<bcos::bytes> leaves;
+    leaves.reserve(receipts.size());
+    for (size_t i = 0; i < receipts.size(); ++i)
+    {
+        leaves.push_back(ledger::mpt::encodeReceiptLeaf(
+            *receipts[i], ledger::mpt::receiptLeafTypeByte(*transactions[i])));
+    }
+    std::vector<bcos::bytesConstRef> leafRefs;
+    leafRefs.reserve(leaves.size());
+    for (auto const& leaf : leaves)
+    {
+        leafRefs.emplace_back(bcos::ref(leaf));
+    }
+    // The property the endpoint exists for: these bytes, and no others, reproduce the committed
+    // root. Swapping encodeReceiptLeaf for any other encoder turns this red.
+    BOOST_CHECK_EQUAL(ledger::mpt::calculateReceiptsRoot(leafRefs), computation.receiptsRoot);
+    BOOST_CHECK(computation.receiptsRoot != bcos::h256{});
+    // The producer finalizes bloom + cumulativeGasUsed only; the position is derived at read time
+    // (see ethereumLaneStoredReceiptsKeepTheirLegacyPosition), so it is still unset here.
+    BOOST_CHECK_EQUAL(receipts[1]->transactionIndex(), 0U);
+    BOOST_CHECK_EQUAL(receipts[1]->logIndex(), 0U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
