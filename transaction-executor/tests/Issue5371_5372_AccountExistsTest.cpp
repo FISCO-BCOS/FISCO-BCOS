@@ -140,9 +140,8 @@ struct AccountExistsFixture
         auto const hash = hashImpl->hash(bcos::bytesConstRef(code.data(), code.size()));
         co_await runnerAcc.setCode(code, "", hash);
 
-        auto host = makeHost(features,
-            static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION), origin, runner, EVMC_CALL,
-            startGas);
+        auto host = makeHost(features, static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION),
+            origin, runner, EVMC_CALL, startGas);
         host.mutableMessage().code_address = runner;
         co_await host.prepare();
         co_return co_await host.execute();

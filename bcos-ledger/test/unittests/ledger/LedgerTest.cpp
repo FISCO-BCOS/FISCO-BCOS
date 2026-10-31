@@ -1895,8 +1895,7 @@ BOOST_AUTO_TEST_CASE(genesisFeaturesRequireDependencies)
             BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
         };
         co_await refused({Features::Flag::feature_balance_precompiled}, "feature_balance");
-        co_await refused(
-            {Features::Flag::feature_balance, Features::Flag::feature_balance_policy1},
+        co_await refused({Features::Flag::feature_balance, Features::Flag::feature_balance_policy1},
             "feature_balance_precompiled");
     }());
 }
