@@ -1,9 +1,9 @@
 {
   "name": "openssl",
-  "version": "1.1.1-tassl",
+  "version": "3.5.4-tongsuo-8.5.0",
   "port-version": 1,
-  "description": "OpenSSL is an open source project that provides a robust, commercial-grade, and full-featured toolkit for the Transport Layer Security (TLS) and Secure Sockets Layer (SSL) protocols. It is also a general-purpose cryptography library.",
-  "homepage": "https://www.openssl.org",
+  "description": "Tongsuo 8.5.0, based on OpenSSL 3.5.4, with SM algorithms, TLCP/NTLS and RFC 8998 support.",
+  "homepage": "https://github.com/Tongsuo-Project/Tongsuo",
   "license": "Apache-2.0",
   "dependencies": [
     {

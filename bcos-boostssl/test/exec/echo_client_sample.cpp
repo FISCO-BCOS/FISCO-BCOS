@@ -23,6 +23,7 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/LogStream.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <string>
@@ -125,8 +126,9 @@ int main(int argc, char** argv)
 
     auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
+    auto ioServicePool = std::make_shared<IOServicePool>(8);
 
-
+    wsInitializer->setIOServicePool(ioServicePool);
     wsInitializer->setConfig(config);
     wsInitializer->initWsService(wsService);
 

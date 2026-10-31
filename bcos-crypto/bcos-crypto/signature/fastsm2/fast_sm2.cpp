@@ -24,14 +24,14 @@
 #include <bcos-utilities/LogStream.h>
 #include <openssl/bn.h>
 #include <openssl/ec.h>
+#include <openssl/ecdsa.h>
 #include <openssl/evp.h>
 #include <openssl/obj_mac.h>
-#include <openssl/sm2.h>
 
 using namespace bcos;
 using namespace bcos::crypto;
 
-const char* c_userId = "1234567812345678";
+constexpr char c_userId[] = "1234567812345678";
 const int c_R_FIELD_LEN = 32;
 const int c_S_FIELD_LEN = 32;
 const int c_PRIVATEKEY_LEN = 32;
@@ -46,12 +46,17 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
     COutputBuffer* output_signature)
 {
     int len = 0;
-    // create EC_GROUP
     EC_KEY* sm2Key = nullptr;
     ECDSA_SIG* sig = nullptr;
     EC_POINT* publicKey = nullptr;
     BIGNUM* privateKey = nullptr;
     BIGNUM* bn = nullptr;
+    EVP_PKEY* evpKey = nullptr;
+    EVP_PKEY_CTX* evpKeyCtx = nullptr;
+    EVP_MD_CTX* mdCtx = nullptr;
+    unsigned char* derSig = nullptr;
+    const unsigned char* derRead = nullptr;
+    size_t derSigLen = 0;
     int8_t ret = WEDPR_ERROR;
     // raw_public_key->len feeds a fixed 65-byte stack buffer below — reject anything but the
     // exact 64-byte X||Y form before the memcpy (KeyImpl does not truncate oversized input)
@@ -77,7 +82,6 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
         goto done;
     }
 
-    // load privateKey
     privateKey = BN_bin2bn((const unsigned char*)raw_private_key->data, raw_private_key->len, NULL);
     if (privateKey == nullptr)
     {
@@ -107,45 +111,89 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of EC_KEY_set_group";
         goto done;
     }
-    // set the private key
     if (!EC_KEY_set_private_key(sm2Key, privateKey))
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of EC_KEY_set_private_key";
         goto done;
     }
-    // set the public key
     if (!EC_KEY_set_public_key(sm2Key, publicKey))
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of EC_KEY_set_public_key";
         goto done;
     }
-    sig = sm2_do_sign(sm2Key, EVP_sm3(), (const uint8_t*)c_userId, (size_t)strlen(c_userId),
-        (const uint8_t*)raw_message_hash->data, raw_message_hash->len);
-    if (sig == NULL)
+
+    evpKey = EVP_PKEY_new();
+    mdCtx = EVP_MD_CTX_new();
+    if (!evpKey || !mdCtx || EVP_PKEY_set1_EC_KEY(evpKey, sm2Key) != 1)
     {
-        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of sm2_do_sign";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error creating EVP key";
         goto done;
     }
-    // set (r, s) to output_signature
+    evpKeyCtx = EVP_PKEY_CTX_new_from_pkey(NULL, evpKey, NULL);
+    if (!evpKeyCtx)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error creating EVP key context";
+        goto done;
+    }
+    EVP_MD_CTX_set_pkey_ctx(mdCtx, evpKeyCtx);
+    if (EVP_DigestSignInit(mdCtx, NULL, EVP_sm3(), NULL, evpKey) != 1 ||
+        EVP_PKEY_CTX_set1_id(evpKeyCtx, c_userId, sizeof(c_userId) - 1) != 1 ||
+        EVP_DigestSignUpdate(mdCtx, raw_message_hash->data, raw_message_hash->len) != 1 ||
+        EVP_DigestSignFinal(mdCtx, NULL, &derSigLen) != 1)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error initializing EVP signature";
+        goto done;
+    }
+    derSig = static_cast<unsigned char*>(OPENSSL_malloc(derSigLen));
+    if (!derSig)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error allocating signature";
+        goto done;
+    }
+    if (EVP_DigestSignFinal(mdCtx, derSig, &derSigLen) != 1)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error creating EVP signature";
+        goto done;
+    }
+    derRead = derSig;
+    sig = d2i_ECDSA_SIG(NULL, &derRead, static_cast<long>(derSigLen));
+    if (!sig || derRead != derSig + derSigLen)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error decoding EVP signature";
+        goto done;
+    }
     len = BN_bn2bin(ECDSA_SIG_get0_r(sig), (unsigned char*)output_signature->data);
     if (len < c_R_FIELD_LEN)
     {
-        // padding zero to the r field
         memmove(output_signature->data + (c_R_FIELD_LEN - len), output_signature->data, len);
         memset(output_signature->data, 0, (c_R_FIELD_LEN - len));
     }
-    // get s filed
     len =
         BN_bn2bin(ECDSA_SIG_get0_s(sig), (unsigned char*)(output_signature->data + c_R_FIELD_LEN));
     if (len < c_S_FIELD_LEN)
     {
         auto startPointer = output_signature->data + c_R_FIELD_LEN;
-        // padding zero to the s field
         memmove(startPointer + (c_S_FIELD_LEN - len), startPointer, len);
         memset(startPointer, 0, (c_S_FIELD_LEN - len));
     }
     ret = WEDPR_SUCCESS;
 done:
+    if (mdCtx)
+    {
+        EVP_MD_CTX_free(mdCtx);
+    }
+    if (evpKeyCtx)
+    {
+        EVP_PKEY_CTX_free(evpKeyCtx);
+    }
+    if (evpKey)
+    {
+        EVP_PKEY_free(evpKey);
+    }
+    if (derSig)
+    {
+        OPENSSL_free(derSig);
+    }
     if (sm2Key)
     {
         EC_KEY_free(sm2Key);
@@ -176,7 +224,13 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
     EC_POINT* point = NULL;
     BIGNUM* r = NULL;
     BIGNUM* s = NULL;
+    BIGNUM* bn = NULL;
     ECDSA_SIG* signData = NULL;
+    EVP_PKEY* evpKey = nullptr;
+    EVP_PKEY_CTX* evpKeyCtx = nullptr;
+    EVP_MD_CTX* mdCtx = nullptr;
+    unsigned char* derSig = nullptr;
+    int derSigLen = 0;
     int8_t ret = WEDPR_ERROR;
     // raw_public_key->len feeds a fixed 65-byte stack buffer below — reject anything but the
     // exact 64-byte X||Y form before the memcpy (KeyImpl does not truncate oversized input).
@@ -195,7 +249,7 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
     }
     uint8_t publicKeyData[65] = {4};
     memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
-    BIGNUM* bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
+    bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
     point = EC_POINT_new(sm2Group);
     if (point == NULL)
     {
@@ -250,12 +304,55 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of ECDSA_SIG_set0";
         goto done;
     }
-    if (sm2_do_verify(sm2Key, EVP_sm3(), signData, (const uint8_t*)c_userId, strlen(c_userId),
-            (const uint8_t*)raw_message_hash->data, raw_message_hash->len))
+
+    evpKey = EVP_PKEY_new();
+    mdCtx = EVP_MD_CTX_new();
+    if (!evpKey || !mdCtx || EVP_PKEY_set1_EC_KEY(evpKey, sm2Key) != 1)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error creating EVP key";
+        goto done;
+    }
+    evpKeyCtx = EVP_PKEY_CTX_new_from_pkey(NULL, evpKey, NULL);
+    if (!evpKeyCtx)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error creating EVP key context";
+        goto done;
+    }
+    EVP_MD_CTX_set_pkey_ctx(mdCtx, evpKeyCtx);
+    derSigLen = i2d_ECDSA_SIG(signData, &derSig);
+    if (derSigLen <= 0)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error encoding signature";
+        goto done;
+    }
+    if (EVP_DigestVerifyInit(mdCtx, NULL, EVP_sm3(), NULL, evpKey) != 1 ||
+        EVP_PKEY_CTX_set1_id(evpKeyCtx, c_userId, sizeof(c_userId) - 1) != 1 ||
+        EVP_DigestVerifyUpdate(mdCtx, raw_message_hash->data, raw_message_hash->len) != 1)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error initializing EVP verification";
+        goto done;
+    }
+    if (EVP_DigestVerifyFinal(mdCtx, derSig, static_cast<size_t>(derSigLen)) == 1)
     {
         ret = WEDPR_SUCCESS;
     }
 done:
+    if (mdCtx)
+    {
+        EVP_MD_CTX_free(mdCtx);
+    }
+    if (evpKeyCtx)
+    {
+        EVP_PKEY_CTX_free(evpKeyCtx);
+    }
+    if (evpKey)
+    {
+        EVP_PKEY_free(evpKey);
+    }
+    if (derSig)
+    {
+        OPENSSL_free(derSig);
+    }
     if (sm2Key)
     {
         EC_KEY_free(sm2Key);

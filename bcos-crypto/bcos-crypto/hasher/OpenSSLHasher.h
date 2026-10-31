@@ -2,10 +2,12 @@
 
 #include "../TrivialObject.h"
 #include "Hasher.h"
+#include "Keccak256.h"
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <memory>
 #include <span>
 #include <stdexcept>
 
@@ -43,41 +45,9 @@ public:
     void init()
     {
         auto md = chooseMD();
-
         if (!EVP_DigestInit(m_mdCtx.get(), md)) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestInit error!"});
-        }
-
-        // Keccak256 special padding
-        if constexpr (hasherType == HasherType::Keccak256)
-        {
-            struct KECCAK1600_CTX
-            {
-                uint64_t A[5][5];
-                size_t block_size;
-                size_t md_size;
-                size_t num;
-                unsigned char buf[1600 / 8 - 32];
-                unsigned char pad;
-            };
-
-            struct EVP_MD_CTX_Keccak256
-            {
-                const EVP_MD* digest;
-                ENGINE* engine;
-                unsigned long flags;
-
-                KECCAK1600_CTX* md_data;
-            };
-
-            auto keccak256 = reinterpret_cast<EVP_MD_CTX_Keccak256*>(m_mdCtx.get());
-            if (!keccak256->md_data || keccak256->md_data->pad != 0x06)  // The sha3 origin pad
-            {
-                BOOST_THROW_EXCEPTION(std::runtime_error{
-                    "OpenSSL KECCAK1600_CTX layout error! Maybe untested openssl version"});
-            }
-            keccak256->md_data->pad = 0x01;
         }
     }
 
@@ -89,7 +59,6 @@ public:
             m_init = true;
         }
         auto view = bcos::crypto::trivial::toView(std::forward<decltype(in)>(in));
-
         if (!EVP_DigestUpdate(m_mdCtx.get(), view.data(), view.size())) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestUpdate error!"});
@@ -103,7 +72,6 @@ public:
             init();
             m_init = true;
         }
-
         if (!EVP_DigestUpdate(m_mdCtx.get(), reinterpret_cast<unsigned char const*>(in.data()),
                 in.size())) [[unlikely]]
         {
@@ -116,7 +84,6 @@ public:
         m_init = false;
         bcos::crypto::trivial::resizeTo(out, HASH_SIZE);
         auto view = bcos::crypto::trivial::toView(std::forward<decltype(out)>(out));
-
         if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(view.data()), nullptr))
             [[unlikely]]
         {
@@ -127,7 +94,6 @@ public:
     void final(std::span<std::byte> out)
     {
         m_init = false;
-
         if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(out.data()), nullptr))
             [[unlikely]]
         {
@@ -135,20 +101,23 @@ public:
         }
     }
 
-    constexpr const EVP_MD* chooseMD()
+    const EVP_MD* chooseMD() const
     {
         if constexpr (hasherType == HasherType::SM3)
         {
             return EVP_sm3();
         }
-        else if constexpr (hasherType == HasherType::SHA3_256 ||
-                           hasherType == HasherType::Keccak256)
+        else if constexpr (hasherType == HasherType::SHA3_256)
         {
             return EVP_sha3_256();
         }
         else if constexpr (hasherType == HasherType::SHA2_256)
         {
             return EVP_sha256();
+        }
+        else if constexpr (hasherType == HasherType::Keccak256)
+        {
+            return bcos::crypto::hasher::keccak256MD();
         }
         else
         {

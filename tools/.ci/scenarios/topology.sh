@@ -66,15 +66,28 @@ wait_status_ok()
 # consensus_write <node_dir> <expect: ok|<codeName>> <args...>: a consensus write through the
 # preset table; on the auth chain the write is a committee proposal (single governor, rates
 # 0/0: executed in the creating transaction) and the precompiled code sits in the proposal's
-# execResult; the plain chains call the precompiled directly
+# execResult; the plain chains call the precompiled directly. Successful writes retry a 10010
+# TransactionPoolTimeout after consensus recovers; that error means the pool swept the transaction
+# without executing it (MemoryStorage::removeInvalidTxs)
 consensus_write()
 {
     local node_dir="${1}"
     local expect="${2}"
     shift 2
-    local result
+    local result attempt rc
     if [[ "${expect}" == "ok" ]]; then
-        result=$(ops "${node_dir}" consensus "$@" --yes --timeout 60000 "${topology_account[@]}") || { echo "${result}"; return 1; }
+        for attempt in 1 2 3; do
+            result=$(ops "${node_dir}" consensus "$@" --yes --timeout 60000 "${topology_account[@]}") && rc=0 || rc=$?
+            if (( rc == 0 )); then
+                break
+            fi
+            if (( attempt == 3 )) || ! jq -e '.error.code == 10010' >/dev/null 2>&1 <<<"${result}"; then
+                echo "${result}"
+                return 1
+            fi
+            echo "consensus $*: attempt ${attempt} got TransactionPoolTimeout; waiting for consensus before retry" >&2
+            wait_status_ok "${node_dir}" 90 >/dev/null || { echo "${result}"; return 1; }
+        done
         assert_jq "${result}" '.ok == true' "consensus $*" || return 1
     else
         result=$(ops_expect_exit 2 "${node_dir}" consensus "$@" --yes --timeout 60000 "${topology_account[@]}") || return 1
@@ -107,7 +120,7 @@ scenario_7_consensus_membership()
     local node_dir="${2}"
     scenario_banner 7 consensus-membership "java-sdk PrecompiledTest.test1ConsensusService"
     topology_setup "${chain}" "${node_dir}" || return 1
-    local new_node new_id role
+    local new_node new_id role target_height
     new_node=$(chain_node_dir "${chain}" "$(chain_node_count "${chain}")")
     [[ -f "${new_node}/conf/node.nodeid" ]] || { scenario_fail "expanded node ${new_node} missing"; return 1; }
     new_id=$(node_id_of "${new_node}")
@@ -120,6 +133,9 @@ scenario_7_consensus_membership()
     consensus_write "${node_dir}" ok add-observer "${new_id}" >/dev/null || return 1
     role=$(consensus_role "${node_dir}" "${new_id}") || return 1
     [[ "${role}" == "observer" ]] || { scenario_fail "after add-observer the role is ${role}"; return 1; }
+    target_height=$(ops "${node_dir}" attach getBlockNumber) || return 1
+    [[ "${target_height}" =~ ^[0-9]+$ ]] || { scenario_fail "getBlockNumber before membership changes: ${target_height}"; return 1; }
+    wait_sync_caught_up "${new_node}" 180 "${target_height}" >/dev/null || return 1
     consensus_write "${node_dir}" ok add-sealer "${new_id}" 1 >/dev/null || return 1
     local list
     list=$(ops "${node_dir}" consensus list) || return 1
