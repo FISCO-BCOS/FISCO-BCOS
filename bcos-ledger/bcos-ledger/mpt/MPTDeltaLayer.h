@@ -68,18 +68,65 @@ struct MPTDeltaLayer
     /// in one batch). Parked here rather than dropped so the pruning spec can decide their fate
     /// with full information; erasing them would orphan them permanently.
     std::unordered_set<bcos::h256> intraBlockObsoleted;
+    /// Per-hash NET reference movement of this block, tallied by mergeNodeDelta: +1 for every
+    /// commitTrie() result that EMITTED the hash, −1 for every result that obsoleted it, −1 for
+    /// every result that RE-EMITTED it byte-identically from the prior version
+    /// (TrieMergeResult::reemittedNodes — such a hash sits in newNodes, but the same trie
+    /// referenced it before and after, so its reference count must not move). The pruning
+    /// spec's reference counting needs this because newNodes cannot carry it: newNodes
+    /// is a deduplicated map, but two accounts whose builds produce the byte-identical node in
+    /// one block create TWO references to it (content-addressed sharing, see obsoletedNodes
+    /// above) and later rebuilds will obsolete it once per referencing trie. Counting each
+    /// result's emission — not each surviving map entry — keeps "all-history adds − removes =
+    /// live references" exact across same-block cross-trie sharing; counting the deduplicated
+    /// sets would under-count the creations and delete the node while the second trie still
+    /// references it. Without the re-emit correction the same tally would drift UP by one on
+    /// every no-net-change rebuild of a node (mergeTrie phase 4 deliberately keeps re-emitted
+    /// nodes out of obsoletedNodes, so the balancing −1 would never arrive) and the node would
+    /// leak on disk forever.
+    ///
+    /// Unlike the three containers above this map is NOT disjointness-adjusted by
+    /// buildAndCollect's end-subtraction — it already nets every emission against every
+    /// obsoletion, so an intraBlockObsoleted hash reads as its true net movement (typically 0:
+    /// one reference lost, one created).
+    std::unordered_map<bcos::h256, int64_t> refCountDeltas;
 };
 
 /// Merge one commitTrie() result into @p delta: newNodes overwrite-insert, obsoleted hashes
-/// merge. Taken by value (moved from): the result is consumed, buffers are moved not copied.
-/// Duck-typed on the newNodes/obsoletedNodes members TrieMergeResult defines, so this pure-data
-/// header does not depend on the trie headers.
+/// merge, and the reference movement is tallied per hash. Taken by value (moved from): the
+/// result is consumed, buffers are moved not copied. Duck-typed on the newNodes/obsoletedNodes
+/// /reemittedNodes members TrieMergeResult defines, so this pure-data header does not depend on
+/// the trie headers.
+/// @param trackRefCounts false skips the refCountDeltas tally (the map is left untouched, not
+/// zeroed) for callers whose CommitObserver does not count references — see
+/// CommitObserver::needsRefCountDeltas; newNodes/obsoletedNodes merge exactly as before.
 template <typename NodeDelta>
-void mergeNodeDelta(NodeDelta merged, MPTDeltaLayer& delta)
+void mergeNodeDelta(NodeDelta merged, MPTDeltaLayer& delta, bool trackRefCounts = true)
 {
     for (auto& [hash, raw] : merged.newNodes)
     {
+        // Every emission is one reference CREATION, even when the map already holds the hash:
+        // a second trie building the byte-identical node in this same block references it too.
+        if (trackRefCounts)
+        {
+            ++delta.refCountDeltas[hash];
+        }
         delta.newNodes.insert_or_assign(hash, std::move(raw));
+    }
+    if (trackRefCounts)
+    {
+        for (auto const& hash : merged.obsoletedNodes)
+        {
+            --delta.refCountDeltas[hash];
+        }
+        for (auto const& hash : merged.reemittedNodes)
+        {
+            // Resolved from the prior version and re-emitted byte-identically: the SAME trie
+            // keeps referencing it, so cancel the +1 the emission loop tallied — net movement is
+            // zero. (A hash is in exactly one of obsoletedNodes / reemittedNodes per result, so
+            // the two corrections never double-count.)
+            --delta.refCountDeltas[hash];
+        }
     }
     delta.obsoletedNodes.merge(std::move(merged.obsoletedNodes));
 }

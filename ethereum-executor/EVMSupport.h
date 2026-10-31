@@ -294,8 +294,7 @@ inline constexpr int64_t AUTHORIZATION_BASE_COST = 12500;
 /// NOTE: this performs recovery ONLY. EIP-2 canonical-s (s <= SECP256K1N_OVER_2),
 /// y-parity <= 1, chain-id match and nonce != max are NOT checked here; the
 /// caller must apply them before calling, as processAuthorizationList does in
-/// bcos-evm/bcos-evm/eth/Eip7702Recover.h:68-83 (and its port in
-/// EthereumTransition.h, split 4/4). Skipping them diverges from geth/op-geth.
+/// EthereumTransition.h. Skipping them diverges from geth/op-geth.
 inline std::optional<evmc::address> recoverAuthority(protocol::Authorization const& auth)
 {
     // rlp([chain_id, address, nonce]).

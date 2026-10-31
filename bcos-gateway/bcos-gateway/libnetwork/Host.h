@@ -8,8 +8,9 @@
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
+#include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
+#include "bcos-task/Task.h"
 #include "bcos-utilities/Common.h"
 #include <openssl/x509.h>
 #include <boost/asio/ssl/stream_base.hpp>
@@ -17,10 +18,12 @@
 #include <boost/system/error_code.hpp>
 #include <atomic>
 #include <chrono>
+#include <future>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <tuple>
 
 
 namespace boost::asio::ssl
@@ -45,6 +48,13 @@ class ASIOInterface;
 
 using x509PubHandler = std::function<bool(X509* x509, std::string& pubHex)>;
 
+// Lifetime contract: a started Host must be stopped (stop()) BEFORE its last strong reference
+// is released. The acceptLoop coroutine frame holds a strong Host reference for its whole life
+// and exits only when stop() clears m_run and cancels the acceptor, so a Host that is started
+// but never stopped is never destroyed — it keeps the ASIOInterface, the acceptor and the
+// teardown executor alive with it. ~Host calls stop() defensively, but the destructor can only
+// run once every strong reference — including the accept loop's — is already gone, so it cannot
+// substitute for an explicit stop().
 class Host : public std::enable_shared_from_this<Host>
 {
 public:
@@ -53,7 +63,7 @@ public:
     Host& operator=(const Host&) = delete;
     Host& operator=(Host&&) = delete;
     Host(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory);
+        std::shared_ptr<SessionFactory> _sessionFactory);
     virtual ~Host();
 
     using Ptr = std::shared_ptr<Host>;
@@ -63,9 +73,20 @@ public:
     virtual void start();
     virtual void stop();
 
-    virtual void asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-            callback);
+    /**
+     * @brief: (coroutine) connect to the server
+     * @param _nodeIPEndpoint : the endpoint of the connected server
+     * @return {error, p2pInfo, session}: on success the error code is 0 and the session is the
+     *         established peer session; on failure the session is nullptr and the error describes
+     *         the failure. A skipped connect (host not running, or the endpoint is already in the
+     *         pending list) returns a success error with a nullptr session.
+     * @note the caller must keep this Host alive until the returned task completes (e.g. own a
+     *       shared_ptr in the awaiting coroutine frame); on success the task resumes on the
+     *       connected socket's io_context thread, on failure it may resume on the resolver's
+     *       thread or complete synchronously on the caller's thread.
+     */
+    virtual task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> connect(
+        NodeIPEndpoint _nodeIPEndpoint);
 
     virtual bool haveNetwork() const;
 
@@ -89,18 +110,21 @@ public:
     virtual void setSSLContextPubHandlerWithoutExtInfo(
         std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo);
 
-    virtual void setSessionCallbackManager(
-        SessionCallbackManagerInterface::Ptr sessionCallbackManager);
+    // host-wide response-callback manager shared by every session this host creates
+    virtual SessionCallbackManager& sessionCallbackManager();
 
     virtual const std::shared_ptr<ASIOInterface>& asioInterface() const;
     virtual std::shared_ptr<SessionFactory> sessionFactory() const;
-    virtual MessageFactory::Ptr messageFactory() const;
+    // Host-wide message seq allocator. The response-callback manager is shared by every session
+    // of this host (and a routed response can be claimed on a different session than the request
+    // went out on), so seqs must be unique host-wide, not per-connection.
+    virtual uint32_t newSeq();
     virtual P2PInfo p2pInfo();
 
-    virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist);
-    virtual PeerBlackWhitelistInterface::Ptr peerBlacklist();
-    virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist);
-    virtual PeerBlackWhitelistInterface::Ptr peerWhitelist();
+    virtual void setPeerBlacklist(PeerBlackWhitelist _peerBlacklist);
+    virtual PeerBlackWhitelist& peerBlacklist();
+    virtual void setPeerWhitelist(PeerBlackWhitelist _peerWhitelist);
+    virtual PeerBlackWhitelist& peerWhitelist();
 
     // FIB-186 (vector D): run a session-teardown notification on the dedicated teardown executor
     // instead of the shared I/O pool. Teardown of established sessions (Service::onMessage's error
@@ -156,10 +180,10 @@ public:
     constexpr static std::size_t DEFAULT_MAX_PENDING_HANDSHAKES = 64;
     // FIB-186: default inbound TLS handshake timeout (ms). Without a timeout a stalled / slow
     // handshake never completes, so its admission slot is never released and (because the
-    // completion handler holds shared_from_this) this Host can never be destroyed. Bounding it lets
-    // a slow-loris peer hold at most this long before its slot is reclaimed. GatewayFactory plumbs
-    // the configured value (p2p.handshake_timeout_ms); this constant is the default when the config
-    // omits it.
+    // serverHandshake coroutine frame holds shared_from_this) this Host can never be destroyed.
+    // Bounding it lets a slow-loris peer hold at most this long before its slot is reclaimed.
+    // GatewayFactory plumbs the configured value (p2p.handshake_timeout_ms); this constant is
+    // the default when the config omits it.
     constexpr static int DEFAULT_HANDSHAKE_TIMEOUT_MS = 10000;
 
     std::size_t maxPendingHandshakes() const { return m_maxPendingHandshakes; }
@@ -174,10 +198,14 @@ public:
 
     // FIB-186: reserve / release an in-flight-handshake slot. tryAcquire returns false (caller must
     // close the socket and re-arm accept) when the global cap is reached. release runs from the
-    // HandshakeSlotGuard bound to the handshake completion handler, i.e. exactly once when the
-    // handshake finishes (success, failure, or abort).
+    // HandshakeSlotGuard riding the serverHandshake coroutine frame, i.e. exactly once when that
+    // frame unwinds (handshake success, failure, or abort).
     bool tryAcquireHandshakeSlot();
     void releaseHandshakeSlot();
+    // FIB-186: reserve a slot AND return the owning RAII guard in one step (nullptr when the cap
+    // is reached). The guard rides the caller's coroutine frame, so acquire and release live in
+    // the same frame — and the "throw between acquire and guard" window cannot leak a slot.
+    std::shared_ptr<void> acquireHandshakeSlotGuard();
 
     // FIB-186: rate-limit accepted new connections (not just their concurrency). The pending-
     // handshake cap above bounds how many handshakes run at once, but on a fast link a churn flood
@@ -214,6 +242,12 @@ public:
     }
     bool tryAcquireConnectionToken();
 
+    // Retry delay after a failed accept-loop iteration (ms): the per-iteration catch in
+    // acceptLoop re-arms a short timer before retrying, so a persistently failing newSocket()
+    // (e.g. fd exhaustion) degrades to a slow retry loop instead of spinning the acceptor's
+    // io_context thread at 100% CPU.
+    constexpr static uint32_t ACCEPT_RETRY_INTERVAL_MS = 200;
+
 protected:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
@@ -236,20 +270,42 @@ protected:
     void handshakeServer(const boost::system::error_code& error,
         std::shared_ptr<std::string> endpointPublicKey, std::shared_ptr<SocketFace> socket);
 
-    void startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-            handler);
+    std::shared_ptr<SessionFace> startPeerSession(
+        P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket);
 
-    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
-        std::shared_ptr<std::string> endpointPublicKey,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-            callback,
-        NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::steady_timer> timerPtr);
+    std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>> handshakeClient(
+        const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
+        std::shared_ptr<std::string> endpointPublicKey, NodeIPEndpoint _nodeIPEndpoint);
 
     void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
     void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
+    /// PeerConnectFailed is rate-limited per endpoint: printed on the first consecutive failure
+    /// and then every c_connectFailLogEvery-th one; the counter resets on handshake success.
+    void recordConnectFailure(
+        NodeIPEndpoint const& nodeIPEndpoint, std::string_view reason, std::string_view detail);
+    void clearConnectFailures(NodeIPEndpoint const& nodeIPEndpoint);
+    constexpr static uint32_t c_connectFailLogEvery = 10;
+
+private:
+    // Coroutine bodies for the accept/connect paths. The accept path is launched fire-and-forget
+    // (task::wait) from startAccept(); the connect path is co_awaited by connect()'s caller. Each
+    // frame holds a strong Host reference for its whole lifetime — structurally replacing the
+    // per-operation shared_from_this() captures of the old completion handlers. acceptLoop
+    // additionally keeps the Host alive until Host::stop() cancels the acceptor, which completes
+    // the pending async_accept with operation_aborted and lets the loop exit.
+    task::Task<void> acceptLoop();
+    // handshakeGuard owns the reserved FIB-186 in-flight-handshake admission slot (acquired in
+    // acceptLoop so the slot/token admission ordering is preserved); it is released exactly when
+    // this coroutine frame unwinds. Held as shared_ptr<void> to keep the concrete guard type an
+    // implementation detail of Host.cpp.
+    task::Task<void> serverHandshake(
+        std::shared_ptr<SocketFace> socket, std::shared_ptr<void> handshakeGuard);
+    task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> clientConnect(
+        std::shared_ptr<SocketFace> socket, NodeIPEndpoint _nodeIPEndpoint);
+
+protected:
     // FIB-186 (vector D): dedicated single-thread executor for session-teardown notifications, kept
     // separate from the shared IOServicePool so a bulk-disconnect flood cannot starve
     // inbound-message delivery. See postTeardown.
@@ -260,7 +316,9 @@ protected:
     // Session::drop() stops posting here once haveNetwork() goes false, so nothing is enqueued
     // after Host::stop().
     std::shared_ptr<bcos::IOServicePool> m_teardownPool;
-    std::shared_ptr<SessionCallbackManagerInterface> m_sessionCallbackManager;
+    // Host-wide response-callback manager, owned here and shared by every session this host
+    // creates (sessions hold a non-owning pointer to it).
+    SessionCallbackManager m_sessionCallbackManager;
 
     bcos::crypto::Hash::Ptr m_hashImpl;
     /// representing to the network state
@@ -270,7 +328,11 @@ protected:
 
     std::set<NodeIPEndpoint> m_pendingConns;
     bcos::Mutex x_pendingConns;
-    MessageFactory::Ptr m_messageFactory;
+    // consecutive outbound connect failures per endpoint, see recordConnectFailure
+    std::map<NodeIPEndpoint, uint32_t> m_connectFailures;
+    bcos::Mutex x_connectFailures;
+    // host-wide seq source, see newSeq()
+    std::atomic<uint32_t> m_seq{1};
 
     std::string m_listenHost;
     uint16_t m_listenPort = 0;
@@ -284,13 +346,34 @@ protected:
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandler;
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandlerWithoutExtInfo;
 
-    bool m_run = false;
+    // Network run flag. Written by start()/stop() from the caller's thread, read as the accept
+    // loop's condition on the acceptor's io_context thread (Host::acceptLoop) and by
+    // haveNetwork() from every session thread. Must be atomic: the new Host contract makes
+    // observing m_run == false the only mechanism that releases the accept loop's strong Host
+    // reference, so a torn/stale read would re-arm async_accept after the cancel was consumed
+    // and make the Host immortal.
+    std::atomic<bool> m_run{false};
+
+    // Accept-loop exit latch (see Host::stop). The loop's frame holds a strong Host reference,
+    // forming a reference cycle (frame -> Host -> ASIOInterface -> IOServicePool -> io_context ->
+    // pending async_accept -> the frame) whose only cut point is the cancel Host::stop() posts
+    // to the acceptor's io_context — if that cancel is lost (the io_context was already stopped
+    // or drained, or the post threw), nothing else ends the loop and the whole graph leaks
+    // silently. stop() therefore waits on this latch with a bounded timeout and logs loudly on
+    // expiry, turning the silent permanent leak into a bounded wait plus a diagnosable line.
+    // m_acceptLoopStarted gates the wait (a Host whose loop never ran has nothing to wait for);
+    // the promise is satisfied when acceptLoop returns. The frame-destroy rescue path never
+    // satisfies it, which is exactly the case the timeout exists to diagnose.
+    std::atomic<bool> m_acceptLoopStarted{false};
+    std::promise<void> m_acceptLoopExit;
 
     P2PInfo m_p2pInfo;
 
-    // Peer black list
-    PeerBlackWhitelistInterface::Ptr m_peerBlacklist{nullptr};
-    PeerBlackWhitelistInterface::Ptr m_peerWhitelist{nullptr};
+    // Peer black/white list, disabled by default (blocks/rejects no one)
+    PeerBlackWhitelist m_peerBlacklist{
+        PeerBlackWhitelist::Type::Blacklist, std::set<std::string>{}};
+    PeerBlackWhitelist m_peerWhitelist{
+        PeerBlackWhitelist::Type::Whitelist, std::set<std::string>{}};
 
     // FIB-184: session-cap accounting.
     std::size_t m_maxConcurrentSessions{DEFAULT_MAX_CONCURRENT_SESSIONS};

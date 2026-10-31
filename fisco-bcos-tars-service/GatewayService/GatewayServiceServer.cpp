@@ -9,10 +9,21 @@ bcostars::Error GatewayServiceServer::asyncNotifyGroupInfo(
     current->setResponse(false);
     auto bcosGroupInfo = toBcosGroupInfo(m_gatewayInitializer->chainNodeInfoFactory(),
         m_gatewayInitializer->groupInfoFactory(), groupInfo);
-    m_gatewayInitializer->gateway()->asyncNotifyGroupInfo(
-        bcosGroupInfo, [current](bcos::Error::Ptr&& _error) {
-            async_response_asyncNotifyGroupInfo(current, toTarsError(_error));
-        });
+    auto gateway = m_gatewayInitializer->gateway();
+    // try/catch guarantees the RPC is always answered even if the notify throws
+    // (current->setResponse(false) already disabled the automatic reply)
+    bcos::task::wait([](auto _gateway, auto _groupInfo, auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto error = co_await _gateway->notifyGroupInfo(std::move(_groupInfo));
+            async_response_asyncNotifyGroupInfo(_current, toTarsError(error));
+        }
+        catch (std::exception const& e)
+        {
+            async_response_asyncNotifyGroupInfo(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
+        }
+    }(gateway, std::move(bcosGroupInfo), current));
     return {};
 }
 
@@ -21,16 +32,29 @@ bcostars::Error GatewayServiceServer::asyncSendMessageByTopic(const std::string&
     tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_gatewayInitializer->gateway()->asyncSendMessageByTopic(_topic,
-        bcos::bytesConstRef((const bcos::byte*)_data.data(), _data.size()),
-        [current](bcos::Error::Ptr&& _error, int16_t _type, bcos::bytesConstRef _responseData) {
-            std::vector<tars::Char> response;
-            if (_responseData)
-            {
-                response.assign(_responseData.begin(), _responseData.end());
-            }
-            async_response_asyncSendMessageByTopic(current, toTarsError(_error), _type, response);
-        });
+    auto gateway = m_gatewayInitializer->gateway();
+    // copy the payload and pass all state as coroutine parameters so it stays alive for the whole
+    // (possibly deferred) send; try/catch guarantees the RPC is always answered even if the send
+    // throws (current->setResponse(false) already disabled the automatic reply)
+    auto requestData = std::make_shared<std::vector<tars::Char>>(_data);
+    bcos::task::wait([](auto _gateway, auto _topic, auto _requestData,
+                         auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto [error, type, responseData] = co_await _gateway->sendMessageByTopic(_topic,
+                bcos::bytesConstRef((const bcos::byte*)_requestData->data(), _requestData->size()));
+            std::vector<tars::Char> response(responseData.begin(), responseData.end());
+            async_response_asyncSendMessageByTopic(_current, toTarsError(error), type, response);
+        }
+        catch (std::exception const& e)
+        {
+            GATEWAYSERVICE_LOG(WARNING)
+                << LOG_DESC("asyncSendMessageByTopic send exception") << LOG_KV("topic", _topic)
+                << LOG_KV("what", boost::diagnostic_information(e));
+            async_response_asyncSendMessageByTopic(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))), 0, {});
+        }
+    }(gateway, _topic, requestData, current));
     return {};
 }
 
@@ -38,18 +62,35 @@ bcostars::Error GatewayServiceServer::asyncSubscribeTopic(
     const std::string& _clientID, const std::string& _topicInfo, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_gatewayInitializer->gateway()->asyncSubscribeTopic(
-        _clientID, _topicInfo, [current](bcos::Error::Ptr&& _error) {
-            async_response_asyncSubscribeTopic(current, toTarsError(_error));
-        });
+    auto gateway = m_gatewayInitializer->gateway();
+    // try/catch guarantees the RPC is always answered even if the subscribe throws
+    // (current->setResponse(false) already disabled the automatic reply)
+    bcos::task::wait([](auto _gateway, auto _clientID, auto _topicInfo,
+                         auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto error = co_await _gateway->subscribeTopic(_clientID, _topicInfo);
+            async_response_asyncSubscribeTopic(_current, toTarsError(error));
+        }
+        catch (std::exception const& e)
+        {
+            async_response_asyncSubscribeTopic(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
+        }
+    }(gateway, _clientID, _topicInfo, current));
     return {};
 }
 bcostars::Error GatewayServiceServer::asyncSendBroadcastMessageByTopic(
     const std::string& _topic, const std::vector<tars::Char>& _data, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_gatewayInitializer->gateway()->asyncSendBroadcastMessageByTopic(
-        _topic, bcos::bytesConstRef((const bcos::byte*)_data.data(), _data.size()));
+    auto gateway = m_gatewayInitializer->gateway();
+    // copy the payload into the coroutine frame so it stays alive until the send completes
+    auto requestData = std::make_shared<std::vector<tars::Char>>(_data);
+    bcos::task::wait([](auto _gateway, auto _topic, auto _requestData) -> bcos::task::Task<void> {
+        co_await _gateway->sendBroadcastMessageByTopic(_topic,
+            bcos::bytesConstRef((const bcos::byte*)_requestData->data(), _requestData->size()));
+    }(gateway, _topic, requestData));
     async_response_asyncSendBroadcastMessageByTopic(
         current, toTarsError<bcos::Error::Ptr>(nullptr));
     return {};
@@ -59,10 +100,22 @@ bcostars::Error GatewayServiceServer::asyncRemoveTopic(const std::string& _clien
     const std::vector<std::string>& _topicList, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_gatewayInitializer->gateway()->asyncRemoveTopic(
-        _clientID, _topicList, [current](bcos::Error::Ptr&& _error) {
-            async_response_asyncRemoveTopic(current, toTarsError(_error));
-        });
+    auto gateway = m_gatewayInitializer->gateway();
+    // try/catch guarantees the RPC is always answered even if the remove throws
+    // (current->setResponse(false) already disabled the automatic reply)
+    bcos::task::wait([](auto _gateway, auto _clientID, auto _topicList,
+                         auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto error = co_await _gateway->removeTopic(_clientID, _topicList);
+            async_response_asyncRemoveTopic(_current, toTarsError(error));
+        }
+        catch (std::exception const& e)
+        {
+            async_response_asyncRemoveTopic(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
+        }
+    }(gateway, _clientID, _topicList, current));
     return {};
 }
 bcostars::GatewayServiceServer::GatewayServiceServer(GatewayServiceParam const& _param)
@@ -92,25 +145,37 @@ bcostars::Error bcostars::GatewayServiceServer::asyncGetPeers(
 {
     GATEWAYSERVICE_LOG(DEBUG) << LOG_DESC("asyncGetPeers: request");
     current->setResponse(false);
-    m_gatewayInitializer->gateway()->asyncGetPeers(
-        [current](const bcos::Error::Ptr _error, bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
-            bcos::gateway::GatewayInfosPtr _peers) {
-            auto localtarsP2pInfo = toTarsGatewayInfo(_localP2pInfo);
+    auto gateway = m_gatewayInitializer->gateway();
+    bcos::task::wait([](auto _gateway, auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto [error, localP2pInfo, peers] = co_await _gateway->getPeers();
+            auto localtarsP2pInfo = toTarsGatewayInfo(localP2pInfo);
             std::vector<bcostars::GatewayInfo> peersInfo;
-            if (_peers)
+            if (peers)
             {
-                for (auto const& peer : *_peers)
+                for (auto const& peer : *peers)
                 {
                     peersInfo.emplace_back(toTarsGatewayInfo(peer));
                 }
             }
-            async_response_asyncGetPeers(current, toTarsError(_error), localtarsP2pInfo, peersInfo);
-        });
+            async_response_asyncGetPeers(_current, toTarsError(error), localtarsP2pInfo, peersInfo);
+        }
+        catch (std::exception const& e)
+        {
+            GATEWAYSERVICE_LOG(WARNING) << LOG_DESC("asyncGetPeers exception")
+                                        << LOG_KV("what", boost::diagnostic_information(e));
+            async_response_asyncGetPeers(_current,
+                toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))),
+                bcostars::GatewayInfo(), {});
+        }
+    }(gateway, current));
     return {};
 }
 bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeID(const std::string& groupID,
-    tars::Int32 moduleID, const std::vector<tars::Char>& srcNodeID, const std::vector<tars::Char>& dstNodeID,
-    const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current)
+    tars::Int32 moduleID, const std::vector<tars::Char>& srcNodeID,
+    const std::vector<tars::Char>& dstNodeID, const std::vector<tars::Char>& payload,
+    tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     auto keyFactory = m_gatewayInitializer->keyFactory();
@@ -124,28 +189,28 @@ bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeID(const s
     // through the async RPC response. try/catch guarantees the RPC is always answered even if the
     // send throws (current->setResponse(false) already disabled the automatic reply).
     auto payloadData = std::make_shared<std::vector<tars::Char>>(payload);
-    bcos::task::wait([](auto _gateway, auto _groupID, auto _moduleID, auto _srcNodeID,
-                         auto _dstNodeID, auto _payloadData,
-                         auto _current) -> bcos::task::Task<void> {
-        try
-        {
-            auto error = co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
-                _dstNodeID,
-                ::ranges::views::single(bcos::bytesConstRef(
-                    (const bcos::byte*)_payloadData->data(), _payloadData->size())));
-            async_response_asyncSendMessageByNodeID(_current, toTarsError(error));
-        }
-        catch (std::exception const& e)
-        {
-            GATEWAYSERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByNodeID send exception")
-                                        << LOG_KV("groupID", _groupID)
-                                        << LOG_KV("moduleID", _moduleID)
-                                        << LOG_KV("dst", _dstNodeID->hex())
-                                        << LOG_KV("what", boost::diagnostic_information(e));
-            async_response_asyncSendMessageByNodeID(
-                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
-        }
-    }(gateway, groupID, moduleID, bcosSrcNodeID, bcosDstNodeID, payloadData, current));
+    bcos::task::wait(
+        [](auto _gateway, auto _groupID, auto _moduleID, auto _srcNodeID, auto _dstNodeID,
+            auto _payloadData, auto _current) -> bcos::task::Task<void> {
+            try
+            {
+                auto error = co_await _gateway->sendMessageByNodeID(_groupID, _moduleID, _srcNodeID,
+                    _dstNodeID,
+                    ::ranges::views::single(bcos::bytesConstRef(
+                        (const bcos::byte*)_payloadData->data(), _payloadData->size())));
+                async_response_asyncSendMessageByNodeID(_current, toTarsError(error));
+            }
+            catch (std::exception const& e)
+            {
+                GATEWAYSERVICE_LOG(WARNING)
+                    << LOG_DESC("asyncSendMessageByNodeID send exception")
+                    << LOG_KV("groupID", _groupID) << LOG_KV("moduleID", _moduleID)
+                    << LOG_KV("dst", _dstNodeID->hex())
+                    << LOG_KV("what", boost::diagnostic_information(e));
+                async_response_asyncSendMessageByNodeID(
+                    _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
+            }
+        }(gateway, groupID, moduleID, bcosSrcNodeID, bcosDstNodeID, payloadData, current));
     return {};
 }
 bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeIDs(
@@ -198,21 +263,32 @@ bcostars::Error bcostars::GatewayServiceServer::asyncGetGroupNodeInfo(
     const std::string& groupID, GroupNodeInfo&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-
-    m_gatewayInitializer->gateway()->asyncGetGroupNodeInfo(groupID,
-        [current](bcos::Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _bcosGroupNodeInfo) {
+    auto gateway = m_gatewayInitializer->gateway();
+    bcos::task::wait([](auto _gateway, auto _groupID, auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto [error, bcosGroupNodeInfo] = co_await _gateway->getGroupNodeInfo(_groupID);
             // Note: the nodeIDs maybe null if no connections
-            if (!_bcosGroupNodeInfo || _bcosGroupNodeInfo->nodeIDList().empty())
+            if (!bcosGroupNodeInfo || bcosGroupNodeInfo->nodeIDList().empty())
             {
                 async_response_asyncGetGroupNodeInfo(
-                    current, toTarsError(_error), bcostars::GroupNodeInfo());
-                return;
+                    _current, toTarsError(error), bcostars::GroupNodeInfo());
+                co_return;
             }
-            auto groupInfoImpl = std::dynamic_pointer_cast<bcostars::protocol::GroupNodeInfoImpl>(
-                _bcosGroupNodeInfo);
+            auto groupInfoImpl =
+                std::dynamic_pointer_cast<bcostars::protocol::GroupNodeInfoImpl>(bcosGroupNodeInfo);
             async_response_asyncGetGroupNodeInfo(
-                current, toTarsError(_error), groupInfoImpl->inner());
-        });
-
+                _current, toTarsError(error), groupInfoImpl->inner());
+        }
+        catch (std::exception const& e)
+        {
+            GATEWAYSERVICE_LOG(WARNING)
+                << LOG_DESC("asyncGetGroupNodeInfo exception") << LOG_KV("groupID", _groupID)
+                << LOG_KV("what", boost::diagnostic_information(e));
+            async_response_asyncGetGroupNodeInfo(_current,
+                toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))),
+                bcostars::GroupNodeInfo());
+        }
+    }(gateway, groupID, current));
     return {};
 }

@@ -22,8 +22,6 @@
 #include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
 
-#ifdef WITH_SM2_OPTIMIZE
-
 namespace bcos
 {
 namespace crypto
@@ -37,5 +35,3 @@ public:
 };
 }  // namespace crypto
 }  // namespace bcos
-
-#endif

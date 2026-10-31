@@ -27,7 +27,7 @@
 #include <bcos-tars-protocol/client/PBFTServiceClient.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::crypto;
@@ -97,8 +97,7 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
     // AirNodeInitializer. In MAX/Tars nodes, the EngineService needs to be exposed as a
     // Tars servant before the RPC process can obtain a proxy to it (TODO: MAX wiring).
     auto nodeService = std::make_shared<NodeService>(ledgerClient.first, schedulerClient.first,
-        txpoolClient.first, consensusClient.first, syncClient.first, blockFactory,
-        m_engineService);
+        txpoolClient.first, consensusClient.first, syncClient.first, blockFactory, m_engineService);
 
     nodeService->setLedgerPrx(ledgerClient.second);
 
@@ -116,7 +115,8 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
     // uses, where it works) — warn prominently at startup.
     if (_nodeConfig->web3SafeBlockDepth() > 0 || _nodeConfig->web3FinalizedBlockDepth() > 0)
     {
-        BCOS_LOG(WARNING) << LOG_BADGE("NodeService") << LOG_DESC(
+        BCOS_LOG(WARNING) << LOG_BADGE("NodeService")
+                          << LOG_DESC(
                                  "safe/finalized blockTag depth configured but this node has "
                                  "no MPT node reader: safe/finalized state reads will fail "
                                  "with -32603 'MPT not enabled on this node'. The "

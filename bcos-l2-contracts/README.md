@@ -54,8 +54,9 @@ reserved for Phase B.
 
 The OP-Stack predeploys are NOT checked into this repo, and their genesis
 bytecode/storage does NOT come from a forge build either: the op-deployer
-terminal alloc JSON is the only genesis source for OP accounts (see
-`tools/opstack-genesis/`). The pinned upstream commit + the four external
+terminal alloc JSON is the only genesis source for OP accounts (see the
+harness's `tools/opstack-genesis/` in FISCO-BCOS/op-stack-e2e-tests, which CI
+checks out under `.ci-op-e2e-tests`). The pinned upstream commit + the four external
 Solidity dependency SHAs (OpenZeppelin × 2, solady, solmate) in
 `op-fork-pin.toml` serve source-level verification: CI clones the pinned
 commit into `/tmp` and builds it there with OP's own foundry config (this

@@ -3,8 +3,9 @@
 #   * [karst_pin] (end of file) — the FROZEN Karst-era artifact quintuple.
 #     This is the AUTHORITATIVE pin: the genesis pipeline consumes the
 #     op-deployer terminal allocs generated from it (no OP forge artifact
-#     feeds genesis), and tools/opstack-genesis/Makefile's op-fork targets
-#     clone the fork tree at [karst_pin].op_contracts_commit.
+#     feeds genesis), and the op-fork targets in the harness's
+#     tools/opstack-genesis/Makefile (FISCO-BCOS/op-stack-e2e-tests) clone the
+#     fork tree at [karst_pin].op_contracts_commit.
 #
 #   * the LEGACY compile-check pin directly below (op-contracts/v1.6.0,
 #     pre-Karst: Ecotone-only L1Block, no OperatorFeeVault). Its ONLY
@@ -25,7 +26,8 @@ date_pinned   = "2026-06-04"
 contracts_path = "packages/contracts-bedrock"
 
 # The runtime OP predeploy set is asserted by the expected_predeploys
-# checklist in tools/opstack-genesis/chain-config.template.yaml (existence +
+# checklist in the harness's tools/opstack-genesis/chain-config.template.yaml
+# (FISCO-BCOS/op-stack-e2e-tests; existence +
 # non-empty code against the op-deployer base allocs); the former source-path
 # enumeration of the fork tree lived here and is re-done whenever the fork
 # tree is next compiled at the Karst tag.

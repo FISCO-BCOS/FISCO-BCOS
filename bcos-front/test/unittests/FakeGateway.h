@@ -52,19 +52,23 @@ public:
      */
     void start() override {}
     void stop() override {}
-    void asyncGetPeers(std::function<void(
-            Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr)>) override
-    {}
+    task::Task<
+        std::tuple<Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr>>
+    getPeers() override
+    {
+        co_return std::make_tuple(Error::Ptr(nullptr), bcos::gateway::GatewayInfo::Ptr(nullptr),
+            bcos::gateway::GatewayInfosPtr(nullptr));
+    }
     /**
      * @brief: get nodeIDs from gateway
      * @param _groupID:
-     * @param _onGetGroupNodeInfo: get nodeIDs callback
-     * @return void
+     * @return {error, groupNodeInfo}: error is nullptr on success
      */
-    void asyncGetGroupNodeInfo(
-        const std::string& _groupID, GetGroupNodeInfoFunc _onGetGroupNodeInfo) override
+    task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo(
+        const std::string& _groupID) override
     {
-        boost::ignore_unused(_groupID, _onGetGroupNodeInfo);
+        boost::ignore_unused(_groupID);
+        co_return std::make_tuple(Error::Ptr(nullptr), bcos::gateway::GroupNodeInfo::Ptr(nullptr));
     }
 
     /**
@@ -84,21 +88,29 @@ public:
         const bcos::crypto::NodeID& srcNodeID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;
 
-    void asyncNotifyGroupInfo(
-        bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override
-    {}
+    task::Task<Error::Ptr> notifyGroupInfo(bcos::group::GroupInfo::Ptr) override
+    {
+        co_return nullptr;
+    }
 
-    void asyncSendMessageByTopic(const std::string&, bcos::bytesConstRef,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)>) override
-    {}
-    void asyncSendBroadcastMessageByTopic(const std::string&, bcos::bytesConstRef) override {}
+    task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
+        const std::string&, bcos::bytesConstRef) override
+    {
+        co_return std::make_tuple(Error::Ptr(nullptr), int16_t(0), bcos::bytes{});
+    }
+    task::Task<void> sendBroadcastMessageByTopic(const std::string&, bcos::bytesConstRef) override
+    {
+        co_return;
+    }
 
-    void asyncSubscribeTopic(
-        std::string const&, std::string const&, std::function<void(Error::Ptr&&)>) override
-    {}
-    void asyncRemoveTopic(std::string const&, std::vector<std::string> const&,
-        std::function<void(Error::Ptr&&)>) override
-    {}
+    task::Task<Error::Ptr> subscribeTopic(std::string const&, std::string const&) override
+    {
+        co_return nullptr;
+    }
+    task::Task<Error::Ptr> removeTopic(std::string const&, std::vector<std::string> const&) override
+    {
+        co_return nullptr;
+    }
 };
 
 }  // namespace bcos::front::test

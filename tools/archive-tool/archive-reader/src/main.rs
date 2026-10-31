@@ -15,7 +15,6 @@ use tide::prelude::*;
 use tide::Body;
 use tide::Request;
 use tide::Response;
-use tikv_client::TransactionOptions;
 use tokio::sync::Mutex;
 
 #[derive(StructOpt)]
@@ -24,15 +23,6 @@ struct Cli {
     #[structopt(parse(from_os_str))]
     #[structopt(short, long)]
     rocksdb_path: Option<std::path::PathBuf>,
-    /// pd address of TiKV cluster
-    #[structopt(
-        short,
-        long,
-        conflicts_with = "rocksdb-path",
-        required_unless = "rocksdb-path",
-        // default_value = "127.0.0.1:2379"
-    )]
-    pd_addrs: Option<String>,
     /// The IP and port to listen
     #[structopt(short, long, default_value = "127.0.0.1:8080")]
     ip_port: String,
@@ -40,7 +30,6 @@ struct Cli {
 
 enum Storage {
     RocksDB(rocksdb::DB),
-    TiKV(tikv_client::TransactionClient),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -81,7 +70,6 @@ async fn main() -> tide::Result<()> {
     let args = Cli::from_args();
     let storage;
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
-    // TODO: if use tikv use env log of slog
     if let Some(rocksdb_path) = args.rocksdb_path {
         if rocksdb_path.exists() {
             info!("rocksdb path: {:?}", rocksdb_path);
@@ -94,13 +82,8 @@ async fn main() -> tide::Result<()> {
         } else {
             panic!("rocksdb path not exists");
         }
-    } else if let Some(pd_addrs) = args.pd_addrs {
-        info!("pd_addrs: {:?}", pd_addrs);
-        let pd_endpoints = pd_addrs.split(",").map(|s| s.to_owned()).collect();
-        let client = tikv_client::TransactionClient::new(pd_endpoints).await?;
-        storage = Arc::new(Mutex::new(Storage::TiKV(client)));
     } else {
-        panic!("one of rocksdb path/pd_addrs must be set");
+        panic!("rocksdb path must be set");
     }
     info!("listen: {:?}", args.ip_port);
     let mut app = tide::with_state(storage);
@@ -207,21 +190,6 @@ async fn main() -> tide::Result<()> {
                     // debug!("values: {:?}", values);
                     result = zip(hex_keys, values)
                         .map(|(k, v)| (k.to_string(), v))
-                        .collect();
-                }
-                Storage::TiKV(_client) => {
-                    let client = _client.clone();
-                    let timestamp = client.current_timestamp().await?;
-                    let mut txn = client.snapshot(timestamp, TransactionOptions::new_optimistic());
-                    result = txn
-                        .batch_get(keys)
-                        .await?
-                        .map(|x| unsafe {
-                            let value = std::str::from_utf8_unchecked(x.value()).to_string();
-                            let key: Vec<u8> = x.key().clone().into();
-                            let key = prefix_hex::encode(key.strip_prefix(table).unwrap());
-                            (key, value)
-                        })
                         .collect();
                 }
             }

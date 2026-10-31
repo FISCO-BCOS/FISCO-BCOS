@@ -24,9 +24,11 @@
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfo.h>
 #include <bcos-framework/multigroup/GroupInfo.h>
+#include <bcos-framework/protocol/BlobSchedule.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-framework/storage2/AnyStorage.h>
@@ -34,16 +36,25 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
+#include <bcos-tx-validator/CheckSet.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <functional>
 #include <servant/Application.h>
+#include <functional>
 #include <utility>
 
 namespace bcos::txpool
 {
 class MemPoolImpl;
 }  // namespace bcos::txpool
+
+/// Forward-declared: this header only holds a shared_ptr to it (whose deleter is type-erased at
+/// construction) and the context enum above. Including the whole validator would pull the
+/// scheduler, ledger and nonce-checker headers into every translation unit that links rpc.
+namespace bcos::txvalidator
+{
+class TxValidator;
+}  // namespace bcos::txvalidator
 
 namespace bcos::rpc
 {
@@ -82,13 +93,45 @@ public:
         return m_engineService;
     }
 
-    /// Single-node consensus mode (config [consensus] enable_single_node_consensus): the
+    /// The DebugSelfProduce driver (config.ini [debug] enable) and the Engine driver: the
     /// in-process mempool that sendRawTransaction routes to instead of txpool. Owned by the
     /// Initializer, which outlives this NodeService, so a raw pointer is safe. Unset
     /// (nullptr) in normal mode and on tars-built nodes.
     void setMemPool(bcos::txpool::MemPoolImpl& _memPool) noexcept { m_memPool = &_memPool; }
     bool memPoolAvailable() const noexcept { return m_memPool != nullptr; }
     bcos::txpool::MemPoolImpl* memPool() const noexcept { return m_memPool; }
+
+    /// Admission for the mempool path, set by the same wiring that sets the mempool above. The
+    /// txpool path does not read it: a transaction going to the txpool is judged by the
+    /// validator that pool owns, through submitTransaction.
+    ///
+    /// @param context PoolAdmission, or EESTReplay when [executor] eest_replay_mode is on --
+    /// the context selects a column of the routing table and nothing else.
+    void setAdmissionValidator(std::shared_ptr<txvalidator::TxValidator> _validator,
+        txvalidator::AdmissionContext _context) noexcept
+    {
+        m_admissionValidator = std::move(_validator);
+        m_admissionContext = _context;
+    }
+    std::shared_ptr<txvalidator::TxValidator> const& admissionValidator() const noexcept
+    {
+        return m_admissionValidator;
+    }
+    txvalidator::AdmissionContext admissionContext() const noexcept { return m_admissionContext; }
+
+    /// EL-mode transaction gossip ([ethereum] tx_gossip): the announcement hook
+    /// eth_sendRawTransaction invokes AFTER a successful mempool admission, with the
+    /// transaction hash, its EIP-2718 type byte, the wire size and the exact wire
+    /// envelope (the EIP-4844 network wrapper for a blob transaction). Type-erased so
+    /// this header names no devp2p type; unset = no gossip wiring (OP / single-node /
+    /// tars builds), in which case the RPC entry skips the call.
+    using TxGossipAnnouncer =
+        std::function<void(crypto::HashType const&, uint8_t, uint64_t, bcos::bytes const&)>;
+    void setTxGossipAnnouncer(TxGossipAnnouncer announcer) noexcept
+    {
+        m_txGossipAnnouncer = std::move(announcer);
+    }
+    TxGossipAnnouncer const& txGossipAnnouncer() const noexcept { return m_txGossipAnnouncer; }
 
     /// Type-erased read handle over the MPT node storage for eth_getProof (M8.3): key = node
     /// hash, value = the node's raw RLP encoding, physically stored as ordinary state rows —
@@ -144,6 +187,47 @@ public:
     }
     protocol::BlockNumber finalizedBlockDepth() const noexcept { return m_finalizedBlockDepth; }
 
+    /// OP DA size caps, read by OpEngineService during payload assembly. The producer is the
+    /// miner_setMaxDASize RPC handler (MinerEndpoint), registered only for a listener whose
+    /// own enable_miner_api key ([engine_rpc] or [web3_rpc]) is set and wired here by
+    /// AirNodeInitializer::initNodeService — that key is the gate; the handler's
+    /// MethodNotFound on null daCaps() is just the Ethereum-only-node fallback.
+    void setDaCaps(std::shared_ptr<bcos::engine::DACaps> caps) noexcept
+    {
+        m_daCaps = std::move(caps);
+    }
+    std::shared_ptr<bcos::engine::DACaps> daCaps() const noexcept { return m_daCaps; }
+    /// MPT pruning retention window (storage.mpt_prune_window; pathdb spec §4.8), wired from
+    /// the node config so historical-state endpoints can distinguish "state root pruned on
+    /// schedule" from an unexpected node-storage miss. <= 0 (default): pruning disabled.
+    void setMPTPruneWindow(std::int64_t _window) noexcept { m_mptPruneWindow = _window; }
+    std::int64_t mptPruneWindow() const noexcept { return m_mptPruneWindow; }
+
+    /// A genesis executor.version=2 node (the Engine driver, or [debug] enable): blob
+    /// transactions arrive in their network wrapper and carry a sidecar (KZG-checked at the RPC
+    /// entry). Wired by AirNodeInitializer::initNodeService from the node config.
+    /// Blob ADMISSION keys on the executor version (see setExecutorVersion), not on this flag.
+    void setEthereumELMode(bool _enabled) noexcept { m_ethereumELMode = _enabled; }
+    bool ethereumELMode() const noexcept { return m_ethereumELMode; }
+
+    /// The chain's executor_version (SYS_CONFIG), resolved by the Initializer at boot and wired
+    /// by AirNodeInitializer. The RPC blob gate keys on it: executor_version==2 is the pure
+    /// Ethereum executor, which admits EIP-4844; 0 defaults to refusal.
+    void setExecutorVersion(int _version) noexcept { m_executorVersion = _version; }
+    int executorVersion() const noexcept { return m_executorVersion; }
+
+    /// The chain's EIP-7840 blob fork schedule (cancun/prague/bpo1/bpo2 activation times, in
+    /// seconds), wired by AirNodeInitializer from [fork_timestamps]. eth_blobBaseFee needs it to
+    /// pick the base-fee update fraction for the head block: the per-block schedule the block
+    /// verifier stamps into a LedgerConfig is not available on the RPC path, and a v2 genesis
+    /// records no evmc_revision row either, so this is the only schedule source the RPC has.
+    /// All entries default to "not scheduled", which yields no blob schedule (pre-Cancun).
+    void setBlobForkTimes(bcos::protocol::BlobForkTimes _forks) noexcept
+    {
+        m_blobForkTimes = _forks;
+    }
+    bcos::protocol::BlobForkTimes const& blobForkTimes() const noexcept { return m_blobForkTimes; }
+
     void setLedgerPrx(bcostars::LedgerServicePrx const& _ledgerPrx) { m_ledgerPrx = _ledgerPrx; }
 
     bool unreachable()
@@ -177,6 +261,25 @@ private:
 
     /// Raw pointer to the single-node-consensus mempool (see setMemPool for lifetime).
     bcos::txpool::MemPoolImpl* m_memPool = nullptr;
+
+    /// MPT pruning retention window; see setMPTPruneWindow.
+    std::int64_t m_mptPruneWindow = -1;
+    /// Ethereum L1 EL mode; see setEthereumELMode.
+    bool m_ethereumELMode = false;
+    /// The chain's executor_version; see setExecutorVersion. 0 = unknown / pre-Ethereum.
+    int m_executorVersion = 0;
+    bcos::protocol::BlobForkTimes m_blobForkTimes{};
+
+    /// Shared, unlike the mempool above: the validator is built for this path alone and nothing
+    /// else keeps it alive. Null until set, which is every mode that has no mempool.
+    std::shared_ptr<txvalidator::TxValidator> m_admissionValidator;
+    txvalidator::AdmissionContext m_admissionContext = txvalidator::AdmissionContext::PoolAdmission;
+
+    /// EL-mode tx-gossip announce hook; see setTxGossipAnnouncer. Empty when unwired.
+    TxGossipAnnouncer m_txGossipAnnouncer;
+
+    /// Shared OP DA caps (see setDaCaps); nullptr on Ethereum-only nodes.
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
 
     bcostars::LedgerServicePrx m_ledgerPrx;
 };

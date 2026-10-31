@@ -60,7 +60,7 @@ public:
     // the height and serves the latest state — byte-for-byte the pre-existing behaviour of
     // every implementation with no historical state to offer (tars SchedulerService, fakes),
     // which is why this is a defaulted method and not a pure one (same pattern as
-    // FrontInterface::asyncBroadcastMessageByOwnedPayload). BaselineScheduler overrides it
+    // FrontInterface::broadcastMessageByOwnedPayload). BaselineScheduler overrides it
     // with a real execution against the MPT state committed at that block. A distinct name
     // rather than a call() overload: -Woverloaded-virtual (in -Wall, promoted by -Werror)
     // would otherwise fire in every subclass that overrides only the latest-state call().
@@ -71,6 +71,15 @@ public:
         call(std::move(tx), std::move(callback));
     }
 
+    // Adopt a verify=false probe as the pending block without re-executing.
+    // Default re-runs executeBlock(verify=true); OpScheduler overrides this.
+    virtual void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
+            callback)
+    {
+        executeBlock(std::move(block), true, std::move(callback));
+    }
+
     // clear all status
     virtual void reset(std::function<void(Error::Ptr)> callback) = 0;
     virtual void getCode(
@@ -79,6 +88,11 @@ public:
     virtual void getABI(
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) = 0;
 
+    // One key from the uncommitted pending plane (sealed, not yet commitBlock'd).
+    // `number` is the ledger-config / feature-flag height for implementations that
+    // need one (BaselineScheduler). The pending rows themselves have no historical
+    // block context: OpScheduler discards `number` and reads the committed tip's
+    // flags. EthEndpoint currently passes 0.
     virtual task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
         std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) = 0;
 

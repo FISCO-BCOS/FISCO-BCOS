@@ -6,6 +6,7 @@
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <servant/Application.h>
+#include <boost/property_tree/ini_parser.hpp>
 
 using namespace bcostars;
 

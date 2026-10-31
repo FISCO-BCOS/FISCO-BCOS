@@ -6,8 +6,7 @@
 ///
 /// Golden values are the canonical Ethereum vectors: keccak256(""), the
 /// Yellow-Paper CREATE example, the EIP-1014 CREATE2 examples, the EIP-4844
-/// blob-gas vector, and the EIP-7702 authority-recovery vector shared with
-/// bcos-evm/test/opstack/Op7702Test.cpp.
+/// blob-gas vector, and the EIP-7702 authority-recovery golden vector.
 ///
 /// Checks are NDEBUG-independent (CHECK exits non-zero on failure): CI builds
 /// with Release/-DNDEBUG, which would compile out assert() and leave the
@@ -15,10 +14,13 @@
 /// ctest actually runs it.
 
 #include "ethereum-executor/EVMSupport.h"
+#include "ethereum-executor/EthExecutionPolicy.h"
 #include "ethereum-executor/EthereumHost.h"
 #include "ethereum-executor/EthereumState.h"
 #include "ethereum-executor/tests/TestMemoryStorage.h"
 
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "bcos-task/TBBWait.h"
 #include <cstdint>
 #include <cstdlib>
@@ -31,7 +33,9 @@
 // error. An explicit instantiation pulls every evmc::Host override into the
 // vtable plus the private non-virtuals (create / prepare_message / call), and
 // is cheaper than constructing an object (which needs an evmc::VM and a
-// protocol::Transaction).
+// protocol::Transaction). The default Policy argument makes this
+// EthereumHost<MutableStorage, EthL1Policy>, so every EthL1Policy hook call
+// site in the host is instantiated too.
 template class bcos::executor_v1::eth::EthereumHost<bcos::executor_v1::MutableStorage>;
 
 namespace
@@ -174,7 +178,7 @@ void testBlobGasPrice()
 
 void testRecoverAuthority()
 {
-    // EIP-7702 golden vector (bcos-evm/test/opstack/Op7702Test.cpp):
+    // EIP-7702 golden vector:
     // private key 0x59c6995e..., chain_id = 1, delegation = 0x00..cc, nonce = 0
     //   -> authority 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
     bcos::protocol::Authorization auth;
@@ -205,6 +209,29 @@ void testRecoverAuthorityRejectsBadSignature()
     CHECK(!eth_evm::recoverAuthority(auth).has_value());
 }
 
+void testL1PolicyPrecompileDispatch()
+{
+    // The default policy must forward precompile dispatch to the shared
+    // EVMPrecompiles table unchanged: 0x01 is a precompile everywhere, 0x0a
+    // (point_evaluation) only from Cancun, 0x0b (BLS12_G1ADD) only from Prague.
+    using eth::EthL1Policy;
+    CHECK(EthL1Policy::isPrecompile(
+        EVMC_CANCUN, addressFromHex("0x0000000000000000000000000000000000000001")));
+    CHECK(!EthL1Policy::isPrecompile(
+        EVMC_SHANGHAI, addressFromHex("0x000000000000000000000000000000000000000a")));
+    CHECK(EthL1Policy::isPrecompile(
+        EVMC_CANCUN, addressFromHex("0x000000000000000000000000000000000000000a")));
+    CHECK(!EthL1Policy::isPrecompile(
+        EVMC_CANCUN, addressFromHex("0x000000000000000000000000000000000000000b")));
+    CHECK(EthL1Policy::isPrecompile(
+        EVMC_PRAGUE, addressFromHex("0x000000000000000000000000000000000000000b")));
+    // The warm-account check and the dispatch check are the same predicate.
+    CHECK(EthL1Policy::isPrecompile(
+              EVMC_CANCUN, addressFromHex("0x0000000000000000000000000000000000000001")) ==
+          eth_evm::is_precompile(
+              EVMC_CANCUN, addressFromHex("0x0000000000000000000000000000000000000001")));
+}
+
 void testEthereumStateInstantiation()
 {
     // Compile/instantiation smoke: EthereumState over the in-memory storage.
@@ -231,6 +258,117 @@ void testEthereumStateInstantiation()
     CHECK(state.find(addr) != nullptr);
 }
 
+void testHasStorageIgnoresTombstones()
+{
+    // Regression for the Sepolia block-4913057 divergence: after a selfdestruct
+    // cleanup the account's storage rows stay in the storage layer as
+    // logically-deleted tombstones, and a later same-block transfer revives the
+    // address as an empty prefunded account. has_initial_storage must then be
+    // false — a tombstone row is not initial storage, or the re-CREATE is
+    // misjudged as an EIP-7610 collision.
+    //
+    // The tombstone scenario needs logical deletion: the plain
+    // executor_v1::MutableStorage is ORDERED-only and removes rows physically,
+    // while the production multi-layer view uses LOGICAL_DELETION storages.
+    using TombstoneStorage =
+        bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+            bcos::executor_v1::StateValue,
+            bcos::storage2::memory_storage::Attribute(
+                bcos::storage2::memory_storage::ORDERED |
+                bcos::storage2::memory_storage::LOGICAL_DELETION)>;
+    TombstoneStorage storage;
+    const auto addr = addressFromHex("0x2000000000000000000000000000000000000000");
+    const auto slotKey =
+        bytes32FromHex("0x0000000000000000000000000000000000000000000000000000000000000001");
+    const auto slotValue =
+        bytes32FromHex("0x00000000000000000000000000000000000000000000000000000000000000ff");
+
+    // Lifecycle 1: a live contract with one storage slot.
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto& acc = state.insert(addr);
+        acc.nonce = 1;
+        acc.balance = 1;
+        state.get_storage(addr, slotKey).current = slotValue;
+        bcos::task::tbb::syncWait(state.applyToStorage(EVMC_SHANGHAI));
+    }
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto* acc = state.find(addr);
+        CHECK(acc != nullptr);
+        CHECK(acc->has_initial_storage);
+    }
+
+    // Lifecycle 2: selfdestruct — applyToStorage clears every account row,
+    // leaving logically-deleted tombstones in the storage layer.
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto& acc = *state.find(addr);
+        state.journal_destruct(addr);
+        acc.destructed = true;
+        bcos::task::tbb::syncWait(state.applyToStorage(EVMC_SHANGHAI));
+    }
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        CHECK(state.find(addr) == nullptr);
+    }
+
+    // Lifecycle 3: the address is revived as an empty prefunded account (a
+    // plain transfer writes back the core rows; the slot row stays a
+    // tombstone), as happened to the metamorphic contract before its
+    // same-block re-creation.
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto& acc = state.get_or_insert(addr);
+        acc.balance = 1000;
+        bcos::task::tbb::syncWait(state.applyToStorage(EVMC_SHANGHAI));
+    }
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto* acc = state.find(addr);
+        CHECK(acc != nullptr);
+        CHECK(!acc->has_initial_storage);
+    }
+}
+
+void testEthereumStateBinaryMode()
+{
+    // The Eth lane's account-table naming is mode-aware: with the node in the binary
+    // address-table layout the same logical account physically lives in "/s/<20 raw bytes>"
+    // (applyToStorage's write path and the cold-read path must agree on it).
+    const bcos::test::ScopedNodeAddressTableMode guard(
+        bcos::ledger::account::AddressTableMode::Binary);
+    bcos::executor_v1::MutableStorage storage;
+    const auto addr = addressFromHex("0x12000000000000000000000000000000000000ff");
+
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto& acc = state.insert(addr);
+        acc.nonce = 1;
+        acc.balance = 42;
+        bcos::task::tbb::syncWait(state.applyToStorage(EVMC_SHANGHAI));
+    }
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        const auto* acc = state.find(addr);
+        CHECK(acc != nullptr);
+        CHECK(acc->nonce == 1);
+        CHECK(acc->balance == 42);
+    }
+
+    // Physical layout: rows under "/s/<20 raw bytes>", none under "/apps/<40hex>".
+    std::string binName{"/s/"};
+    binName.append(reinterpret_cast<const char*>(addr.bytes), sizeof(addr.bytes));
+    auto binRow = bcos::task::tbb::syncWait(bcos::storage2::readOne(
+        storage, bcos::executor_v1::StateKey{
+                     binName, std::string{bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE}}));
+    CHECK(binRow.has_value());
+    auto hexRow = bcos::task::tbb::syncWait(bcos::storage2::readOne(storage,
+        bcos::executor_v1::StateKey{std::string{"/apps/12000000000000000000000000000000000000ff"},
+            std::string{bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE}}));
+    CHECK(!hexRow.has_value());
+}
+
 }  // namespace
 
 int main()
@@ -242,7 +380,10 @@ int main()
     testBlobGasPrice();
     testRecoverAuthority();
     testRecoverAuthorityRejectsBadSignature();
+    testL1PolicyPrecompileDispatch();
     testEthereumStateInstantiation();
+    testHasStorageIgnoresTombstones();
+    testEthereumStateBinaryMode();
 
     if (g_failures > 0)
     {

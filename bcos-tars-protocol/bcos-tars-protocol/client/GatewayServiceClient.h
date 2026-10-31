@@ -23,9 +23,10 @@
 #include "bcos-tars-protocol/tars/GatewayService.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <range/v3/view/any_view.hpp>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
 
 #define GATEWAYCLIENT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[GATEWAYCLIENT][INITIALIZER]"
 #define GATEWAYCLIENT_BADGE "[GATEWAYCLIENT]"
@@ -41,9 +42,9 @@ public:
 
     void setKeyFactory(bcos::crypto::KeyFactory::Ptr keyFactory);
 
-    void asyncGetPeers(std::function<void(
-            bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr)>
-            _callback) override;
+    bcos::task::Task<std::tuple<bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr,
+        bcos::gateway::GatewayInfosPtr>>
+    getPeers() override;
 
     // (coroutine) send message to a single node by awaiting the gateway-service RPC
     bcos::task::Task<bcos::Error::Ptr> sendMessageByNodeID(const std::string& _groupID,
@@ -54,23 +55,23 @@ public:
         const bcos::crypto::NodeID& srcNodeID,
         ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads) override;
 
-    void asyncGetGroupNodeInfo(const std::string& _groupID,
-        bcos::gateway::GetGroupNodeInfoFunc _onGetGroupNodeInfo) override;
+    bcos::task::Task<std::tuple<bcos::Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>>
+    getGroupNodeInfo(const std::string& _groupID) override;
 
-    void asyncNotifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo,
-        std::function<void(bcos::Error::Ptr&&)> _callback) override;
+    bcos::task::Task<bcos::Error::Ptr> notifyGroupInfo(
+        bcos::group::GroupInfo::Ptr _groupInfo) override;
 
-    void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesConstRef)> _respFunc) override;
-
-    void asyncSendBroadcastMessageByTopic(
+    bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override;
 
-    void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
-        std::function<void(bcos::Error::Ptr&&)> _callback) override;
+    bcos::task::Task<void> sendBroadcastMessageByTopic(
+        const std::string& _topic, bcos::bytesConstRef _data) override;
 
-    void asyncRemoveTopic(std::string const& _clientID, std::vector<std::string> const& _topicList,
-        std::function<void(bcos::Error::Ptr&&)> _callback) override;
+    bcos::task::Task<bcos::Error::Ptr> subscribeTopic(
+        std::string const& _clientID, std::string const& _topicInfo) override;
+
+    bcos::task::Task<bcos::Error::Ptr> removeTopic(
+        std::string const& _clientID, std::vector<std::string> const& _topicList) override;
 
     bcostars::GatewayServicePrx prx();
 
@@ -82,7 +83,7 @@ protected:
 private:
     bcostars::GatewayServicePrx m_prx;
     std::string m_gatewayServiceName;
-    // Note: only useful for asyncGetGroupNodeInfo
+    // Note: only useful for getGroupNodeInfo
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     std::string const c_moduleName = "GatewayServiceClient";
     // AMOP timeout 40s

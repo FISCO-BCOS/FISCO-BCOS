@@ -30,10 +30,7 @@ compile_service("NodeService/pro" ${PRO_NODE_SERVICE_BINARY_NAME})
 set(MAX_NODE_SERVICE_BINARY_NAME BcosMaxNodeService)
 compile_service("NodeService/max" ${MAX_NODE_SERVICE_BINARY_NAME})
 
-if(WITH_TIKV)
-    # ExecutorService
-    set(EXECUTOR_BINARY_NAME BcosExecutorService)
-    compile_service("ExecutorService/main" ${EXECUTOR_BINARY_NAME})
-endif()
+# ExecutorService (TiKV-based, deprecated) has been archived to
+# legacy/ExecutorService and is no longer built.
 
 add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})

@@ -1,0 +1,234 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file Client.cpp
+ * @brief RLPx client/server implementation: handshake + Hello + eth Status.
+ * @date 2026/8/18
+ */
+#include "Client.h"
+
+#include "../eth/Protocol.h"
+#include "Framing.h"
+#include "Messages.h"
+#include <bcos-codec/rlp/Result.h>
+#include <bcos-utilities/LogStream.h>
+#include <cctype>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+
+namespace bcos::devp2p::rlpx
+{
+namespace
+{
+// Build the framing cipher from the handshake keys and wrap a session.
+Session makeSession(Socket&& _socket, AuthKeys const& _keys, bool _isInitiator)
+{
+    FramingCipher::KeyMaterial keyMaterial;
+    keyMaterial.ephemeralSharedSecret = EciesCipher::computeSharedSecret(
+        bytesConstRef(_keys.peerEphemeralPublicKey.data(), _keys.peerEphemeralPublicKey.size()),
+        bytesConstRef(_keys.ephemeralPrivateKey.data(), _keys.ephemeralPrivateKey.size()));
+    keyMaterial.isInitiator = _isInitiator;
+    keyMaterial.initiatorNonce = _keys.initiatorNonce;
+    keyMaterial.recipientNonce = _keys.recipientNonce;
+    keyMaterial.initiatorFirstMessageData = _keys.initiatorFirstMessageData;
+    keyMaterial.recipientFirstMessageData = _keys.recipientFirstMessageData;
+    return Session(std::move(_socket), FramingCipher(keyMaterial));
+}
+
+// Unwraps an RlpResult at the handshake boundary (once per connection, so the
+// exception style is kept here).
+using bcos::codec::rlp::unwrapOrThrow;
+
+// Formats the peer's Disconnect reason for a log/exception message.
+std::string disconnectReason(bytesConstRef _data)
+{
+    auto disc = decodeDisconnect(_data);
+    if (disc)
+    {
+        return "reason=" + std::to_string(static_cast<int>(disc->reason));
+    }
+    return "reason undecodable: " + disc.error().message;
+}
+
+// Shared Hello/Status exchange once the encrypted session exists.
+EstablishedSession exchangeHandshake(
+    Session&& _session, EccKeyPair const& _keyPair, PeerConfig const& _config)
+{
+    auto session = std::move(_session);
+
+    // --- Hello exchange ---
+    HelloMessage hello;
+    hello.version = 5;
+    hello.clientId = _config.clientId;
+    for (auto const& cap : eth::ethCapabilities())
+    {
+        hello.capabilities.push_back(cap);
+    }
+    hello.listenPort = _config.listenPort;
+    hello.id = _keyPair.publicKey();
+
+    session.sendMessage(Message{baseMsg::Hello, encodeHello(hello)});
+    auto helloMsg = unwrapOrThrow(
+        session.recvMessage(), "exchangeHandshake: failed to decode the Hello frame: ");
+    if (helloMsg.id != baseMsg::Hello)
+    {
+        if (helloMsg.id == baseMsg::Disconnect)
+        {
+            throw std::runtime_error(
+                "exchangeHandshake: peer disconnected during Hello: " +
+                disconnectReason(bytesConstRef(helloMsg.data.data(), helloMsg.data.size())));
+        }
+        throw std::runtime_error(
+            "exchangeHandshake: expected Hello, got message id=" + std::to_string(helloMsg.id));
+    }
+    auto peerHello =
+        unwrapOrThrow(decodeHello(bytesConstRef(helloMsg.data.data(), helloMsg.data.size())),
+            "exchangeHandshake: failed to decode the Hello message: ");
+    // Negotiate the highest eth version the peer supports from {68, 69}.
+    uint8_t negotiatedEth = 0;
+    for (auto const& cap : peerHello.capabilities)
+    {
+        if (cap.name == "eth" && (cap.version == 68 || cap.version == 69))
+        {
+            negotiatedEth = std::max(negotiatedEth, cap.version);
+        }
+    }
+    if (negotiatedEth == 0)
+    {
+        throw std::runtime_error("exchangeHandshake: no common eth capability with peer");
+    }
+    // Diagnostics: the negotiated capability layout determines every eth frame id.
+    {
+        std::string peerCaps;
+        for (auto const& cap : peerHello.capabilities)
+        {
+            peerCaps += " " + cap.name + "/" + std::to_string(cap.version);
+        }
+        std::string ourCaps;
+        for (auto const& cap : hello.capabilities)
+        {
+            ourCaps += " " + cap.name + "/" + std::to_string(cap.version);
+        }
+        BCOS_LOG(INFO) << LOG_BADGE("handshake") << LOG_KV("peerClient", peerHello.clientId)
+                       << LOG_KV("peerCaps", peerCaps) << LOG_KV("ourCaps", ourCaps)
+                       << LOG_KV("eth", static_cast<int>(negotiatedEth));
+    }
+
+    // Both peers send Hello with version >= 5 → enable snappy on the session.
+    // Raw snappy is varint-prefixed + block, wire-identical across geth/erigon/
+    // reth/ethrex (Go snappy.Decode and Rust snap::raw are the same format).
+    session.enableCompression();
+
+    // --- eth Status exchange ---
+    eth::StatusMessage status;
+    status.protocolVersion = negotiatedEth;
+    status.networkId = _config.networkId;
+    status.genesisHash = _config.genesisHash;
+    status.forkId = _config.forkId;
+    if (negotiatedEth >= 69)
+    {
+        // EIP-7642: advertise our (genesis-only) block range.
+        status.eip7642 = true;
+        status.earliestBlock = 0;
+        status.latestBlock = 0;
+        status.latestBlockHash = _config.genesisHash;
+    }
+    else
+    {
+        status.headHash = _config.headHash;
+        status.totalDifficulty = _config.totalDifficulty;
+    }
+
+    session.sendMessage(
+        Message{static_cast<uint8_t>(eth::frameId(eth::msg::Status)), encodeStatus(status)});
+
+    auto statusMsg = unwrapOrThrow(
+        session.recvMessage(), "exchangeHandshake: failed to decode the eth Status frame: ");
+    if (statusMsg.id != eth::frameId(eth::msg::Status))
+    {
+        if (statusMsg.id == baseMsg::Disconnect)
+        {
+            BCOS_LOG(INFO) << LOG_BADGE("handshake") << "peer disconnected during Status"
+                           << LOG_KV("peerClient", peerHello.clientId)
+                           << disconnectReason(
+                                  bytesConstRef(statusMsg.data.data(), statusMsg.data.size()));
+        }
+        throw std::runtime_error("exchangeHandshake: expected eth Status, got message id=" +
+                                 std::to_string(statusMsg.id));
+    }
+    // The Status layout is selected from the version negotiated in Hello (never
+    // from the peer-supplied field), and the embedded version must match it.
+    auto peerStatus =
+        unwrapOrThrow(eth::decodeStatus(bytesConstRef(statusMsg.data.data(), statusMsg.data.size()),
+                          negotiatedEth),
+            "exchangeHandshake: failed to decode the eth Status message: ");
+
+    // The peer must be on our network (spec: disconnect on network-ID mismatch).
+    if (peerStatus.networkId != _config.networkId)
+    {
+        throw std::runtime_error(
+            "exchangeHandshake: peer network id mismatch: " + std::to_string(peerStatus.networkId) +
+            " != " + std::to_string(_config.networkId));
+    }
+
+    // Verify the peer is on our chain — only when the local config actually
+    // pins a genesis hash (the server side accepts whatever the client sends).
+    if (_config.genesisHash != bcos::h256{} && peerStatus.genesisHash != _config.genesisHash)
+    {
+        throw std::runtime_error("exchangeHandshake: peer genesis hash mismatch (different chain)");
+    }
+    return EstablishedSession(std::move(session), std::move(peerHello), std::move(peerStatus));
+}
+}  // namespace
+
+RlpxClient::RlpxClient(EccKeyPair _keyPair, PeerConfig _config)
+  : m_keyPair(std::move(_keyPair)), m_config(std::move(_config))
+{}
+
+EstablishedSession RlpxClient::connect()
+{
+    Socket socket;
+    socket.connect(m_config.host, m_config.port);
+
+    Handshake handshake(m_keyPair, /* isInitiator = */ true,
+        bytesConstRef(m_config.peerPublicKey.data(), m_config.peerPublicKey.size()));
+    auto authKeys = handshake.execute(socket);
+
+    auto session = makeSession(std::move(socket), authKeys, /* isInitiator = */ true);
+    return exchangeHandshake(std::move(session), m_keyPair, m_config);
+}
+
+RlpxServer::RlpxServer(EccKeyPair _keyPair, uint16_t _port, PeerConfig _config)
+  : m_keyPair(std::move(_keyPair)), m_config(std::move(_config)), m_listener(_port)
+{}
+
+EstablishedSession RlpxServer::accept()
+{
+    auto socket = m_listener.accept();
+
+    Handshake handshake(m_keyPair, /* isInitiator = */ false);
+    auto authKeys = handshake.execute(socket);
+
+    auto session = makeSession(std::move(socket), authKeys, /* isInitiator = */ false);
+
+    if (m_config.clientId.empty())
+    {
+        m_config.clientId = "FISCO-BCOS-devp2p-server/v0.1.0";
+    }
+    return exchangeHandshake(std::move(session), m_keyPair, m_config);
+}
+
+}  // namespace bcos::devp2p::rlpx

@@ -26,8 +26,10 @@ set(SOURCES unittests/storage2/TestMemoryStorage.cpp
     unittests/interfaces/FeaturesActivationBlockTest.cpp
     unittests/interfaces/FeaturesTest.cpp
     unittests/interfaces/TestTransactionExecutor.cpp
+    unittests/interfaces/OpForkScheduleTest.cpp
     unittests/mempool/TestAnyMemPool.cpp
-    unittests/engine/TestAnyEngineService.cpp)
+    unittests/engine/TestAnyEngineService.cpp
+    unittests/engine/TestDACaps.cpp)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 
@@ -35,6 +37,5 @@ find_package(Boost REQUIRED serialization unit_test_framework)
 find_package(FakeIt CONFIG REQUIRED)
 target_link_libraries(${TEST_BINARY_NAME} PUBLIC bcos-utilities bcos-framework FakeIt::FakeIt-boost Boost::serialization Boost::unit_test_framework)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 # add_test(NAME test-framework WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" "")

@@ -17,13 +17,18 @@ target_include_directories(storage PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-storage>)
 target_link_libraries(storage PUBLIC ${LIB_LIST})
-set_source_files_properties(
-  "bcos-storage/CheckpointRocksDBStorage.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(storage PROPERTIES UNITY_BUILD "ON")
 
 if (APPLE)
   target_link_libraries(storage PUBLIC "-framework SystemConfiguration")
 endif()
+
+include(GNUInstallDirs)
+# Headers only (the target itself stays out of the export set: RocksDB/zstd must not enter
+# fiscobcosTargets). KeyPrefixes.h is header-only and is included by the installed
+# bcos-transaction-scheduler/MPTNodeStorage.h, which the installed bcos-engine headers reach.
+# DESTINATION is the include root like every other module: include/bcos-storage/*.h.
+install(DIRECTORY "bcos-storage" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    FILES_MATCHING PATTERN "*.h")
 
 if(TESTS)
   enable_testing()

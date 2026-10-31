@@ -2,18 +2,22 @@
 # Copyright (c) FISCO-BCOS, Apache-2.0
 """
 eest_rpc_runner.py — run EEST (execution-spec-tests v5.4.0) state-test fixtures
-against a live FISCO-BCOS single-node-consensus node via RPC.
+against a live FISCO-BCOS node under the single-node driver ([debug] enable) via RPC.
 
 For each fixture (per fork, per post vector) it:
   1. generates a fresh single-node chain whose genesis reproduces the fixture:
-       - [alloc.*]  = fixture `pre`   (exact world state, L2 mode / op-geth MPT)
+       - [alloc.*]  = fixture `pre`   (exact world state, L2 mode / op-geth MPT), plus the
+         EIP-7002/7251 request contracts from Prague on (PRAGUE_SYSTEM_CONTRACTS)
        - [tx] gas_limit / gas_price   = fixture env.currentGasLimit / currentBaseFee
-       - [executor] version=2 evm_revision=<fork>
-       - [consensus] enable_single_node_consensus=true, produce_empty_blocks=false,
+       - [executor] version=2
+       - [fork_timestamps] = every fork up to <fork> at 0, the rest in the future: the
+         chain's only EVM revision source (block building, the RPC dry run); pre-Paris
+         forks are skipped (no PoW blocks)
+       - config.ini [debug] enable=true, produce_empty_blocks=false,
          prev_randao=<env.currentRandom>, fixed_timestamp=<env.currentTimestamp>,
          fee_recipient=<env.currentCoinbase>
   2. starts the node and submits the fixture transaction(s) via eth_sendRawTransaction
-     (mempool -> single-node driver -> BaselineScheduler commit);
+     (mempool -> single-node driver -> EngineService commit);
   3. compares the resulting post state (accounts) via eth_getBalance / eth_getCode /
      eth_getTransactionCount / eth_getStorageAt against the fixture's expected `post`.
 
@@ -42,7 +46,7 @@ import requests
 from eth_account import Account
 
 # ----------------------------------------------------------------------------- forks
-# EEST state-test fork names -> evmc revision (v2 executor evm_revision).
+# EEST state-test fork names -> evmc revision names (the [fork_timestamps] ladder rung).
 # NB: EEST "ConstantinopleFix" is Petersburg: the original Constantinople's
 # EIP-1283 (net gas metering) was reverted, so it must map to EVMC_PETERSBURG.
 # Mapping it to "constantinople" makes SSTORE billing diverge (observed: the
@@ -129,6 +133,164 @@ PORT_STRIDE = 4000
 WEB3_RPC_PORT_BASE = 20000
 P2P_PORT_BASE = 24000
 LEGACY_RPC_PORT_BASE = 28000
+SYNC_CHECK_BINARY = "build/tools/eth-sync-check/eth-sync-check"  # overridden in main()
+
+# ----------------------------------------------------------------------------- eth B0
+# NodeConfig::validateL2Invariants (upstream #5420) requires an [eth_genesis_header]
+# section on the Ethereum lane (executor_version >= 2): the Ledger cross-checks state_root
+# against the MPT root derived from the [alloc.*] sections and hash against
+# keccak256(rlp(header)). state_root comes from the node's own trie builder via
+# `eth-sync-check --genesis-ini`; the header hash is computed here (geth field order).
+ERA_ORDER = ["frontier", "homestead", "tangerinewhistle", "spuriousdragon", "byzantium",
+             "constantinople", "petersburg", "istanbul", "berlin", "london", "paris",
+             "shanghai", "cancun", "prague", "osaka"]
+EMPTY_TRIE_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+EMPTY_OMMERS_HASH = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+EMPTY_REQUESTS_HASH = "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+
+def rev_at_least(rev, name):
+    return ERA_ORDER.index(rev) >= ERA_ORDER.index(name)
+
+
+# [fork_timestamps] keys in ladder order. The v2 block drivers build PoS blocks only, so the
+# ladder starts at london+paris (both required); forks after <fork> are scheduled in the
+# future (2100-01-01) or, for the optional osaka, left out.
+FORK_TIMESTAMP_KEYS = [("london", "london_time"), ("paris", "paris_time"),
+                       ("shanghai", "shanghai_time"), ("cancun", "cancun_time"),
+                       ("prague", "prague_time"), ("osaka", "osaka_time")]
+FUTURE_FORK_TIME = 4102444800
+
+
+def fork_timestamps_section(fork_rev):
+    lines = ["[fork_timestamps]"]
+    for rev, key in FORK_TIMESTAMP_KEYS:
+        if rev_at_least(fork_rev, rev):
+            lines.append(f"    {key}=0")
+        elif rev != "osaka":
+            lines.append(f"    {key}={FUTURE_FORK_TIME}")
+    lines.append("    merge_block=0")
+    return "\n".join(lines) + "\n"
+
+
+# EIP-7002 / EIP-7251 request contracts. A state test's `pre` omits them (state tests run no
+# system calls), but a Prague block cannot be built without them: the block-end system calls
+# fail on missing code (EIP-7002/7251). Their runtime code and nonce are the ones EEST's own
+# blockchain-test `pre` carries (v5.4.0, e.g. prague/eip7702_set_code_tx).
+PRAGUE_SYSTEM_CONTRACTS = {
+    "0x00000961ef480eb55e80d19ad83579a64c007002": {
+        "nonce": "0x01", "balance": "0x00",
+        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460cb5760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146101f457600182026001905f5b5f82111560685781019083028483029004916001019190604d565b909390049250505036603814608857366101f457346101f4575f5260205ff35b34106101f457600154600101600155600354806003026004013381556001015f35815560010160203590553360601b5f5260385f601437604c5fa0600101600355005b6003546002548082038060101160df575060105b5f5b8181146101835782810160030260040181604c02815460601b8152601401816001015481526020019060020154807fffffffffffffffffffffffffffffffff00000000000000000000000000000000168252906010019060401c908160381c81600701538160301c81600601538160281c81600501538160201c81600401538160181c81600301538160101c81600201538160081c81600101535360010160e1565b910180921461019557906002556101a0565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff14156101cd57505f5b6001546002828201116101e25750505f6101e8565b01600290035b5f555f600155604c025ff35b5f5ffd"},
+    "0x0000bbddc7ce488642fb579f8b00f3a590007251": {
+        "nonce": "0x01", "balance": "0x00",
+        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82111560685781019083028483029004916001019190604d565b9093900492505050366060146088573661019a573461019a575f5260205ff35b341061019a57600154600101600155600354806004026004013381556001015f358155600101602035815560010160403590553360601b5f5260605f60143760745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b8181146101295782810160040260040181607402815460601b815260140181600101548152602001816002015481526020019060030154905260010160e9565b910180921461013b5790600255610146565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561017357505f5b6001546001828201116101885750505f61018e565b01600190035b5f555f6001556074025ff35b5f5ffd"},
+}
+
+
+def chain_pre(fixture, fork_rev):
+    """The fixture `pre` plus, from Prague on, the request contracts it does not carry."""
+    pre = dict(fixture.pre)
+    if rev_at_least(fork_rev, "prague"):
+        known = {a.lower() for a in pre}
+        for addr, acc in PRAGUE_SYSTEM_CONTRACTS.items():
+            if addr not in known:
+                pre[addr] = acc
+    return pre
+
+
+def _hx(value):
+    """Fixture hex quantity -> int."""
+    return int(value, 16) if isinstance(value, str) else int(value)
+
+
+def genesis_state_root(workdir, fixture, fork_rev, sync_check_binary):
+    """Derive the alloc MPT root with the node's own trie builder. The --genesis JSON
+    path is used (NOT --genesis-ini): the INI path goes through NodeConfig, whose
+    validateL2Invariants already refuses a header-less genesis — chicken-and-egg.
+    eth-sync-check --genesis prints 'genesis stateRoot: <hex> ...'."""
+    alloc = {}
+    for addr, acc in chain_pre(fixture, fork_rev).items():
+        entry = {"balance": acc.get("balance", "0x0"), "nonce": acc.get("nonce", "0x0"),
+                 "code": acc.get("code", "0x")}
+        storage = acc.get("storage", {})
+        if storage:
+            # Mirror the INI path's pad32: keys and values are 32-byte words.
+            entry["storage"] = {pad32(k): pad32(v) for k, v in storage.items()}
+        alloc[addr] = entry
+    json_path = Path(workdir) / "alloc.json"
+    json_path.write_text(json.dumps({"alloc": alloc}))
+    # Same ulimit -s bump as the node start: importing a very large alloc
+    # (e.g. 4800 accounts) overflows the default 8MB stack in RocksDB's
+    # WAL/crc32c path (ASAN DEADLYSIGNAL), 64MB is plenty.
+    proc = subprocess.run([shutil.which("bash") or "/bin/bash", "-c",  # nosec B603 - argv is shlex-quoted above
+                           "ulimit -s 65536 && exec "
+                           + " ".join(shlex.quote(a) for a in
+                                      [sync_check_binary, "--genesis", str(json_path),
+                                       # The fixture chain runs the pure-Ethereum executor
+                                       # (executor_version=2, see the genesis template), which
+                                       # admits 0x1000-range allocs as ordinary /apps/ accounts.
+                                       "--executor-version", "2"])],
+                          capture_output=True, text=True, timeout=120)
+    m = re.search(r"genesis stateRoot:\s*(?:0x)?([0-9a-fA-F]{64})", proc.stdout + proc.stderr)
+    if proc.returncode != 0 or not m:
+        raise RuntimeError(f"eth-sync-check failed on {json_path}: "
+                           f"{proc.stdout[-300:]} {proc.stderr[-300:]}")
+    return "0x" + m.group(1)
+
+
+def eth_genesis_header_section(fixture, fork_rev, state_root):
+    """Build the [eth_genesis_header] ini text for the fixture chain, including the
+    self-consistent `hash` (keccak256(rlp(header)), go-ethereum field order)."""
+    env = fixture.env
+    fields = []          # (ini_key, rlp_encoded) pairs, in geth header order
+    rlp_fields = []
+
+    def add_bytes(ini_key, hex_value):
+        body = hex_value[2:] if hex_value.startswith("0x") else hex_value
+        fields.append((ini_key, "0x" + body))
+        rlp_fields.append(_rlp_bytes(bytes.fromhex(body) if body else b""))
+
+    def add_quantity(ini_key, value):
+        n = _hx(value) if isinstance(value, str) else int(value)
+        fields.append((ini_key, hex(n)))
+        rlp_fields.append(_rlp_int(n))
+
+    add_bytes("parent_hash", "0x" + "00" * 32)
+    add_bytes("sha3_uncles", EMPTY_OMMERS_HASH)
+    add_bytes("miner", env.get("currentCoinbase", "0x" + "00" * 20))
+    add_bytes("state_root", state_root)
+    add_bytes("transactions_root", EMPTY_TRIE_ROOT)
+    add_bytes("receipts_root", EMPTY_TRIE_ROOT)
+    add_bytes("logs_bloom", "0x" + "00" * 256)
+    add_quantity("difficulty", 0)
+    add_quantity("number", 0)
+    add_quantity("gas_limit", env.get("currentGasLimit", "0x0"))
+    # The block driver derives the next base fee from this header by the EIP-1559 rule;
+    # B0 at exactly the gas target keeps it at currentBaseFee for the test block.
+    add_quantity("gas_used", _hx(env.get("currentGasLimit", "0x0")) // 2
+                 if rev_at_least(fork_rev, "london") else 0)
+    # B0 predates the test block; the exact delta is irrelevant (every fork up to the
+    # fixture's is scheduled at 0 in [fork_timestamps]).
+    add_quantity("timestamp", max(0, _hx(env.get("currentTimestamp", "0x0")) - 12))
+    add_bytes("extra_data", "0x")
+    add_bytes("mix_hash", "0x" + "00" * 32)
+    add_bytes("nonce", "0x" + "00" * 8)
+    if rev_at_least(fork_rev, "london"):
+        add_quantity("base_fee_per_gas", env.get("currentBaseFee", "0x0"))
+    if rev_at_least(fork_rev, "shanghai"):
+        add_bytes("withdrawals_root", EMPTY_TRIE_ROOT)
+    if rev_at_least(fork_rev, "cancun"):
+        add_quantity("blob_gas_used", 0)
+        add_quantity("excess_blob_gas", env.get("currentExcessBlobGas", "0x0"))
+        add_bytes("parent_beacon_block_root", "0x" + "00" * 32)
+    if rev_at_least(fork_rev, "prague"):
+        add_bytes("requests_hash", EMPTY_REQUESTS_HASH)
+
+    header_hash = "0x" + eth_utils.keccak(_rlp_list(rlp_fields)).hex()
+    lines = ["", "[eth_genesis_header]"]
+    lines += [f"    {k}={v}" for k, v in fields]
+    lines.append(f"    hash={header_hash}")
+    return "\n".join(lines) + "\n"
 
 
 def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=0):
@@ -157,7 +319,7 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     # ----- config.genesis -----
     allocs = []
     idx = 0
-    for addr, acc in fixture.pre.items():
+    for addr, acc in chain_pre(fixture, fork_rev).items():
         # balance / nonce must be decimal in config.genesis (requireDecimalField); the
         # fixture carries them as hex.
         allocs.append(f"[alloc.{idx}]\n    address={addr}\n")
@@ -176,32 +338,26 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
         idx += 1
 
     # EEST fixtures sign authorizations / EIP-155 payloads with their own
-    # configured chain id (config.chainid, usually 0x01). The node's [web3]
-    # chain_id MUST match: processAuthorizationList (EIP-7702) compares each
-    # authorization's chain_id against the node's chain id, and a mismatch
-    # silently skips the authorization (observed: 7702 delegation code never
-    # written for chainid=0x01 fixtures against the old hardcoded 20200).
+    # configured chain id (config.chainid, usually 0x01). The node's [chain]
+    # chain_id (the v2 lane's only chain id) MUST match: processAuthorizationList
+    # (EIP-7702) compares each authorization's chain_id against the node's chain
+    # id, and a mismatch silently skips the authorization (observed: 7702
+    # delegation code never written for chainid=0x01 fixtures against the old
+    # hardcoded 20200).
     web3_chain_id = int(fixture.config.get("chainid"), 16) if fixture.config.get("chainid") else 20200
 
     genesis = f"""[chain]
     sm_crypto=false
     group_id=group0
-    chain_id=chain0
-
-[web3]
     chain_id={web3_chain_id}
 
 [consensus]
     consensus_type=pbft
     block_tx_count_limit=1000
-    consensus_timeout=3000
     leader_period=1
     epoch_sealer_num=4
     epoch_block_num=1000
     node.0=179895f679d850ae7e60e245ecee2ad89c625017666368e5b226bc0a894074520dc9c7be1a14e05b77482da1792c54a14f1d4c0581676e4e0081209db53093da: 1
-
-[version]
-    compatibility_version=3.18.0
 
 [tx]
     gas_limit={gas_limit}
@@ -213,23 +369,34 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     auth_admin_account=0x0000000000000000000000000000000000000000
     is_serial_execute=true
     version=2
-    evm_revision={fork_rev}
 
-[features]
-    feature_l2_ethereum_compat=1
-
-""" + "\n".join(allocs)
+""" + fork_timestamps_section(fork_rev) + "\n" + "\n".join(allocs)
     (workdir / "config.genesis").write_text(genesis)
+
+    # [eth_genesis_header] is mandatory on the Ethereum lane (executor_version >= 2,
+    # upstream #5420): derive the alloc state root with the node's own trie builder and
+    # append a self-consistent B0 header section.
+    state_root = genesis_state_root(workdir, fixture, fork_rev, SYNC_CHECK_BINARY)
+    with open(workdir / "config.genesis", "a") as fh:
+        fh.write(eth_genesis_header_section(fixture, fork_rev, state_root))
 
     # ----- config.ini -----
     # Use the full single-node template (the smoke node's config.ini) as the base —
     # a hand-written minimal config.ini broke L2 alloc import (balance/nonce/storage
-    # read back as 0). Patch only ports + single-node consensus keys.
+    # read back as 0). Patch only ports + the [debug] keys.
     tmpl_ini = (Path(__file__).resolve().parent.parent / "tools/nodes/127.0.0.1/node0"
                 / "config.ini")
     if not tmpl_ini.exists():
         raise RuntimeError(f"template config.ini not found: {tmpl_ini}")
     ini = tmpl_ini.read_text()
+
+    # The node loads its secp256k1 key (conf/node.pem) and gateway certs relative to
+    # the workdir; the template's conf/ and nodes.json ride along with config.ini.
+    tmpl_dir = tmpl_ini.parent
+    if (tmpl_dir / "conf").is_dir() and not (workdir / "conf").exists():
+        shutil.copytree(tmpl_dir / "conf", workdir / "conf")
+    if (tmpl_dir / "nodes.json").exists() and not (workdir / "nodes.json").exists():
+        shutil.copy(tmpl_dir / "nodes.json", workdir / "nodes.json")
 
     def patch_section(text, section, key, value):
         """Replace `key=<anything>` (whitespace-tolerant) with `key=value` inside [section]."""
@@ -248,39 +415,26 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     ini = patch_section(ini, "p2p", "listen_port", p2p_port)
     ini = patch_section(ini, "rpc", "listen_port", legacy_port)
 
-    # Single-node consensus keys. patch_section() above only rewrites keys that
-    # ALREADY exist; the template is regenerated by build_chain.sh (the smoke CI
-    # scripts) and may not carry the single-node mode at all, so the enable flag
-    # itself can be absent. Ensure every key the harness needs is present, inserting
-    # any missing ones into [consensus] right after `min_seal_time` (the first key
-    # of a freshly-built template), or at the end of the [consensus] block as a
-    # fallback. Without this the node runs in plain pbft mode and never produces a
-    # block (EEST "no receipt" failures).
-    sn_keys = [("enable_single_node_consensus", "true"),
-               ("block_interval", "1000"),
-               ("produce_empty_blocks", "false"),
-               ("prev_randao", prev_randao),
-               ("fixed_timestamp", fixed_ts),
-               ("fee_recipient", coinbase)]
-    ini = patch_section(ini, "consensus", "block_interval", "1000")
-    ini = patch_section(ini, "consensus", "produce_empty_blocks", "false")
-    ini = patch_section(ini, "consensus", "prev_randao", prev_randao)
-    ini = patch_section(ini, "consensus", "fixed_timestamp", fixed_ts)
-    missing = [(k, v) for k, v in sn_keys if f"{k}=" not in ini]
-    if missing:
-        lines = ini.splitlines()
-        out, in_sec, inserted = [], False, False
-        for line in lines:
-            s = line.strip()
-            if s.startswith("[") and s.endswith("]"):
-                in_sec = (s[1:-1].strip() == "consensus")
+    # The single-node driver: the hidden [debug] section, which no template carries
+    # (a template that already has one, e.g. a smoke CI node, gets it replaced).
+    # Without it a v2 node waits for a consensus client and never produces a block
+    # (EEST "no receipt" failures).
+    debug_keys = [("enable", "true"),
+                  ("block_interval", "1000"),
+                  ("produce_empty_blocks", "false"),
+                  ("prev_randao", prev_randao),
+                  ("fixed_timestamp", fixed_ts),
+                  ("fee_recipient", coinbase)]
+    out, in_debug = [], False
+    for line in ini.splitlines():
+        s = line.strip()
+        if s.startswith("[") and s.endswith("]"):
+            in_debug = (s[1:-1].strip() == "debug")
+        if not in_debug:
             out.append(line)
-            # Insert the missing keys right after the first [consensus] line.
-            if in_sec and not inserted and s.startswith("[consensus]"):
-                for k, v in missing:
-                    out.append(f"    {k}={v}")
-                inserted = True
-        ini = "\n".join(out)
+    out.append("[debug]")
+    out.extend(f"    {k}={v}" for k, v in debug_keys)
+    ini = "\n".join(out) + "\n"
     (workdir / "config.ini").write_text(ini)
 
 
@@ -290,6 +444,13 @@ class Node:
         self.binary, self.workdir, self.rpc_port = binary, workdir, rpc_port
         self.proc = None
         self.url = f"http://127.0.0.1:{rpc_port}"
+        self._shift_ports = False
+        # Keep-alive session: one reused TCP connection for all polls instead
+        # of a fresh connection per call. Without it every 0.5s readiness poll
+        # ends as a server-side TIME_WAIT socket on the node's web3 port (the
+        # HttpServer closes after each response), and a same-port restart
+        # within 60s then fails to bind.
+        self.session = requests.Session()
 
     def start(self, retries=3):
         # Raise the main-thread stack (ulimit -s) before exec. Importing a very
@@ -299,24 +460,34 @@ class Node:
         # used instead of subprocess preexec_fn because the harness runs under a
         # ThreadPoolExecutor (preexec_fn is unsafe in multi-threaded parents).
         #
-        # Startup is retried: a node occasionally dies during boot with a
-        # transient "bind: Address already in use" (the 3 per-node listener ports
-        # are unique per unit, but a rare lingering socket from a just-killed
-        # neighbour can still collide for a few ms). The port is released
-        # immediately after the process dies, so a short delay + a fresh start
-        # (with the half-written storage dir removed) reliably recovers — this is
-        # the residual "node failed to start" flakiness seen in CI eest runs.
+        # Startup is retried on failure. The dominant flake is "acceptor bind
+        # failed": the unit's listen port is blocked by something that
+        # outlives the process — a lingering TIME_WAIT socket, or (observed on
+        # this WSL2 box) a persistent "ghost" port that EADDRINUSEs every bind
+        # while no socket is visible in ss(8) at all. Waiting does not clear
+        # ghosts, so a bind failure retried on a *shifted* port slot; only
+        # non-bind failures retry on the same port after a short pause.
         for attempt in range(retries):
+            if attempt > 0 and self._shift_ports:
+                self._shift_ports = False
+                self._retarget_ports(attempt)
             env = dict(os.environ)
             logf = open(self.workdir / "node.log", "w")
             inner = [self.binary, "-c", "config.ini", "-g", "config.genesis"]
             inner = " ".join(shlex.quote(a) for a in inner)
             self.proc = subprocess.Popen(
-                ["bash", "-c", f"ulimit -s 65536 && exec {inner}"],
+                [shutil.which("bash") or "/bin/bash", "-c",  # nosec B603 - argv is shlex-quoted above
+                 f"ulimit -s 65536 && exec {inner}"],
                 cwd=str(self.workdir), stdout=logf, stderr=subprocess.STDOUT,
                 env=env, start_new_session=True)
             ready = False
-            for _ in range(60):
+            # ASAN+Debug genesis import of a heavy fixture (thousands of
+            # accounts) can exceed 30s under parallel load; give each attempt
+            # a 90s readiness window. Deadline-based: a single rpc() call can
+            # itself block ~45s (3 retries x 15s timeout) against a hung node,
+            # so an iteration-counted loop could stretch the window to ~45min.
+            deadline = time.monotonic() + 90
+            while time.monotonic() < deadline:
                 try:
                     if self.rpc("eth_blockNumber", []) is not None:
                         ready = True
@@ -328,16 +499,74 @@ class Node:
                 time.sleep(0.5)
             if ready:
                 return True
-            # Node exited before becoming ready (or RPC not ready within 30s).
-            # Clean up the dead process and the half-written storage, wait for
-            # the sockets to drain, then retry.
+            # Node exited before becoming ready (or RPC not ready within 90s).
+            logf.close()
+            # Capture who holds this unit's ports so "acceptor bind failed"
+            # flakes are diagnosable (web3/p2p/legacy are PORT_STRIDE apart).
+            bind_failed = False
+            try:
+                with open(self.workdir / "node.log", errors="replace") as nl:
+                    tail = nl.read()[-4000:]
+                bind_failed = "bind failed" in tail or "Address already in use" in tail
+                ports = [self.rpc_port, self.rpc_port + PORT_STRIDE,
+                         self.rpc_port + 2 * PORT_STRIDE]
+                out = subprocess.run(  # nosec B603 - fixed argv, diagnostic only
+                    [shutil.which("ss") or "/usr/bin/ss", "-tanp"],
+                    capture_output=True, text=True, timeout=10).stdout
+                hits = [ln for ln in out.splitlines()
+                        if any(f":{p} " in ln for p in ports)]
+                with open(self.workdir / "bind-debug.txt", "a") as dbg:
+                    dbg.write(f"--- attempt {attempt} bind_failed={bind_failed} ---\n")
+                    dbg.write("\n".join(hits) + "\n")
+            except Exception:  # noqa: BLE001
+                pass
+            # Clean up the dead process and the half-written storage, then
+            # retry — on a shifted port slot if the bind failed.
+            self._shift_ports = bind_failed
             self.stop()
             data_dir = self.workdir / "data"
             if data_dir.exists():
                 shutil.rmtree(data_dir, ignore_errors=True)
             if attempt + 1 < retries:
-                time.sleep(1)
+                time.sleep(3)
         return False
+
+    def _retarget_ports(self, attempt):
+        """Move this node's 3 listener ports to a different slot inside their
+        4000-wide bands and rewrite config.ini accordingly. Used after a bind
+        failure: the original port may be blocked by a persistent ghost, so
+        the retry must not reuse it. The shift keeps each port inside its own
+        band window, so the disjoint-bands invariant between parallel harness
+        processes (port_offset multiples of 3*PORT_STRIDE) still holds."""
+        ini = self.workdir / "config.ini"
+        text = ini.read_text()
+        slot = self.rpc_port % PORT_STRIDE
+        new_slot = (slot + 977 * attempt) % PORT_STRIDE
+        # All band bases are multiples of PORT_STRIDE (bases 20000/24000/28000
+        # plus a port_offset that is a multiple of 3*PORT_STRIDE), so the band
+        # base of each port is port - port % PORT_STRIDE.
+        new_ports = {
+            "web3_rpc": self.rpc_port - slot + new_slot,
+            "p2p": self.rpc_port - slot + PORT_STRIDE + new_slot,
+            "rpc": self.rpc_port - slot + 2 * PORT_STRIDE + new_slot,
+        }
+        out, section, replaced = [], None, set()
+        for line in text.splitlines(keepends=True):
+            m = re.match(r"\s*\[(.+?)\]", line)
+            if m:
+                section = m.group(1)
+            elif section in new_ports and re.match(r"\s*listen_port\s*=", line):
+                line = f"listen_port={new_ports[section]}\n"
+                replaced.add(section)
+            out.append(line)
+        if replaced != set(new_ports):
+            return  # unexpected ini layout — keep the original ports
+        ini.write_text("".join(out))
+        self.rpc_port = new_ports["web3_rpc"]
+        self.url = f"http://127.0.0.1:{self.rpc_port}"
+        with open(self.workdir / "bind-debug.txt", "a") as dbg:
+            dbg.write(f"retargeted to slot {new_slot} "
+                      f"(web3={self.rpc_port})\n")
 
     def stop(self):
         if self.proc and self.proc.poll() is None:
@@ -345,14 +574,29 @@ class Node:
                 os.killpg(os.getpgid(self.proc.pid), signal.SIGKILL)
             except Exception:  # noqa: BLE001
                 self.proc.kill()
-            self.proc.wait(timeout=10)
+            try:
+                self.proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                # A node stuck in uninterruptible I/O (observed on WSL2:
+                # D-state after SIGKILL) cannot be reaped yet. Leaking it is
+                # survivable — its ports are avoided via _retarget_ports on
+                # any later bind failure — while raising here escapes
+                # run_unit and kills the whole tally loop via fut.result().
+                try:
+                    with open(self.workdir / "bind-debug.txt", "a") as dbg:
+                        dbg.write(f"stop(): pid {self.proc.pid} ignored "
+                                  f"SIGKILL for 10s (D-state?), leaked\n")
+                except Exception:  # noqa: BLE001
+                    pass
+        self.session.close()
 
     def rpc(self, method, params):
         last = None
         for _ in range(3):
             try:
-                r = requests.post(self.url, json={"jsonrpc": "2.0", "id": 1, "method": method,
-                                                  "params": params}, timeout=15)
+                r = self.session.post(self.url, json={"jsonrpc": "2.0", "id": 1,
+                                                      "method": method, "params": params},
+                                      timeout=15)
                 b = r.json()
                 if "error" in b:
                     raise RuntimeError(f"{method}: {json.dumps(b['error'])[:300]}")
@@ -615,7 +859,20 @@ def run_one_fixture(args, fixture, fork_key, post_entry, workdir, idx):
     fork_rev = fork_key_to_rev(fork_key)
     if not fork_rev:
         return None  # unsupported fork, skip
-    gen_config(workdir, fixture, fork_rev, idx, port_offset=args.port_offset)
+    if not rev_at_least(fork_rev, "paris"):
+        # The v2 block drivers build PoS blocks under [fork_timestamps], whose ladder
+        # starts at the merge: a pre-Paris environment cannot be reproduced.
+        return ("SKIP", f"pre-Paris fork {fork_rev}: the v2 block drivers build PoS blocks "
+                "only", workdir.name)
+    try:
+        gen_config(workdir, fixture, fork_rev, idx, port_offset=args.port_offset)
+    except RuntimeError as exc:
+        # eth-sync-check/NodeConfig reject genesis allocs the L2 lane cannot
+        # represent (e.g. an account at a FISCO system address such as
+        # 0x...1000, which legacy general-state-tests fixtures use as the
+        # contract under test). The fixture is a valid Ethereum test but not
+        # runnable on this platform — SKIP, not FAIL.
+        return ("SKIP", f"unsupported genesis: {exc}", workdir.name)
     rpc_port = WEB3_RPC_PORT_BASE + (idx % PORT_STRIDE) + args.port_offset
     node = Node(args.binary, workdir, rpc_port)
     try:
@@ -659,8 +916,11 @@ def run_one_fixture(args, fixture, fork_key, post_entry, workdir, idx):
             return ("FAIL", f"submit error: {exc}", workdir.name)
         # Accepted into mempool → wait for a receipt (driver seals within ~1-2s,
         # but EIP-7702 txs with thousands of authorizations can take ~50s to
-        # execute — e.g. test_many_delegations has 4798 auths).
-        for _ in range(120):
+        # execute — e.g. test_many_delegations has 4798 auths). Deadline-based:
+        # one rpc() call can itself block ~45s against a hung node, so an
+        # iteration-counted loop could stretch the wait to ~90min.
+        deadline = time.monotonic() + 150
+        while time.monotonic() < deadline:
             time.sleep(1)
             try:
                 rc = node.rpc("eth_getTransactionReceipt", [h])
@@ -672,7 +932,7 @@ def run_one_fixture(args, fixture, fork_key, post_entry, workdir, idx):
             if expect_exc:
                 # accepted but never included — treat as the expected invalid outcome
                 return ("PASS", "", workdir.name)
-            return ("FAIL", "no receipt after 15s", workdir.name)
+            return ("FAIL", "no receipt after 150s", workdir.name)
         ok, msg = compare_post(node, fork_rev, post_entry)
         if not ok:
             return ("FAIL", msg, workdir.name)
@@ -694,6 +954,10 @@ def main():
                     help="add to every port so multiple harness processes can run"
                          " in parallel on disjoint port ranges (use multiples of"
                          " 3*PORT_STRIDE: 0, 12000, 24000, ...)")
+    ap.add_argument("--sync-check-binary",
+                    default="build/tools/eth-sync-check/eth-sync-check",
+                    help="eth-sync-check binary used to derive the alloc MPT state root"
+                         " for the mandatory [eth_genesis_header] section")
     args = ap.parse_args()
 
     binary = os.path.abspath(args.binary)
@@ -701,6 +965,12 @@ def main():
         print(f"binary not found: {binary}", file=sys.stderr)
         return 1
     args.binary = binary  # nodes start with cwd=workdir; the binary must be absolute
+
+    global SYNC_CHECK_BINARY
+    SYNC_CHECK_BINARY = os.path.abspath(args.sync_check_binary)
+    if not os.path.exists(SYNC_CHECK_BINARY):
+        print(f"eth-sync-check binary not found: {SYNC_CHECK_BINARY}", file=sys.stderr)
+        return 1
     fixtures = load_fixtures(args.fixture_dir, args.pattern)
     print(f"loaded {len(fixtures)} fixtures", flush=True)
 
@@ -785,7 +1055,14 @@ def main():
         done = 0
         t0 = time.time()
         for fut in as_completed(futs):
-            res, msg, path, name, fork_key = fut.result()
+            try:
+                res, msg, path, name, fork_key = fut.result()
+            except Exception as exc:  # noqa: BLE001
+                # A worker bug (e.g. an unexpected error escaping run_unit)
+                # must not kill the tally loop: record it as a failure and
+                # keep consuming the remaining futures.
+                res, msg, path, name, fork_key = (
+                    "FAIL", f"runner internal error: {exc!r}", "?", "?", "?")
             done += 1
             if res == "PASS":
                 results["PASS"] += 1

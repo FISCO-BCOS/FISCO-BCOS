@@ -14,6 +14,7 @@ endif()
 
 find_package(Boost REQUIRED COMPONENTS log log_setup filesystem chrono thread serialization iostreams ${BOOST_STACKTRACE_COMPONENT})
 find_package(ZLIB REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 if(NOT ONLY_CPP_SDK)
     find_package(zstd CONFIG REQUIRED)
 endif ()
@@ -26,6 +27,12 @@ if (ONLY_CPP_SDK)
 endif ()
 
 add_library(bcos-utilities ${SRCS})
+# ClientIdentity.cpp is the only source here that includes the generated include/BuildInfo.h
+# (create_build_info in cmake/BuildInfo.cmake): make sure it exists before this library
+# compiles, and keep that file out of the unity batches so the per-build timestamp in
+# BuildInfo.h only recompiles this one small TU.
+add_dependencies(bcos-utilities BuildInfo.h)
+set_source_files_properties(bcos-utilities/ClientIdentity.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_include_directories(bcos-utilities PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-utilities>)
@@ -34,7 +41,9 @@ if (ONLY_CPP_SDK)
 else ()
     target_link_libraries(bcos-utilities PUBLIC bcos-task Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} ZLIB::ZLIB zstd::libzstd_static ittapi)
 endif ()
-set_target_properties(bcos-utilities PROPERTIES UNITY_BUILD "ON")
+# fmt is used only inside BoostLog.cpp; the target is exported in
+# fiscobcosTargets, so keep it out of the public interface.
+target_link_libraries(bcos-utilities PRIVATE fmt::fmt)
 
 if(TESTS)
     enable_testing()

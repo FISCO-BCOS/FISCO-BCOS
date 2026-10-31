@@ -20,7 +20,9 @@
  */
 #pragma once
 
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cstdlib>
@@ -31,7 +33,6 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-#include <bcos-utilities/BoostLog.h>
 
 #define STORAGE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE]"
 
@@ -39,7 +40,6 @@ namespace bcos::storage
 {
 
 const std::string ROCKSDB = "rocksDB";
-const std::string TiKV = "TiKV";
 
 enum StorageError
 {

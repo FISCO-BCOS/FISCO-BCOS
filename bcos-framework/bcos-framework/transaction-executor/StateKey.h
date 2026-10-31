@@ -1,6 +1,8 @@
 #pragma once
 #include "../storage/Entry.h"
+#include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/FixedBytes.h"
 #include "bcos-utilities/ThreeWay4Apple.h"
 #include <boost/throw_exception.hpp>
 #include <compare>
@@ -29,12 +31,48 @@ public:
         m_tableAndKey.append(key);
     }
     explicit StateKey(std::string tableAndKey)
-      : m_tableAndKey(std::move(tableAndKey)), m_split(m_tableAndKey.find_first_of(':'))
+      : m_tableAndKey(std::move(tableAndKey)), m_split(splitPosition(m_tableAndKey))
     {
         if (m_split == std::string::npos)
         {
             throwTrace(NoTableSpliterError());
         }
+    }
+
+    // Locate the table/key separator in the flat "table:key" form. Raw-address
+    // account tables (the binary node-local layout: "/s/" + 20 raw address bytes,
+    // ledger/account/AccountTableName.h) can contain 0x3a (':') inside the address,
+    // so a plain find_first_of(':') would split inside the table name. The binary
+    // form is fixed-length, and a ':' at exactly that offset is unambiguous:
+    // "/s/" is a reserved namespace that only ever holds the 20-byte binary account
+    // tables (BFS cannot create "/s/" tables — checkPathPrefixValid whitelists only
+    // "/apps/", "/tables/", "/usr/"), so nothing else places a ':' there by
+    // coincidence. Everything else — including ALL "/apps/" tables — keeps
+    // first-':' semantics unconditionally.
+    //
+    // The earlier draft put the binary tables under "/apps/" and needed a fixed-offset
+    // rule there too, which had a known ambiguity: a short "/apps/" table whose key
+    // happened to place a ':' at the binary split offset was misread as a
+    // binary-address table. Moving the binary layout to "/s/" removes that whole
+    // class — and nothing binary ever shipped under "/apps/" (feature_raw_address
+    // never reached a release; this PR is unmerged), so no committed key needs the
+    // old rule and it is deleted outright rather than kept for compatibility.
+    //
+    // Constants: the 20 is bcos::Address::SIZE; the "/s/" prefix is
+    // ledger::account::BINARY_TABLE_PREFIX — that header is dependency-free
+    // (ledger/AccountTableName.h), so this header names the shared constant directly
+    // instead of mirroring the literal (Classify.h, which keeps no bcos-framework
+    // dependency, is the one remaining mirror).
+    static size_t splitPosition(std::string_view tableAndKey) noexcept
+    {
+        constexpr std::string_view binaryTablePrefix = ledger::account::BINARY_TABLE_PREFIX;
+        constexpr size_t rawAddressTableSize = binaryTablePrefix.size() + bcos::Address::SIZE;
+        if (tableAndKey.size() > rawAddressTableSize &&
+            tableAndKey.starts_with(binaryTablePrefix) && tableAndKey[rawAddressTableSize] == ':')
+        {
+            return rawAddressTableSize;
+        }
+        return tableAndKey.find_first_of(':');
     }
     explicit StateKey(StateKeyView const& view);
 

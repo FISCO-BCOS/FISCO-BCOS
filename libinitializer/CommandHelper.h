@@ -20,6 +20,7 @@
 #pragma once
 #include <iostream>
 #include <memory>
+#include <optional>
 namespace bcos
 {
 namespace initializer
@@ -34,6 +35,10 @@ struct Params
     std::string genesisFilePath;
     std::string snapshotPath;  // import from or export to
     float txSpeed;
+    // devp2p override (--bootnodes). The config file is the source of truth; the flag only
+    // mirrors it. A --bootnodes path that differs from [ethereum].bootnodes_file is a hard
+    // error — see AirNodeInitializer::validateEthereumELParams.
+    std::optional<std::string> ethereumBootnodesFile;
     enum class operation : int
     {
         None = 0,
@@ -41,7 +46,12 @@ struct Params
         Snapshot = 1 << 1,
         SnapshotWithoutTxAndReceipt = 1 << 2,
         ImportSnapshot = 1 << 3,
+        ImportBlocks = 1 << 4,
     } op;
+    // Path for --import-blocks: an RLP-encoded Ethereum block source — either a
+    // chain.rlp-style file (concatenated top-level RLP blocks) or a directory of
+    // one-block *.rlp files (the hive simulator contract).
+    std::string importBlocksPath;
     bool hasOp(operation op) const
     {
         return (static_cast<int>(this->op) & static_cast<int>(op)) != 0;

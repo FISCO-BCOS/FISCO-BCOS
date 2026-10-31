@@ -65,8 +65,7 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> makeSignedTx(std::string_vi
     auto raw = fromHexWithPrefix(rawHex);
     auto ref = bcos::ref(raw);
     rpc::Web3Transaction web3;
-    auto err = codec::rlp::decode(ref, web3);
-    BOOST_REQUIRE_MESSAGE(err == nullptr, "fixture must decode");
+    BOOST_REQUIRE_NO_THROW(codec::rlp::decode(ref, web3));
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [inner = web3.takeToTarsTransaction()]() mutable { return &inner; });

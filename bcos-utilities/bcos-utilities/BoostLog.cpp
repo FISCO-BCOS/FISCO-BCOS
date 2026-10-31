@@ -22,9 +22,14 @@
  * @date 2024-01-18
  * @brief: add file collector
  */
-#include "GzTools.h"
+#include "BoostLog.h"
 #include "BoostLogCollector.h"
+#include "Common.h"
+#include "GzTools.h"
+#include "LineAsyncSink.h"
+#include "LineLayout.h"
 #include "Log.h"
+#include <fmt/format.h>
 #include <boost/date_time/time_facet.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/filesystem/directory.hpp>
@@ -36,33 +41,837 @@
 #include <boost/log/attributes/time_traits.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/detail/singleton.hpp>
+#include <boost/log/trivial.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/spirit/home/qi/numeric/numeric_utils.hpp>
 #include <boost/system/detail/error_category.hpp>
 #include <boost/system/detail/error_code.hpp>
-#include <utility>
+#ifdef _WIN32
+// NOMINMAX: windows.h otherwise defines min/max as function-like macros,
+// which leak ahead in unity builds and break unparenthesized
+// std::numeric_limits<...>::max() in BoostLogInitializer.cpp.
+#define NOMINMAX
+#include <windows.h>
+// wingdi.h (pulled in by windows.h) defines ERROR as a macro, which breaks
+// LogLevel::ERROR below; LogStream.h's #undef cannot help because windows.h
+// is included after it here (and leaks ahead in unity builds).
+#undef ERROR
+#else
+#include <pthread.h>
+#include <unistd.h>
+#endif
+#include <array>
+#include <atomic>
+#include <cctype>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <ctime>
 #include <list>
+#include <memory>
+#include <optional>
+#include <shared_mutex>
+#include <utility>
+#include <vector>
 namespace bcos
 {
 std::string const FileLogger = "FileLogger";
-boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
-    FileLoggerHandler(boost::log::keywords::channel = FileLogger);
 
-std::string const StatFileLogger = "StatFileLogger";
-boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
-    StatFileLoggerHandler(boost::log::keywords::channel = StatFileLogger);
+// LogLevel is defined in LogStream.h without referencing boost; make sure the
+// values stay in sync with boost::log::trivial::severity_level.
+static_assert(static_cast<int>(LogLevel::TRACE) == boost::log::trivial::severity_level::trace);
+static_assert(static_cast<int>(LogLevel::DEBUG) == boost::log::trivial::severity_level::debug);
+static_assert(static_cast<int>(LogLevel::INFO) == boost::log::trivial::severity_level::info);
+static_assert(static_cast<int>(LogLevel::WARNING) == boost::log::trivial::severity_level::warning);
+static_assert(static_cast<int>(LogLevel::ERROR) == boost::log::trivial::severity_level::error);
+static_assert(static_cast<int>(LogLevel::FATAL) == boost::log::trivial::severity_level::fatal);
 
-LogLevel c_fileLogLevel = LogLevel::TRACE;
-LogLevel c_statLogLevel = LogLevel::INFO;
+std::atomic<LogLevel> c_fileLogLevel = LogLevel::TRACE;
+
+namespace log
+{
+namespace
+{
+// Process-wide registry of whole-line sinks. std::atomic<std::shared_ptr> is
+// not portable (libc++ rejects it), so the slots are plain shared_ptrs
+// guarded by a shared_mutex: readers hold the shared lock across writeLine,
+// and unregisterLineSink takes the unique lock, so it waits for in-flight
+// producers before a sink can be destroyed. Register/unregister are rare
+// (initLog/stopLogging), so the lock is never contended in practice.
+constexpr std::size_t MaxLineSinks = 4;
+struct LineSinkRegistry
+{
+    std::array<std::shared_ptr<LineSinkWriter>, MaxLineSinks> sinks;
+    std::shared_mutex mutex;
+    std::atomic<int> count{0};
+};
+
+// Leaked deliberately, the same lifetime contract as LineFeeder: when
+// stopLogging() has not run, a log statement from another TU's static
+// destructor can reach commitLine after this TU's statics are destroyed —
+// with a leaked registry that degrades to a no-op instead of taking a
+// shared lock on a destroyed std::shared_mutex.
+LineSinkRegistry& registry()
+{
+    static auto* s_registry = new LineSinkRegistry();
+    return *s_registry;
+}
+
+constexpr std::string_view c_severityNames[] = {
+    "trace", "debug", "info", "warning", "error", "fatal"};
+
+// "0x<tid>" exactly as the ThreadID attribute formats it; invariant per
+// thread, so cached once.
+std::string_view threadTidHex()
+{
+    thread_local std::string const tid = [] {
+#ifdef _WIN32
+        char buf[16];
+        std::snprintf(
+            buf, sizeof(buf), "0x%08lx", static_cast<unsigned long>(::GetCurrentThreadId()));
+#else
+        char buf[24];
+        std::snprintf(buf, sizeof(buf), "0x%016llx",
+            static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(pthread_self())));
+#endif
+        return std::string(buf);
+    }();
+    return tid;
+}
+
+// "<threadName>-0x<tid>" exactly as the ThreadName/ThreadID attributes format
+// it; the value only changes when the thread is renamed, so cache it. Cache
+// validity is tracked separately from the cached name: an empty name is a
+// valid lookup result (unnamed threads on macOS, every thread on Windows)
+// and must still build the "Unnamed-0x..." fragment on the first call.
+std::string_view threadPart()
+{
+    thread_local bool initialized = false;
+    thread_local std::string cachedName;
+    thread_local std::string part;
+    auto const& name = bcos::pthread_getThreadNameRef();
+    if (!initialized || cachedName != name)
+    {
+        cachedName = name;
+        part = name.empty() ? "Unnamed" : name;
+        part += '-';
+        part += threadTidHex();
+        initialized = true;
+    }
+    return part;
+}
+
+// The wall clock as a broken-down local time plus the microsecond fraction.
+// localtime_r takes glibc's internal timezone lock, so the broken-down time
+// is cached per thread and recomputed only when the second ticks over.
+struct BrokenDownTime
+{
+    std::tm tm{};
+    long fracMicros = 0;  // 0..999999
+};
+BrokenDownTime brokenDownNow()
+{
+    auto const micros = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch());
+    std::time_t const secs = static_cast<std::time_t>(micros.count() / 1000000);
+    thread_local std::time_t cachedSecs = 0;
+    thread_local std::tm tm{};
+    if (secs != cachedSecs)
+    {
+#ifdef _WIN32
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        cachedSecs = secs;
+    }
+    return {tm, static_cast<long>(micros.count() % 1000000)};
+}
+
+// Zero-padded decimal append; no allocation, no locale.
+void appendUnsigned(std::string& _out, std::uint64_t _value, unsigned _minWidth = 1)
+{
+    char tmp[20];
+    char* const end = tmp + sizeof(tmp);
+    char* p = end;
+    unsigned digits = 0;
+    do
+    {
+        *--p = static_cast<char>('0' + (_value % 10));
+        _value /= 10;
+        ++digits;
+    } while (_value != 0);
+    while (digits < _minWidth)
+    {
+        _out += '0';
+        ++digits;
+    }
+    _out.append(p, static_cast<std::size_t>(end - p));
+}
+}  // namespace
+
+// "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|", byte-identical to the
+// release-3.18.0 default formatter expression (attr<severity_level>
+// ("Severity") << "|" << format_date_time<ptime>("TimeStamp",
+// "%Y-%m-%d %H:%M:%S.%f") << "|" << attr<std::string>("ThreadName") << "-"
+// << attr<current_thread_id>("ThreadID") << "|" << smessage), which this
+// pipeline reimplements without boost::log.
+void appendLinePrefix(std::string& _out, LogLevel _level)
+{
+    _out.append(c_severityNames[static_cast<int>(_level)]);
+    _out += '|';
+    auto const time = brokenDownNow();
+    char buf[40];
+    auto const formatted = fmt::format_to_n(buf, sizeof(buf),
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}", time.tm.tm_year + 1900, time.tm.tm_mon + 1,
+        time.tm.tm_mday, time.tm.tm_hour, time.tm.tm_min, time.tm.tm_sec, time.fracMicros);
+    _out.append(buf, formatted.size);
+    _out += '|';
+    _out.append(threadPart());
+    _out += '|';
+}
+
+namespace
+{
+// The installed custom layout; write-once per initLog call, never freed, so
+// the hot path reads it with a single atomic load and no lifetime juggling.
+std::atomic<LineLayout const*> s_lineLayout{nullptr};
+// Every layout retired from s_lineLayout. The objects are never freed —
+// producers on other threads may still be mid-render with them — and keeping
+// them reachable also keeps them off the leak-sanitizer report. Leaked
+// deliberately, the same lifetime contract as the registry and LineFeeder.
+struct RetiredLayouts
+{
+    std::mutex mutex;
+    std::vector<LineLayout const*> layouts;
+};
+RetiredLayouts& retiredLayouts()
+{
+    static auto* s_retired = new RetiredLayouts();
+    return *s_retired;
+}
+// Global monotonically increasing id rendered by %LineID%, matching the
+// boost LineID attribute semantics (first rendered id is 1). Only layouts
+// containing %LineID% pay the increment.
+std::atomic<std::uint64_t> s_lineID{0};
+
+void appendTimeStamp(
+    std::string& _out, std::vector<LineLayout::TimePart> const& _parts, BrokenDownTime const& _time)
+{
+    for (auto const& part : _parts)
+    {
+        switch (part.kind)
+        {
+        case LineLayout::TimePart::Kind::Literal:
+            _out.append(part.literal);
+            break;
+        case LineLayout::TimePart::Kind::Year4:
+            appendUnsigned(_out, static_cast<std::uint64_t>(_time.tm.tm_year) + 1900, 4);
+            break;
+        case LineLayout::TimePart::Kind::Year2:
+            appendUnsigned(_out, (static_cast<std::uint64_t>(_time.tm.tm_year) + 1900) % 100, 2);
+            break;
+        case LineLayout::TimePart::Kind::Month:
+            appendUnsigned(_out, static_cast<std::uint64_t>(_time.tm.tm_mon) + 1, 2);
+            break;
+        case LineLayout::TimePart::Kind::Day:
+            appendUnsigned(_out, static_cast<std::uint64_t>(_time.tm.tm_mday), 2);
+            break;
+        case LineLayout::TimePart::Kind::Hour:
+            appendUnsigned(_out, static_cast<std::uint64_t>(_time.tm.tm_hour), 2);
+            break;
+        case LineLayout::TimePart::Kind::Minute:
+            appendUnsigned(_out, static_cast<std::uint64_t>(_time.tm.tm_min), 2);
+            break;
+        case LineLayout::TimePart::Kind::Second:
+            appendUnsigned(_out, static_cast<std::uint64_t>(_time.tm.tm_sec), 2);
+            break;
+        case LineLayout::TimePart::Kind::Frac6:
+            appendUnsigned(_out, static_cast<std::uint64_t>(_time.fracMicros), 6);
+            break;
+        }
+    }
+}
+
+// Compiles a boost date_time format string (the flags the record-based
+// pipeline accepted through boost's time_facet) into TimeParts.
+bool compileTimeFormat(
+    std::string_view _fmt, std::vector<LineLayout::TimePart>& _parts, std::string& _error)
+{
+    std::string literal;
+    auto flushLiteral = [&]() {
+        if (!literal.empty())
+        {
+            LineLayout::TimePart part;
+            part.literal = std::move(literal);
+            literal.clear();
+            _parts.push_back(std::move(part));
+        }
+    };
+    for (std::size_t i = 0; i < _fmt.size(); ++i)
+    {
+        if (_fmt[i] != '%')
+        {
+            literal += _fmt[i];
+            continue;
+        }
+        if (i + 1 >= _fmt.size())
+        {
+            _error = "dangling '%' at end of TimeStamp format";
+            return false;
+        }
+        LineLayout::TimePart part;
+        switch (_fmt[i + 1])
+        {
+        case '%':
+            literal += '%';
+            ++i;
+            continue;
+        case 'Y':
+            part.kind = LineLayout::TimePart::Kind::Year4;
+            break;
+        case 'y':
+            part.kind = LineLayout::TimePart::Kind::Year2;
+            break;
+        case 'm':
+            part.kind = LineLayout::TimePart::Kind::Month;
+            break;
+        case 'd':
+            part.kind = LineLayout::TimePart::Kind::Day;
+            break;
+        case 'H':
+            part.kind = LineLayout::TimePart::Kind::Hour;
+            break;
+        case 'M':
+            part.kind = LineLayout::TimePart::Kind::Minute;
+            break;
+        case 'S':
+            part.kind = LineLayout::TimePart::Kind::Second;
+            break;
+        case 'f':
+            part.kind = LineLayout::TimePart::Kind::Frac6;
+            break;
+        default:
+            _error = "unsupported date_time flag '%";
+            _error += _fmt[i + 1];
+            _error += "' in TimeStamp format";
+            return false;
+        }
+        flushLiteral();
+        _parts.push_back(std::move(part));
+        ++i;
+    }
+    flushLiteral();
+    return true;
+}
+
+std::string_view trimSpaces(std::string_view _s)
+{
+    while (!_s.empty() && (_s.front() == ' ' || _s.front() == '\t'))
+    {
+        _s.remove_prefix(1);
+    }
+    while (!_s.empty() && (_s.back() == ' ' || _s.back() == '\t'))
+    {
+        _s.remove_suffix(1);
+    }
+    return _s;
+}
+}  // namespace
+
+std::unique_ptr<LineLayout> parseLineLayout(std::string_view _format, std::string& _error)
+{
+    auto layout = std::make_unique<LineLayout>();
+    {
+        std::string pid;
+#ifdef _WIN32
+        appendUnsigned(pid, static_cast<std::uint64_t>(::GetCurrentProcessId()));
+#else
+        appendUnsigned(pid, static_cast<std::uint64_t>(::getpid()));
+#endif
+        layout->processID = std::move(pid);
+    }
+
+    std::string literal;
+    auto flushLiteral = [&]() {
+        if (!literal.empty())
+        {
+            LineLayout::Segment segment;
+            segment.literal = std::move(literal);
+            literal.clear();
+            layout->segments.push_back(std::move(segment));
+        }
+    };
+
+    std::size_t pos = 0;
+    while (pos < _format.size())
+    {
+        if (_format[pos] != '%')
+        {
+            literal += _format[pos++];
+            continue;
+        }
+        if (pos + 1 < _format.size() && _format[pos + 1] == '%')
+        {
+            literal += '%';
+            pos += 2;
+            continue;
+        }
+        // Placeholder: %Name% or %Name(args)%; the closing '%' is the first
+        // one outside any quoted region (the TimeStamp format string itself
+        // contains '%').
+        std::size_t const bodyBegin = pos + 1;
+        std::size_t i = bodyBegin;
+        std::size_t close = std::string_view::npos;
+        while (i < _format.size())
+        {
+            char const ch = _format[i];
+            if (ch == '"')
+            {
+                ++i;
+                while (i < _format.size() && _format[i] != '"')
+                {
+                    if (_format[i] == '\\' && i + 1 < _format.size())
+                    {
+                        ++i;
+                    }
+                    ++i;
+                }
+                if (i >= _format.size())
+                {
+                    _error = "unterminated quoted string";
+                    return nullptr;
+                }
+                ++i;
+                continue;
+            }
+            if (ch == '%')
+            {
+                close = i;
+                break;
+            }
+            ++i;
+        }
+        if (close == std::string_view::npos)
+        {
+            _error = "unterminated '%' placeholder";
+            return nullptr;
+        }
+
+        std::string_view const body = _format.substr(bodyBegin, close - bodyBegin);
+        std::string_view name = body;
+        std::string_view args;
+        bool const hasArgs = body.find('(') != std::string_view::npos;
+        if (hasArgs)
+        {
+            auto const paren = body.find('(');
+            if (body.back() != ')')
+            {
+                _error = "malformed arguments in '%" + std::string(body) + "%'";
+                return nullptr;
+            }
+            name = body.substr(0, paren);
+            args = body.substr(paren + 1, body.size() - paren - 2);
+        }
+        name = trimSpaces(name);
+
+        LineLayout::Segment segment;
+        if (name == "Severity")
+        {
+            segment.field = LineLayout::Field::Severity;
+        }
+        else if (name == "TimeStamp")
+        {
+            segment.field = LineLayout::Field::TimeStamp;
+        }
+        else if (name == "ThreadName")
+        {
+            segment.field = LineLayout::Field::ThreadName;
+        }
+        else if (name == "ThreadID")
+        {
+            segment.field = LineLayout::Field::ThreadID;
+        }
+        else if (name == "LineID")
+        {
+            segment.field = LineLayout::Field::LineID;
+        }
+        else if (name == "ProcessID")
+        {
+            segment.field = LineLayout::Field::ProcessID;
+        }
+        else if (name == "Message")
+        {
+            segment.field = LineLayout::Field::Message;
+        }
+        else
+        {
+            _error = "unknown attribute '" + std::string(name) + "'";
+            return nullptr;
+        }
+
+        if (hasArgs)
+        {
+            // Only %TimeStamp(format="...")% takes arguments.
+            if (segment.field != LineLayout::Field::TimeStamp)
+            {
+                _error = "arguments are only supported on %TimeStamp(...)%";
+                return nullptr;
+            }
+            args = trimSpaces(args);
+            constexpr std::string_view formatKey = "format";
+            if (!args.starts_with(formatKey))
+            {
+                _error = "unsupported argument in '%" + std::string(body) +
+                         "%', expected format=\"...\"";
+                return nullptr;
+            }
+            args = trimSpaces(args.substr(formatKey.size()));
+            if (args.empty() || args.front() != '=')
+            {
+                _error = "expected '=' in '%" + std::string(body) + "%'";
+                return nullptr;
+            }
+            args = trimSpaces(args.substr(1));
+            if (args.size() < 2 || args.front() != '"' || args.back() != '"')
+            {
+                _error = "expected quoted string in '%" + std::string(body) + "%'";
+                return nullptr;
+            }
+            std::string timeFormat;
+            for (std::size_t k = 1; k + 1 < args.size(); ++k)
+            {
+                // \' \" \\ escapes, as in the boost formatter grammar
+                if (args[k] == '\\' && k + 2 < args.size())
+                {
+                    ++k;
+                }
+                timeFormat += args[k];
+            }
+            if (!compileTimeFormat(timeFormat, segment.timeParts, _error))
+            {
+                return nullptr;
+            }
+        }
+        else if (segment.field == LineLayout::Field::TimeStamp)
+        {
+            // boost renders a bare %TimeStamp% via to_simple_string, which at
+            // microsecond resolution is exactly this format.
+            if (!compileTimeFormat("%Y-%m-%d %H:%M:%S.%f", segment.timeParts, _error))
+            {
+                return nullptr;
+            }
+        }
+
+        if (segment.field == LineLayout::Field::TimeStamp)
+        {
+            layout->usesTimeStamp = true;
+        }
+        else if (segment.field == LineLayout::Field::LineID)
+        {
+            layout->usesLineID = true;
+        }
+        flushLiteral();
+        layout->segments.push_back(std::move(segment));
+        pos = close + 1;
+    }
+    flushLiteral();
+    return layout;
+}
+
+void setLineLayout(std::unique_ptr<LineLayout> _layout)
+{
+    // Leaked deliberately: producers on other threads may be mid-render with
+    // the previous layout, and there is no safe reclamation point short of
+    // per-line synchronization. The retired one stays reachable so it never
+    // shows up on the leak-sanitizer report.
+    LineLayout const* previous =
+        s_lineLayout.exchange(_layout.release(), std::memory_order_acq_rel);
+    if (previous != nullptr)
+    {
+        auto& retired = retiredLayouts();
+        std::lock_guard lock(retired.mutex);
+        retired.layouts.push_back(previous);
+    }
+}
+
+LineLayout const* lineLayout() noexcept
+{
+    return s_lineLayout.load(std::memory_order_acquire);
+}
+
+void appendLayoutLine(
+    std::string& _out, LineLayout const& _layout, LogLevel _level, std::string_view _message)
+{
+    // The clock is read only when the layout actually prints a timestamp.
+    auto const time = _layout.usesTimeStamp ? brokenDownNow() : BrokenDownTime{};
+    // The line id is hoisted the same way: one increment per rendered line, so
+    // a layout referencing %LineID% more than once prints the same id on that
+    // line, matching the boost LineID attribute semantics.
+    auto const lineID =
+        _layout.usesLineID ? s_lineID.fetch_add(1, std::memory_order_relaxed) + 1 : 0;
+    for (auto const& segment : _layout.segments)
+    {
+        switch (segment.field)
+        {
+        case LineLayout::Field::Literal:
+            _out.append(segment.literal);
+            break;
+        case LineLayout::Field::Severity:
+            _out.append(c_severityNames[static_cast<int>(_level)]);
+            break;
+        case LineLayout::Field::TimeStamp:
+            appendTimeStamp(_out, segment.timeParts, time);
+            break;
+        case LineLayout::Field::ThreadName:
+        {
+            // Same substitution as the legacy ThreadName attribute and the
+            // built-in layout's threadPart(): an empty name (unnamed threads
+            // on macOS, every thread on Windows) renders as "Unnamed".
+            auto const& threadName = bcos::pthread_getThreadNameRef();
+            if (threadName.empty())
+            {
+                _out.append("Unnamed");
+            }
+            else
+            {
+                _out.append(threadName);
+            }
+            break;
+        }
+        case LineLayout::Field::ThreadID:
+            _out.append(threadTidHex());
+            break;
+        case LineLayout::Field::LineID:
+            appendUnsigned(_out, lineID);
+            break;
+        case LineLayout::Field::ProcessID:
+            _out.append(_layout.processID);
+            break;
+        case LineLayout::Field::Message:
+            _out.append(_message);
+            break;
+        }
+    }
+}
+
+std::string formatLogLine(LogLevel _level, std::string_view _message)
+{
+    std::string line;
+    if (auto const* layout = lineLayout(); layout != nullptr)
+    {
+        appendLayoutLine(line, *layout, _level, _message);
+    }
+    else
+    {
+        appendLinePrefix(line, _level);
+        line.append(_message);
+    }
+    return line;
+}
+
+void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
+{
+    auto& reg = registry();
+    std::unique_lock lock(reg.mutex);
+    for (auto& slot : reg.sinks)
+    {
+        if (!slot)
+        {
+            slot = std::move(_sink);
+            reg.count.fetch_add(1, std::memory_order_release);
+            return;
+        }
+    }
+    // All slots taken: more than MaxLineSinks sinks registered. Not reachable
+    // with today's single-initializer deployments; say so instead of dropping
+    // the sink silently.
+    std::fputs("registerLineSink: registry full, sink not registered\n", stderr);
+}
+
+void unregisterLineSink(LineSinkWriter const* _sink)
+{
+    auto& reg = registry();
+    std::unique_lock lock(reg.mutex);
+    for (auto& slot : reg.sinks)
+    {
+        if (slot.get() == _sink)
+        {
+            slot.reset();
+            reg.count.fetch_sub(1, std::memory_order_release);
+            return;
+        }
+    }
+}
+
+bool hasLineSinks() noexcept
+{
+    return registry().count.load(std::memory_order_acquire) > 0;
+}
+
+std::uint64_t droppedLogLines() noexcept
+{
+    auto& reg = registry();
+    std::shared_lock lock(reg.mutex);
+    std::uint64_t total = 0;
+    for (auto const& sink : reg.sinks)
+    {
+        if (sink)
+        {
+            total += sink->droppedTotal();
+        }
+    }
+    return total;
+}
+
+// Fans the line out to every registered whole-line sink. The shared lock is
+// held across writeLine: normally that is only the sink's queue critical
+// section, so producers never block a reader on backend I/O. The FATAL path
+// is the exception: it can hold the shared lock for up to
+// 2 x FatalDrainTimeout (bounded drain + bounded backend acquisition), and a
+// throwing backend makes it return without aborting — so
+// register/unregister can stall up to two seconds against an in-flight
+// FATAL. register/unregister are rare by construction.
+void commitLine(LogLevel _level, std::string_view _message)
+{
+    thread_local std::string prefix;
+    prefix.clear();
+    if (auto const* layout = lineLayout(); layout != nullptr)
+    {
+        // Custom log.format: the layout places the message freely, so the
+        // line is assembled whole and handed over as prefix + empty message.
+        appendLayoutLine(prefix, *layout, _level, _message);
+        _message = {};
+    }
+    else
+    {
+        appendLinePrefix(prefix, _level);
+    }
+    auto& reg = registry();
+    std::shared_lock lock(reg.mutex);
+    for (auto const& sink : reg.sinks)
+    {
+        if (sink)
+        {
+            sink->writeLine(_level, prefix, _message);
+        }
+    }
+}
+}  // namespace log
 
 void setFileLogLevel(LogLevel const& _level)
 {
-    c_fileLogLevel = _level;
+    c_fileLogLevel.store(_level, std::memory_order_relaxed);
 }
 
-void setStatLogLevel(LogLevel const& _level)
+LogStream::~LogStream() noexcept
 {
-    c_statLogLevel = _level;
+    try
+    {
+        // The line is committed to every registered whole-line sink; when
+        // none is registered (before initLog / after stopLogging) it is
+        // dropped, same as logging with no sinks attached used to behave.
+        // The count check avoids formatting the prefix when logging is down.
+        if (log::hasLineSinks())
+        {
+            log::commitLine(m_level, view());
+        }
+    }
+    catch (...)
+    {}
+}
+
+namespace
+{
+constexpr std::array<std::string_view, static_cast<size_t>(LogModule::COUNT)> c_logModuleNames = {
+    "PBFT", "TXPOOL", "SYNC", "SCHEDULER", "EXECUTOR", "LEDGER", "RPC", "GATEWAY", "FRONT"};
+
+}  // namespace
+
+static_assert(static_cast<size_t>(LogModule::COUNT) == 9, "update c_moduleLogLevel initializer");
+std::array<std::atomic<int>, static_cast<size_t>(LogModule::COUNT)> c_moduleLogLevel = {
+    {c_inheritGlobalLogLevel, c_inheritGlobalLogLevel, c_inheritGlobalLogLevel,
+        c_inheritGlobalLogLevel, c_inheritGlobalLogLevel, c_inheritGlobalLogLevel,
+        c_inheritGlobalLogLevel, c_inheritGlobalLogLevel, c_inheritGlobalLogLevel}};
+
+std::string_view logModuleName(LogModule _module)
+{
+    return c_logModuleNames[static_cast<size_t>(_module)];
+}
+
+std::optional<LogModule> parseLogModule(std::string_view _name)
+{
+    for (size_t i = 0; i < c_logModuleNames.size(); ++i)
+    {
+        auto candidate = c_logModuleNames[i];
+        if (candidate.size() != _name.size())
+        {
+            continue;
+        }
+        bool equal = true;
+        for (size_t j = 0; j < candidate.size(); ++j)
+        {
+            if (std::toupper(static_cast<unsigned char>(_name[j])) != candidate[j])
+            {
+                equal = false;
+                break;
+            }
+        }
+        if (equal)
+        {
+            return static_cast<LogModule>(i);
+        }
+    }
+    return std::nullopt;
+}
+
+void setModuleLogLevel(LogModule _module, LogLevel _level)
+{
+    c_moduleLogLevel[static_cast<size_t>(_module)].store(
+        static_cast<int>(_level), std::memory_order_relaxed);
+}
+
+void resetModuleLogLevel(LogModule _module)
+{
+    c_moduleLogLevel[static_cast<size_t>(_module)].store(
+        c_inheritGlobalLogLevel, std::memory_order_relaxed);
+}
+
+bool setModuleLogLevel(std::string_view _name, LogLevel _level)
+{
+    auto module = parseLogModule(_name);
+    if (!module)
+    {
+        return false;
+    }
+    setModuleLogLevel(*module, _level);
+    return true;
+}
+
+bool resetModuleLogLevel(std::string_view _name)
+{
+    auto module = parseLogModule(_name);
+    if (!module)
+    {
+        return false;
+    }
+    resetModuleLogLevel(*module);
+    return true;
+}
+
+std::vector<std::pair<std::string, LogLevel>> moduleLogLevels()
+{
+    std::vector<std::pair<std::string, LogLevel>> result;
+    for (size_t i = 0; i < c_moduleLogLevel.size(); ++i)
+    {
+        auto level = c_moduleLogLevel[i].load(std::memory_order_relaxed);
+        if (level == c_inheritGlobalLogLevel)
+        {
+            continue;
+        }
+        result.emplace_back(std::string(c_logModuleNames[i]), static_cast<LogLevel>(level));
+    }
+    return result;
 }
 
 namespace

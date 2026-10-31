@@ -1,139 +1,184 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file BaselineSchedulerMPTHelpers.h
+ * @brief MPT helpers shared by the PBFT baseline scheduler and the engine services.
+ *        The feature gates and the XOR fold themselves live in bcos-ledger
+ *        (mpt/MPTFeatureGates.h, mpt/StateRoots.h — namespace bcos::ledger::mpt) so every
+ *        state-root producer applies the SAME transition rule; this header aliases the
+ *        gates into scheduler_v1, forwards the XOR fold, and defines the shared
+ *        build/publish/prune helpers (buildMPTStateRootForView,
+ *        publishPendingBlockHeaderForMPT, prepareMPTPruneRows).
+ */
 #pragma once
 
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/BlockFactory.h"
+#include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include <bcos-utilities/Exceptions.h>
-#include <boost/throw_exception.hpp>
+#include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
+#include <bcos-ledger/mpt/CommitObserver.h>
+#include <bcos-ledger/mpt/MPTDeltaLayer.h>
+#include <bcos-ledger/mpt/MPTFeatureGates.h>
+#include <bcos-ledger/mpt/StateRoots.h>
+#include <bcos-task/Task.h>
+#include <boost/lexical_cast.hpp>
 
 namespace bcos::scheduler_v1
 {
+using ledger::mpt::shouldBuildMPT;
 
-DERIVE_BCOS_EXCEPTION(InvalidMPTFlagMatrix);
+DERIVE_BCOS_EXCEPTION(InvalidExecutorVersionGenesis);
 
-// Decide whether block @p blockNumber commits with an Ethereum MPT state root instead of
-// the legacy XOR root (spec 5.6 / 5.10). The execute path (coExecuteBlock) consults it once
-// per block when the MPT branch is wired in.
-//
-// Pure: no throw, no side effect. The flag-matrix rule this decision depends on is enforced
-// by rejectRawAddressWithMPT below, which the execute path calls inside this predicate's
-// branch — one evaluation, and the guard never has to re-ask the question.
-inline bool shouldBuildMPT(
-    bcos::ledger::Features const& features, bcos::protocol::BlockNumber blockNumber)
+/// Every lane at or above the Ethereum boundary (executor_version >= ETHEREUM_EXECUTOR_VERSION)
+/// is a genesis-only property: it is decided when the chain is created and cannot change
+/// afterwards — executor_version must be genesis-bound (activation block 0), and the
+/// SystemConfigPrecompiled refuses governance writes crossing the Ethereum lane boundary
+/// (>= ETHEREUM_EXECUTOR_VERSION) in both directions. The activation check must start at the
+/// Ethereum lane, not at OP: MPTFeatureGates.h, StateRoots.h and MPTPruner.h all treat >=
+/// ETHEREUM as "MPT from genesis", so a historical (2, activation != 0) row — writable before
+/// compat 3.18 bounded the key — would otherwise boot into MPT-from-genesis over a chain whose
+/// history is XOR. A value above the newest declared lane is not a lane of its own:
+/// MultiVersionScheduler::setVersion saturates it onto the newest WIRED slot, so boot does not
+/// refuse it (and must not, or a chain that wrote such a row before 3.18 could not start to
+/// fix it) — what remains here is the lane's own preconditions, which apply to every value at
+/// or above ETHEREUM.
+inline void validateOpModeGenesisOnly(
+    int executorVersion, bcos::protocol::BlockNumber executorVersionActivation)
 {
-    bool buildMPT = false;
-    // Scenario B: L2 Ethereum-compat chains build the MPT from genesis on. Checked FIRST:
-    // at block 0 feature_mpt_state_root is not yet active, so consulting scenario A first
-    // would send an L2 chain down the XOR path.
-    if (features.get(ledger::Features::Flag::feature_l2_ethereum_compat))
-    {
-        buildMPT = true;
-    }
-    // Scenario A: MPT enabled mid-chain by feature_mpt_state_root. Strictly-greater keeps
-    // the activation block N itself on XOR as the transition boundary (spec 5.10). The
-    // >= 0 guard rejects activationBlockOf == -1 — a flag set() without a storage load —
-    // which would otherwise silently enable MPT since blockNumber > -1 is always true.
-    else if (features.get(ledger::Features::Flag::feature_mpt_state_root))
-    {
-        auto activationBlock =
-            features.activationBlockOf(ledger::Features::Flag::feature_mpt_state_root);
-        buildMPT = activationBlock >= 0 && blockNumber > activationBlock;
-    }
-    // Neither flag: legacy XOR state root (buildMPT stays false).
-    return buildMPT;
-}
-
-// Runtime half of the flag-matrix guard. PRECONDITION: call it only where the block is
-// already known to be building an MPT — i.e. inside the shouldBuildMPT branch of the execute
-// path — so the predicate is evaluated once and this function only has to answer "is
-// raw_address in the way?".
-//
-// The startup half (validateMPTFlagMatrix, below) cannot cover this case: flags activate at
-// block boundaries after boot, so a node that started before feature_raw_address — or before
-// either MPT flag — never saw the pair at startup.
-//
-// @throws InvalidMPTFlagMatrix when feature_raw_address is set. Aborting execution loudly
-//         beats silently building an MPT that classifies no account table (see
-//         validateMPTFlagMatrix for why the combination is unsupported) — fail-loud over
-//         fail-silent. @p blockNumber is diagnostic only.
-//
-// OPERATIONAL CONSEQUENCE, deliberate: on a chain already building an MPT, turning
-// feature_raw_address on mid-chain halts block production from the next block, and there is
-// no in-protocol recovery — the flag cannot be turned off again through consensus once every
-// node refuses to execute. The alternative is worse: an MPT over a key space the delta scan
-// cannot classify commits roots that cover no account at all, which forks the chain against
-// every honest replica silently. feature_raw_address and the MPT state root are mutually
-// exclusive for the life of a chain, not just at boot.
-inline void rejectRawAddressWithMPT(
-    bcos::ledger::Features const& features, bcos::protocol::BlockNumber blockNumber)
-{
-    if (features.get(ledger::Features::Flag::feature_raw_address))
-    {
-        BOOST_THROW_EXCEPTION(InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
-                                  "feature_raw_address is active while the MPT state root is "
-                                  "enabled (block " +
-                                  std::to_string(blockNumber) +
-                                  "); raw_address stores account tables under 20-byte binary "
-                                  "names, which the MPT delta scan cannot classify — every "
-                                  "account would silently drop out of the MPT. Unsupported in "
-                                  "v1; aborting the execute path instead of forking silently"));
-    }
-}
-
-// Startup-time guard for the flag matrix shouldBuildMPT relies on (spec 5.10, M7.3).
-//
-// Scenario B has no transition rule: shouldBuildMPT returns true for EVERY block once
-// feature_l2_ethereum_compat is set, because the flag is assumed enabled at genesis
-// (activation block 0) — the chain never has XOR history to transition from. A mid-chain
-// enable would silently flip the state-root scheme with no boundary, forking any node
-// that replays the pre-flag blocks. Refuse to start instead.
-//
-// Call this with a Features loaded via readFromStorage so activation blocks are
-// populated; a bare set() leaves activationBlockOf at -1, which this guard rejects for
-// the same reason (an unverifiable activation must not pass a consistency check).
-//
-// A second invariant guards feature_raw_address: it switches account table names from
-// /apps/<40-hex-address> to 20-byte binary addresses, but the MPT delta scan
-// (parseAccountTable, spec 5.10) only classifies 40-hex account tables. With both active,
-// every account table fails classification and silently drops out of the MPT — the chain
-// keeps committing state roots that cover no account (a silent fork against any honest
-// replica). Binary account tables are unsupported in v1, so refuse the combination with
-// either MPT flag. rejectRawAddressWithMPT re-checks that half on the blocks that actually
-// build an MPT, for activations that happen after boot.
-//
-// @throws InvalidMPTFlagMatrix when feature_raw_address is set together with
-//         feature_mpt_state_root or feature_l2_ethereum_compat, or when
-//         feature_l2_ethereum_compat is set with a non-zero (or unknown) activation
-//         block. A features object with neither MPT flag always passes.
-inline void validateMPTFlagMatrix(bcos::ledger::Features const& features)
-{
-    using Flag = bcos::ledger::Features::Flag;
-    if (features.get(Flag::feature_raw_address) &&
-        (features.get(Flag::feature_mpt_state_root) ||
-            features.get(Flag::feature_l2_ethereum_compat)))
-    {
-        BOOST_THROW_EXCEPTION(InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
-                                  "feature_raw_address cannot be combined with "
-                                  "feature_mpt_state_root or feature_l2_ethereum_compat: "
-                                  "raw_address stores account tables under 20-byte binary "
-                                  "names, but the MPT delta scan only classifies 40-hex "
-                                  "/apps/<address> tables, so every account would silently "
-                                  "drop out of the MPT state root (silent fork). Binary "
-                                  "account tables are unsupported in v1 (spec 5.10)"));
-    }
-    if (!features.get(Flag::feature_l2_ethereum_compat))
-    {
-        return;
-    }
-    auto activationBlock = features.activationBlockOf(Flag::feature_l2_ethereum_compat);
-    if (activationBlock != 0)
+    bool const ethLane = (executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
+    if (ethLane && executorVersionActivation != 0)
     {
         BOOST_THROW_EXCEPTION(
-            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
-                "feature_l2_ethereum_compat must be enabled at genesis (activation block 0), "
-                "but its activation block is " +
-                std::to_string(activationBlock) +
-                "; enabling it mid-chain would switch the state-root scheme with no "
-                "transition rule (spec 5.10 scenario B)"));
+            InvalidExecutorVersionGenesis{} << bcos::errinfo_comment(
+                "executor_version is genesis-only at or above the Ethereum lane (activation "
+                "block " +
+                std::to_string(executorVersionActivation) +
+                " != 0); every MPT gate reads executor_version >= 2 as MPT-from-genesis, so "
+                "this row would fold a chain with XOR history into an MPT. The row could only "
+                "have been written by governance before compatibility_version 3.18. Recovery: "
+                "start the previous binary and set executor_version back to the legacy value "
+                "the chain ran with (0 or 1) — writes below the Ethereum lane stay legal at "
+                "every compatibility version — then upgrade again. If no binary can land that "
+                "write, restore from a backup taken before the row was written"));
+    }
+}
+
+/// XOR fold over flat storage — the legacy (non-MPT) state-root path, shared by the PBFT
+/// scheduler and the engine service. The implementation lives in bcos-ledger
+/// (ledger::mpt::computeLegacyStateRoot, StateRoots.h) so every producer folds the same way
+/// (BOTH callers must pass @p features to Entry::hash: the v3.17 bugfix flag
+/// bugfix_statestorage_hash_v3_17 changes the digest); this alias keeps the scheduler_v1
+/// spelling the engine services use.
+template <class StorageType>
+task::Task<h256> xorStateRoot(StorageType& storage, uint32_t blockVersion,
+    crypto::Hash const& hashImpl, ledger::Features const& features)
+{
+    co_return co_await ledger::mpt::computeLegacyStateRoot(
+        storage, blockVersion, hashImpl, features);
+}
+
+/// Backwards-compatible name for xorStateRoot, kept for the FIB-99/FIB-105 state-root tests.
+template <class StorageType>
+task::Task<h256> calculateStateRoot(StorageType& storage, uint32_t blockVersion,
+    crypto::Hash const& hashImpl, ledger::Features const& features)
+{
+    co_return co_await xorStateRoot(storage, blockVersion, hashImpl, features);
+}
+
+/// Build an Ethereum MPT state root over @p view. The parent-root rule is single-sourced in
+/// bcos-ledger (ledger::mpt::parentStateRootFor, StateRoots.h): the parent's committed state
+/// root is read only when the parent itself built an MPT, so an activation-boundary parent
+/// (XOR root) starts the build from the empty trie.
+///
+/// @param trackRefCounts  forwarded to buildAndCollect: false skips the per-hash
+///                        refCountDeltas tally for callers whose commit path never reads it.
+///                        Pass the commit observer's needsRefCountDeltas() (the PBFT scheduler
+///                        and the engine services both do). Defaults to false so a producer
+///                        that forgets to wire its observer through fails LOUD — the pruner's
+///                        empty-refCountDeltas check (MPTPruner::coPreparePruneRows) throws on
+///                        the first pruned block — instead of silently tallying with no
+///                        consumer.
+template <class ViewType>
+task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRootForView(ViewType& view,
+    protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
+    protocol::BlockFactory& blockFactory, bool trackRefCounts = false)
+{
+    h256 parentStateRoot =
+        co_await ledger::mpt::parentStateRootFor(view, ledgerConfig.executorVersion(),
+            ledgerConfig.features(), blockHeader.number(), blockFactory);
+    co_return co_await ledger::mpt::computeMptStateDelta(
+        view, parentStateRoot, ledgerConfig, trackRefCounts);
+}
+
+/// Publish the header under SYS_NUMBER_2_BLOCK_HEADER so the next block's MPT build can read
+/// the parent's committed state root through the view.
+///
+/// NOT byte-equivalent to a fully signed header when called at execute time: the engine calls
+/// it before receiptsRoot / txsRoot / gasUsed are set and before the hash is computed, so the
+/// row carries defaults for those fields. Two facts make that safe, and any new reader must
+/// re-check them: (1) the only reader before the commit overwrites the row is the next
+/// block's parent-stateRoot lookup, which needs only stateRoot; (2) the commit's prewrite
+/// layer merges after the block layer, so the signed header wins in the backend.
+template <class ViewType>
+task::Task<void> publishPendingBlockHeaderForMPT(
+    ViewType& view, protocol::BlockHeader const& header)
+{
+    if (header.number() == 0)
+    {
+        co_return;
+    }
+    auto blockNumberStr = boost::lexical_cast<std::string>(header.number());
+    bytes headerBuffer;
+    header.encode(headerBuffer);
+    storage::Entry headerEntry;
+    headerEntry.set(std::move(headerBuffer));
+    co_await storage2::writeOne(view,
+        executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
+        std::move(headerEntry));
+}
+
+/// The pre-commit pruning hook, shared by every producer that lands an MPT delta (the PBFT
+/// BaselineScheduler::coCommitBlock and the engine services' newPayload commit): the observer
+/// turns the block's delta into the deletion keys of expired "/mpt/" node rows, applied to
+/// @p prewriteStorage so the deletions land in the SAME WriteBatch as the block data
+/// (CommitObserver.h explains the crash-atomicity contract). The NoopCommitObserver default returns
+/// an empty batch, so a node without pruning configured pays nothing.
+///
+/// SERIALIZATION CONTRACT: MPTPruner stages the block's counting work on a single shared
+/// overlay between this call and the matching CommitObserver::onCommit, so the caller must
+/// hold its commit mutex across [prepareMPTPruneRows -> merge -> onCommit] and thereby
+/// serialize the triple against every other commit (BaselineScheduler::m_commitMutex, the
+/// engine services' m_commitMutex). A commit that fails before onCommit simply re-runs this
+/// helper on retry — the staged overlay is discarded and re-derived (idempotent).
+template <class MutableStorageType>
+task::Task<void> prepareMPTPruneRows(ledger::mpt::CommitObserver& commitObserver,
+    protocol::BlockNumber blockNumber, ledger::mpt::MPTDeltaLayer const& mptDelta,
+    MutableStorageType& prewriteStorage)
+{
+    auto pruneRows = co_await commitObserver.coPreparePruneRows(blockNumber, mptDelta);
+    if (!pruneRows.deletions.empty())
+    {
+        // The mutable layer is LOGICAL_DELETION: removeSome writes tombstones that the
+        // merge turns into physical deletes in the backend's WriteBatch (and removals
+        // in the cache fan-out).
+        co_await storage2::removeSome(prewriteStorage, std::move(pruneRows.deletions));
     }
 }
 

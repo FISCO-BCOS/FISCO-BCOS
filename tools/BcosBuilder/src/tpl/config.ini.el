@@ -1,0 +1,141 @@
+; ============================================================================
+; FISCO-BCOS Ethereum L1 EL-mode node configuration (config.ini)
+; Run as a pure Ethereum execution-layer client: config.genesis executor
+; version 2 makes the node download blocks from RLPx bootnodes and serve the
+; Engine API to a consensus client, verify blocks with the Ethereum block
+; verifier and commit them locally. No FISCO gateway / PBFT / txpool network is
+; started.
+;
+; Usage:
+;   fisco-bcos -c config.ini -g config.genesis [--bootnodes bootnodes.json]
+;
+; CURRENT LIMITATIONS (follow-up work, tracked):
+;   - Sync is serial and no full Sepolia from-genesis time/disk benchmark is
+;     published yet; the log reports each committed block, without a rate or ETA.
+;     Tracked in #5623.
+;   - No rollback/truncate tool ships: after a fatal checkpoint/reorg stop, the
+;     supported recovery is a full resync from scratch. Tracked in #5621;
+;     reorg handling / a finality feed beyond finalized_checkpoint is #5622.
+;   - No backup/restore guidance for EL nodes yet; tracked in #5624.
+;   - executor version 2 is pre-release; its consensus gates are tracked in
+;     https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5563.
+; ============================================================================
+
+[service]
+    ; AIR nodes run in-process (no tars framework needed). Keep without_tars_framework
+    ; commented so the tars proxy file is not required.
+    ; without_tars_framework = true
+    ; tars_proxy_conf = conf/tars_proxy.ini
+    rpc=chain0
+    gateway=chain0
+
+[ethereum]
+    ; geth-style bootnodes file (a JSON array of enode:// strings); see bootnodes.json
+    ;
+    ; TRUST MODEL: the bootnodes list is the trust root for chain data. The node
+    ; commits the chain the bootnodes serve as long as it is internally consistent
+    ; (parent-hash linkage + re-executed state roots); pre-merge PoW difficulty /
+    ; total difficulty are NOT verified, and there is no consensus-layer finality
+    ; feed. Configure ONLY bootnodes you trust, and consider pinning
+    ; finalized_checkpoint below. A full checkpoint/finality mechanism is a known
+    ; limitation and tracked as follow-up work (#5622).
+    bootnodes_file=./bootnodes.json
+    ; secp256k1 node identity: a file holding the 32-byte private key as hex
+    ; (optional 0x prefix). Empty = auto-generate a persistent key on first start
+    ; (node.rlpx.key next to the FISCO node key) and reuse it on restart.
+    ; A stable key is strongly recommended so bootnodes can authenticate us.
+    node_key_file=
+    ; max blocks requested per batch
+    max_batch_size=192
+    ; shallow-reorg window: how many committed blocks a reorg may rewind. Every commit
+    ; journals its pre-block flat-state values, so the knob trades per-commit journal
+    ; cost for reorg depth. 0 disables journaling/rollback entirely. Must be <=
+    ; storage.mpt_prune_window unless the latter is -1 (unbounded).
+    ; reorg_window=256
+    ; engine mempool sizing (EL mode only): capacity in transactions, per-transaction
+    ; lifetime in minutes before expiry
+    ; mempool_capacity=5120
+    ; mempool_tx_lifetime_minutes=30
+    ; eth/68 transaction gossip: dedicated outbound sessions exchange pooled
+    ; transactions with bootnode peers and admit what arrives into the engine
+    ; mempool (locally injected RPC transactions are announced the same way).
+    tx_gossip=true
+    ; optional operator-pinned finalized checkpoint, "<number>:<0xHASH>": the
+    ; committed block at <number> must carry <0xHASH>; on a mismatch the sync loop
+    ; stops with a fatal error (the bootnodes serve a wrong fork). Take the value
+    ; from a trusted source (e.g. a block explorer or your own archive node).
+    ; Empty = no checkpoint.
+    ; finalized_checkpoint=9200000:0x...
+    ; EIP-6110 deposit contract address, used by the Prague+ requestsHash
+    ; cross-check when verifying blocks. The code default is the Ethereum mainnet
+    ; deposit contract; this template targets Sepolia, whose deposit contract is:
+    deposit_contract_address=0x7f02c3e3c98b133055b8b348b2ac625669182295
+
+[engine_rpc]
+    ; Authenticated Engine API listener (JSON-RPC over HTTP + JWT) for a consensus
+    ; client. Always served on executor version 2 (there is no enable key).
+    ; The node is CL-DRIVEN once a consensus client connects: newPayload payloads are verified AND
+    ; executed/committed locally through the shared EthereumBlockVerifier, and
+    ; forkchoiceUpdated advances the head; the devp2p sync loop is demoted to a
+    ; backfiller — it bootstraps up to the peer tip, then idles and only downloads
+    ; when the Engine API answers SYNCING for a payload whose ancestors are missing.
+    ; Until the first forkchoiceUpdated the sync loop is autonomous (devp2p import only).
+    listen_ip=127.0.0.1
+    listen_port=8551
+    ;request_body_size_limit=10485760
+    ;batch_request_size_limit=8
+    ; JWT secret file (32-byte hex) — MUST be identical to the CL client's jwtsecret
+    jwt_secret_file=conf/engine/jwt.hex
+    ; allowed JWT iat clock skew in seconds
+    ;clock_skew_secs=60
+
+[security]
+    private_key_path=conf/node.pem
+    enable_hsm=false
+
+; FISCO gateway config — present only because the core node still builds a gateway
+; object; in EL mode it is NEVER started (AirNodeInitializer skips m_gateway->start()).
+; nodes.json must be an empty list so no FISCO peer is contacted.
+[p2p]
+    listen_ip=0.0.0.0
+    listen_port=30300
+    sm_ssl=false
+    nodes_path=./
+    nodes_file=nodes.json
+
+[cert]
+    ; directory the certificates located in
+    ca_path=./conf
+    ca_cert=ca.crt
+    node_key=ssl.key
+    node_cert=ssl.crt
+
+[storage]
+    data_path=data
+    enable_cache=true
+    type=RocksDB
+    key_page_size=10240
+    ; EL nodes sync an Ethereum L1 chain whose state is archive-scale (tens of thousands
+    ; of SSTs): the bounded default (256) thrashes the table cache there — every random
+    ; MPT node read evicts a reader and re-reads its index/filter/properties blocks
+    ; (measured ~900MB/s of throwaway reads during an MPT prune rebuild on a ~942GB /
+    ; 10k-SST database). Keep every touched SST open instead. Cost: one file descriptor
+    ; per live SST plus pinned index/filter blocks on the heap — raise the process nofile
+    ; limit (>= 65536); the startup warning (warnIfMaxOpenFilesUnbounded) fires if the
+    ; limit is too small.
+    rocksdb_max_open_files=-1
+
+[log]
+    enable=true
+    log_path=./log
+    level=info
+    max_log_file_size=200
+    ; flush every log line to disk immediately (default false: lines are flushed
+    ; when the log queue drains; under sustained load at most 100ms plus up to 63 lines of write latency)
+    ; under a sustained flood beyond the 32768-line backlog new lines are dropped
+    ; (a "[log] dropped N log line(s)" marker follows; cumulative count via admin_getLogLevel droppedLines)
+    ;flush=false
+
+[thread_pool]
+    ; Shared IOServicePool thread count
+    ;io_thread_count=

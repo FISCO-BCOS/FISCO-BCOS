@@ -84,8 +84,7 @@ void RateCollector::report()
     }
 
     auto& stat = m_rateCollectorStat;
-    BCOS_LOG(INFO) << LOG_BADGE("RateCollector")
-                   << LOG_BADGE(m_moduleName)
+    BCOS_LOG(INFO) << LOG_BADGE("RateCollector") << LOG_BADGE(m_moduleName)
                    << LOG_KV("lastCount", stat.lastCount)
                    << LOG_KV("lastTotalDataSize", stat.lastTotalDataSize)
                    << LOG_KV("lastFailedCount", stat.lastFailedCount)

@@ -48,7 +48,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmone/evmone.h>
@@ -72,7 +72,7 @@
 namespace bcos::executor_v1::hostcontext
 {
 
-#define HOST_CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("HOST_CONTEXT")
+#define HOST_CONTEXT_LOG(LEVEL) BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("HOST_CONTEXT")
 
 // clang-format off
 struct NotFoundCodeError : public bcos::Error {};
@@ -134,8 +134,8 @@ using CacheExecutables =
         std::hash<evmc_address>>;
 CacheExecutables& getCacheExecutables();
 
-task::Task<std::shared_ptr<Executable>> getExecutable(
-    auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
+task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_address& address,
+    const evmc_revision& revision, ledger::account::AddressTableMode addressTableMode)
 {
     constexpr bool useGlobalCache = !isHistoricalStorage<decltype(storage)>();
     if constexpr (useGlobalCache)
@@ -146,7 +146,7 @@ task::Task<std::shared_ptr<Executable>> getExecutable(
         }
     }
 
-    if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
+    if (Account<std::decay_t<decltype(storage)>> account(storage, address, addressTableMode);
         auto codeEntry = co_await account.code())
     {
         auto executable = std::make_shared<Executable>(std::move(*codeEntry));
@@ -285,8 +285,7 @@ public:
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
     {
         return Account<std::decay_t<Storage>>(hostContext.m_rollbackableStorage.get(), address,
-            hostContext.m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_raw_address));
+            ledger::account::nodeAddressTableMode());
     }
 
     // Tag-forwarding variant: passes all tags through to the underlying
@@ -346,8 +345,7 @@ public:
         const evmc_address& address, auto&&... /*unused*/)
     {
         if (auto executable = co_await getExecutable(m_rollbackableStorage.get(), address,
-                m_revision,
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+                m_revision, ledger::account::nodeAddressTableMode());
             executable && executable->m_code)
         {
             co_return executable->m_code;
@@ -372,15 +370,41 @@ public:
 
     task::Task<h256> codeHashAt(const evmc_address& address, auto&&... /*unused*/)
     {
-        Account<Storage> account(m_rollbackableStorage.get(), address,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-        co_return co_await account.codeHash();
+        Account<Storage> account(
+            m_rollbackableStorage.get(), address, ledger::account::nodeAddressTableMode());
+        if (!m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_eip161_1052_account_semantics))
+        {
+            co_return co_await account.codeHash();  // pre-fix: zero for any code-less account
+        }
+        // EIP-1052: 0 for an absent or EIP-161-empty account, hash("") for a live code-less
+        // one, the code hash otherwise (issue #5372). Read CODE_HASH first so a contract costs
+        // the same single read as before; nonce/balance are consulted only for code-less rows.
+        auto const emptyCodeHash = m_hashImpl.get().emptyHash();
+        auto codeHash = co_await account.codeHash();
+        if (codeHash != h256{} && codeHash != emptyCodeHash)
+        {
+            co_return codeHash;
+        }
+        if (!co_await account.existsEthereum(emptyCodeHash, codeHash))
+        {
+            co_return {};
+        }
+        co_return emptyCodeHash;
     }
 
-    task::Task<bool> exists([[maybe_unused]] const evmc_address& address, auto&&... /*unused*/)
+    task::Task<bool> exists(const evmc_address& address, auto&&... /*unused*/)
     {
-        // TODO: impl the full support for solidity
-        co_return true;
+        if (!m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_eip161_1052_account_semantics))
+        {
+            co_return true;  // pre-fix: every address "exists"
+        }
+        // EIP-161: empty == absent; feeds evmone's new-account gas and SELFDESTRUCT beneficiary
+        // handling through account_exists (issue #5371).
+        Account<Storage> account(
+            m_rollbackableStorage.get(), address, ledger::account::nodeAddressTableMode());
+        co_return co_await account.existsEthereum(m_hashImpl.get().emptyHash());
     }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
@@ -620,14 +644,19 @@ private:
         if (m_blockHeader.get().number() != 0)
         {
             std::string authTablePath;
-            // FIB-82: when feature_raw_address is on, m_recipientAccount.path() returns a binary
-            // path, but ContractAuthMgrPrecompiled always looks up auth tables using hex paths.
-            // Force hex to match the lookup path.
-            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_auth_check) &&
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address))
+            // FIB-82: in a binary node-local layout m_recipientAccount.path() returns a
+            // binary path, but ContractAuthMgrPrecompiled always looks up auth tables using
+            // hex paths (auth tables are not migrated). Force hex to match the lookup path.
+            // This is not gated on bugfix_auth_check: the precompiled's hex lookup is
+            // unconditional, so the write side must agree with it in every feature
+            // configuration — on Hex nodes the branch is never taken and nothing changes.
+            // Derive through the shared rule in Hex mode (never a local prefix + hex
+            // concat): accountTableName owns the routing, including the /sys/ special case
+            // for the c_systemTxsAddress members, so this call site cannot drift from it.
+            if (ledger::account::nodeAddressTableMode() != ledger::account::AddressTableMode::Hex)
             {
-                authTablePath =
-                    std::string(executor::USER_APPS_PREFIX) + address2HexString(ref.code_address);
+                authTablePath = ledger::account::accountTableName(
+                    ref.code_address, ledger::account::AddressTableMode::Hex);
             }
             else
             {
@@ -774,8 +803,7 @@ private:
         }
 
         if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
-                m_revision,
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+                m_revision, ledger::account::nodeAddressTableMode());
             !m_executable)
         {
             if (ref.input_size > 0)

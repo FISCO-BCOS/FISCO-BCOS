@@ -27,10 +27,28 @@ struct RocksDBCheckpointOption
     bool optimizeLevelStyleCompaction = false;
     bool enableBlobFiles = false;
     bool enableDBStatistics = false;
+    // RocksDB table-cache bound. The default 256 caps fd usage and pinned index/filter
+    // blocks for ordinary consortium-chain databases. -1 (unlimited) never evicts table
+    // readers — the right choice for an archive-scale DB (tens of thousands of SSTs),
+    // where a 256-entry cache thrashes: every random read evicts a reader and re-reads
+    // its index/filter/properties blocks (observed ~900MB/s of throwaway reads during an
+    // MPT prune rebuild on a ~942GB / 10k-SST database). Cost of -1: fd usage grows
+    // toward the live SST count and, with cache_index_and_filter_blocks off, every
+    // reader pins its index/filter blocks on the heap — raise the process nofile limit
+    // (>= 65536) when configuring it via [storage].rocksdb_max_open_files.
+    int maxOpenFiles = 256;
 };
 
 namespace detail
 {
+// The process soft RLIMIT_NOFILE, or -1 when unlimited / undeterminable.
+long softOpenFileLimit();
+
+// With maxOpenFiles == -1 RocksDB never evicts table readers, so fd usage grows toward the
+// live SST count. Log a loud warning when the soft fd limit leaves no headroom for an
+// archive-scale SST count; a no-op for any bounded value.
+void warnIfMaxOpenFilesUnbounded(int maxOpenFiles, std::string_view path);
+
 std::unique_ptr<::rocksdb::DB> openCheckpointRocksDB(
     const std::string& path, const ::rocksdb::Options& options, bool readOnly);
 
@@ -62,9 +80,8 @@ public:
     using CheckpointName = bcos::h256;
 
 
-    explicit CheckpointRocksDBStorage(
-        std::string_view rootDir, KeyResolver keyResolver = {}, ValueResolver valueResolver = {},
-        RocksDBCheckpointOption option = {})
+    explicit CheckpointRocksDBStorage(std::string_view rootDir, KeyResolver keyResolver = {},
+        ValueResolver valueResolver = {}, RocksDBCheckpointOption option = {})
       : m_path(std::filesystem::path(rootDir).lexically_normal().string()),
         m_option(std::move(option)),
         m_cache(::rocksdb::NewLRUCache(m_option.blockCacheSize)),

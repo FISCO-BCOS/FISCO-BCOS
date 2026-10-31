@@ -23,7 +23,7 @@ using namespace bcos::executor;
 // still-blocked worker thread.
 //
 // Threads are created only when PromiseTransactionExecutive is actually
-// invoked (TiKV storage + sharding path only) and exit after the task
+// invoked (sharding path only) and exit after the task
 // completes, avoiding persistent resource consumption.
 // ---------------------------------------------------------------------------
 
@@ -56,8 +56,7 @@ void MessagePromiseSwapper::spawnAndCall(std::function<CallParameters::UniquePtr
     // spawnAndCall happens-before this thread's wake-up via the
     // thread-creation + promise set_value/get chain; the scheduler is
     // always blocked in get() when this thread's completion runs.
-    std::thread([this, lastPromise,
-                    spawnCall = std::move(spawnCall)]() mutable {
+    std::thread([this, lastPromise, spawnCall = std::move(spawnCall)]() mutable {
         try
         {
             auto message = spawnCall();

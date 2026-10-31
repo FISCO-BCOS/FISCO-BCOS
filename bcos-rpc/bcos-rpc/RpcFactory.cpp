@@ -20,6 +20,8 @@
  */
 
 #include "bcos-rpc/amop/AirAMOPClient.h"
+#include "bcos-rpc/ipc/IpcServer.h"
+#include "bcos-rpc/jsonrpc/AdminMethods.h"
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
@@ -36,12 +38,12 @@
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/NewTimer.h>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -172,10 +174,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
             if (nodeKeyContent.empty())
             {
-                BOOST_THROW_EXCEPTION(
-                    InvalidParameter()
-                    << errinfo_comment("RpcFactory::initConfig: unable read content of key:" +
-                                       _nodeConfig->nodeKey()));
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeKey()));
             }
             certConfig.nodeKey.resize(nodeKeyContent.size());
             memcpy(certConfig.nodeKey.data(), nodeKeyContent.data(), nodeKeyContent.size());
@@ -286,10 +287,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
             if (smNodeKeyContent.empty())
             {
-                BOOST_THROW_EXCEPTION(
-                    InvalidParameter()
-                    << errinfo_comment("RpcFactory::initConfig: unable read content of key:" +
-                                       _nodeConfig->smNodeKey()));
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->smNodeKey()));
             }
             certConfig.nodeKey.resize(smNodeKeyContent.size());
             memcpy(certConfig.nodeKey.data(), smNodeKeyContent.data(), smNodeKeyContent.size());
@@ -358,14 +358,13 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
             if (enSmNodeKeyContent.empty())
             {
-                BOOST_THROW_EXCEPTION(
-                    InvalidParameter()
-                    << errinfo_comment("RpcFactory::initConfig: unable read content of key:" +
-                                       _nodeConfig->enSmNodeKey()));
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->enSmNodeKey()));
             }
             certConfig.enNodeKey.resize(enSmNodeKeyContent.size());
-            memcpy(certConfig.enNodeKey.data(), enSmNodeKeyContent.data(),
-                enSmNodeKeyContent.size());
+            memcpy(
+                certConfig.enNodeKey.data(), enSmNodeKeyContent.data(), enSmNodeKeyContent.size());
         }
 
         contextConfig->setIsCertPath(false);
@@ -390,20 +389,21 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     return wsConfig;
 }
 
-// Init HTTP RPC service configuration. When _enableOPEngine=true, reads from
-// [op_engine_rpc] section (OP-Stack Engine API); otherwise reads from [web3_rpc].
+// Init HTTP RPC service configuration. When _enableEngineRpc=true, reads from the section
+// the Engine API listener uses (NodeConfig::engineApiListener); otherwise from [web3_rpc].
 std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConfig(
-    const bcos::tool::NodeConfig::Ptr& _nodeConfig, bool _enableOPEngine)
+    const bcos::tool::NodeConfig::Ptr& _nodeConfig, bool _enableEngineRpc)
 {
     auto wsConfig = std::make_shared<boostssl::ws::WsConfig>();
     wsConfig->setModel(bcos::boostssl::ws::WsModel::Server);
     wsConfig->setDisableSsl(true);
 
-    if (_enableOPEngine)
+    if (_enableEngineRpc)
     {
-        wsConfig->setListenIP(_nodeConfig->opEngineRpcListenIP());
-        wsConfig->setListenPort(_nodeConfig->opEngineRpcListenPort());
-        wsConfig->setMaxMsgSize(_nodeConfig->opEngineHttpBodySizeLimit());
+        auto const& listener = _nodeConfig->engineApiListener();
+        wsConfig->setListenIP(listener.listenIP);
+        wsConfig->setListenPort(listener.listenPort);
+        wsConfig->setMaxMsgSize(listener.requestBodySizeLimit);
         // The engine API port is machine-to-machine (op-node / consensus clients),
         // not browser-facing, so CORS provides no functionality and would only
         // expose the port to cross-origin pages. Disable it explicitly.
@@ -432,7 +432,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
                   << LOG_KV("asServer", wsConfig->asServer())
                   << LOG_KV("maxMsgSize", wsConfig->maxMsgSize())
                   << LOG_KV("corsConfig", wsConfig->corsConfig().toString())
-                  << LOG_KV("enableOPEngine", _enableOPEngine);
+                  << LOG_KV("enableEngineRpc", _enableEngineRpc);
 
     return wsConfig;
 }
@@ -484,9 +484,10 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 }
 
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
-    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager, bool _enableOPEngine)
+    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager, bool _enableEngineRpc,
+    bool _enableMinerApi, bool _enableDebugApi)
 {
-    // Each RPC surface (web3 / op-engine) gets its own FilterSystem so that
+    // Each RPC surface (web3 / engine) gets its own FilterSystem so that
     // filter stores are isolated across ports (filters created on one port
     // cannot be removed from the other), and the internal static RNG used by
     // FilterSystem::insertFilter is not shared concurrently.
@@ -494,18 +495,19 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
         _groupManager, m_nodeConfig->groupId(), m_nodeConfig->web3FilterTimeout(),
         m_nodeConfig->web3MaxProcessBlock());
 
+    auto const& engineListener = m_nodeConfig->engineApiListener();
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
-        _enableOPEngine ? m_nodeConfig->opEngineBatchRequestSizeLimit() :
-                          m_nodeConfig->web3BatchRequestSizeLimit(),
+        _enableEngineRpc ? engineListener.batchRequestSizeLimit :
+                           m_nodeConfig->web3BatchRequestSizeLimit(),
         std::move(_groupManager), std::move(filterSystem), m_nodeConfig->web3SyncTransaction(),
-        _enableOPEngine);
+        _enableEngineRpc, _enableMinerApi, _enableDebugApi);
 
-    // if enable op engine, set jwt verifier and register op engine json http request handler
-    if (_enableOPEngine)
+    // if enable engine rpc, set jwt verifier and register engine json http request handler
+    if (_enableEngineRpc)
     {
         auto jwtConfig = std::make_shared<bcos::rpc::JwtConfig>();
-        jwtConfig->setSecretFile(m_nodeConfig->opEngineJwtSecretFile());
-        jwtConfig->setClockSkewSecs(m_nodeConfig->opEngineClockSkewSecs());
+        jwtConfig->setSecretFile(engineListener.jwtSecretFile);
+        jwtConfig->setClockSkewSecs(engineListener.clockSkewSecs);
         jwtConfig->setAllowedAlgorithms("HS256");
         web3JsonRpc->setJwtVerifier(std::make_shared<bcos::rpc::JwtVerifier>(std::move(jwtConfig)));
         if (auto httpServer = _wsService->httpServer())
@@ -592,25 +594,30 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     auto amopClient = buildAirAMOPClient(wsService);
     auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
 
-    if (m_nodeConfig->enableOpEngineRpc())
+    if (m_nodeConfig->servesEngineApi())
     {
-        auto opEngineConfig = initWeb3RpcServiceConfig(m_nodeConfig, true);
-        auto opEngineWsService = buildWsService(std::move(opEngineConfig));
+        auto engineConfig = initWeb3RpcServiceConfig(m_nodeConfig, true);
+        auto engineWsService = buildWsService(std::move(engineConfig));
         // buildWeb3JsonRpc creates a dedicated FilterSystem for this port, so
-        // filter stores are isolated between the OP Engine (8551) and web3 (8545).
-        auto opEngineJsonRpc =
-            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), opEngineWsService, groupManager, true);
+        // filter stores are isolated between the engine (8551) and web3 (8545) ports.
+        // The miner namespace is scoped per listener: the Engine API port carries it under
+        // [engine_rpc] enable_miner_api (OP lane only), the web3 port under [web3_rpc]
+        // enable_miner_api — the batcher handshake can no longer leak onto the public
+        // listener.
+        auto engineJsonRpc =
+            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), engineWsService, groupManager, true,
+                m_nodeConfig->engineApiMinerApi(), m_nodeConfig->engineApiDebugApi());
 
-        rpc->setOpEngineJsonRpcImpl(std::move(opEngineJsonRpc));
-        rpc->setOpEngineService(std::move(opEngineWsService));
+        rpc->setOpEngineJsonRpcImpl(std::move(engineJsonRpc));
+        rpc->setOpEngineService(std::move(engineWsService));
     }
     if (m_nodeConfig->enableWeb3Rpc())
     {
         auto web3Config = initWeb3RpcServiceConfig(m_nodeConfig);
         auto web3WsService = buildWsService(std::move(web3Config));
 
-        auto web3JsonRpc =
-            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService, groupManager);
+        auto web3JsonRpc = buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService,
+            groupManager, false, m_nodeConfig->enableMinerApi(), m_nodeConfig->enableDebugApi());
 
         auto weakPtrWeb3JsonRpc = std::weak_ptr<Web3JsonRpcImpl>(web3JsonRpc);
 
@@ -656,6 +663,23 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
                     }
                 }
             });
+    }
+    if (m_nodeConfig->rpcIpcEnable() && m_ioServicePool)
+    {
+        // the attach channel: the public method table plus admin_* on a unix socket under the
+        // data directory, serialized on one io thread of the pool
+        auto jsonRpc = rpc->jsonRpcImpl();
+        registerAdminMethods(*jsonRpc);
+        std::weak_ptr<JsonRpcImpl_2_0> weakJsonRpc = jsonRpc;
+        auto ipcServer = std::make_shared<IpcServer>(*m_ioServicePool->getIOService(),
+            m_nodeConfig->storagePath() + "/fisco-bcos.ipc",
+            [weakJsonRpc](std::string_view _body, auto&& _sender) {
+                if (auto jsonRpc = weakJsonRpc.lock())
+                {
+                    jsonRpc->onIpcRequest(_body, std::forward<decltype(_sender)>(_sender));
+                }
+            });
+        rpc->setIpcServer(std::move(ipcServer));
     }
     // Note: init groupManager after create rpc and register the handlers
     groupManager->init();

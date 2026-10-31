@@ -53,7 +53,6 @@ target_include_directories(sync PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${PROTO_OUTPUT_PATH}>)
 target_link_libraries(sync PUBLIC ledger storage bcos-framework bcos-utilities codec tool jsoncpp_static)
-set_target_properties(sync PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()

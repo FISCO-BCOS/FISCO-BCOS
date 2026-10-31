@@ -26,12 +26,13 @@
 using namespace bcos;
 using namespace bcos::rpc;
 
-bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string const& _groupId, uint32_t _batchRequestSizeLimit,
-    bcos::rpc::GroupManager::Ptr const& _groupManager, FilterSystem::Ptr filterSystem, 
-    bool syncTransaction, bool _enableOPEngine)
+bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string const& _groupId,
+    uint32_t _batchRequestSizeLimit, bcos::rpc::GroupManager::Ptr const& _groupManager,
+    FilterSystem::Ptr filterSystem, bool syncTransaction, bool _enableOPEngine,
+    bool _enableMinerApi, bool _enableDebugApi)
   : m_endpoints(
         _groupManager->getNodeService(_groupId, ""), std::move(filterSystem), syncTransaction),
-    m_endpointsMapping(_enableOPEngine),
+    m_endpointsMapping(_enableOPEngine, _enableMinerApi, _enableDebugApi),
     m_batchRequestSizeLimit(_batchRequestSizeLimit)
 {
     RPC_LOG(INFO) << LOG_KV("[NEWOBJ][Web3JsonRpcImpl]", this);
@@ -61,7 +62,7 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
 
         if (m_web3Subscribe && m_web3Subscribe->isSubscribeRequest(method))
         {
-            auto result = handleSubscribeRequest(_request, std::move(method), std::move(_session));
+            auto result = handleSubscribeRequest(_request, method, std::move(_session));
             co_return result;
         }
 
@@ -73,7 +74,9 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
 
         Json::Value const& params = _request["params"];
         Json::Value result;
-        co_await (m_endpoints.*optHandler.value())(params, result);
+        auto handler = optHandler.value();
+        auto task = (m_endpoints.*handler)(params, result);
+        co_await std::move(task);
         result["id"] = _request["id"];
         response = std::move(result);
 
@@ -105,8 +108,8 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
     co_return response;
 }
 
-void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request,
-    std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender)
+void Web3JsonRpcImpl::handleBatchRequest(
+    Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender)
 {
     auto respJsonValuePtr = std::make_shared<Json::Value>(Json::arrayValue);
     auto leftRequestSize = std::make_shared<std::atomic<size_t>>(_request.size());
@@ -122,9 +125,9 @@ void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request,
     for (auto& reqItem : _request)
     {
         respJsonValuePtr->append(Json::Value(Json::nullValue));
-        task::wait([](Web3JsonRpcImpl* self, Json::Value req, auto session,
-                        auto respJsonValuePtr, auto leftRequestSize, auto requestIndex,
-                        decltype(startT) startT, Sender send) mutable -> task::Task<void> {
+        task::wait([](Web3JsonRpcImpl* self, Json::Value req, auto session, auto respJsonValuePtr,
+                       auto leftRequestSize, auto requestIndex, decltype(startT) startT,
+                       Sender send) mutable -> task::Task<void> {
             auto result = co_await self->handleRequest(std::move(req), std::move(session));
             (*respJsonValuePtr)[requestIndex] = std::move(result);
             if (leftRequestSize->fetch_sub(1) > 1)
@@ -144,13 +147,13 @@ void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request,
                                 << LOG_KV("response", printJson(*respJsonValuePtr));
             }
         }(this, std::move(reqItem), _session, respJsonValuePtr, leftRequestSize, requestIndex,
-            startT, _sender));
+                                                startT, _sender));
         ++requestIndex;
     }
 }
 
-Json::Value Web3JsonRpcImpl::handleSubscribeRequest(Json::Value _request, std::string _method,
-    std::shared_ptr<boostssl::ws::WsSession> _session)
+Json::Value Web3JsonRpcImpl::handleSubscribeRequest(Json::Value _request,
+    std::string const& _method, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
     if (!_session)
     {
@@ -187,12 +190,14 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, const Sender& 
     onRPCRequest(_requestBody, nullptr, _sender);
 }
 
-void Web3JsonRpcImpl::onRPCRequest(const bcos::boostssl::http::HttpRequest& _request, const Sender& _sender)
+void Web3JsonRpcImpl::onRPCRequest(
+    const bcos::boostssl::http::HttpRequest& _request, const Sender& _sender)
 {
-    // JWT verification is mandatory for the OP-Engine RPC path: the handler below is only
-    // registered together with setJwtVerifier() in RpcFactory::buildWeb3JsonRpc(_enableOPEngine=true),
-    // so m_jwtVerifier is always set when this overload is reachable. The assert is a
-    // zero-cost documentation of that invariant (it compiles out under NDEBUG).
+    // JWT verification is mandatory for the engine RPC path: the handler below is only
+    // registered together with setJwtVerifier() in
+    // RpcFactory::buildWeb3JsonRpc(_enableEngineRpc=true), so m_jwtVerifier is always set when this
+    // overload is reachable. The assert is a zero-cost documentation of that invariant (it compiles
+    // out under NDEBUG).
     assert(m_jwtVerifier && "m_jwtVerifier is not set");
 
     std::string authorization;
@@ -200,7 +205,7 @@ void Web3JsonRpcImpl::onRPCRequest(const bcos::boostssl::http::HttpRequest& _req
     {
         authorization = std::string(it->value());
     }
-     auto verifyResult = m_jwtVerifier->verify(authorization);
+    auto verifyResult = m_jwtVerifier->verify(authorization);
     if (!verifyResult)
     {
         Json::Value request;
@@ -265,18 +270,16 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
                                         std::to_string(m_batchRequestSizeLimit)));
             }
 
-            if (request.size() > 1)
-            {
-                handleBatchRequest(std::move(request), std::move(_session), _sender);
-                return;
-            }
-
-            // single request in array
-            request = std::move(request[0]);
+            // JSON-RPC 2.0 §6: a batch (an Array) is answered with an Array of Response
+            // objects even when it holds a single call. Unwrapping a one-element array into a
+            // plain request answered with a bare object, which ethers.js v6 (whose default
+            // network detection is a one-element batch) cannot match (issue #5706).
+            handleBatchRequest(std::move(request), std::move(_session), _sender);
+            return;
         }
 
         task::wait([](Web3JsonRpcImpl* self, Json::Value req, auto session,
-                        Sender send) mutable -> task::Task<void> {
+                       Sender send) mutable -> task::Task<void> {
             auto result = co_await self->handleRequest(std::move(req), std::move(session));
             send(toBytesResponse(result), boost::beast::http::status::ok);
         }(this, std::move(request), std::move(_session), _sender));

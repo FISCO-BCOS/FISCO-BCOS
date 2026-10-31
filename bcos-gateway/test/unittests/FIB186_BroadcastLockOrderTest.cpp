@@ -34,7 +34,7 @@
  */
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-task/Wait.h"
@@ -70,7 +70,7 @@ public:
     // virtual is called for each session; a probe thread tries to take x_sessions EXCLUSIVELY: it
     // fails iff the broadcasting thread still holds it. No throw needed -- broadcastMessageToAll
     // touches no host; we just probe the lock state and stop.
-    task::Task<Message::Ptr> sendMessageByNodeID(P2pID /*nodeID*/, P2PMessage& /*header*/,
+    task::Task<std::optional<Message>> sendMessageByNodeID(P2pID /*nodeID*/, Message& /*header*/,
         ::ranges::any_view<bytesConstRef> /*payloads*/, Options /*options*/) override
     {
         bool acquiredExclusive = false;
@@ -91,7 +91,7 @@ public:
         probe.join();
         m_xSessionsHeldDuringSend = !acquiredExclusive;
         m_sendInvoked = true;
-        co_return nullptr;
+        co_return std::nullopt;
     }
 
     std::shared_mutex* m_xSessionsPtr = nullptr;
@@ -108,9 +108,9 @@ BOOST_AUTO_TEST_CASE(BroadcastDoesNotHoldSessionsLockWhileSending)
     auto service = std::make_shared<BroadcastProbeService>(selfInfo);
     service->arm();
 
-    auto message = std::make_shared<P2PMessage>();
-    task::wait([](std::shared_ptr<BroadcastProbeService> _service, P2PMessage::Ptr _message)
-                   -> task::Task<void> {
+    auto message = std::make_shared<Message>();
+    task::wait([](std::shared_ptr<BroadcastProbeService> _service,
+                   Message::Ptr _message) -> task::Task<void> {
         co_await _service->broadcastMessageToAll(
             _message, ::ranges::views::single(_message->payload()), Options{});
     }(service, message));

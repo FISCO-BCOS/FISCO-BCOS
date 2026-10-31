@@ -20,13 +20,9 @@
  */
 #include "PBFTInitializer.h"
 #include "Common.h"
-#include <bcos-framework/election/FailOverTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-ledger/Ledger.h>
-#ifdef WITH_LEDGER_ELECTION
-#include <bcos-leader-election/src/LeaderElectionFactory.h>
-#endif
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-rpbft/bcos-rpbft/rpbft/utilities/RPBFTFactory.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
@@ -34,7 +30,6 @@
 #include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
-#include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-txpool/TxPool.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-utilities/FileUtility.h>
@@ -55,7 +50,6 @@ using namespace bcos::scheduler;
 using namespace bcos::initializer;
 using namespace bcos::group;
 using namespace bcos::protocol;
-using namespace bcos::election;
 
 PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::tool::NodeConfig::Ptr _nodeConfig, ProtocolInitializer::Ptr _protocolInitializer,
@@ -193,28 +187,17 @@ void PBFTInitializer::initChainNodeInfo(
 
 void PBFTInitializer::start()
 {
-    if (!m_nodeConfig->enableFailOver())
-    {
-        m_blockSync->enableAsMaster(true);
-        // Note: since enableAsMasterNode will recover pbftState and execute the recovered proposal,
-        // should call this after every module and handlers has been inited completed
-        m_pbft->enableAsMasterNode(true);
-    }
+    // Note: since enableAsMasterNode will recover pbftState and execute the recovered proposal,
+    // should call this after every module and handlers has been inited completed
+    m_blockSync->enableAsMaster(true);
+    m_pbft->enableAsMasterNode(true);
     m_sealer->start();
     m_blockSync->start();
     m_pbft->start();
-    if (m_leaderElection)
-    {
-        m_leaderElection->start();
-    }
 }
 
 void PBFTInitializer::stop()
 {
-    if (m_leaderElection)
-    {
-        m_leaderElection->stop();
-    }
     m_sealer->stop();
     m_blockSync->stop();
     m_pbft->stop();
@@ -226,10 +209,6 @@ void PBFTInitializer::init()
     m_sealer->init(m_pbft);
     m_blockSync->init();
     m_pbft->init();
-    if (m_nodeConfig->enableFailOver())
-    {
-        initConsensusFailOver(m_protocolInitializer->keyPair()->publicKey());
-    }
     syncGroupNodeInfo();
 }
 
@@ -532,112 +511,58 @@ void PBFTInitializer::syncGroupNodeInfo()
 {
     // Note: In air mode, the groupNodeInfo must be successful
     auto self = std::weak_ptr<PBFTInitializer>(shared_from_this());
-    m_frontService->asyncGetGroupNodeInfo(
-        [self](Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-            auto pbftInit = self.lock();
-            if (!pbftInit)
+    task::wait([](std::weak_ptr<PBFTInitializer> _self,
+                   front::FrontServiceInterface::Ptr _frontService) -> task::Task<void> {
+        auto pbftInit = _self.lock();
+        if (!pbftInit)
+        {
+            co_return;
+        }
+        auto [_error, _groupNodeInfo] = co_await _frontService->getGroupNodeInfo();
+        if (_error != nullptr)
+        {
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("getGroupNodeInfo failed") << LOG_KV("code", _error->errorCode())
+                << LOG_KV("msg", _error->errorMessage());
+            co_return;
+        }
+        try
+        {
+            if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().empty())
             {
-                return;
+                co_return;
             }
-            if (_error != nullptr)
+            NodeIDSet nodeIdSet;
+            auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+            if (nodeIDList.empty())
             {
-                INITIALIZER_LOG(WARNING)
-                    << LOG_DESC("asyncGetGroupNodeInfo failed")
-                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-                return;
+                co_return;
             }
-            try
+            for (auto const& nodeIDStr : nodeIDList)
             {
-                if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().empty())
-                {
-                    return;
-                }
-                NodeIDSet nodeIdSet;
-                auto const& nodeIDList = _groupNodeInfo->nodeIDList();
-                if (nodeIDList.empty())
-                {
-                    return;
-                }
-                for (auto const& nodeIDStr : nodeIDList)
-                {
-                    auto nodeID =
-                        pbftInit->m_protocolInitializer->cryptoSuite()->keyFactory()->createKey(
-                            fromHex(nodeIDStr));
-                    nodeIdSet.insert(nodeID);
-                }
-                // the blockSync module set the connected node list
-                pbftInit->m_blockSync->config()->setConnectedNodeList(nodeIdSet);
-                // the txpool module set the connected node list
-                auto txpool = std::dynamic_pointer_cast<bcos::txpool::TxPool>(pbftInit->m_txpool);
-                INITIALIZER_LOG(INFO) << LOG_DESC("syncGroupNodeInfo for block sync and txpool")
-                                      << LOG_KV("connectedSize", nodeIdSet.size());
-                txpool->transactionSync()->config()->setConnectedNodeList(std::move(nodeIdSet));
+                auto nodeID =
+                    pbftInit->m_protocolInitializer->cryptoSuite()->keyFactory()->createKey(
+                        fromHex(nodeIDStr));
+                nodeIdSet.insert(nodeID);
             }
-            catch (std::exception const& e)
-            {
-                INITIALIZER_LOG(WARNING) << LOG_DESC("asyncGetGroupNodeInfo exception")
-                                         << LOG_KV("message", boost::diagnostic_information(e));
-            }
-        });
+            // the blockSync module set the connected node list
+            pbftInit->m_blockSync->config()->setConnectedNodeList(nodeIdSet);
+            // the txpool module set the connected node list
+            auto txpool = std::dynamic_pointer_cast<bcos::txpool::TxPool>(pbftInit->m_txpool);
+            INITIALIZER_LOG(INFO) << LOG_DESC("syncGroupNodeInfo for block sync and txpool")
+                                  << LOG_KV("connectedSize", nodeIdSet.size());
+            txpool->transactionSync()->config()->setConnectedNodeList(std::move(nodeIdSet));
+        }
+        catch (std::exception const& e)
+        {
+            INITIALIZER_LOG(WARNING) << LOG_DESC("getGroupNodeInfo exception")
+                                     << LOG_KV("message", boost::diagnostic_information(e));
+        }
+    }(self, m_frontService));
 }
 
 void PBFTInitializer::onGroupInfoChanged()
 {
-    if (!m_leaderElection)
-    {
-        return;
-    }
-    // failover enabled, should sync the latest information to the etcd if the node is
-    // leader
-    INITIALIZER_LOG(INFO) << LOG_DESC("Election onGroupInfoChanged, update the memberConfig");
-    std::string modifiedConfig;
-    m_groupInfoCodec->serialize(modifiedConfig, m_groupInfo);
-    auto memberInfo = m_memberFactory->createMember();
-    memberInfo->setMemberID(m_nodeConfig->memberID());
-    memberInfo->setMemberConfig(modifiedConfig);
-    m_leaderElection->updateSelfConfig(memberInfo);
-}
-
-void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
-{
-    m_memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
-
-#ifdef WITH_LEDGER_ELECTION
-    auto leaderElectionFactory = std::make_shared<LeaderElectionFactory>(m_memberFactory);
-#endif
-    // leader key: /${chainID}/consensus/${nodeID}
-    std::string leaderKey =
-        "/" + m_nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR + _nodeID->hex();
-
-    std::string nodeConfig;
-    m_groupInfoCodec->serialize(nodeConfig, m_groupInfo);
-
-#ifdef WITH_LEDGER_ELECTION
-    m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
-        nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
-        m_nodeConfig->leaseTTL(), m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(),
-        m_nodeConfig->pdKeyPath(), *m_ioServicePool->getIOService());
-
-    // register the handler
-    m_leaderElection->registerOnCampaignHandler(
-        [this](bool _success, bcos::protocol::MemberInterface::Ptr _leader) {
-            m_pbft->enableAsMasterNode(_success);
-            m_blockSync->enableAsMaster(_success);
-            INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
-                                  << LOG_KV("leader", _leader ? _leader->memberID() : "None");
-            if (!_success)
-            {
-                return;
-            }
-            auto schedulerManager =
-                std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
-            schedulerManager->asyncSwitchTerm(_leader->seq(), [_leader](Error::Ptr&& error) {
-                INITIALIZER_LOG(INFO)
-                    << "Notify scheduler switch " << (error ? "failed" : "success") << " with"
-                    << LOG_KV("seq", _leader->seq());
-            });
-        });
-    INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusFailOver") << LOG_KV("leaderKey", leaderKey)
-                          << LOG_KV("nodeConfig", nodeConfig);
-#endif
+    // Consensus failover (etcd leader election) was retired together with the TiKV-based
+    // MAX topology; nothing to propagate on group info change in the base implementation.
 }

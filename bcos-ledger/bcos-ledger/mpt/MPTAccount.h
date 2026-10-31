@@ -46,7 +46,7 @@ namespace bcos::ledger::mpt
 {
 
 /// A Storage that carries the MPT node/backend handles, letting MPTAccount keep EVMAccount's
-/// fixed (storage, address, binaryAddress) construction shape — the one HostContext uses.
+/// fixed (storage, address, AddressTableMode) construction shape — the one HostContext uses.
 ///
 /// Reserved for PR-43; nothing outside the tests satisfies it yet. It exists so a historical
 /// storage stack can hand HostContext an Account type without widening HostContext's three
@@ -87,10 +87,13 @@ concept HistoricalStorageContext = requires(Storage& storage) {
 /// One consequence to know about: exists() means different things on the two paths, and the rooted
 /// one is the Ethereum meaning. With a root it is leaf presence, exactly as an Ethereum client
 /// answers "does this account exist". The inherited flat exists() (EVMAccount.h:27-31) tests for a
-/// SYS_TABLES row, a BCOS notion with no Ethereum counterpart, and the two can disagree: an
-/// account touched only by rows carrying no Ethereum state never produces a leaf (MPTBuilder.h:
-/// 92-97, 215-227 keep that one member of the EIP-161 empty-account class out of the trie), so it
-/// reads as absent historically and present flatly. Ethereum agrees with the historical answer.
+/// SYS_TABLES row, a BCOS notion with no Ethereum counterpart, and the two can disagree.
+/// MPTBuilder.h finalizeAccount keeps the whole EIP-161 empty-account class out of the trie: an
+/// account touched only by rows carrying no Ethereum state never produces a leaf (the
+/// sawEthereumRow early-out), and an account whose merged post-block triple is
+/// {0, 0, keccak256("")} has its leaf removed (the empty-triple check, storage ignored). Either
+/// kind still owns a SYS_TABLES row, so it reads as present flatly and absent historically.
+/// Ethereum agrees with the historical answer.
 ///
 /// abi() and increaseNonce() are inherited unchanged. abi is BCOS metadata outside the committed
 /// 4-tuple and is deliberately not historicised — a historical query returns the CURRENT abi,
@@ -115,13 +118,25 @@ private:
 
 public:
     /// Direct construction, for callers that already hold the trie handles (tests, tooling).
-    /// @param binaryAddress the caller's feature_raw_address setting, exactly as EVMAccount
-    /// takes it — deliberately without a default: it decides the flat table name every
-    /// no-root read and every inherited write uses, and guessing it wrong makes those reads
-    /// silently miss on a raw-address chain.
+    /// @param mode the node's account-table mode (ledger::account::AddressTableMode,
+    /// usually nodeAddressTableMode()), exactly as EVMAccount takes it — deliberately
+    /// without a default: it decides the flat table name every no-root read and every inherited
+    /// write uses, and guessing it wrong makes those reads silently miss on a binary-layout node.
     MPTAccount(Storage& storage, NodeStorage& nodeStorage, BackendStorage& backendStorage,
-        bcos::Address address, bool binaryAddress)
-      : Base(storage, address, binaryAddress),
+        bcos::Address address, account::AddressTableMode mode)
+      : Base(storage, address, mode),
+        m_nodeStorage(nodeStorage),
+        m_backendStorage(backendStorage),
+        m_address(address)
+    {}
+
+    /// FromTableName form: the flat table name is pinned by the caller (e.g. the Eth/OP
+    /// lane's ethLaneAccountTableName, which keeps system-tx addresses under their /apps/
+    /// logical name where the v1 rule would route them to /sys/). The rooted historical
+    /// reads are table-name-independent either way (the leaf key is keccak(address)).
+    MPTAccount(Storage& storage, NodeStorage& nodeStorage, BackendStorage& backendStorage,
+        bcos::Address address, account::FromTableName /*tag*/, std::string tableName)
+      : Base(storage, account::FromTableName{}, std::move(tableName)),
         m_nodeStorage(nodeStorage),
         m_backendStorage(backendStorage),
         m_address(address)
@@ -136,9 +151,9 @@ public:
     /// EVMAccount. Historical base state comes from the storage stack PR-43 builds (a writable
     /// layer over a read-through layer that resolves misses through the rooted reads below), not
     /// from the account type.
-    MPTAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
+    MPTAccount(Storage& storage, const evmc_address& address, account::AddressTableMode mode)
         requires HistoricalStorageContext<Storage>
-      : Base(storage, address, binaryAddress),
+      : Base(storage, address, mode),
         m_nodeStorage(storage.mptNodeStorage()),
         m_backendStorage(storage.mptBackendStorage()),
         m_address(bcos::bytesConstRef{address.bytes, sizeof(address.bytes)})

@@ -1,6 +1,14 @@
 
 ### v3.18.0
 
+**bcos-utilities 日志破坏性变更**：
+
+* 日志管线替换为整行异步 fast path；`log.format` 自定义格式恢复支持——配置串在 initLog 时编译为整行布局、由生产者线程直接渲染（支持字面量、`%%` 转义及 `%Severity%`、`%TimeStamp(format="...")%`、`%ThreadName%`、`%ThreadID%`、`%LineID%`、`%ProcessID%`、`%Message%`，TimeStamp 支持 date_time 标志 `%Y %y %m %d %H %M %S %f %%`），不支持的语法回退内置布局并在 stderr 与日志中输出 ERROR；格式串缺少 `%Message%` 占位符时日志内容不被渲染，布局仍然生效，但同样在 stderr 与日志中输出告警；`log.flush` 默认值由 `true` 改为 `false`（改为队列排空时刷盘，持续洪泛下兜底上界为 100ms + 至多 63 行的写盘延迟，逐行刷盘可显式配置 `flush=true` 恢复）
+* 持续洪泛超过 sink 槽位池（32768 行）时新日志行会被丢弃（基线 boost 异步管线以内存增长换取不丢行）；积压排空后会输出一条 `[log] dropped N log line(s)` 标记行，累计丢弃计数可通过 `admin_getLogLevel` 响应的 `droppedLines` 字段轮询告警
+* 删除 stat 日志通道及以下导出符号：`FileLoggerHandler`、`StatFileLogger`、`StatFileLoggerHandler`、`c_statLogLevel`、`setStatLogLevel`，下游如有链接引用需移除；同时删除已安装公共头 `BoostLogThreadNameAttribute.h`（含 `bcos::log::thread_name`、`bcos::log::thread_name_impl`），下游如有 `#include` 引用需移除
+* 已安装公共头 `BoostLogInitializer.h` 删除以下公共 API：`sink_t`/`console_sink_t` typedef、两个 `initStatLog` 重载、`initLogSink`/`initHourLogSink`/`initConsoleLogSink`、`setLogFormatter`；下游如 `#include` 该头驱动自建 sink 需迁移
+* 合入 upstream release-3.18.0 的 per-module 日志级别（`BCOS_MODULE_LOG`/`setModuleLogLevel`，实现移植到整行 fast path，不经过 boost::log core）、`log.enable_block_stat` BlockStat 开关及共识路径命名事件日志；测试工具 `LogCapture` 改为注册 whole-line sink 捕获日志
+
 **bcos-boostssl/bcos-cpp-sdk 破坏性变更**：删除 MessageFace 及工厂、WsMessage 改 move-only、回调改按值传 WsMessage、WsSession/WsService 去虚、发送路径签名改 const WsMessage&（迁移详见 PR #5464）
 
 **后续跟进**：`WsStreamDelegate::setVerifyCallback` fail-closed（raw 流上请求证书校验时抛错）将在独立 PR 落地

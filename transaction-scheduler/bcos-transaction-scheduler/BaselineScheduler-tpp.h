@@ -24,7 +24,6 @@
 
 #include "BaselineSchedulerMPTHelpers.h"
 #include "HistoricalCallStorage.h"
-#include "MPTNodeStorage.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-executor/src/Common.h"
@@ -39,12 +38,17 @@
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/TransactionReceiptNormalize.h"
 #include "bcos-framework/protocol/TransactionSubmitResultFactory.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/mpt/Errors.h"
+#include "bcos-ledger/mpt/EthereumBlockRoots.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
+#include "bcos-ledger/mpt/StateRoots.h"
+#include "bcos-ledger/mpt/ViewNodeStorage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Bloom.h"
@@ -63,54 +67,6 @@
 
 namespace bcos::scheduler_v1
 {
-
-/**
- * Calculates the state root of the given storage using the specified hash implementation.
- *
- * @param storage The storage to calculate the state root for.
- * @param hashImpl The hash implementation to use for the calculation.
- * @return A task that will eventually resolve to the calculated state root.
- */
-task::Task<h256> calculateStateRoot(auto& storage, uint32_t blockVersion,
-    crypto::Hash const& hashImpl, ledger::Features const& features)
-{
-    auto range = co_await storage2::range(storage);
-    storage::Entry deletedEntry;
-    deletedEntry.setStatus(storage::Entry::DELETED);
-
-    // Wrap once outside the parallel pipeline so the optional copy is paid only once,
-    // not per entry.
-    const std::optional<ledger::Features> featuresOpt(features);
-
-    h256 totalHash;
-    using KeyValueType = task::AwaitableReturnType<decltype(range.next())>;
-    tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
-        tbb::make_filter<void, KeyValueType>(tbb::filter_mode::serial_in_order,
-            [&](tbb::flow_control& control) -> KeyValueType {
-                if (auto keyValue = task::tbb::syncWait(range.next()))
-                {
-                    return keyValue;
-                }
-                control.stop();
-                return {};
-            }) &
-            tbb::make_filter<KeyValueType, h256>(tbb::filter_mode::parallel,
-                [&](KeyValueType keyValue) -> h256 {
-                    auto& [key, value] = *keyValue;
-                    executor_v1::StateKeyView view(key);
-                    auto [tableName, keyName] = view.get();
-
-                    const storage::Entry* entry = nullptr;
-                    if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
-                    {
-                        entry = std::addressof(deletedEntry);
-                    }
-                    return entry->hash(tableName, keyName, hashImpl, blockVersion, featuresOpt);
-                }) &
-            tbb::make_filter<h256, void>(
-                tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
-    co_return totalHash;
-}
 
 h256 calculateReceiptRoot(
     ::ranges::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
@@ -131,6 +87,12 @@ h256 calculateReceiptRoot(
     return receiptRoot;
 }
 
+/// The Ethereum receipts trie root (receiptsRoot) for executor_version >= 2 chains is
+/// ledger::mpt::calculateEthereumReceiptsRoot (bcos-ledger/mpt/EthereumBlockRoots.h), shared
+/// with EthereumBlockVerifier and EngineServiceImpl::buildPayload. It must be computed AFTER
+/// finishExecute's receipt-processing phase (it reads cumulativeGasUsed + logsBloom, which
+/// that phase fills). Empty -> emptyRootHash().
+
 /**
  * @brief Finishes the execution of a transaction and updates the block header and block.
  *
@@ -140,11 +102,15 @@ h256 calculateReceiptRoot(
  * @param newBlockHeader The updated block header.
  * @param newBlock The updated block.
  * @param hashImpl The hash implementation used to calculate the block hash.
+ * @param executorVersion The chain's executor version: >= ETHEREUM_EXECUTOR_VERSION selects the
+ *        Ethereum-compatible roots (txsRoot/receiptsRoot trie roots, emptyRootHash() for empty
+ *        blocks); lower versions keep the legacy Merkle roots byte-identical (no behaviour
+ *        change on legacy chains).
  */
 task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     protocol::BlockHeader& newBlockHeader, protocol::Block& block,
     ::ranges::input_range auto transactions, bool& sysBlock, crypto::Hash const& hashImpl,
-    ledger::Features const& features, std::optional<h256> mptStateRoot = {})
+    ledger::Features const& features, int executorVersion, std::optional<h256> mptStateRoot = {})
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
@@ -153,7 +119,18 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     h256 stateRoot;
     h256 receiptRoot;
 
-    tbb::parallel_invoke([&]() { transactionRoot = calculateTransactionRoot(block, hashImpl); },
+    // Ethereum-compatible roots for the pure-Ethereum executor (v2): the tx trie is committed
+    // over each transaction's EIP-2718 wire bytes and the receipt trie over EthReceipt RLP
+    // (empty blocks get emptyRootHash()). Legacy executors keep the Merkle roots unchanged.
+    // ETHEREUM_EXECUTOR_VERSION is a PRE-RELEASE gate — see its doc comment in
+    // bcos-framework/ledger/LedgerConfig.h (must be feature-flagged before release).
+    const bool ethereumRoots = executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
+
+    tbb::parallel_invoke(
+        [&]() {
+            transactionRoot = ethereumRoots ? calculateEthereumTransactionRoot(block) :
+                                              calculateTransactionRoot(block, hashImpl);
+        },
         [&]() {
             // When the block was built with an Ethereum MPT root (shouldBuildMPT), the header
             // commits to it verbatim and the legacy XOR fold is skipped; with no MPT root the
@@ -166,20 +143,24 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
             stateRoot = task::tbb::syncWait(
                 calculateStateRoot(storage, block.blockHeader()->version(), hashImpl, features));
         },
-        [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
-            size_t logIndex = 0;
             block.clearReceipts();
-            for (auto&& [index, receipt] : ::ranges::views::enumerate(receipts))
+            totalGasUsed = protocol::normalizeReceipts(receipts);
+            auto transactionIt = ::ranges::begin(transactions);
+            auto const transactionEnd = ::ranges::end(transactions);
+            for (auto const& receipt : receipts)
             {
-                receipt->setTransactionIndex(index);
-                receipt->setLogIndex(logIndex);
-                auto logBloom = getLogsBloom(receipt->logEntries());
-                receipt->setLogsBloom({logBloom.data(), logBloom.size()});
-                logIndex += receipt->logEntries().size();
-                totalGasUsed += receipt->gasUsed();
-                receipt->setCumulativeGasUsed(totalGasUsed.str());
-
+                // one DEBUG line per tx (the handbook's TxExecuted stage, baseline lane)
+                if (transactionIt != transactionEnd)
+                {
+                    BASELINE_SCHEDULER_LOG(DEBUG)
+                        << LOG_DESC("TxExecuted")
+                        << LOG_KV("tx", (*transactionIt)->hash().abridged())
+                        << LOG_KV("number", block.blockHeader()->number())
+                        << LOG_KV("status", receipt->status())
+                        << LOG_KV("gasUsed", receipt->gasUsed());
+                    ++transactionIt;
+                }
                 block.appendReceipt(receipt);
             }
         },
@@ -189,6 +170,14 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
                     bcos::precompiled::c_systemTxsAddress, transaction->to());
             });
         });
+
+    // The Ethereum receipts trie root reads cumulativeGasUsed + logsBloom, which the receipt
+    // processing branch above fills — so it is computed strictly AFTER that branch. The legacy
+    // Merkle arm is unaffected by the move (receipt->hash() is cached by the executor and the
+    // finishExecute mutations never clear dataHash), keeping legacy output identical.
+    receiptRoot = ethereumRoots ?
+                      ledger::mpt::calculateEthereumReceiptsRoot(receipts, transactions) :
+                      calculateReceiptRoot(receipts, block, hashImpl);
 
     newBlockHeader.setGasUsed(totalGasUsed);
     newBlockHeader.setTxsRoot(transactionRoot);
@@ -229,15 +218,11 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     //    prewriteBlockToBuffer for block 0 (isSysContractDeploy), so nothing would overwrite
     //    an execute-time row — the sys-contract-deploy header (its own gasUsed, hash, empty
     //    sealer/parentInfo) would replace the chain's genesis header on disk.
-    if (mptStateRoot && newBlockHeader.number() != 0)
+    if (mptStateRoot)
     {
-        bytes headerBuffer;
-        newBlockHeader.encode(headerBuffer);
-        storage::Entry headerEntry;
-        headerEntry.set(std::move(headerBuffer));
-        co_await storage2::writeOne(storage,
-            executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
-            std::move(headerEntry));
+        // Shared with the engine service (BaselineSchedulerMPTHelpers.h); it no-ops at
+        // block 0, which the comment above explains is load-bearing for genesis.
+        co_await scheduler_v1::publishPendingBlockHeaderForMPT(storage, newBlockHeader);
     }
 }
 
@@ -248,22 +233,16 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::buildMPTS
     typename MultiLayerStorage::ViewType& view, protocol::BlockHeader const& blockHeader,
     ledger::LedgerConfig const& ledgerConfig)
 {
-    auto const blockNumber = blockHeader.number();
-    h256 parentStateRoot = ledger::mpt::emptyRootHash();
-    if (blockNumber > 0 && shouldBuildMPT(ledgerConfig.features(), blockNumber - 1))
-    {
-        auto parentBlock = co_await ledger::getBlockData(
-            view, blockNumber - 1, ledger::HEADER, m_blockFactory.get());
-        parentStateRoot = parentBlock->blockHeader()->stateRoot();
-    }
-    // else: scenario-A activation boundary (parent committed an XOR root) — empty trie.
-
-    // Node reads resolve through the full view (parent nodes live in the pending layers /
-    // backend); node writes land in this block's own mutable layer (MPTNodeStorage.h).
-    ViewNodeStorage<typename MultiLayerStorage::ViewType> nodeStorage(view);
-    bool const l2Mode =
-        ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
-    co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
+    // Single source (BaselineSchedulerMPTHelpers.h): the parent-root rule, the ViewNodeStorage
+    // wiring and the l2Mode derivation are shared with the engine service.
+    // trackRefCounts: skip the per-hash refCountDeltas tally when the commit observer does not
+    // count references (NoopCommitObserver — pruning not configured): the delta's consumers then
+    // never read the map, and the execute path pays nothing for it. The execute path reads the
+    // cached m_trackRefCounts flag rather than the observer pointer, so it needs no
+    // synchronization against resetMPTCommitObserver's stop()-time write beyond the atomic flag
+    // itself.
+    co_return co_await scheduler_v1::buildMPTStateRootForView(view, blockHeader, ledgerConfig,
+        m_blockFactory.get(), m_trackRefCounts.load(std::memory_order_relaxed));
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
@@ -371,14 +350,9 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
         // the next block's parent root.
         std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
         std::optional<h256> mptStateRoot;
-        if (shouldBuildMPT(ledgerConfig->features(), blockHeader->number()))
+        if (shouldBuildMPT(
+                ledgerConfig->executorVersion(), ledgerConfig->features(), blockHeader->number()))
         {
-            // Reaching here means an MPT IS being built, so the flag-matrix rule the
-            // build depends on has to hold. Re-checked per block rather than at startup
-            // only: a mid-chain activation of either flag is invisible to the boot-time
-            // guard (LedgerInitializer). Inside the branch, so shouldBuildMPT stays a
-            // pure predicate AND is evaluated once.
-            rejectRawAddressWithMPT(ledgerConfig->features(), blockHeader->number());
             try
             {
                 mptDelta.emplace(co_await buildMPTStateRoot(view, *blockHeader, *ledgerConfig));
@@ -394,17 +368,17 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
                     << blockHeader->number() << " | " << boost::diagnostic_information(e);
                 if (blockHeader->number() == 1)
                 {
-                    // The known scenario-B gap has exactly this shape, and a bare
-                    // missing-node error from the trie core cannot say so: an L2 genesis
-                    // built from a NON-EMPTY alloc writes the genesis stateRoot but not
-                    // the trie nodes behind it, so block 1's incremental build cannot
-                    // resolve the parent trie. Name it instead of leaving operators to
-                    // guess.
+                    // Block 1 is where a missing parent trie first bites on an Ethereum-lane
+                    // chain: the genesis trie nodes ARE persisted with the genesis state
+                    // (Ledger.cpp's ethLane prewrite, #5374), so a failure here means that
+                    // prewrite
+                    // did not run (e.g. a genesis written by a binary predating #5374). Name
+                    // it instead of leaving operators to guess at a bare missing-node error
+                    // from the trie core.
                     BASELINE_SCHEDULER_LOG(ERROR)
-                        << "Block 1 build failure on an L2 chain: if genesis was created "
-                           "with a non-empty alloc, its trie nodes were never persisted "
-                           "(known limitation) — only empty-alloc genesis chains block 1 "
-                           "today";
+                        << "Block 1 build failure on an L2 chain: the genesis trie nodes are "
+                           "missing from \"/mpt/\" storage — the genesis was likely written by "
+                           "a binary that predates genesis node persistence (#5374)";
                 }
                 throw;
             }
@@ -415,7 +389,8 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
         bool sysBlock = false;
         co_await finishExecute(mutableStorage(view), ::ranges::views::all(receipts),
             *executedBlockHeader, *block, ::ranges::views::all(transactions), sysBlock,
-            m_hashImpl.get(), ledgerConfig->features(), mptStateRoot);
+            m_hashImpl.get(), ledgerConfig->features(), ledgerConfig->executorVersion(),
+            mptStateRoot);
 
         if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
         {
@@ -449,7 +424,8 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
                 .m_executedBlockHeader = executedBlockHeader,
                 .m_block = std::move(block),
                 .m_sysBlock = sysBlock,
-                .m_mptDelta = std::move(mptDelta)});
+                .m_mptDelta = std::move(mptDelta),
+                .m_executeMs = static_cast<int64_t>(current() - now)});
 
         // FIB-103 / FIB-104: Commit the execution result in a strict order:
         // push the view first (so we have a rollback target), then push the
@@ -636,9 +612,32 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // into its mutable layer at execute time as ordinary "/mpt/" state rows
         // (MPTNodeStorage.h), so the single mergeBackStorage below lands flat state and
         // trie nodes in one backend merge — one WriteBatch, one Write
-        // (RocksDBStorage2::merge). delta.obsoletedNodes / intraBlockObsoleted are NOT
-        // consumed here: they are candidates for the future pathdb pruning spec only, no
-        // deletes are issued (MPTDeltaLayer.h contract).
+        // (RocksDBStorage2::merge).
+        //
+        // MPT pruning (CommitObserver::coPreparePruneRows): the observer turns the block's
+        // delta into the deletion keys of expired node rows (pruning keeps no metadata on
+        // disk — its counts and queue are in memory — so the batch carries deletions only),
+        // applied to prewriteStorage so they land in the SAME WriteBatch as the block data —
+        // data and deletions can never diverge across a crash, and the deletion decision runs
+        // here, under m_commitMutex, so it can
+        // never race a concurrent commit reviving the node (F2 review fix: an earlier revision
+        // deleted from the observer's private worker thread, which could remove a node a
+        // concurrent block had just revived). The NoopCommitObserver default returns an empty
+        // batch, so a node without pruning configured pays nothing here — and pays nothing on the
+        // execute path either: buildMPTStateRoot skips the refCountDeltas tally unless the
+        // observer's needsRefCountDeltas() says it counts references.
+        // The observer is read ONCE per commit so coPreparePruneRows and onCommit below see
+        // the same observer even if stop()'s reset lands mid-commit (impossible today — the
+        // reset holds m_commitMutex, which this coroutine holds — but cheap insurance).
+        auto const commitObserver = m_mptCommitObserver;
+        if (result->m_mptDelta)
+        {
+            // The shared pre-commit hook (BaselineSchedulerMPTHelpers.h), also fired by the
+            // engine services' commit paths: deletion keys of expired node rows land in
+            // prewriteStorage, i.e. in the SAME WriteBatch as the block data.
+            co_await prepareMPTPruneRows(
+                *commitObserver, header->number(), *result->m_mptDelta, prewriteStorage);
+        }
         {
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_STATE);
@@ -652,7 +651,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // no try/catch here — swallowing an observer bug would hide it forever.
         if (result->m_mptDelta)
         {
-            m_mptCommitObserver->onCommit(header->number(), *result->m_mptDelta);
+            commitObserver->onCommit(header->number(), *result->m_mptDelta);
         }
 
         {
@@ -674,6 +673,13 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
 
         BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
                                      << " | elapsed: " << (current() - now) << "ms";
+        if (bcos::BlockStat::enabled())
+        {
+            BASELINE_SCHEDULER_LOG(INFO)
+                << METRIC << LOG_DESC("BlockStat") << LOG_KV("number", header->number())
+                << LOG_KV("txs", result->m_receipts.size()) << LOG_KV("execMs", result->m_executeMs)
+                << LOG_KV("commitMs", current() - now);
+        }
         commitLock.unlock();
 
         m_asyncGroup.run([&, result = std::move(result), blockHash = ledgerConfig->hash(),
@@ -802,6 +808,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCallLat
     auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber, m_blockFactory.get());
     auto block =
         co_await ledger::getBlockData(view, blockNumber, ledger::HEADER, m_blockFactory.get());
+    stampCallRevision(*ledgerConfig, *block->blockHeader());
     co_return co_await m_executor.get().executeTransaction(
         view, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
 }
@@ -834,15 +841,14 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             }
             auto ledgerConfig = co_await ledger::getLedgerConfig(
                 latestView, blockNumber, self->m_blockFactory.get());
-            if (!ledgerConfig->features().get(ledger::Features::Flag::feature_l2_ethereum_compat))
+            if (ledgerConfig->executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
             {
-                callback(
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                        fmt::format("eth_call: historical call at block {} requires the "
-                                    "full-fidelity MPT of an L2 Ethereum-compat chain "
-                                    "(feature_l2_ethereum_compat, scenario B); this chain's state "
-                                    "at that block is not completely committed to an MPT",
-                            blockNumber)),
+                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                             fmt::format("eth_call: historical call at block {} requires the "
+                                         "full-fidelity MPT of an Ethereum-lane chain "
+                                         "(executor_version >= 2, scenario B); this chain's state "
+                                         "at that block is not completely committed to an MPT",
+                                 blockNumber)),
                     nullptr);
                 co_return;
             }
@@ -859,8 +865,9 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
                 co_return;
             }
 
+            self->stampCallRevision(*ledgerConfig, *block->blockHeader());
             HistoricalStateBackend<typename MultiLayerStorage::ViewType> historicalBackend(
-                latestView, stateRoot);
+                latestView, stateRoot, ledger::account::nodeAddressTableMode());
             storage2::View<typename MultiLayerStorage::MutableStorage, void,
                 HistoricalStateBackend<typename MultiLayerStorage::ViewType>>
                 historicalView(std::addressof(historicalBackend));
@@ -868,6 +875,21 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             auto receipt = co_await self->m_executor.get().executeTransaction(
                 historicalView, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
             callback(nullptr, std::move(receipt));
+        }
+        catch (bcos::ledger::mpt::MPTInvariantViolation const& e)
+        {
+            // The historical walk lost its state-trie root (or an internal node): with
+            // pruning enabled that is the retention window, not corruption — and the
+            // window-boundary race (root resolves at request time, a concurrent commit
+            // deletes the rows before the walk) makes it reachable on a healthy node.
+            // Distinct error code so the RPC layer answers -32004, the same shape the five
+            // direct historical endpoints use, instead of a generic internal error leaking
+            // diagnostic_information to an unauthenticated caller.
+            callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::MPTStateUnavailable,
+                         fmt::format("eth_call at block {} failed: state trie node unavailable "
+                                     "(beyond the pruning retention window or missing): {}",
+                             blockNumber, boost::diagnostic_information(e))),
+                nullptr);
         }
         catch (std::exception const& e)
         {
@@ -894,12 +916,9 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getC
                    decltype(callback) callback) -> task::Task<void> {
         auto view = self->m_multiLayerStorage.get().fork();
         auto contractAddress = unhexAddress(contract);
-        auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-        auto ledgerConfig =
-            co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
-        ledger::account::EVMAccount account(view, contractAddress,
-            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+        ledger::account::EVMAccount account(
+            view, contractAddress, ledger::account::nodeAddressTableMode());
         auto code = co_await account.code();
 
         if (!code)
@@ -920,12 +939,9 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getA
                    decltype(callback) callback) -> task::Task<void> {
         auto view = self->m_multiLayerStorage.get().fork();
         auto contractAddress = unhexAddress(contract);
-        auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-        auto ledgerConfig =
-            co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
-        ledger::account::EVMAccount account(view, contractAddress,
-            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+        ledger::account::EVMAccount account(
+            view, contractAddress, ledger::account::nodeAddressTableMode());
         auto abi = co_await account.abi();
 
         if (!abi)
@@ -940,13 +956,14 @@ template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Le
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 task::Task<std::optional<bcos::storage::Entry>>
 BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getPendingStorageAt(
-    std::string_view address, std::string_view key, bcos::protocol::BlockNumber number)
+    // `number` is unused: the account-table mode is node-local (nodeAddressTableMode()), not a
+    // property of the queried block's feature set.
+    std::string_view address, std::string_view key,
+    [[maybe_unused]] bcos::protocol::BlockNumber number)
 {
     auto view = m_multiLayerStorage.get().fork();
-    auto ledgerConfig = co_await ledger::getLedgerConfig(view, number, m_blockFactory.get());
 
-    ledger::account::EVMAccount account(
-        view, address, ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+    ledger::account::EVMAccount account(view, address, ledger::account::nodeAddressTableMode());
     co_return co_await account.storageEntry(key);
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
@@ -959,7 +976,23 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::preE
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
-void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stop() {};
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stop()
+{
+    resetMPTCommitObserver();
+};
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::resetMPTCommitObserver()
+{
+    // Blocking lock, unlike coCommitBlock's try_to_lock: wait out any in-flight commit so
+    // that once this returns, no thread will ever dereference the previous observer from the
+    // commit path again (the commit path reads m_mptCommitObserver only while holding
+    // m_commitMutex). The execute path never dereferences the pointer — it reads the atomic
+    // m_trackRefCounts flag, whose stale value is harmless either way.
+    std::unique_lock commitLock(m_commitMutex);
+    m_mptCommitObserver = std::make_shared<ledger::mpt::NoopCommitObserver>();
+    m_trackRefCounts.store(false, std::memory_order_relaxed);
+}
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl,
@@ -984,7 +1017,27 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setM
 {
     if (observer)
     {
+        // Wiring-time only, before block flow starts — no mutex needed here.
+        m_trackRefCounts.store(observer->needsRefCountDeltas(), std::memory_order_relaxed);
         m_mptCommitObserver = std::move(observer);
+    }
+}
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setEvmcRevisionSchedule(
+    ledger::EvmcRevisionSchedule schedule)
+{
+    m_evmcRevisionSchedule = std::move(schedule);
+}
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stampCallRevision(
+    ledger::LedgerConfig& ledgerConfig, protocol::BlockHeader const& blockHeader) const
+{
+    if (m_evmcRevisionSchedule)
+    {
+        ledgerConfig.setEVMCRevision(
+            m_evmcRevisionSchedule(blockHeader.timestamp() / 1000, blockHeader.difficulty()));
     }
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>

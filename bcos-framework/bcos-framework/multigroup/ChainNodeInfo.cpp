@@ -1,13 +1,11 @@
 #include "bcos-framework/multigroup/ChainNodeInfo.h"
 
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <sstream>
 
 namespace bcos::group
 {
-ChainNodeInfo::ChainNodeInfo()
-  : m_nodeProtocol(std::make_shared<bcos::protocol::ProtocolInfo>())
-{}
+ChainNodeInfo::ChainNodeInfo() : m_nodeProtocol(std::make_shared<bcos::protocol::ProtocolInfo>()) {}
 
 ChainNodeInfo::ChainNodeInfo(std::string const& _nodeName, int32_t _type) : ChainNodeInfo()
 {

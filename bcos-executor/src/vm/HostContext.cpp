@@ -39,7 +39,7 @@
 #include <vector>
 
 
-using namespace std;
+using std::string;
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::storage;
@@ -263,7 +263,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
         // account must exist
         ledger::account::EVMAccount account(*m_executive->storage().getRawStorage(),
-            request->senderAddress, features().get(ledger::Features::Flag::feature_raw_address));
+            request->senderAddress, ledger::account::nodeAddressTableMode());
         request->nonce = task::syncWait([](decltype(account) contract) -> task::Task<u256> {
             auto const nonceString = co_await contract.nonce();
             // uint in storage

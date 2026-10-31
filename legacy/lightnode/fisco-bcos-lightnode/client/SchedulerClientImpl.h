@@ -2,11 +2,11 @@
 
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
+#include "../../../concepts/bcos-concepts/scheduler/Scheduler.h"
 #include "P2PClientImpl.h"
 #include <bcos-concepts/Serialize.h>
-#include "../../../concepts/bcos-concepts/scheduler/Scheduler.h"
 #include <bcos-tars-protocol/tars/LightNode.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace bcos::scheduler
 {
@@ -28,16 +28,16 @@ private:
 
         bcostars::ResponseSendTransaction response;
         auto nodeIDs = co_await p2p().getAllNodeID();
-        for(auto const& nodeID : nodeIDs)
+        for (auto const& nodeID : nodeIDs)
         {
             co_await p2p().sendMessageByNodeID(
-                    bcos::protocol::LIGHTNODE_CALL, nodeID, request, response);
+                bcos::protocol::LIGHTNODE_CALL, nodeID, request, response);
 
             if (response.error.errorCode)
             {
                 LIGHTNODE_LOG(WARNING) << "call failed, request nodeID: " << nodeID->hex()
-                                       << "response errorCode: " << response.error.errorCode
-                                       << " " << response.error.errorMessage;
+                                       << "response errorCode: " << response.error.errorCode << " "
+                                       << response.error.errorMessage;
                 continue;
             }
             else

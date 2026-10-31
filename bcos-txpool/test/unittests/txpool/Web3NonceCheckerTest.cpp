@@ -20,6 +20,7 @@
 
 #include "bcos-utilities/Common.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
+#include <bcos-framework/txpool/Constant.h>
 #include <bcos-tx-validator/Web3NonceChecker.h>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/test/unit_test.hpp>
@@ -335,6 +336,34 @@ BOOST_AUTO_TEST_CASE(FIB58_NonceNormalizationDetectsDuplicates)
         task::syncWait(checker.checkWeb3Nonce(sender2, "0x10")), TransactionStatus::NonceCheckFail);
 }
 
+// existsMemoryNonce is the reservation lookup on its own: the same answer checkWeb3Nonce's
+// memory half gives, over the same value-keyed entries, and NOTHING else. The admission layer
+// applies the ledger window itself (Check::Web3NonceWindow), so a checker that also answered
+// "outside the window" here would make that check run twice and report through two paths.
+BOOST_AUTO_TEST_CASE(existsMemoryNonceAnswersTheReservationOnly)
+{
+    const std::string sender = Address::generateRandomFixedBytes().toRawString();
+    BOOST_CHECK(!task::syncWait(checker.existsMemoryNonce(sender, "0x1")));
+
+    task::syncWait(checker.insertMemoryNonce(sender, "0x1"));
+    BOOST_CHECK(task::syncWait(checker.existsMemoryNonce(sender, "0x1")));
+    // Same value, three spellings, one entry (FIB-58).
+    BOOST_CHECK(task::syncWait(checker.existsMemoryNonce(sender, "0x01")));
+    BOOST_CHECK(task::syncWait(checker.existsMemoryNonce(sender, "1")));
+    BOOST_CHECK(!task::syncWait(checker.existsMemoryNonce(sender, "0x2")));
+
+    // Another sender's pending nonce is not this sender's: the key is the pair.
+    const std::string other = Address::generateRandomFixedBytes().toRawString();
+    BOOST_CHECK(!task::syncWait(checker.existsMemoryNonce(other, "0x1")));
+
+    // A nonce nowhere near the committed window is still "not reserved" -- that verdict belongs
+    // to the window check, not here. The committed nonce has to be seeded for this to say
+    // anything: with none, checkWeb3Nonce's storage miss makes it decline to judge too, and an
+    // implementation that consulted the window would pass this case by accident.
+    checker.insert(sender, u256(0));
+    BOOST_CHECK(!task::syncWait(checker.existsMemoryNonce(sender, "0xfffffff")));
+}
+
 BOOST_AUTO_TEST_CASE(FIB59_CacheHitSkipsLedgerQuery)
 {
     // FIB-59: After checking m_ledgerStateNonces, the code unconditionally queried storage
@@ -360,6 +389,32 @@ BOOST_AUTO_TEST_CASE(FIB59_CacheHitSkipsLedgerQuery)
     auto pending = task::syncWait(checker.getPendingNonce(senderHex));
     BOOST_CHECK(pending.has_value());
     BOOST_CHECK_EQUAL(pending.value(), 10);
+}
+
+// One committed-nonce window rule for both readers: checkWeb3Nonce here, which the pool's
+// re-checks of pooled transactions call, and admission's Web3NonceWindow. Its four edges, first on
+// the function and then through checkWeb3Nonce over a committed nonce read from the ledger, so a
+// change to either reader's arithmetic cannot pass unnoticed.
+BOOST_AUTO_TEST_CASE(testCommittedWindowEdges)
+{
+    using txvalidator::Web3NonceChecker;
+    const u256 committed = 1000;
+    const u256 limit = DEFAULT_WEB3_NONCE_CHECK_LIMIT;
+    BOOST_CHECK(!Web3NonceChecker::withinCommittedWindow(committed - 1, committed));
+    BOOST_CHECK(Web3NonceChecker::withinCommittedWindow(committed, committed));
+    BOOST_CHECK(Web3NonceChecker::withinCommittedWindow(committed + limit, committed));
+    BOOST_CHECK(!Web3NonceChecker::withinCommittedWindow(committed + limit + 1, committed));
+
+    auto sender = Address::generateRandomFixedBytes().toRawString();
+    m_ledger->setStorageState(toHex(sender), {.nonce = committed.str(), .balance = "1"});
+    auto verdict = [&](u256 const& nonce) {
+        auto const nonceStr = nonce.str();
+        return task::syncWait(checker.checkWeb3Nonce(sender, nonceStr, true));
+    };
+    BOOST_CHECK_EQUAL(verdict(committed - 1), TransactionStatus::NonceCheckFail);
+    BOOST_CHECK_EQUAL(verdict(committed), TransactionStatus::None);
+    BOOST_CHECK_EQUAL(verdict(committed + limit), TransactionStatus::None);
+    BOOST_CHECK_EQUAL(verdict(committed + limit + 1), TransactionStatus::NonceCheckFail);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

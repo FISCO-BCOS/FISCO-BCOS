@@ -54,12 +54,6 @@
     ; url of the key center, in format of ip:port
     ;key_center_url=
     ;cipher_data_key=
-    
-[failover]
-    ; enable failover or not, default disable
-    enable = false
-    ; the address of etcd, can configure multiple comma-separated
-    cluster_url= "127.0.0.1:2379"
 
 [flow_control]
     ; rate limiter stat reporter interval, unit: ms
@@ -67,13 +61,6 @@
 
     ; time window for rate limiter, default: 3s
     ; time_window_sec=3
-
-    ; enable distributed rate limiter, redis required, default: false
-    ; enable_distributed_ratelimit=false
-    ; enable local cache for distributed rate limiter, work with enable_distributed_ratelimit, default: true
-    ; enable_distributed_ratelimit_cache=true
-    ; distributed rate limiter local cache percent, work with enable_distributed_ratelimit_cache, default: 20
-    ; distributed_ratelimit_cache_percent=20
 
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
@@ -118,3 +105,8 @@
     ; MB
     max_log_file_size=200
     enable_rate_collector=false
+    ; flush every log line to disk immediately (default false: lines are flushed
+    ; when the log queue drains; under sustained load at most 100ms plus up to 63 lines of write latency)
+    ; under a sustained flood beyond the 32768-line backlog new lines are dropped
+    ; (a "[log] dropped N log line(s)" marker follows; cumulative count via admin_getLogLevel droppedLines)
+    ;flush=false

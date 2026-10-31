@@ -40,15 +40,8 @@ DERIVE_BCOS_EXCEPTION(NoSuchFeatureError);
 class Features
 {
 public:
-    // Use for storage key, do not change the enum name!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    // feature_flags (Features::toFlagsNumber) packs each enabled flag at
-    // bit = its EXPLICIT enum value below. Those values are persisted on-chain,
-    // so each value is PERMANENT: never change or reuse a value, never delete a
-    // flag's number. New flags take the next unused number — the declaration
-    // position is free (you may group them anywhere), only the value matters.
-    // magic_enum reflects values in its default range [-128, 127]. The
-    // enum_contains assert catches any flag outside that range at compile time.
-    // The static_assert keeps the max value ≤ 127 (bitset encoding constraint).
+    // Flags persist by NAME only (SYS_CONFIG keys and the genesis pin), so never rename one.
+    // A retired flag keeps its name while existing genesis files may still carry it.
     enum class Flag
     {
         bugfix_revert = 0,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
@@ -106,6 +99,12 @@ public:
         feature_evm_timestamp = 51,
         feature_evm_address = 52,
         feature_rpbft_term_weight = 53,
+        // DEPRECATED: the account-table encoding (hex vs binary /apps/ names) is a
+        // node-local physical layout, published by the startup detection as
+        // ledger::account::nodeAddressTableMode() (ledger/AccountTableName.h) — this flag no
+        // longer drives any behavior. string2Flag still recognizes the name so existing
+        // config.genesis files load; setting it, through governance or config.genesis, is
+        // accepted with a warning and records an inert no-op row.
         feature_raw_address = 54,
         feature_rpbft_vrf_type_secp256k1 = 55,
         feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist
@@ -125,22 +124,18 @@ public:
                                      // timestamp-based fork activation); read at startup from
                                      // genesis [features], same channel as
                                      // feature_l2_ethereum_compat.
+        bugfix_eip161_1052_account_semantics = 61,  // #5371/#5372: v1 executor answers
+                                                    // account_exists per EIP-161 (empty == absent)
+                                                    // and EXTCODEHASH per EIP-1052: the chain
+                                                    // hasher's hash("") (keccak on a non-SM
+                                                    // chain) for a code-less live account, 0 for
+                                                    // an absent/empty one; was true / 0.
     };
 
-    // feature_flags bit = enum value. Pin the newest flag so a value beyond
-    // magic_enum's default reflection range [-128,127] is caught at compile time.
-    // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
-    // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
-    // (A contiguity static_assert is deliberately omitted: magic_enum only reflects
-    // contiguous values by default, so `enum_max == enum_count - 1` is a tautology
-    // and cannot catch gaps. The contiguous-from-zero rule is enforced by code review
-    // and the comment on Flag above — the two range asserts catch the other failure
-    // mode: a new flag pushed past magic_enum's reflection boundary.)
-    static_assert(magic_enum::enum_contains(Flag::feature_op_jovian),
-        "newest Flag fell outside magic_enum's reflection range — check enum values");
-    static_assert(magic_enum::enum_integer(
-                      magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,
-        "max Flag value exceeds 127; bitset encoding (bit = enum value) requires values 0..127.");
+    // magic_enum reflects values in its default range [-128, 127]; a flag past it would drop out
+    // of get/set/string2Flag.
+    static_assert(magic_enum::enum_count<Flag>() <= 128,
+        "Flag count exceeds magic_enum's default reflection range");
 
 private:
     std::bitset<magic_enum::enum_count<Flag>()> m_flags;
@@ -157,14 +152,31 @@ public:
 
     void validate(std::string_view flag) const;
 
+    /// Rejects a feature the governance setSystemConfig path must not turn on: one whose
+    /// dependencies (getFeatureDependencies) are not all enabled yet.
     void validate(Flag flag) const;
+
+    /// Throws InvalidSetFeature naming the first dependency of @p flag that is not enabled.
+    /// Ledger::buildGenesisBlock calls it on first init of a compatibility_version >= 3.18.0
+    /// genesis; validate() calls it per flag.
+    void validateDependencies(Flag flag) const;
+
+    /// A deprecated flag is still parsed (string2Flag recognizes the name) but drives
+    /// nothing. Entry points accept it with a warning
+    /// rather than reject it — rejecting would fail governance transactions and
+    /// config.genesis files written before the deprecation, while the flag is an inert
+    /// no-op either way. validate() warns on the governance path;
+    /// NodeConfig::loadGenesisFeatures warns on the genesis path.
+    static constexpr bool isDeprecated(Flag flag) noexcept
+    {
+        return flag == Flag::feature_raw_address;
+    }
 
     bool get(Flag flag) const;
     bool get(std::string_view flag) const { return get(string2Flag(flag)); }
 
-    // DO NOT use now, there is some action after set feature in systemPrecompiled
+    /// The flags that must already be enabled before @p flag can be.
     static std::set<Flag> getFeatureDependencies(Flag flag);
-    void enableDependencyFeatures(Flag flag);
 
     void set(Flag flag);
 
@@ -210,26 +222,6 @@ public:
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return magic_enum::enum_name(flag);
                });
-    }
-
-    // Pack the enabled flags into a 256-bit number: bit = the flag's explicit
-    // enum value (see Flag). m_flags is indexed by position in magic_enum's
-    // VALUE-SORTED reflection order (not by declaration order), so map each set
-    // bit back to its flag and shift by that flag's value — the encoding stays
-    // stable even if flags are later grouped/reordered, as long as each flag
-    // keeps its value. Consumed by L2 genesis to seed SystemConfig's
-    // feature_flags entry.
-    u256 toFlagsNumber() const
-    {
-        u256 result = 0;
-        for (size_t i = 0; i < m_flags.size(); ++i)
-        {
-            if (m_flags[i])
-            {
-                result |= (u256(1) << static_cast<size_t>(magic_enum::enum_value<Flag>(i)));
-            }
-        }
-        return result;
     }
 
     // Storage I/O member templates. Definitions live in FeaturesStorage.h,

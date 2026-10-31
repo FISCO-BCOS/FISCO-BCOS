@@ -20,6 +20,8 @@
  */
 #pragma once
 #include "Common.h"
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core.hpp>
@@ -28,7 +30,6 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
 
 namespace Json
 {
@@ -47,7 +48,7 @@ class BcosKmsHttpClientInterface
 {
 public:
     using Ptr = std::shared_ptr<BcosKmsHttpClientInterface>;
-    virtual ~BcosKmsHttpClientInterface(){};
+    virtual ~BcosKmsHttpClientInterface() {};
     virtual void connect() = 0;
     virtual void close() = 0;
     virtual Json::Value callMethod(const std::string& _method, Json::Value _params) = 0;
@@ -77,8 +78,8 @@ class BcosKms
 public:
     using Ptr = std::shared_ptr<BcosKms>;
 
-    BcosKms(){};
-    virtual ~BcosKms(){};
+    BcosKms() {};
+    virtual ~BcosKms() {};
     virtual const bytes getDataKey(const std::string& _cipherDataKey, const bool isSMCrypto);
     void setIpPort(const std::string& _ip, int _port);
     const std::string url() { return m_ip + ":" + std::to_string(m_port); }

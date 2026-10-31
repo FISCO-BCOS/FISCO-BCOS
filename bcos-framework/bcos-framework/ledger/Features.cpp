@@ -1,7 +1,8 @@
 #include "bcos-framework/ledger/Features.h"
 
 #include "bcos-tool/Exceptions.h"
-#include <boost/core/ignore_unused.hpp>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/throw_exception.hpp>
 
 namespace bcos::ledger
@@ -32,17 +33,36 @@ void Features::validate(std::string_view flag) const
     validate(*value);
 }
 
+void Features::validateDependencies(Flag flag) const
+{
+    for (auto dependency : getFeatureDependencies(flag))
+    {
+        if (!get(dependency))
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidSetFeature{} << errinfo_comment(
+                    "must set " + std::string(magic_enum::enum_name(dependency)) + " first"));
+        }
+    }
+}
+
 void Features::validate(Flag flag) const
 {
-    if (flag == Flag::feature_balance_precompiled && !get(Flag::feature_balance))
+    validateDependencies(flag);
+    // DEPRECATED, inert. feature_raw_address used to gate the binary account-table
+    // encoding; the encoding is a node-local physical layout now (published by the boot-time
+    // detection as ledger::account::nodeAddressTableMode()), so the flag drives nothing.
+    // Accept-but-warn rather than reject: rejecting would fail governance transactions and
+    // config.genesis files written before the deprecation, while the recorded row is an
+    // inert no-op either way. Genesis loading (NodeConfig::loadGenesisFeatures) warns the
+    // same way.
+    if (flag == Flag::feature_raw_address)
     {
-        BOOST_THROW_EXCEPTION(
-            bcos::tool::InvalidSetFeature{} << errinfo_comment("must set feature_balance first"));
-    }
-    if (flag == Flag::feature_balance_policy1 && !get(Flag::feature_balance_precompiled))
-    {
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
-                              << errinfo_comment("must set feature_balance_precompiled first"));
+        BCOS_LOG(WARNING) << LOG_DESC(
+            "feature_raw_address is deprecated: the account-table encoding is a "
+            "node-local property (detected at startup, see "
+            "ledger::account::nodeAddressTableMode), not a chain feature. The flag "
+            "drives nothing; the recorded row is an inert no-op.");
     }
 }
 
@@ -59,15 +79,14 @@ bool Features::get(Flag flag) const
 
 std::set<Features::Flag> Features::getFeatureDependencies(Flag flag)
 {
-    boost::ignore_unused(flag);
-    return {};
-}
-
-void Features::enableDependencyFeatures(Flag flag)
-{
-    for (const auto& dependence : getFeatureDependencies(flag))
+    switch (flag)
     {
-        set(dependence);
+    case Flag::feature_balance_precompiled:
+        return {Flag::feature_balance};
+    case Flag::feature_balance_policy1:
+        return {Flag::feature_balance_precompiled};
+    default:
+        return {};
     }
 }
 
@@ -195,15 +214,18 @@ void Features::setUpgradeFeatures(
                     Flag::bugfix_v1_timestamp}},
             {.to = protocol::BlockVersion::V3_16_4_VERSION, .flags = {Flag::bugfix_revert_logs}},
             {.to = protocol::BlockVersion::V3_17_0_VERSION,
-                .flags = {
-                    Flag::bugfix_auth_check,
-                    Flag::bugfix_v1_error_handling,
-                    Flag::bugfix_gas_payment_balance_precheck,
-                    Flag::bugfix_precompiled_feature_gate,
-                    Flag::bugfix_evm_storage_status,
-                    Flag::bugfix_statestorage_hash_v3_17,
-                    Flag::bugfix_nonce_ordering,
-                }}});
+                .flags =
+                    {
+                        Flag::bugfix_auth_check,
+                        Flag::bugfix_v1_error_handling,
+                        Flag::bugfix_gas_payment_balance_precheck,
+                        Flag::bugfix_precompiled_feature_gate,
+                        Flag::bugfix_evm_storage_status,
+                        Flag::bugfix_statestorage_hash_v3_17,
+                        Flag::bugfix_nonce_ordering,
+                    }},
+            {.to = protocol::BlockVersion::V3_18_0_VERSION,
+                .flags = {Flag::bugfix_eip161_1052_account_semantics}}});
     for (const auto& upgradeFeatures : upgradeRoadmap)
     {
         if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&

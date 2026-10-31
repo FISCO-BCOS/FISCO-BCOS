@@ -45,6 +45,11 @@ enum class EthMethod
     engine_newPayloadV2,
     engine_newPayloadV3,
     engine_newPayloadV4,
+    engine_getPayloadBodiesByHashV1,
+    engine_getPayloadBodiesByRangeV1,
+    engine_getBlobsV1,
+    engine_getClientVersionV1,
+    engine_exchangeClientVersionV1,
     eth_protocolVersion,
     eth_syncing,
     eth_coinbase,
@@ -84,7 +89,16 @@ enum class EthMethod
     eth_getFilterLogs,
     eth_getLogs,
     eth_maxPriorityFeePerGas,
-    eth_getProof
+    eth_blobBaseFee,
+    eth_feeHistory,
+    eth_getBlockReceipts,
+    txpool_status,
+    txpool_content,
+    eth_getProof,
+    miner_setMaxDASize,
+    debug_dbGet,
+    debug_getRawHeader,
+    debug_executePayload
 };
 
 [[maybe_unused]] static std::string methodString(EthMethod _method)

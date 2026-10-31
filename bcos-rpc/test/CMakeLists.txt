@@ -29,20 +29,15 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 # transaction-scheduler: EthGetProofIntegrationTest.cpp drives the FullChainFixture
 # end-to-end harness (transaction-scheduler/tests/FullChainFixture.h); it brings
 # ledger/storage (RocksDB) transitively. Deliberately NOT linking `executor` here even
-# though the BaselineScheduler instantiation references bcos::unhexAddress: executor
-# PUBLIC-links wedprcrypto's Rust static libraries, whose bundled runtime breaks libc++
-# exception catching binary-wide (testCallRequest/decode_invalid_gas_string starts
-# reporting "unknown type" for a plain std::invalid_argument). The test file carries a
-# linkage-only definition of unhexAddress instead.
+# though the BaselineScheduler instantiation references bcos::unhexAddress: historically
+# executor PUBLIC-linked wedprcrypto's Rust static libraries, whose bundled runtime broke
+# libc++ exception catching binary-wide; wedprcrypto is gone now, but the local
+# linkage-only definition of unhexAddress is kept to keep this binary's closure small.
 target_link_libraries(${TEST_BINARY_NAME} txpool mempool ledger rpc tool transaction-scheduler storage Boost::unit_test_framework)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/rpc/RpcReadHandlersTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-# FullChainFixture.h pulls RocksDB and testutils headers whose names collide with the
-# using-directives other unity-merged TUs carry; compile its user standalone.
-set_source_files_properties(
-    "unittests/rpc/EthGetProofIntegrationTest.cpp" "unittests/rpc/FullChainFixtureInst.cpp"
-    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
+# keep the attach-channel tests standalone (FakeTxPool.h is namespace-fragile in a unity merge)
+set_source_files_properties("unittests/rpc/IpcServerTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("unittests/rpc/AdminMethodsTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 #add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")
 enable_testing()

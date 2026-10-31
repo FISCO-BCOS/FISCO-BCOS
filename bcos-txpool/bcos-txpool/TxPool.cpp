@@ -24,19 +24,31 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
-#include "txpool/validator/TxValidator.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-tx-validator/LedgerNonceChecker.h>
 #include <bcos-utilities/ITTAPI.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
+#include <mutex>
 #include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::txpool;
+
+namespace
+{
+// Printed once per process per reason: the per-tx line used to flood INFO on observer nodes.
+void logBroadcastFallbackOnce(std::once_flag& _flag, std::string_view _reason)
+{
+    std::call_once(_flag, [&]() {
+        TXPOOL_LOG(INFO) << LOG_DESC("TxBroadcastFallback") << LOG_KV("reason", _reason)
+                         << LOG_KV("msg", "falling back to flood broadcast");
+    });
+}
+}  // namespace
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 using namespace bcos::sync;
@@ -149,9 +161,8 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
         auto groupNodeInfo = m_transactionSync->config()->frontService()->groupNodeInfo();
         if (!groupNodeInfo)
         {
-            TXPOOL_LOG(WARNING) << LOG_DESC(
-                "broadcastTransactionBufferByTree: groupNodeInfo unavailable, falling back to "
-                "flood broadcast");
+            static std::once_flag flag;
+            logBroadcastFallbackOnce(flag, "group_node_info_unavailable");
             co_await m_transactionSync->config()->frontService()->broadcastMessage(
                 protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
                 ::ranges::views::single(_data));
@@ -160,9 +171,8 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
         auto const& protocolList = groupNodeInfo->nodeProtocolList();
         if (protocolList.empty())
         {
-            TXPOOL_LOG(WARNING) << LOG_DESC(
-                "broadcastTransactionBufferByTree: nodeProtocolList empty, falling back to "
-                "flood broadcast");
+            static std::once_flag flag;
+            logBroadcastFallbackOnce(flag, "node_protocol_list_empty");
             co_await m_transactionSync->config()->frontService()->broadcastMessage(
                 protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
                 ::ranges::views::single(_data));
@@ -232,9 +242,8 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
         // chose the tree path on capability had no signal that the broadcast was a no-op
         // and transactions could be silently dropped. Fall back to the standard flood
         // broadcast and log the substitution for diagnostics.
-        TXPOOL_LOG(INFO) << LOG_DESC(
-            "broadcastTransactionBufferByTree: tree router unavailable, falling back to "
-            "flood broadcast");
+        static std::once_flag flag;
+        logBroadcastFallbackOnce(flag, "tree_router_unavailable");
         co_await m_transactionSync->config()->frontService()->broadcastMessage(
             protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
             ::ranges::views::single(_data));
@@ -273,9 +282,9 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
     std::function<void(Error::Ptr, bool)> _onVerifyFinished)
 {
     auto blockHeader = _block->blockHeader();
-    TXPOOL_LOG(INFO) << LOG_DESC("begin asyncVerifyBlock")
-                     << LOG_KV("consNum", blockHeader->number())
-                     << LOG_KV("hash", blockHeader->hash().abridged());
+    TXPOOL_LOG(DEBUG) << LOG_DESC("begin asyncVerifyBlock")
+                      << LOG_KV("consNum", blockHeader->number())
+                      << LOG_KV("hash", blockHeader->hash().abridged());
     // Note: here must have thread pool for lock in the callback
     // use single thread here to decrease thread competition
     auto self = weak_from_this();
@@ -322,7 +331,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                         verifyError = nullptr;
                     }
                 }
-                TXPOOL_LOG(INFO) << METRIC << LOG_DESC("asyncVerifyBlock finished")
+                TXPOOL_LOG(INFO) << METRIC << LOG_DESC("ProposalVerified")
                                  << LOG_KV("consNum", blockHeader->number())
                                  << LOG_KV("hash", blockHeader->hash().abridged())
                                  << LOG_KV("code", verifyError ? verifyError->errorCode() : 0)
@@ -650,8 +659,10 @@ void TxPool::init()
     auto ledgerNonceChecker = std::make_shared<txvalidator::LedgerNonceChecker>(
         nonceList, ledgerConfig->blockNumber(), blockLimit, m_checkBlockLimit);
 
-    auto validator = std::dynamic_pointer_cast<TxValidator>(m_config->txValidator());
-    validator->setLedgerNonceChecker(ledgerNonceChecker);
+    // Bound on the validator only. The pool reaches the same instance through
+    // TxPoolConfig::ledgerNonceChecker, so the commit path clears exactly the history admission
+    // checks against -- one holder, nothing to keep in step.
+    m_config->txValidator()->setLedgerNonceChecker(ledgerNonceChecker);
     TXPOOL_LOG(INFO) << LOG_DESC("init txs validator success");
 
     // init syncConfig
@@ -681,17 +692,22 @@ void TxPool::initSendResponseHandler()
             {
                 return;
             }
-            frontService->asyncSendResponse(
-                _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
-                    if (_error)
+            // fire-and-forget: the coroutine parameters own the payload copy so nothing
+            // dangles after task::wait detaches
+            task::wait(
+                [](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _id,
+                    int _moduleID, NodeIDPtr _dstNode, bcos::bytes _payload) -> task::Task<void> {
+                    auto error = co_await _frontService->sendResponse(
+                        _id, _moduleID, _dstNode, bcos::ref(_payload));
+                    if (error)
                     {
                         TXPOOL_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
                                           << LOG_KV("module", std::to_string(_moduleID))
                                           << LOG_KV("dst", _dstNode->shortHex())
-                                          << LOG_KV("code", _error->errorCode())
-                                          << LOG_KV("msg", _error->errorMessage());
+                                          << LOG_KV("code", error->errorCode())
+                                          << LOG_KV("msg", error->errorMessage());
                     }
-                });
+                }(frontService, _id, _moduleID, _dstNode, _data.toBytes()));
         }
         catch (std::exception const& e)
         {
@@ -792,7 +808,7 @@ void bcos::txpool::TxPool::tryToSyncTxsFromPeers()
 
 task::Task<std::optional<u256>> bcos::txpool::TxPool::getWeb3PendingNonce(std::string_view address)
 {
-    co_return co_await m_config->txValidator()->web3NonceChecker()->getPendingNonce(address);
+    co_return co_await m_config->web3NonceChecker()->getPendingNonce(address);
 }
 
 void bcos::txpool::TxPool::asyncGetPendingTransactionSize(

@@ -27,25 +27,50 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-utilities/LogStream.h>
 #include <util/tc_clientsocket.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <cstddef>
+#include <cstdint>
+#include <string>
 #include <unordered_map>
-#include <bcos-utilities/BoostLog.h>
+#include <vector>
 
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
 namespace bcos::tool
 {
+/// Who decides the next block. NodeConfig::blockDriver() derives it from the lane (genesis
+/// executor.version) and the hidden config.ini [debug] section; nothing else chooses it.
+enum class BlockDriver : std::uint8_t
+{
+    PBFT,               // FISCO consensus (txpool + sealer + PBFT/rPBFT)
+    Engine,             // an external consensus client over the authenticated Engine API
+    DebugSelfProduce,   // the in-process single-node driver
+    DebugFollowDevp2p,  // OP lane only: download, verify and commit op-geth blocks over devp2p
+};
+
+/// Field set of the authenticated Engine API listener section ([engine_rpc]). It has no enable
+/// key: the listener runs whenever blockDriver() is Engine.
+struct EngineRpcConfig
+{
+    std::string listenIP = "127.0.0.1";
+    int listenPort = 8551;
+    int requestBodySizeLimit = 10485760;
+    int batchRequestSizeLimit = 8;
+    std::string jwtSecretFile;
+    int32_t clockSkewSecs = 60;
+    bool enableMinerApi = false;
+    bool enableDebugApi = false;
+};
+
 class NodeConfig
 {
 public:
     constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
     constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
-    constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
     constexpr static ssize_t DEFAULT_MAX_SEAL_TIME_MS = 600000;
     constexpr static ssize_t DEFAULT_PIPELINE_SIZE = 50;
-
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig();
 
@@ -56,12 +81,13 @@ public:
     explicit NodeConfig(bcos::crypto::KeyFactory::Ptr _keyFactory);
     virtual ~NodeConfig() = default;
 
-    virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true,
-        bool enforceChainConfig = false, bool enforceGroupId = true);
+    virtual void loadConfig(std::string const& _configPath, bool enforceChainConfig = false,
+        bool enforceGroupId = true);
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadEngineRpcConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadDebugConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadWithoutTarsFrameworkConfig(boost::property_tree::ptree const& _pt);
 
@@ -79,9 +105,13 @@ public:
 
     virtual void loadGenesisConfigFromString(std::string const& _content);
 
-    virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
+    virtual void loadConfig(boost::property_tree::ptree const& _pt,
         bool _enforceChainConfig = false, bool _enforceGroupId = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
+
+    // Keys that have no effect any more, found by the last loadGenesisConfig and loadConfig
+    // (genesis first), each spelled "<file> [section] key" and logged as one WARN at load.
+    std::vector<std::string> deadKeys() const;
 
     // the txpool configurations
     size_t txpoolLimit() const;
@@ -93,11 +123,19 @@ public:
     std::string const& groupId() const;
     size_t blockLimit() const;
 
-    /// OP-Stack Jovian fork selection: enabled iff `feature_op_jovian` is set in the genesis
-    /// [features] section (the FISCO-native feature-flag mechanism — replaces the former
-    /// chain.isthmus_time / chain.jovian_time timestamp thresholds). Isthmus is the OP-mode
-    /// baseline; this flag selects Jovian semantics (DA footprint, operator fee ×100).
-    bool opJovianActive() const;
+    /// OP-lane fork schedule from the genesis [op_fork_timestamps] section: activation times
+    /// in SECONDS, keyed per block by the L2 block timestamp exactly as op-node keys
+    /// rollup.json's *_time fields. Present iff the section is present, which
+    /// validateL2Invariants binds both ways to executor.version >= OPSTACK_EXECUTOR_VERSION.
+    /// An unset isthmus_time keeps Isthmus as the zero-start baseline (existing chains); a
+    /// set one activates the full Bedrock..Karst ladder (Bedrock is genesis, no entry).
+    std::optional<ledger::OpForkSchedule> const& opForkSchedule() const;
+
+    /// The chain's EIP-1559 triple from the genesis [op_eip1559] section, or nullopt when the
+    /// section is absent (the engine then prices with c_legacyOpEip1559Params). Chain-level and
+    /// genesis-frozen: two nodes disagreeing about it would price the same height differently,
+    /// so it is part of the genesis pin via generateGenesisData.
+    std::optional<ledger::OpEip1559Params> const& opEip1559() const;
 
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
@@ -122,14 +160,23 @@ public:
     int maxWriteBufferNumber() const;
     bool enableStatistics() const;
     int maxBackgroundJobs() const;
+    // RocksDB table-cache bound: -1 (default) keeps every touched SST open; >= 64 bounds it.
+    int maxOpenFiles() const;
     size_t writeBufferSize() const;
     int minWriteBufferNumberToMerge() const;
     size_t blockCacheSize() const;
     bool enableRocksDBBlob() const;
-    std::vector<std::string> const& pdAddrs() const;
-    std::string const& pdCaPath() const;
-    std::string const& pdCertPath() const;
-    std::string const& pdKeyPath() const;
+    // MPT pruning (pathdb spec §4.8): retention window in blocks, -1 = disabled (default,
+    // archive behavior).
+    std::int64_t mptPruneWindow() const;
+    // Whether the startup rebuild also DELETES the pre-existing unreachable "/mpt/" garbage it
+    // finds (init Phase 3). Default false: the scan is skipped entirely (only a hint is
+    // logged — counting the garbage would itself cost the full-table scan).
+    bool mptPruneSweepGarbage() const;
+    // One-shot offline hex→binary account-table migration at boot
+    // ([storage] migrate_account_tables_to_binary, default false). Safe to leave on: once the
+    // layout flag in the state DB says "bin" the boot skips the scan entirely.
+    bool migrateAccountTablesToBinary() const;
     std::string const& storageDBName() const;
     std::string const& stateDBName() const;
     bool enableArchive() const;
@@ -174,6 +221,8 @@ public:
     uint32_t rpcMaxProcessBlock() const;
     bool rpcSmSsl() const;
     bool rpcDisableSsl() const;
+    /// [rpc] ipc_enable: the local attach socket under storage.data_path (default true)
+    bool rpcIpcEnable() const { return m_rpcIpcEnable; }
 
     // the web3 rpc configurations
     bool enableWeb3Rpc() const;
@@ -201,44 +250,70 @@ public:
     size_t ioThreadCount() const;
     size_t tbbThreadCount() const;
 
-    // op engine rpc configurations
-    bool enableOpEngineRpc() const;
-    const std::string& opEngineRpcListenIP() const;
-    uint16_t opEngineRpcListenPort() const;
-    uint32_t opEngineHttpBodySizeLimit() const;
-    uint32_t opEngineBatchRequestSizeLimit() const;
-    const std::string& opEngineJwtSecretFile() const;
-    int32_t opEngineClockSkewSecs() const;
-    // test-only escape hatch: allow [op_engine_rpc] to serve the v1 EngineService on
-    // executor_version < 2 (the v1 Engine API integration harness drives it over this
-    // endpoint); production configs must never set it
-    bool opEngineAllowV1Executor() const;
+    // Who decides the next block. OP lane (executor.version >= 3): Engine, or
+    // DebugFollowDevp2p under [debug] follow_devp2p. v2: DebugSelfProduce under [debug]
+    // enable, else Engine. v1: DebugSelfProduce under [debug] enable, else PBFT. v0: PBFT.
+    // Throws InvalidConfig for a combination the lane refuses ([debug] enable off v1/v2,
+    // follow_devp2p off the OP lane, both together). Reads both files: call it after both are
+    // loaded.
+    BlockDriver blockDriver() const;
 
-    // single-node consensus configurations
-    bool enableSingleNodeConsensus() const;
-    // true when block production is driven through the EngineService — by the built-in
-    // single-node driver or by an external op-node over [op_engine_rpc] — and the legacy
-    // txpool/PBFT pipeline must therefore stay dormant (sole-producer discipline)
-    bool engineDrivenBlockProduction() const;
-    uint64_t singleNodeConsensusBlockInterval() const;
-    bool singleNodeConsensusProduceEmptyBlocks() const;
-    const std::string& singleNodeConsensusFeeRecipient() const;
-    const std::string& singleNodeConsensusPrevRandao() const;
-    std::uint64_t singleNodeConsensusFixedTimestamp() const;
+    // Engine API listener: runs whenever blockDriver() is Engine and reads [engine_rpc].
+    // The lane decides the method set it serves (v2: the L1 Engine API, v3: OpEngineService).
+    bool servesEngineApi() const;
+    EngineRpcConfig const& engineApiListener() const;
+    // the OP miner namespace (miner_setMaxDASize) on the Engine API listener: [engine_rpc]
+    // enable_miner_api, read on the OP lane only. enableMinerApi() is the web3 listener's
+    // own switch ([web3_rpc] enable_miner_api); neither reaches the other port.
+    bool engineApiMinerApi() const;
+    bool enableMinerApi() const;
+    // the geth debug namespace (debug_dbGet/debug_getRawHeader/debug_executePayload), scoped
+    // per listener like miner. Off by default: it serves the fault-proof preimage oracle
+    // (kona-host), not general clients. engineApiDebugApi() gates the Engine API listener
+    // ([engine_rpc] enable_debug_api), enableDebugApi() the web3 listener ([web3_rpc]
+    // enable_debug_api); neither reaches the other port.
+    bool engineApiDebugApi() const;
+    bool enableDebugApi() const;
 
-    // Ethereum L1 EL-mode (self-sync) configurations ([ethereum] in config.ini).
-    // mode=el runs the node as an Ethereum execution-layer client: it downloads blocks
-    // from RLPx bootnodes, verifies them with EthereumBlockVerifier and commits them
-    // locally — no FISCO gateway / PBFT / txpool pipeline.
+    // The DebugSelfProduce driver's block parameters, from the hidden [debug] section:
+    // block_interval (ms, default 1000), produce_empty_blocks (default true), fee_recipient
+    // (default the zero address), prev_randao (32-byte hex; empty = the hash of a fixed seed),
+    // fixed_timestamp (seconds; 0 = wall clock). [debug] enable selects the driver itself.
+    uint64_t debugBlockInterval() const;
+    bool debugProduceEmptyBlocks() const;
+    const std::string& debugFeeRecipient() const;
+    const std::string& debugPrevRandao() const;
+    std::uint64_t debugFixedTimestamp() const;
+
+    // Ethereum L1 EL mode: executor.version=2 under the Engine driver (derived from
+    // blockDriver(), nothing configures it). The node is an Ethereum execution-layer client:
+    // devp2p sync ([ethereum] network keys; no bootnodes = no peers) and the Engine API run
+    // side by side, both committing through EthereumBlockVerifier — no FISCO gateway / PBFT /
+    // txpool pipeline.
     bool ethereumELModeEnabled() const;
-    const std::string& ethereumListenIP() const;
-    uint16_t ethereumListenPort() const;
+    // [ethereum] op_block_time_seconds: the OP chain's block cadence in seconds (rollup.json
+    // block_time; 2 on every superchain chain). Feeds the header validator's soft
+    // block-interval check. Default 2, accepted range [1, 60].
+    uint64_t opBlockTimeSeconds() const;
+    // [ethereum] op_sync_lag_blocks: how far behind the peer's UNSAFE head the OP-EL sync
+    // caps its download (a tip-reorg-avoidance heuristic only — it does NOT track the OP
+    // safe/finalized head, which L1 batch derivation defines and which can lag the unsafe
+    // head by a whole sequencing window). Default 64, accepted range [0, 10000];
+    // 0 = download right up to the peer's tip.
+    uint64_t opSyncLagBlocks() const;
     // path to the bootnodes file (enode:// list, geth-style); default ./bootnodes.json
     const std::string& ethereumBootnodesFile() const;
-    // path to the secp256k1 node private key (PEM/hex), default empty => derive/load
-    // from the node's own key material
+    // eth/68 transaction gossip ([ethereum] tx_gossip, default true): dedicated outbound
+    // sessions that exchange pooled transactions with bootnode peers and admit what
+    // arrives into the engine mempool. Only meaningful in EL mode.
+    bool ethereumTxGossipEnabled() const;
+    // path to a file holding the 32-byte secp256k1 node private key (hex, optional
+    // 0x prefix); empty => auto-generate a persistent key next to the FISCO node key
+    // on first start (conf/node.rlpx.key) so the RLPx identity survives restarts
     const std::string& ethereumNodeKeyFile() const;
     uint32_t ethereumMaxBatchSize() const;
+    // the Ethereum-lane chain id ([chain] chain_id in config.genesis, executor.version >= 2);
+    // 0 = unset (never a mainnet fallback)
     uint64_t ethereumChainId() const;
     // EL-mode fork schedule ([fork_timestamps] in config.genesis): L1 PoS chains fork on
     // timestamps (not block heights); 0 means active from genesis, and an absent
@@ -251,13 +326,35 @@ public:
     uint64_t ethereumForkOsakaTime() const;
     uint64_t ethereumForkBpo1Time() const;
     uint64_t ethereumForkBpo2Time() const;
-
-    // the gateway configurations
-    const std::string& p2pListenIP() const;
-    uint16_t p2pListenPort() const;
-    bool p2pSmSsl() const;
-    const std::string& p2pNodeDir() const;
-    const std::string& p2pNodeFileName() const;
+    // The merge (TTD) block number ([fork_timestamps].merge_block in config.genesis):
+    // blocks below it follow PoW header rules (non-zero difficulty, ommers allowed),
+    // from it onward PoS rules. 0 = PoS from genesis. REQUIRED whenever a
+    // [fork_timestamps] section is present — there is no chain-agnostic default.
+    uint64_t ethereumMergeBlock() const;
+    // Optional operator-pinned finalized checkpoint ([ethereum].finalized_checkpoint in
+    // config.ini, "<number>:<0xHASH>"): the committed block at `number` must carry
+    // `hash` — a mismatch means the bootnodes serve a wrong fork and is fatal.
+    struct EthereumFinalizedCheckpoint
+    {
+        uint64_t number = 0;
+        bcos::crypto::HashType hash;
+    };
+    std::optional<EthereumFinalizedCheckpoint> const& ethereumFinalizedCheckpoint() const;
+    // EIP-6110 deposit contract address ([ethereum] deposit_contract_address in
+    // config.ini), consumed by the Prague+ requestsHash cross-check in
+    // EthereumBlockVerifier. Defaults to the Ethereum mainnet deposit contract.
+    bcos::Address const& ethereumDepositContractAddress() const;
+    // EL shallow-reorg window ([ethereum] reorg_window in config.ini): how many committed
+    // blocks a reorg may rewind. Every commit journals its pre-block flat-state values
+    // (EthereumChainRollback.h) so the chain can roll back up to this depth. Requires
+    // storage.mpt_prune_window to be -1 or >= this value (validated in
+    // validateELModeInvariants). Default 256.
+    std::int64_t ethereumReorgWindow() const;
+    // EL-mode engine mempool sizing ([ethereum] mempool_capacity /
+    // mempool_tx_lifetime_minutes in config.ini): how many transactions the in-process
+    // pool holds and how many minutes one lives before expiry. Defaults 5120 / 30.
+    size_t ethereumMempoolCapacity() const;
+    std::int64_t ethereumMempoolTxLifetimeMinutes() const;
 
     // config for cert
     const std::string& certPath();
@@ -292,11 +389,6 @@ public:
 
     uint32_t compatibilityVersion() const;
     std::string compatibilityVersionStr() const;
-
-    std::string const& memberID() const;
-    unsigned leaseTTL() const;
-    bool enableFailOver() const;
-    std::string const& failOverClusterUrl() const;
 
     bool storageSecurityEnable() const;
     std::string storageSecuirtyKeyCenterUrl() const;
@@ -334,7 +426,9 @@ public:
     TarsRPCConfig const& tarsRPCConfig() const;
 
     bool checkTransactionSignature() const;
-    bool checkParallelConflict() const;
+    /// [executor] eest_replay_mode. Node-local and NOT part of the genesis config: it changes
+    /// which checks admission runs on this node, never what the chain agrees on.
+    bool eestReplayMode() const { return m_eestReplayMode; }
     bool singlePointConsensus() const;
     const bytes& forceSender() const;
 
@@ -346,22 +440,16 @@ public:
     bool preStoreBackpressureEnabled() const;
     size_t preStoreMaxInflight() const;
     int executorVersion() const;
-    /// EVMC revision config (ethereum-executor, executor_version=2): explicit single
-    /// revision applied to all blocks, plus block-height fork transitions.
-    std::optional<evmc_revision> evmcRevision() const;
-    std::map<protocol::BlockNumber, evmc_revision> const& evmcRevisionForks() const;
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
     virtual void loadWeb3ChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
     virtual void loadWeb3RpcConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadGatewayConfig(boost::property_tree::ptree const& _pt);
     virtual void loadCertConfig(boost::property_tree::ptree const& _pt);
     virtual void loadTxPoolConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadSingleNodeConsensusConfig(boost::property_tree::ptree const& _pt);
     virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSyncConfig(boost::property_tree::ptree const& _pt);
     virtual void loadEthereumConfig(boost::property_tree::ptree const& _pt);
@@ -369,8 +457,6 @@ protected:
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
 
-    virtual void loadFailOverConfig(
-        boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
     virtual void loadOthersConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
@@ -379,6 +465,10 @@ protected:
     void loadExecutorConfig(boost::property_tree::ptree const& _pt);
     // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis)
     void loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
+    // OP-lane fork schedule ([op_fork_timestamps] in config.genesis)
+    void loadOpForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
+    // OP-lane chain EIP-1559 parameters ([op_eip1559] in config.genesis)
+    void loadOpEip1559(boost::property_tree::ptree const& _genesisConfig);
 
     // load config.ini
     void loadExecutorNormalConfig(boost::property_tree::ptree const& _pt);
@@ -389,26 +479,24 @@ protected:
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
     // [features] section loader — exposed to the LoaderProbe test harness like the other
-    // per-section loaders (feature_op_jovian drives OP-Stack fork selection).
+    // per-section loaders.
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
 
 private:
-    void loadAlloc(boost::property_tree::ptree const& ptree);
-
-    // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
+    // A6.5: Ethereum-lane genesis alloc parsing (the lane is gated by executor.version >= 2)
     void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
     void loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig);
     void validateL2Invariants();
 
 public:
-    // Cross-file EL-mode invariant (config.ini ethereum.mode=el must be backed by
-    // the genesis [ethereum] mode=el declaration). Reads BOTH files' members, so
-    // the node initializers call it after both are loaded — deliberately NOT part
-    // of loadEthereumConfig, because tools load config.ini before config.genesis.
+    // Cross-file invariants: blockDriver()'s lane refusals, the v2 Engine driver's
+    // [fork_timestamps], the OP-lane mpt_prune_window gate, eest_replay_mode's lane and the EL
+    // reorg/prune window pairing. Reads BOTH files' members, so the node initializers call it
+    // after both are loaded — deliberately NOT part of the config.ini loaders, because tools
+    // load config.ini before config.genesis.
     void validateELModeInvariants() const;
 
 private:
-
     bcos::consensus::ConsensusNodeList parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
         std::string const& _subSectionName);
@@ -478,17 +566,24 @@ private:
     std::string m_storagePath;
     std::string m_storageType = "RocksDB";
     size_t m_keyPageSize = 10240;
-    std::vector<std::string> m_pd_addrs;
-    std::string m_pdCaPath;
-    std::string m_pdCertPath;
-    std::string m_pdKeyPath;
     bool m_enableDBStatistics = false;
     int m_maxWriteBufferNumber = 3;
     int m_maxBackgroundJobs = 3;
+    int m_maxOpenFiles = 256;
     size_t m_writeBufferSize = 64 << 21;
     int m_minWriteBufferNumberToMerge = 2;
     size_t m_blockCacheSize = 128 << 20;
     bool m_enableRocksDBBlob = false;
+    // MPT pruning (pathdb spec §4.8): a node whose refcount hits 0 at block b is deleted once
+    // block b + mptPruneWindow commits; state roots in [head - N, head] stay fully reachable.
+    std::int64_t m_mptPruneWindow = -1;  // -1 = disabled (default, archive behavior)
+    // Startup garbage sweep (init Phase 3): delete pre-existing unreachable "/mpt/" rows while
+    // booting. Default off — the boot skips the scan entirely and only logs a hint (counting
+    // the garbage would itself cost the full-table scan).
+    bool m_mptPruneSweepGarbage = false;
+    // One-shot boot-time migration of the account tables to the binary encoding
+    // (libinitializer/AccountTableMigration). Hex-only executor lanes refuse it at boot.
+    bool m_migrateAccountTablesToBinary = false;
 
     bool m_enableArchive = false;
     bool m_syncArchivedBlocks = false;
@@ -528,6 +623,7 @@ private:
     uint32_t m_rpcMaxProcessBlock{};
     bool m_rpcSmSsl{};
     bool m_rpcDisableSsl = false;
+    bool m_rpcIpcEnable = true;
 
     // config fro web3 rpc
     bool m_enableWeb3Rpc = false;
@@ -554,32 +650,21 @@ private:
     size_t m_ioThreadCount{};
     size_t m_tbbThreadCount{};
 
-    // config for op engine rpc
-    bool m_enableOpEngineRpc = false;
-    std::string m_opEngineRpcListenIP = "127.0.0.1";
-    uint16_t m_opEngineRpcListenPort{};
-    uint32_t m_opEngineHttpBodySizeLimit{};
-    uint32_t m_opEngineBatchRequestSizeLimit{};
-    std::string m_opEngineJwtSecretFile;
-    int32_t m_opEngineClockSkewSecs{60};
-    bool m_opEngineAllowV1Executor = false;
+    // config for the Engine API listener ([engine_rpc])
+    bool m_enableMinerApi = false;
+    bool m_enableDebugApi = false;
+    EngineRpcConfig m_engineRpc;
 
-    // config for single-node consensus
-    bool m_enableSingleNodeConsensus = false;
-    uint64_t m_singleNodeConsensusBlockInterval = 1000;
-    bool m_singleNodeConsensusProduceEmptyBlocks = true;
-    std::string m_singleNodeConsensusFeeRecipient = "0x0000000000000000000000000000000000000000";
+    // config for the hidden [debug] section (blockDriver() and the DebugSelfProduce driver)
+    bool m_debugEnable = false;
+    bool m_debugFollowDevp2p = false;
+    uint64_t m_debugBlockInterval = 1000;
+    bool m_debugProduceEmptyBlocks = true;
+    std::string m_debugFeeRecipient = "0x0000000000000000000000000000000000000000";
     // 32-byte hex prevRandao; empty means derive deterministically from a seed.
-    std::string m_singleNodeConsensusPrevRandao;
+    std::string m_debugPrevRandao;
     // fixed block timestamp in seconds; 0 = wall clock.
-    std::uint64_t m_singleNodeConsensusFixedTimestamp = 0;
-
-    // config for gateway
-    std::string m_p2pListenIP;
-    uint16_t m_p2pListenPort{};
-    bool m_p2pSmSsl{};
-    std::string m_p2pNodeDir;
-    std::string m_p2pNodeFileName;
+    std::uint64_t m_debugFixedTimestamp = 0;
 
     // config for sync
     bool m_enableSendBlockStatusByTree = false;
@@ -587,15 +672,30 @@ private:
     std::uint32_t m_treeWidth = 3;
 
     // config for Ethereum L1 EL-mode self-sync ([ethereum] in config.ini)
-    bool m_enableEthereumEL = false;
-    std::string m_ethereumListenIP = "0.0.0.0";
-    uint16_t m_ethereumListenPort = 30303;
+    uint64_t m_opBlockTimeSeconds = 2;
+    uint64_t m_opSyncLagBlocks = 64;
     std::string m_ethereumBootnodesFile = "./bootnodes.json";
+    // [ethereum] tx_gossip: eth/68 pooled-transaction gossip with bootnode peers.
+    bool m_ethereumTxGossip = true;
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
-    // The EL-mode chain id, validated and pinned from config.genesis's [web3] chain_id
-    // (validateL2Invariants) when the genesis declares EL mode. 0 = unset: a read
-    // outside EL mode is obviously invalid rather than silently Ethereum mainnet.
+    uint64_t m_ethereumMergeBlock = 0;
+    std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
+    // [ethereum] reorg_window: EL shallow-reorg depth bound (see ethereumReorgWindow()).
+    std::int64_t m_ethereumReorgWindow = 256;
+    // [ethereum] mempool_capacity / mempool_tx_lifetime_minutes: engine mempool sizing
+    // (EL mode only; see ethereumMempoolCapacity()).
+    size_t m_ethereumMempoolCapacity = 5120;
+    std::int64_t m_ethereumMempoolTxLifetimeMinutes = 30;
+    // EIP-6110 deposit contract ([ethereum] deposit_contract_address in config.ini) for the
+    // Prague+ requestsHash cross-check. Defaults to the Ethereum mainnet deposit contract —
+    // the same address scheduler_v1::c_mainnetDepositContractAddress pins (Sepolia:
+    // 0x7f02c3e3c98b133055b8b348b2ac625669182295).
+    bcos::Address m_ethereumDepositContractAddress{
+        std::string("0x00000000219ab540356cBB839Cbe05303d7705Fa")};
+    // The Ethereum-lane chain id, copied from config.genesis's [chain] chain_id
+    // (validateL2Invariants) on executor.version >= 2. 0 = unset: a read on a FISCO lane is
+    // obviously invalid rather than silently Ethereum mainnet.
     uint64_t m_ethereumChainId = 0;
     // The EL-mode fork schedule ([fork_timestamps] in config.genesis) lives on
     // m_genesisConfig.m_ethereumForkSchedule; the REQUIRED pre-Prague ladder
@@ -622,22 +722,18 @@ private:
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
 
-    // failover config
-    std::string m_memberID;
-    unsigned m_leaseTTL = 0;
-    bool m_enableFailOver = false;
-    // etcd/zookeeper/consual url
-    std::string m_failOverClusterUrl;
-
     // others config
     int m_sendTxTimeout = -1;
     int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
 
     // experimental
     bool m_checkTransactionSignature = true;
-    bool m_checkParallelConflict = true;
+    bool m_eestReplayMode = false;
     bool m_singlePointConsensus = false;
     bytes m_forceSender;
+
+    std::vector<std::string> m_deadConfigKeys;
+    std::vector<std::string> m_deadGenesisKeys;
 };
 
 std::string generateGenesisData(

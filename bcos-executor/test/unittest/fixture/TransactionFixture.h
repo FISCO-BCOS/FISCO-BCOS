@@ -44,6 +44,7 @@
 #include "mock/MockTxPool.h"
 #include <bcos-framework/storage/Serialize.h>
 #include <libinitializer/AuthInitializer.h>
+#include <boost/log/core/core.hpp>
 #include <string>
 
 using namespace bcos;

@@ -651,9 +651,7 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHash)
     // Eth path: mark as London, then calculateRLPHash computes keccak256(rlp(header)) and
     // injects it
     impl->setEthBlockVersion(bcos::protocol::EthBlockVersion::LONDON);
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(!error);
+    bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
     auto ethHash = impl->hash();
 
     // calculateHash on an Eth-versioned header recomputes keccak256(rlp(header)); since the

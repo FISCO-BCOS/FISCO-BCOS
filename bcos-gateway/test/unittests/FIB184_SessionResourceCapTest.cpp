@@ -22,9 +22,9 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
+#include "bcos-utilities/IOServicePool.h"
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::gateway;
@@ -45,9 +45,6 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB184"), "0.0.0.0", 0)
     {}
     ~FakeASIO_FIB184() noexcept override {}
-    void asyncReadSome(
-        const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler) override
-    {}
 };
 
 class FakeSocket_FIB184 : public SocketFace
@@ -87,7 +84,7 @@ class FakeHost_FIB184 : public bcos::gateway::Host
 {
 public:
     FakeHost_FIB184(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface)
-      : Host(_hash, _asioInterface, nullptr, nullptr)
+      : Host(_hash, _asioInterface, nullptr)
     {
         m_run = true;
     }

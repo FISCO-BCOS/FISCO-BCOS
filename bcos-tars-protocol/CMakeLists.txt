@@ -53,13 +53,14 @@ target_include_directories(protocol-tars PUBLIC
 # `rlp-protocol` provides EthBlockHeader, which BlockHeaderImpl::calculateHash uses to
 # recompute the RLP hash for Ethereum-standard headers.
 target_link_libraries(protocol-tars PUBLIC bcos-concepts bcos-framework bcos-crypto codec rlp-protocol tarscpp::tarsservant tarscpp::tarsutil TBB::tbb jsoncpp_static)
-set_target_properties(protocol-tars PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
-    add_subdirectory(benchmark)
+    if(WITH_BENCHMARK)
+        add_subdirectory(benchmark)
+    endif()
 endif()
 
 include(GNUInstallDirs)

@@ -58,6 +58,11 @@ BOOST_AUTO_TEST_CASE(settersAndGetters)
     BOOST_CHECK_EQUAL(config->maxSendDataSize(), 48U * 1024U);
     BOOST_CHECK_EQUAL(config->maxMsgCountSendOneTime(), 20U);
 
+    // The setter shares initP2PConfig's clamp: a 0 byte budget would stall every outbound write
+    // (the batch loop never pops), so it can never be stored through any path.
+    config->setMaxSendDataSize(0U);
+    BOOST_CHECK_EQUAL(config->maxSendDataSize(), 1U);
+
     // read-only getters should not throw on a freshly constructed config
     BOOST_CHECK_NO_THROW(config->listenIP());
     BOOST_CHECK_NO_THROW(config->listenPort());

@@ -8,5 +8,7 @@ target_link_libraries(test-transaction-executor transaction-executor executor le
 add_dependencies(test-transaction-executor executor)
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(test-transaction-executor PROPERTIES UNITY_BUILD "ON")
+# Standalone: anonymous-namespace helpers would collide with other TUs in the unity blob.
+set_source_files_properties("TestEvmPrecompiledAdapter.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # add_test(NAME test-transaction-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND test-transaction-executor)
 config_test_cases("" "${SOURCES}" "test-transaction-executor" "" "")

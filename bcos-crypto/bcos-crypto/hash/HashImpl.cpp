@@ -42,6 +42,12 @@ HashType Keccak256::hash(bytesConstRef _data) const
     return keccak256Hash(_data);
 }
 
+HashType Keccak256::emptyHash() const
+{
+    static const HashType s_emptyHash = keccak256Hash(bytesConstRef{});
+    return s_emptyHash;
+}
+
 bcos::crypto::hasher::AnyHasher Keccak256::hasher() const
 {
     return bcos::crypto::hasher::AnyHasher{hasher::openssl::OpenSSL_Keccak256_Hasher{}};
@@ -59,7 +65,7 @@ HashType sha256Hash(bytesConstRef _data)
 
 Sha256::Sha256()
 {
-    setHashImplType(HashImplType::Sha3);
+    setHashImplType(HashImplType::Sha256Hash);
 }
 
 HashType Sha256::hash(bytesConstRef _data) const
@@ -67,9 +73,15 @@ HashType Sha256::hash(bytesConstRef _data) const
     return sha256Hash(_data);
 }
 
+HashType Sha256::emptyHash() const
+{
+    static const HashType s_emptyHash = sha256Hash(bytesConstRef{});
+    return s_emptyHash;
+}
+
 bcos::crypto::hasher::AnyHasher Sha256::hasher() const
 {
-    return bcos::crypto::hasher::AnyHasher{hasher::openssl::OpenSSL_SHA3_256_Hasher{}};
+    return bcos::crypto::hasher::AnyHasher{hasher::openssl::OpenSSL_SHA2_256_Hasher{}};
 }
 
 HashType sha3Hash(bytesConstRef _data)
@@ -90,6 +102,12 @@ Sha3::Sha3()
 HashType Sha3::hash(bytesConstRef _data) const
 {
     return sha3Hash(_data);
+}
+
+HashType Sha3::emptyHash() const
+{
+    static const HashType s_emptyHash = sha3Hash(bytesConstRef{});
+    return s_emptyHash;
 }
 
 bcos::crypto::hasher::AnyHasher Sha3::hasher() const
@@ -115,6 +133,12 @@ SM3::SM3()
 HashType SM3::hash(bytesConstRef _data) const
 {
     return sm3Hash(_data);
+}
+
+HashType SM3::emptyHash() const
+{
+    static const HashType s_emptyHash = sm3Hash(bytesConstRef{});
+    return s_emptyHash;
 }
 
 bcos::crypto::hasher::AnyHasher SM3::hasher() const

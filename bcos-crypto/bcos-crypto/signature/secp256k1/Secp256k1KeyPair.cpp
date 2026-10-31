@@ -19,9 +19,15 @@
  * @author yujiechen
  */
 #include <bcos-crypto/signature/Exceptions.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
-#include <wedpr-crypto/WedprUtilities.h>
-#include <wedpr-crypto/WedprCrypto.h>
+#include <secp256k1.h>
+#include <array>
+#include <cstring>
+#include <memory>
+
+using namespace bcos;
+using namespace bcos::crypto;
 
 bcos::crypto::Secp256k1KeyPair::Secp256k1KeyPair()
   : KeyPair(SECP256K1_PUBLIC_LEN, SECP256K1_PRIVATE_LEN, KeyPairType::Secp256K1)
@@ -41,15 +47,27 @@ bcos::crypto::PublicPtr bcos::crypto::Secp256k1KeyPair::priToPub(SecretPtr _secr
 
 bcos::crypto::PublicPtr bcos::crypto::secp256k1PriToPub(bcos::crypto::SecretPtr _secret)
 {
-    CInputBuffer privateKey{_secret->constData(), _secret->size()};
-
-    PublicPtr pubKey = std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN);
-    COutputBuffer publicKey{pubKey->mutableData(), pubKey->size()};
-    auto retCode = wedpr_secp256k1_derive_public_key(&privateKey, &publicKey);
-    if (retCode != WEDPR_SUCCESS)
+    // secp256k1_ec_pubkey_create reads exactly 32 bytes unconditionally — a shorter
+    // secret would be an out-of-bounds read
+    if (_secret->size() != SECP256K1_PRIVATE_LEN)
+    {
+        BOOST_THROW_EXCEPTION(PriToPublicKeyException() << errinfo_comment(
+                                  "secp256k1PriToPub exception: invalid secret length " +
+                                  std::to_string(_secret->size())));
+    }
+    secp256k1_pubkey pubkey;
+    if (secp256k1_ec_pubkey_create(secp256k1Context(), &pubkey,
+            reinterpret_cast<const unsigned char*>(_secret->constData())) == 0)
     {
         BOOST_THROW_EXCEPTION(
             PriToPublicKeyException() << errinfo_comment("secp256k1PriToPub exception"));
     }
+    std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> serializedPubKey{};
+    size_t serializedPubKeySize = serializedPubKey.size();
+    secp256k1_ec_pubkey_serialize(secp256k1Context(), serializedPubKey.data(),
+        &serializedPubKeySize, &pubkey, SECP256K1_EC_UNCOMPRESSED);
+    // drop the 0x04 uncompressed prefix, keep the 64-byte X||Y form
+    PublicPtr pubKey = std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN);
+    memcpy(pubKey->mutableData(), serializedPubKey.data() + 1, SECP256K1_PUBLIC_LEN);
     return pubKey;
 }

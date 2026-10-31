@@ -1,4 +1,3 @@
-#include <ostream>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -6,14 +5,15 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
+#include <ostream>
 #include <random>
 #include <stdexcept>
 
-using HashType = std::array<uint8_t, 32>;
+using MerkleTestHash = std::array<uint8_t, 32>;
 
 namespace std
 {
-std::ostream& operator<<(std::ostream& stream, const HashType& hash)
+std::ostream& operator<<(std::ostream& stream, const MerkleTestHash& hash)
 {
     std::string hex;
     boost::algorithm::hex_lower(
@@ -34,7 +34,7 @@ using MerkleProofPtr = std::shared_ptr<MerkleProof>;
 
 struct TestBinaryMerkleTrieFixture
 {
-    std::array<HashType, 64> hashes;
+    std::array<MerkleTestHash, 64> hashes;
 
     TestBinaryMerkleTrieFixture()
     {
@@ -54,18 +54,18 @@ BOOST_FIXTURE_TEST_SUITE(TestBinaryMerkleTrie, TestBinaryMerkleTrieFixture)
 template <size_t width>
 void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashes)
 {
-    HashType emptyHash;
+    MerkleTestHash emptyHash;
     emptyHash.fill(0);
     auto seed = std::random_device{}();
 
     for (auto count = 0lu; count < ::ranges::size(inputHashes); ++count)
     {
-        std::span<HashType const> hashes(inputHashes.data(), count);
+        std::span<MerkleTestHash const> hashes(inputHashes.data(), count);
 
         bcos::crypto::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, width>
             trie(bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher{});
-        std::vector<HashType> out;
-        BOOST_CHECK_THROW(trie.generateMerkle(std::vector<HashType>{}, out),
+        std::vector<MerkleTestHash> out;
+        BOOST_CHECK_THROW(trie.generateMerkle(std::vector<MerkleTestHash>{}, out),
             boost::wrapexcept<std::invalid_argument>);
 
         if (count == 0)
@@ -75,12 +75,12 @@ void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashe
         }
         else
         {
-            std::vector<HashType> outMerkle;
+            std::vector<MerkleTestHash> outMerkle;
             BOOST_CHECK_NO_THROW(trie.generateMerkle(std::as_const(hashes), outMerkle));
             std::cout << "Merkle: " << std::endl;
             std::cout << outMerkle << std::endl;
 
-            std::vector<HashType> outProof;
+            std::vector<MerkleTestHash> outProof;
             BOOST_CHECK_THROW(trie.generateMerkleProof(hashes, outMerkle, emptyHash, outProof),
                 boost::wrapexcept<std::invalid_argument>);
             BOOST_CHECK_THROW(

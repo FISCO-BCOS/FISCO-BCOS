@@ -37,15 +37,25 @@ std::optional<EndpointsMapping::Handler> EndpointsMapping::findHandler(
     return it->second;
 }
 
-void EndpointsMapping::addHandlers(bool enableOPEngine)
+void EndpointsMapping::addHandlers(bool enableOPEngine, bool enableMinerApi, bool enableDebugApi)
 {
     if (enableOPEngine)
     {
         addEngineHandlers();
     }
     addEthHandlers();
+    if (enableMinerApi)
+    {
+        addMinerHandlers();
+    }
     addNetHandlers();
     addWeb3Handlers();
+    // The debug namespace serves the fault-proof preimage oracle and is opt-in per listener
+    // ([engine_rpc] / [web3_rpc] enable_debug_api), mirroring the miner-namespace gate.
+    if (enableDebugApi)
+    {
+        addDebugHandlers();
+    }
     for (auto& [method, _] : m_handlers)
     {
         WEB3_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("method", method);
@@ -70,6 +80,11 @@ void EndpointsMapping::addEngineHandlers()
     m_handlers[methodString(EthMethod::engine_newPayloadV2)] = &Endpoints::newPayloadV2;
     m_handlers[methodString(EthMethod::engine_newPayloadV3)] = &Endpoints::newPayloadV3;
     m_handlers[methodString(EthMethod::engine_newPayloadV4)] = &Endpoints::newPayloadV4;
+    m_handlers[methodString(EthMethod::engine_getPayloadBodiesByHashV1)] = &Endpoints::getPayloadBodiesByHashV1;
+    m_handlers[methodString(EthMethod::engine_getPayloadBodiesByRangeV1)] = &Endpoints::getPayloadBodiesByRangeV1;
+    m_handlers[methodString(EthMethod::engine_getBlobsV1)] = &Endpoints::getBlobsV1;
+    m_handlers[methodString(EthMethod::engine_getClientVersionV1)] = &Endpoints::getClientVersionV1;
+    m_handlers[methodString(EthMethod::engine_exchangeClientVersionV1)] = &Endpoints::exchangeClientVersionV1;
     // clang-format on
 }
 
@@ -115,7 +130,29 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getFilterLogs)] = &Endpoints::getFilterLogs;
     m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
     m_handlers[methodString(EthMethod::eth_maxPriorityFeePerGas)] = &Endpoints::maxPriorityFeePerGas;
+    // Ethereum/OP-lane methods served on BOTH the Ethereum lane (v2) and the OP lane (v3):
+    // they answer MethodNotFound on the legacy FISCO lane only.
+    m_handlers[methodString(EthMethod::eth_blobBaseFee)] = &Endpoints::blobBaseFee;
+    m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
+    m_handlers[methodString(EthMethod::eth_getBlockReceipts)] = &Endpoints::getBlockReceipts;
+    // OP-lane only (requireOpStackLane): MethodNotFound on the Ethereum lane too, since a bare
+    // Ethereum chain has no batcher to serve a DA snapshot to.
+    m_handlers[methodString(EthMethod::txpool_status)] = &Endpoints::txpoolStatus;
+    m_handlers[methodString(EthMethod::txpool_content)] = &Endpoints::txpoolContent;
+    // Served on every lane, including the legacy FISCO one: EIP-1186 proofs are answered from
+    // whatever state trie the block has, so there is no lane claim to make here.
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
+    // clang-format on
+}
+
+void EndpointsMapping::addMinerHandlers()
+{
+    // clang-format off
+    // OP Stack `miner` namespace. Registered only for a listener whose own
+    // enable_miner_api key ([engine_rpc] or [web3_rpc]) is set — the flag is the
+    // gate. The null-daCaps MethodNotFound below is the Ethereum-only-node fallback,
+    // not the protection.
+    m_handlers[methodString(EthMethod::miner_setMaxDASize)] = &Endpoints::setMaxDASize;
     // clang-format on
 }
 
@@ -133,6 +170,15 @@ void EndpointsMapping::addWeb3Handlers()
     // clang-format off
     m_handlers[methodString(EthMethod::web3_clientVersion)] = &Endpoints::clientVersion;
     m_handlers[methodString(EthMethod::web3_sha3)] = &Endpoints::sha3;
+    // clang-format on
+}
+
+void EndpointsMapping::addDebugHandlers()
+{
+    // clang-format off
+    m_handlers[methodString(EthMethod::debug_dbGet)] = &Endpoints::dbGet;
+    m_handlers[methodString(EthMethod::debug_getRawHeader)] = &Endpoints::getRawHeader;
+    m_handlers[methodString(EthMethod::debug_executePayload)] = &Endpoints::executePayload;
     // clang-format on
 }
 }  // namespace bcos::rpc

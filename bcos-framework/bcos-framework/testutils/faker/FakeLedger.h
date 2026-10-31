@@ -31,15 +31,20 @@
 #include <string>
 #include <utility>
 
-using namespace bcos;
-using namespace bcos::ledger;
-using namespace bcos::protocol;
-using namespace bcos::crypto;
-using namespace bcos::consensus;
 namespace bcos
 {
 namespace test
 {
+// Using-directives live INSIDE bcos::test on purpose: at global scope they leak into
+// every consumer TU (and every unity-build batch-mate), making names like
+// ConsensusNodeList ambiguous for unrelated files that pull both bcos::ledger and
+// bcos::consensus. From here they still reach all consumers - test code lives in
+// bcos::test, and [namespace.udir] nominates the names into the enclosing bcos -
+// while batch-mates outside bcos::test no longer see them.
+using namespace bcos::ledger;
+using namespace bcos::protocol;
+using namespace bcos::crypto;
+using namespace bcos::consensus;
 
 class FakeLedger : public LedgerInterface, public std::enable_shared_from_this<FakeLedger>
 {
@@ -128,7 +133,10 @@ public:
         FakeLedger* m_ledger;
     };
     using Ptr = std::shared_ptr<FakeLedger>;
-    FakeLedger() = default;
+    // m_ledgerConfig must exist even here: BOTH branches of asyncGetSystemConfigByKey read
+    // m_ledgerConfig->blockNumber(), so a default-constructed FakeLedger used only for system
+    // config -- no block factory, no chain -- would dereference null.
+    FakeLedger() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
     FakeLedger(BlockFactory::Ptr _blockFactory, size_t _blockNumber, size_t _txsSize, size_t,
         std::vector<bytes> _sealerList)
       : m_blockFactory(std::move(_blockFactory)),
@@ -242,6 +250,26 @@ public:
         updateLedgerConfig(latestBlock->blockHeader());
     }
 
+    /// Test-only: inject an already-built block header (e.g. an Eth-shaped header whose hash is
+    /// the RLP hash, as debug_getRawHeader expects) and register its hash->number mapping so
+    /// hash-based lookups resolve to it. The header must already carry its final hash.
+    void injectBlock(BlockHeader::Ptr _header)
+    {
+        auto block = m_blockFactory->createBlock();
+        block->setBlockHeader(_header);
+        WriteGuard l(x_ledger);
+        m_ledger.push_back(block);
+        m_hash2Block[_header->hash()] = _header->number();
+        updateLedgerConfig(_header);
+    }
+
+    /// Map @p _hash to @p _number for asyncGetBlockNumberByHash, e.g. after a test rewrites a
+    /// header so its hash() changes (an OP header's RLP hash).
+    void indexBlockHash(HashType const& _hash, BlockNumber _number)
+    {
+        m_hash2Block[_hash] = _number;
+    }
+
     Block::Ptr populateFromHeader(BlockHeader::Ptr _blockHeader)
     {
         auto block = m_blockFactory->createBlock();
@@ -327,9 +355,21 @@ public:
         _callback(nullptr, block);
     }
 
-    void asyncGetBlockNumberByHash(
-        crypto::HashType const&, std::function<void(Error::Ptr, BlockNumber)>) override
-    {}
+    void asyncGetBlockNumberByHash(crypto::HashType const& _hash,
+        std::function<void(Error::Ptr, BlockNumber)> _onGetBlock) override
+    {
+        // Mirror Ledger::asyncGetBlockNumberByHash: a known hash answers its block number, an
+        // unknown one answers GetStorageError WITHOUT a chained STDError (the "not found" shape
+        // the eth_getProof hash branch discriminates from a storage fault).
+        auto const it = m_hash2Block.find(_hash);
+        if (it != m_hash2Block.end())
+        {
+            _onGetBlock(nullptr, it->second);
+            return;
+        }
+        _onGetBlock(
+            BCOS_ERROR_PTR(LedgerError::GetStorageError, "GetBlockNumberByHash failed"), -1);
+    }
 
     void asyncGetBlockHashByNumber(BlockNumber _blockNumber,
         std::function<void(Error::Ptr, crypto::HashType)> _onGetBlock) override
@@ -353,7 +393,11 @@ public:
         auto txs = std::make_shared<Transactions>();
         for (auto const& hash : *_txHashList)
         {
-            if (m_txsHashToData.count(hash))
+            if (auto it = m_storedTxs.find(hash); it != m_storedTxs.end())
+            {
+                txs->emplace_back(it->second);
+            }
+            else if (m_txsHashToData.count(hash))
             {
                 auto tx = m_blockFactory->transactionFactory()->createTransaction(
                     ref(*(m_txsHashToData[hash])), false);
@@ -363,10 +407,25 @@ public:
         _onGetTx(nullptr, txs, nullptr);
     }
 
-    void asyncGetTransactionReceiptByHash(crypto::HashType const&, bool,
+    void asyncGetTransactionReceiptByHash(crypto::HashType const& _hash, bool,
         std::function<void(Error::Ptr, TransactionReceipt::Ptr, MerkleProofPtr)> _onGetTx) override
     {
-        _onGetTx(nullptr, nullptr, nullptr);
+        auto it = m_storedReceipts.find(_hash);
+        _onGetTx(nullptr, it == m_storedReceipts.end() ? nullptr : it->second, nullptr);
+    }
+
+    /// Serve @p _tx and @p _receipt by the tx hash (getTransactions / getReceipt).
+    void storeTxAndReceipt(Transaction::Ptr _tx, TransactionReceipt::Ptr _receipt)
+    {
+        m_storedReceipts[_tx->hash()] = std::move(_receipt);
+        m_storedTxs[_tx->hash()] = std::move(_tx);
+    }
+    /// Make @p _block the ledger's block at its header's number, indexed by its hash.
+    void replaceBlock(Block::Ptr _block)
+    {
+        auto const number = _block->blockHeader()->number();
+        m_hash2Block[_block->blockHeader()->hash()] = number;
+        m_ledger[number] = std::move(_block);
     }
 
     void asyncGetTotalTransactionCount(std::function<void(Error::Ptr, int64_t _totalTxCount,
@@ -546,6 +605,13 @@ public:
         fakeStorageEntryMaps[tableName][_key] = std::move(_data);
     }
 
+    /// Test-only: write a state-storage entry directly by table name, so debug_dbGet's
+    /// content-addressed code read (table SYS_CODE_BINARY) can be seeded without an account.
+    void setStateStorageEntry(std::string _table, std::string _key, storage::Entry _entry)
+    {
+        fakeStorageEntryMaps[std::move(_table)][std::move(_key)] = std::move(_entry);
+    }
+
     void setFeatures(bcos::ledger::Features _features) { m_features = _features; }
 
     task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override
@@ -601,6 +667,8 @@ private:
     std::string eoaInLedger;
     std::string eoaInLedgerNonce;
     std::shared_ptr<FakeStorage> m_fakeStorage;
+    std::map<HashType, Transaction::Ptr> m_storedTxs;
+    std::map<HashType, TransactionReceipt::Ptr> m_storedReceipts;
     std::map<std::string, std::map<std::string, std::optional<storage::Entry>>>
         fakeStorageEntryMaps;
     // Empty by default, matching LedgerInterface's default fetchAllFeatures.

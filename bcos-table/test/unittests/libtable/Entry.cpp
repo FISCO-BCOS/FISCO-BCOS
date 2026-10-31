@@ -22,9 +22,12 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/hash/SM3.h>
+#include <bcos-framework/ledger/AccountTableName.h>
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/test/unit_test.hpp>
 #include <array>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -221,6 +224,71 @@ BOOST_AUTO_TEST_CASE(entryHash)
     auto normalHash =
         entry.hash(table, key, *sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     BOOST_CHECK_EQUAL(normalHash, bcos::crypto::HashType{});
+}
+
+// Encoding-agnostic state root (ledger/AccountTableName.h): the binary and hex encodings
+// of one logical account table fold the same entry hash, in both digest formats (the
+// v3.1 format and the bugfix_statestorage_hash_v3_17 length-prefixed format).
+BOOST_AUTO_TEST_CASE(entryHashAccountTableNormalization)
+{
+    namespace account = bcos::ledger::account;
+    auto sm3 = std::make_shared<bcos::crypto::SM3>();
+    const auto v3_1 = (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION;
+
+    bcos::ledger::Features featuresV317;
+    featuresV317.set(bcos::ledger::Features::Flag::bugfix_statestorage_hash_v3_17);
+    const std::optional<bcos::ledger::Features> v317{featuresV317};
+
+    std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
+    std::string const binTable = account::hexToBinaryAccountTableName(hexTable);
+    BOOST_REQUIRE_EQUAL(binTable.size(), 23u);
+
+    auto data = "some-value"s;
+    auto key = "nonce"s;
+
+    for (auto status : {Entry::MODIFIED, Entry::DELETED})
+    {
+        Entry entry;
+        entry.setStatus(status);
+        if (status == Entry::MODIFIED)
+        {
+            entry.set(data);
+        }
+
+        // (1) Same logical row, two encodings of the account table: equal digests.
+        for (auto&& features : {std::optional<bcos::ledger::Features>{std::nullopt}, v317})
+        {
+            auto hexHash = entry.hash(hexTable, key, *sm3, v3_1, features);
+            auto binHash = entry.hash(binTable, key, *sm3, v3_1, features);
+            BOOST_CHECK_EQUAL(hexHash, binHash);
+            BOOST_CHECK_NE(hexHash, bcos::crypto::HashType{});
+
+            // (2) s_tables registration rows embed the table name in the KEY: the binary
+            // key normalizes to the hex key.
+            auto hexRegHash = entry.hash("s_tables", hexTable, *sm3, v3_1, features);
+            auto binRegHash = entry.hash("s_tables", binTable, *sm3, v3_1, features);
+            BOOST_CHECK_EQUAL(hexRegHash, binRegHash);
+        }
+
+        // (3) Negative control: "_accessAuth" auth tables are NOT normalized (out of
+        // scope — they stay hex, unmigrated), so the two spellings hash differently.
+        auto hexAuthHash = entry.hash(hexTable + "_accessAuth", key, *sm3, v3_1, std::nullopt);
+        auto binAuthHash = entry.hash(binTable + "_accessAuth", key, *sm3, v3_1, std::nullopt);
+        BOOST_CHECK_NE(hexAuthHash, binAuthHash);
+
+        // (4) Non-account tables hash by their literal name (no accidental rewrite).
+        auto sysHash = entry.hash("/sys/status", key, *sm3, v3_1, std::nullopt);
+        auto hasher = sm3->hasher();
+        hasher.update(std::string_view{"/sys/status"});
+        hasher.update(key);
+        if (status == Entry::MODIFIED)
+        {
+            hasher.update(data);
+        }
+        bcos::crypto::HashType sysExpect;
+        hasher.final(sysExpect);
+        BOOST_CHECK_EQUAL(sysHash, sysExpect);
+    }
 }
 
 // ── Buffer model coverage tests ───────────────────────────────────
@@ -609,16 +677,6 @@ struct TestValueA
         nameLen = static_cast<int32_t>(std::min(n.size(), nameBuf.size()));
         std::memcpy(nameBuf.data(), n.data(), nameLen);
     }
-    TestValueA(bytesConstRef data)
-    {
-        if (data.size() < 8)
-            return;
-        std::memcpy(&id, data.data(), 4);
-        std::memcpy(&nameLen, data.data() + 4, 4);
-        auto actualLen = std::min(static_cast<size_t>(nameLen), nameBuf.size());
-        if (data.size() >= 8 + actualLen)
-            std::memcpy(nameBuf.data(), data.data() + 8, actualLen);
-    }
     void encode(auto&& sink) const
     {
         uint8_t buf[32];
@@ -642,11 +700,6 @@ struct TestValueB
 
     TestValueB() = default;
     explicit TestValueB(int64_t v) : value(v) {}
-    TestValueB(bytesConstRef data)
-    {
-        if (data.size() >= 8)
-            std::memcpy(&value, data.data(), 8);
-    }
     void encode(auto&& sink) const
     {
         sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(&value), 8));
@@ -662,24 +715,24 @@ void tag_invoke(bcos::storage::encode_t, const TestValueA& v, Sink&& sink)
 {
     v.encode(std::forward<Sink>(sink));
 }
-TestValueA tag_invoke(
-    bcos::storage::decode_t, std::type_identity<TestValueA>, bytesConstRef data)
-{
-    return TestValueA{data};
-}
 
 template <typename Sink>
 void tag_invoke(bcos::storage::encode_t, const TestValueB& v, Sink&& sink)
 {
     v.encode(std::forward<Sink>(sink));
 }
-TestValueB tag_invoke(
-    bcos::storage::decode_t, std::type_identity<TestValueB>, bytesConstRef data)
-{
-    return TestValueB{data};
-}
 
 // ─── Typed Entry tests ─────────────────────────────────────────────
+
+// Compile-time probe for getBuffer<T>() constraint satisfaction.
+template <typename T>
+concept CanGetBuffer = requires(const Entry& e) { e.getBuffer<T>(); };
+static_assert(CanGetBuffer<std::string_view>);
+static_assert(CanGetBuffer<bytesConstRef>);
+static_assert(CanGetBuffer<std::span<const bcos::byte>>);
+// Owning types are rejected — only non-owning views are allowed.
+static_assert(!CanGetBuffer<std::string>);
+static_assert(!CanGetBuffer<bcos::bytes>);
 
 BOOST_AUTO_TEST_CASE(setTypedGetTypedSameType)
 {
@@ -717,11 +770,11 @@ BOOST_AUTO_TEST_CASE(setTypedGetTypedDifferentType)
     BOOST_TEST(!entry.holdsType<TestValueB>());
 }
 
-BOOST_AUTO_TEST_CASE(lazyDecodeFromByteMode)
+BOOST_AUTO_TEST_CASE(getTypedDoesNotDecodeByteMode)
 {
-    // Start with a byte-mode Entry (simulating data from RocksDB)
+    // Start with a byte-mode Entry (simulating data loaded from storage)
     Entry entry;
-    TestValueA original{99, "lazy"};
+    TestValueA original{99, "byte"};
     std::string encoded;
     encode(original, [&encoded](bytesConstRef d) {
         encoded.append(reinterpret_cast<const char*>(d.data()), d.size());
@@ -732,20 +785,16 @@ BOOST_AUTO_TEST_CASE(lazyDecodeFromByteMode)
     BOOST_TEST(!entry.holdsType<TestValueA>());
     BOOST_TEST(!entry.holdsType<TestValueB>());
 
-    // First getTyped triggers lazy decode
+    // getTyped never decodes: byte-mode entries return nullptr
     auto* ptr = entry.getTyped<TestValueA>();
-    BOOST_REQUIRE(ptr != nullptr);
-    BOOST_CHECK_EQUAL(ptr->id, 99);
-    BOOST_CHECK_EQUAL(ptr->nameStr(), "lazy");
+    BOOST_TEST(ptr == nullptr);
 
-    // After lazy decode, entry holds the typed model
-    BOOST_TEST(entry.holdsType<TestValueA>());
+    // The lookup has no side effects — the entry stays in byte-mode
+    BOOST_TEST(!entry.holdsType<TestValueA>());
     BOOST_TEST(!entry.holdsType<TestValueB>());
 
-    // Second getTyped is O(1) — no re-decode
-    auto* ptr2 = entry.getTyped<TestValueA>();
-    BOOST_REQUIRE(ptr2 != nullptr);
-    BOOST_CHECK(ptr == ptr2);  // Same pointer, same TypedHolderModel instance
+    // Raw bytes remain accessible
+    BOOST_CHECK_EQUAL(std::string(entry.get()), encoded);
 }
 
 BOOST_AUTO_TEST_CASE(encodeToBytesAfterSetTyped)
@@ -786,6 +835,128 @@ BOOST_AUTO_TEST_CASE(emptyEntryGetTyped)
     auto* ptr = entry.getTyped<TestValueA>();
     BOOST_TEST(ptr == nullptr);
     BOOST_TEST(!entry.holdsType<TestValueA>());
+}
+
+BOOST_AUTO_TEST_CASE(typedEntrySpecialMembers)
+{
+    // Defaulted special members must preserve the typed model.
+    Entry entry;
+    entry.setTyped(TestValueA{42, "pin"});
+
+    // Copy-construct
+    Entry copied(entry);
+    BOOST_TEST(copied.holdsType<TestValueA>());
+    auto* copiedPtr = copied.getTyped<TestValueA>();
+    BOOST_REQUIRE(copiedPtr != nullptr);
+    BOOST_CHECK_EQUAL(copiedPtr->id, 42);
+    BOOST_CHECK_EQUAL(copiedPtr->nameStr(), "pin");
+
+    // The copy is deep: rewriting it leaves the source intact
+    copied.setTyped(TestValueA{1, "other"});
+    BOOST_REQUIRE(entry.getTyped<TestValueA>() != nullptr);
+    BOOST_CHECK_EQUAL(entry.getTyped<TestValueA>()->id, 42);
+
+    // Move-construct
+    Entry moveSource;
+    moveSource.setTyped(TestValueA{7, "move"});
+    Entry moved(std::move(moveSource));
+    BOOST_TEST(moved.holdsType<TestValueA>());
+    BOOST_REQUIRE(moved.getTyped<TestValueA>() != nullptr);
+    BOOST_CHECK_EQUAL(moved.getTyped<TestValueA>()->id, 7);
+
+    // Copy-assign
+    Entry copyAssigned;
+    copyAssigned = entry;
+    BOOST_TEST(copyAssigned.holdsType<TestValueA>());
+    BOOST_REQUIRE(copyAssigned.getTyped<TestValueA>() != nullptr);
+    BOOST_CHECK_EQUAL(copyAssigned.getTyped<TestValueA>()->id, 42);
+
+    // Move-assign
+    Entry moveAssignSource;
+    moveAssignSource.setTyped(TestValueA{9, "massign"});
+    Entry moveAssigned;
+    moveAssigned = std::move(moveAssignSource);
+    BOOST_TEST(moveAssigned.holdsType<TestValueA>());
+    BOOST_REQUIRE(moveAssigned.getTyped<TestValueA>() != nullptr);
+    BOOST_CHECK_EQUAL(moveAssigned.getTyped<TestValueA>()->id, 9);
+
+    // set() over a typed entry leaves no stale typed state
+    entry.set(std::string_view("bytes"));
+    BOOST_TEST(!entry.holdsType<TestValueA>());
+    BOOST_TEST(entry.getTyped<TestValueA>() == nullptr);
+    BOOST_TEST(entry.holdsBuffer());
+    BOOST_CHECK_EQUAL(entry.get(), "bytes");
+}
+
+BOOST_AUTO_TEST_CASE(holdsBuffer)
+{
+    // EMPTY entry
+    Entry entry;
+    BOOST_TEST(!entry.holdsBuffer());
+
+    // Byte-mode entry (small buffer)
+    entry.set(std::string("small"));
+    BOOST_TEST(entry.holdsBuffer());
+
+    // Byte-mode entry (large buffer)
+    entry.set(std::string(64, 'x'));
+    BOOST_TEST(entry.holdsBuffer());
+
+    // Typed entry
+    entry.setTyped(TestValueA{1, "typed"});
+    BOOST_TEST(!entry.holdsBuffer());
+
+    // DELETED tombstone
+    entry.set(std::string("gone"));
+    entry.setStatus(Entry::DELETED);
+    BOOST_TEST(!entry.holdsBuffer());
+}
+
+BOOST_AUTO_TEST_CASE(getBuffer)
+{
+    // EMPTY entry → nullopt
+    Entry entry;
+    BOOST_TEST(!entry.getBuffer().has_value());
+
+    // Empty buffer → engaged view of size 0 (distinguishable from nullopt)
+    entry.set(std::string_view{});
+    auto emptyView = entry.getBuffer();
+    BOOST_REQUIRE(emptyView.has_value());
+    BOOST_TEST(emptyView->empty());
+
+    // Non-empty buffer
+    entry.set(std::string("data"));
+    auto view = entry.getBuffer();
+    BOOST_REQUIRE(view.has_value());
+    BOOST_CHECK_EQUAL(*view, "data");
+
+    // Explicit std::string_view
+    auto svView = entry.getBuffer<std::string_view>();
+    BOOST_REQUIRE(svView.has_value());
+    BOOST_CHECK_EQUAL(*svView, "data");
+
+    // bytesConstRef (RefDataContainer<const byte>)
+    auto byteRef = entry.getBuffer<bytesConstRef>();
+    BOOST_REQUIRE(byteRef.has_value());
+    BOOST_TEST(byteRef->size() == 4);
+    BOOST_CHECK_EQUAL_COLLECTIONS(byteRef->data(), byteRef->data() + byteRef->size(),
+        reinterpret_cast<const byte*>("data"), reinterpret_cast<const byte*>("data") + 4);
+
+    // std::span<const byte>
+    auto span = entry.getBuffer<std::span<const bcos::byte>>();
+    BOOST_REQUIRE(span.has_value());
+    BOOST_TEST(span->size() == 4);
+
+    // Typed entry → nullopt for every requested type
+    entry.setTyped(TestValueA{1, "typed"});
+    BOOST_TEST(!entry.getBuffer().has_value());
+    BOOST_TEST(!entry.getBuffer<bytesConstRef>().has_value());
+    BOOST_TEST(entry.get().empty());
+
+    // DELETED tombstone → nullopt
+    entry.set(std::string("gone"));
+    entry.setStatus(Entry::DELETED);
+    BOOST_TEST(!entry.getBuffer().has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

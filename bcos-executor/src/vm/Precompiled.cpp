@@ -21,8 +21,10 @@
 
 #include "../vm/Precompiled.h"
 #include "../Common.h"
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
-#include "wedpr-crypto/WedprCrypto.h"
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -38,9 +40,11 @@
 #include <evmone_precompiles/sha256.hpp>
 #include <intx/intx.hpp>
 #include <span>
-#include <bcos-utilities/BoostLog.h>
 
-using namespace std;
+using std::max;
+using std::min;
+using std::numeric_limits;
+using std::pair;
 using namespace bcos;
 using namespace bcos::crypto;
 
@@ -326,7 +330,8 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
     using namespace evmmax::bn254;
 
     uint8_t buf[128]{};
-    std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
+    if (_in.size() != 0)
+        std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
 
     const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf, 64});
     const auto q = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf + 64, 64});
@@ -343,7 +348,8 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
     using namespace evmmax::bn254;
 
     uint8_t buf[96]{};
-    std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
+    if (_in.size() != 0)
+        std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
 
     const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf, 64});
     if (!p.has_value() || !validate(*p))
@@ -702,27 +708,16 @@ namespace crypto
 h256 sha256(bytesConstRef _in) noexcept
 {
     h256 ret;
-    CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.data(), h256::SIZE};
-    if (wedpr_sha256_hash(&in, &result) != 0) [[unlikely]]
-    {
-        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("sha256 failed.") << _in.toString();
-        return ret;
-    }
+    evmone::crypto::sha256(reinterpret_cast<std::byte*>(ret.data()),
+        reinterpret_cast<const std::byte*>(_in.data()), _in.size());
     return ret;
 }
 
 h160 ripemd160(bytesConstRef _in)
 {
     h160 ret;
-    CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.data(), h160::SIZE};
-    if (wedpr_ripemd160_hash(&in, &result) != 0) [[unlikely]]
-    {
-        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ripemd160 failed.")
-                        << _in.toString();
-        return ret;
-    }
+    evmone::crypto::ripemd160(reinterpret_cast<std::byte*>(ret.data()),
+        reinterpret_cast<const std::byte*>(_in.data()), _in.size());
     return ret;
 }
 
@@ -899,7 +894,7 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     }
 
     pair<bool, bytes> ret{true, bytes(crypto::HashType::SIZE, 0)};
-    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("wedpr_secp256k1_recover_public_key")
+    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("secp256k1_recover_public_key")
                     << LOG_KV("hash", toHexStringWithPrefix(mHash))
                     << LOG_KV("rsv", toHex(bytesConstRef(rawRSV, RSV_LENGTH)));
     if (pk == nullptr)
@@ -907,16 +902,11 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
         BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover publicKey failed");
         return {true, {}};
     }
-    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled")
-                    << LOG_DESC("wedpr_secp256k1_recover_public_key success");
+    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("secp256k1_recover_public_key success");
     // keccak256 and set first 12 byte to zero
-    CInputBuffer pubkeyBuffer{pk->constData(), PUBLIC_KEY_LENGTH};
-    COutputBuffer pubkeyHash{(char*)ret.second.data(), crypto::HashType::SIZE};
-    auto retCode = wedpr_keccak256_hash(&pubkeyBuffer, &pubkeyHash);
-    if (retCode != 0)
-    {
-        return {true, {}};
-    }
+    auto pubkeyHash = keccak256Hash(
+        bytesConstRef(reinterpret_cast<const byte*>(pk->constData()), PUBLIC_KEY_LENGTH));
+    ret.second = pubkeyHash.asBytes();
     memset(ret.second.data(), 0, 12);
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover success");
     return ret;

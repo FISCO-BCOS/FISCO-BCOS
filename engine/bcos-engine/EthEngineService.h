@@ -1,0 +1,353 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EthEngineService.h
+ * @brief Ethereum Engine API service beside the legacy EngineServiceImpl
+ */
+
+#pragma once
+
+#include "ClSyncCoordination.h"
+#include "EngineMPTStateRoot.h"
+#include "EngineServiceCommon.h"
+#include "EngineTracker.h"
+
+#include <bcos-concepts/ByteBuffer.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/merkle/Merkle.h>
+#include <bcos-framework/engine/EngineService.h>
+#include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/Ledger.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/LedgerConfigState.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/protocol/Transaction.h>
+#include <bcos-framework/storage/Entry.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
+#include <bcos-ledger/LedgerMethods.h>
+#include <bcos-ledger/mpt/CommitObserver.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
+#include <bcos-task/Task.h>
+#include <bcos-transaction-scheduler/EthereumChainRollback.h>
+#include <bcos-utilities/Bloom.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/LogStream.h>
+#include <boost/lexical_cast.hpp>
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+namespace bcos::engine
+{
+
+namespace detail
+{
+template <class Guard, class ArtifactsMap>
+void commitRetainedPayload(Guard& guard, ArtifactsMap& artifacts, PayloadID const& payloadId,
+    h256 const& blockHash, BuiltPayloadPtr entry)
+{
+    PayloadCache cacheRollback = guard.snapshotPayloadCache();
+    ArtifactsMap artifactsRollback = artifacts;
+    try
+    {
+        guard.putAndRetainPayload(payloadId, blockHash, std::move(entry));
+        artifacts.clear();
+    }
+    catch (...)
+    {
+        guard.restorePayloadCache(std::move(cacheRollback));
+        artifacts = std::move(artifactsRollback);
+        throw;
+    }
+}
+
+/// Terminal-SYNCING visibility: the CL keeps retrying an answer it cannot move
+/// past without EL sync; keep the fail-closed answer but make the gap visible
+/// (rate-limited log naming it). One CAS gate (10 s) PER call site (template
+/// parameter, one static per instantiation) so a noisy routine site cannot
+/// suppress another site's window. The desc names the specific gap at each
+/// call site.
+enum SyncingWarnSite : std::size_t
+{
+    c_forkchoiceHeadUnknown,
+    c_forkchoiceHeadBehindTip,
+    c_newPayloadParentUnknown,
+    c_newPayloadNotBuiltHere,
+    c_newPayloadCacheMiss,
+};
+
+template <SyncingWarnSite kSiteV>
+inline void warnSyncingRateLimited(const char* desc, h256 const& blockHash)
+{
+    static std::atomic<std::chrono::steady_clock::time_point> lastWarn{
+        std::chrono::steady_clock::time_point{}};
+    auto const now = std::chrono::steady_clock::now();
+    auto prev = lastWarn.load(std::memory_order_relaxed);
+    if (now - prev >= std::chrono::seconds(10) &&
+        lastWarn.compare_exchange_strong(
+            prev, now, std::memory_order_relaxed, std::memory_order_relaxed))
+    {
+        BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService") << LOG_DESC(desc)
+                          << LOG_KV("blockHash", blockHash.hex());
+    }
+}
+
+/// Unlimited variant for the mid-persist alarm: a fully built block lost
+/// mid-commit must never be dropped by another site's 10 s window.
+inline void warnSyncingUnlimited(const char* desc, h256 const& blockHash)
+{
+    BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService") << LOG_DESC(desc)
+                      << LOG_KV("blockHash", blockHash.hex());
+}
+}  // namespace detail
+
+template <class ViewType>
+struct EthPayloadArtifacts
+{
+    std::shared_ptr<ViewType> view;
+    bcos::protocol::BlockHeader::Ptr header;
+    std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    /// The block's MPT delta (null on the XOR-root path), handed to the CommitObserver (MPT
+    /// pruning) when newPayload commits the block. Kept until the durable write succeeds,
+    /// same rule as header/receipts, so a failed attempt's retry re-reads it.
+    std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
+    /// The block's rollback journal, captured BEFORE pushView in newPayload's commit
+    /// section and stashed here immediately: a commit attempt that throws after pushView
+    /// has consumed the view cannot recapture on the CL's retry (captureRollbackJournal
+    /// iterates the view's dirty rows), so the retry reads the journal from the artifact
+    /// and still writes the journal rows with the block — a journal-less committed block
+    /// would refuse every later reorg reaching it. Held by shared_ptr (same convention as
+    /// mptDelta above): the stash and the exception-rollback artifacts-map snapshots then
+    /// copy a refcount instead of the block's whole dirty-row set, and the stash — running
+    /// between the capture's catch and pushView with the view still in hand — is nothrow,
+    /// so it cannot recreate the header-only-without-journal artifact it guards against.
+    std::shared_ptr<const scheduler_v1::RollbackJournal> rollbackJournal = nullptr;
+};
+
+template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
+    requires executor_v1::TransactionExecutor<ExecutorType,
+                 typename GlobalStateStorageType::ViewType> &&
+             scheduler_v1::TransactionScheduler<SchedulerType,
+                 typename GlobalStateStorageType::ViewType, ExecutorType,
+                 std::vector<protocol::Transaction::Ptr>>
+class EthEngineService
+{
+public:
+    using ViewType = typename GlobalStateStorageType::ViewType;
+
+    EthEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
+        ExecutorType& executor, SchedulerType& scheduler,
+        bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
+        int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
+        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr,
+        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr,
+        std::shared_ptr<engine_common::IExternalPayloadVerifier<GlobalStateStorageType>>
+            externalPayloadVerifier = nullptr,
+        std::shared_ptr<engine_common::ClSyncCoordination> clSync = nullptr,
+        bool allowBlobTransactions = false)
+      : m_memPool(memPool),
+        m_globalStateStorage(globalStateStorage),
+        m_executor(executor),
+        m_scheduler(scheduler),
+        m_blockFactory(std::move(blockFactory)),
+        m_ledger(std::move(ledger)),
+        m_blockTxCountLimit(blockTxCountLimit),
+        m_maxEngineVersion(maxEngineVersion),
+        m_commitObserver(commitObserver ? std::move(commitObserver) :
+                                          std::make_shared<ledger::mpt::NoopCommitObserver>()),
+        m_ledgerConfigState(std::move(ledgerConfigState)),
+        m_externalPayloadVerifier(std::move(externalPayloadVerifier)),
+        m_clSync(std::move(clSync)),
+        m_allowBlobTransactions(allowBlobTransactions)
+    {
+        if (!m_blockFactory)
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"blockFactory must not be null"});
+        }
+    }
+    ~EthEngineService() = default;
+    EthEngineService(const EthEngineService&) = delete;
+    EthEngineService(EthEngineService&&) = delete;
+    EthEngineService& operator=(const EthEngineService&) = delete;
+    EthEngineService& operator=(EthEngineService&&) = delete;
+
+    /// Version-window contract (the four surfaces deliberately differ, matching
+    /// op-geth's by-design ceiling split; do not "fix" them to agree):
+    /// - exchangeCapabilities: the FULL supported list regardless of
+    /// m_maxEngineVersion — capability advertisement is static, method windows
+    /// are what gate actual dispatch.
+    /// - updateForkchoice (FCU): instance-gated by m_maxEngineVersion (V1–V3 for
+    /// the default-constructed service).
+    /// - newPayload: V1–V4 (Isthmus V4 empty-lists shape).
+    /// - getPayload: V1–V5 via the tracker's window (the V2 build answers V1–V2,
+    /// the V3 build answers V1–V5).
+    task::Task<std::vector<std::string>> exchangeCapabilities(
+        std::vector<std::string> remoteCapabilities)
+    {
+        (void)remoteCapabilities;
+        co_return engine_common::supportedCapabilities();
+    }
+
+    task::Task<ForkchoiceUpdatedResult> updateForkchoice(const ForkchoiceState& forkchoiceState,
+        const PayloadAttributes* payloadAttributes, std::uint32_t version);
+
+    task::Task<GetPayloadResult> getPayload(const PayloadID& payloadId, std::uint32_t version)
+    {
+        co_return m_tracker.getPayload(payloadId, version);
+    }
+
+    task::Task<PayloadStatus> newPayload(const NewPayloadRequest& request, std::uint32_t version);
+
+    /// EL-mode external lane: a CL-pushed payload that was not built by this node's
+    /// forkchoiceUpdated. Reached only when m_externalPayloadVerifier is set (every
+    /// executor_version=2 wiring: the Engine driver and [debug] enable); a service built
+    /// without one (the executor_version < 2 build, tests) leaves it null and the null
+    /// branch below keeps its historical behavior.
+    task::Task<PayloadStatus> newPayloadExternal(const NewPayloadRequest& request);
+
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
+    {
+        return m_tracker.safeBlockNumber();
+    }
+
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
+    {
+        return m_tracker.finalizedBlockNumber();
+    }
+
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const
+    {
+        auto const head = m_tracker.trackedHead();
+        return head ? std::optional(head->blockNumber) : std::nullopt;
+    }
+
+private:
+    struct BuildPayloadResult
+    {
+        ExecutionPayload executionPayload;
+        bcos::protocol::BlockHeader::Ptr header;
+        std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        /// The block's MPT delta (null on the XOR-root path); updateForkchoice stashes it in
+        /// the payload artifacts for the newPayload commit's pruning hooks.
+        std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
+        /// Prague+ execution requests computed during an L1 build (engine-API wire form);
+        /// nullopt pre-Prague or on the OP path.
+        std::optional<std::vector<bytes>> executionRequests = std::nullopt;
+    };
+
+    /// EL-mode (L1) build inputs updateForkchoice resolves before sealing: the parent's
+    /// Ethereum header (the builder's state anchor) plus the base fee / excess blob gas /
+    /// header fork derived from it and the CL's timestamp.
+    struct L1BuildInput
+    {
+        bcos::protocol::EthBlockHeaderData parentHeader;
+        engine_common::ExternalL1Context l1Context;
+    };
+
+    bool isForkchoiceVersionSupported(std::uint32_t version) const
+    {
+        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
+               version <= m_maxEngineVersion;
+    }
+
+    static bool isNewPayloadVersionSupported(std::uint32_t version)
+    {
+        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
+               version <= static_cast<std::uint32_t>(ApiVersion::V4);
+    }
+
+    task::Task<BuildPayloadResult> buildPayload(const ForkchoiceState& forkchoiceState,
+        const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
+        std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
+        std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
+        std::vector<bcos::bytes> decodedForcedTxs, std::optional<L1BuildInput> l1Input) const;
+
+    /// The L1 (EL-mode) half of buildPayload: runs the assembled transactions through the
+    /// shared verifier execution phase (IExternalPayloadVerifier::buildL1Block) and stamps
+    /// the computed roots into the payload/header it is building.
+    task::Task<BuildPayloadResult> buildL1Payload(const ForkchoiceState& forkchoiceState,
+        const PayloadAttributes& payloadAttributes, bcos::protocol::BlockNumber nextBlockNumber,
+        std::vector<EngineTransaction> engineTransactions, ViewType& view,
+        L1BuildInput const& l1Input) const;
+
+    EngineTracker m_tracker;
+    /// Serializes the newPayload commit section [prepareMPTPruneRows -> merge -> onCommit ->
+    /// artifact consume] against every other commit: MPTPruner stages the block's counting
+    /// work on one shared overlay between the two hooks, so concurrent commits (the
+    /// duplicate-newPayload race the commit path comments describe) would corrupt it. Held
+    /// across co_await, the same pattern as BaselineScheduler::m_commitMutex.
+    std::mutex m_commitMutex;
+    std::unordered_map<PayloadID, EthPayloadArtifacts<ViewType>> m_artifacts;
+    MemPoolType& m_memPool;
+    GlobalStateStorageType& m_globalStateStorage;
+    ExecutorType& m_executor;
+    SchedulerType& m_scheduler;
+    bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    bcos::ledger::LedgerInterface::Ptr m_ledger;
+    int64_t m_blockTxCountLimit;
+    std::uint32_t m_maxEngineVersion;
+    /// The pruning observer the newPayload commit path fires (NoopCommitObserver unless the
+    /// wiring injected an MPTPruner). Dereferenced only under m_commitMutex; also consulted at
+    /// build time via needsRefCountDeltas() (passed to resolveEngineBlockStateRoot so the
+    /// tally decision cannot drift from the commit hook).
+    std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
+
+    /// Published after every durable commit (whoever commits a block publishes the new
+    /// configuration — TxValidator's contract): this lane commits via direct storage merges,
+    /// not through MultiVersionScheduler's publishing wrapper, so without this holder the
+    /// engine-driven modes would admit every later transaction against the boot snapshot.
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
+
+    /// Type-erased seam over scheduler_v1::EthereumBlockVerifier, injected only on the
+    /// EL-mode wiring (the instance is shared with the devp2p sync loop so both commit
+    /// lanes serialize on the verifier's m_commitMutex). Non-null switches newPayload's
+    /// shape gate to the L1 dialect and enables the external newPayload lane.
+    std::shared_ptr<engine_common::IExternalPayloadVerifier<GlobalStateStorageType>>
+        m_externalPayloadVerifier;
+
+    /// CL-driven sync coordination ([engine_rpc] EL wiring only, created and shared by
+    /// the composition root): the first served forkchoiceUpdated latches the devp2p
+    /// sync loop's CL-driven mode, and every SYNCING answer records its missing hash
+    /// as the loop's backfill target. Null under [debug] enable and on builds without an
+    /// external verifier, where no devp2p sync loop exists.
+    std::shared_ptr<engine_common::ClSyncCoordination> m_clSync;
+
+    /// Set by the composition root on executor_version==2. It matters only on a service
+    /// without an external verifier (tests): that path keeps the OP-flavored newPayload
+    /// shape gate, except blob (type-3) envelopes are admitted — the admission path
+    /// (TxValidator Web3Blob) already let them into the pool. The L1 dialect behind the
+    /// verifier admits them regardless.
+    bool m_allowBlobTransactions;
+};
+
+}  // namespace bcos::engine
+
+#include "EthEngineService.inl"

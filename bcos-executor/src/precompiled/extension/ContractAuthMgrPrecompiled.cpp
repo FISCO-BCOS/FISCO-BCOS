@@ -20,6 +20,7 @@
 
 #include "ContractAuthMgrPrecompiled.h"
 #include "bcos-codec/scale/Scale.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include <utility>
 
 using namespace bcos;
@@ -247,8 +248,11 @@ void ContractAuthMgrPrecompiled::resetAdmin(
                                << LOG_DESC("contract ACL table not found") << LOG_KV("path", path);
         if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
         {
-            if (!_executive->storage().openTable(getContractTableName(USER_APPS_PREFIX, address)))
-                [[unlikely]]
+            // Probe contract existence where the contract table actually lives. Binary
+            // is a physical re-encoding of the Hex string (legacyAppsAccountTableName);
+            // no /sys/ routing in either mode.
+            if (!_executive->storage().openTable(
+                    ledger::account::legacyAppsAccountTableName(address))) [[unlikely]]
             {
                 // not exist contract address
                 BOOST_THROW_EXCEPTION(

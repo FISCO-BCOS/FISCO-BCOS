@@ -1,0 +1,339 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpEngineService.cpp
+ * @brief OP Engine API service validators (OP payload-attribute and newPayload-request validation)
+ */
+
+#include "OpEngineService.h"
+
+#include <bcos-codec/rlp/RLPDecode.h>
+#include <bcos-framework/engine/RawTransactionDispatch.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <limits>
+
+namespace bcos::engine::engine_common::op
+{
+namespace
+{
+constexpr char const* c_opMaxBlockGasLimitMessage =
+    "gasLimit exceeds the maximum block gas limit (2^63-1)";
+
+constexpr bool gasLimitExceedsOpCap(std::uint64_t gasLimit) noexcept
+{
+    return gasLimit > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+}
+
+// Consensus header constants live in engine_common (EngineServiceCommon.h) — shared with
+// the Eth builder so the keccak256(rlp(header))-critical literals have exactly one home.
+}  // namespace
+
+std::optional<bcostars::Transaction> opEnvelopeToTars(
+    bcos::bytes const& env, bcos::crypto::HashType const& txHash, bool allowDeposit)
+{
+    bcos::rpc::Web3Transaction web3Tx;
+    bcos::bytesRef envRef{const_cast<bcos::byte*>(env.data()), env.size()};
+    if (!web3Tx.tryDecode(envRef))
+    {
+        return std::nullopt;
+    }
+    if (!envRef.empty())
+    {
+        return std::nullopt;
+    }
+    // Deposit envelopes are an OP-Stack extension: the OP lane must accept them (the
+    // CL submits deposits via payloadAttributes.transactions), but the shared decode
+    // must not admit 0x7e on the Eth lane — the type is invalid outside OP and no
+    // Eth client would re-execute the block, so executing one would fork the chain
+    // from every honest peer. The Eth build path answers this as undecodable, which
+    // updateForkchoice maps to a terminal INVALID — the same contract as any other
+    // inadmissible payload content.
+    if (web3Tx.type == bcos::rpc::TransactionType::Deposit && !allowDeposit)
+    {
+        return std::nullopt;
+    }
+    auto tarsTx = web3Tx.takeToTarsTransaction();
+    tarsTx.extraTransactionHash.assign(txHash.begin(), txHash.end());
+    if (tarsTx.sender.empty())
+    {
+        try
+        {
+            auto sender = bcos::fromHex(web3Tx.sender());
+            tarsTx.sender.assign(sender.begin(), sender.end());
+        }
+        catch (std::exception const&)
+        {
+            return std::nullopt;
+        }
+    }
+    return tarsTx;
+}
+
+void applyOpHeaderConstants(bcos::protocol::BlockHeader& header)
+{
+    header.setUncleHash(bcos::protocol::c_emptyOmmersHash);
+    header.setDifficulty(bcos::u256(0));
+    header.setNonce(engine_common::c_posNonce);
+}
+
+std::vector<std::string> supportedOpCapabilities()
+{
+    // The OP lane's real window, NOT the Eth list: OP newPayload is Isthmus-only
+    // (V4; the service answers -38005 for V1-V3) and getPayloadV1/V2 cannot render
+    // a PayloadV3 build (IncompatiblePayloadVersion). Advertising them would strand
+    // a pre-Isthmus CL on methods that deterministically fail, with no sync path
+    // to recover. FCU V1/V2 stay listed (heartbeat FCUs are accepted); FCU V4 is
+    // unimplemented (Endpoint -38005) and absent upstream.
+    //
+    // getPayloadBodiesBy{Hash,Range}V1 and getClientVersionV1 are the SAME EngineEndpoint
+    // handlers the Eth lane serves (one implementation, registered once in EndpointsMapping
+    // for both lanes) and answer from the committed ledger / build info, so the table
+    // lists them: geth and op-geth advertise them from one auto-derived caps list, and
+    // the CLs / harnesses that probe exchangeCapabilities before calling them must not
+    // read this node as lacking methods it serves.
+    static const std::vector<std::string> caps{"engine_exchangeCapabilities",
+        "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3",
+        "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5", "engine_newPayloadV4",
+        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
+        "engine_getClientVersionV1"};
+    return caps;
+}
+
+std::optional<std::uint64_t> narrowU256ToU64(const u256& value)
+{
+    if (!bcos::u256FitsUint64(value))
+    {
+        return std::nullopt;
+    }
+    return static_cast<std::uint64_t>(value);
+}
+
+bcos::h2048 toEthLogsBloom(const Bloom& logsBloom)
+{
+    return bcos::h2048(logsBloom.data(), logsBloom.size());
+}
+
+std::optional<std::string> validateOpPayloadAttributes(
+    const PayloadAttributes& payloadAttributes, bool jovianActive)
+{
+    if (!payloadAttributes.gasLimit.has_value())
+    {
+        return std::string("gasLimit parameter is required (OP rollup)");
+    }
+    // Same 2^63-1 cap as validateOpNewPayloadRequest. JSON parseQuantity already
+    // rejects >uint64; this closes the window where FCU would stamp a payloadId
+    // that newPayload then refuses (op-geth defers the cap to VerifyHeader).
+    if (gasLimitExceedsOpCap(*payloadAttributes.gasLimit))
+    {
+        return std::string(c_opMaxBlockGasLimitMessage);
+    }
+    if (!payloadAttributes.eip1559Params.has_value())
+    {
+        return std::string("eip1559Params is required on the OP path (Holocene+)");
+    }
+    if (payloadAttributes.eip1559Params->size() != 8)
+    {
+        return std::string("eip1559Params must be exactly 8 bytes");
+    }
+    const auto [denominator, elasticity] =
+        bcos::engine::decodeEip1559Params(*payloadAttributes.eip1559Params);
+    if (auto error = engine_common::validateHolocene1559Params(denominator, elasticity))
+    {
+        return error;
+    }
+    if (payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty())
+    {
+        return std::string("withdrawals must be empty on the OP path");
+    }
+    if (jovianActive && !payloadAttributes.minBaseFee.has_value())
+    {
+        return std::string("minBaseFee is required after the Jovian fork");
+    }
+    if (!jovianActive && payloadAttributes.minBaseFee.has_value())
+    {
+        return std::string("minBaseFee must be null before the Jovian fork");
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> validateOpNewPayloadRequest(
+    const NewPayloadRequest& request, bool jovianActive, bool isthmusActive)
+{
+    const auto& payload = request.executionPayload;
+    bool const isthmus = isthmusActive || jovianActive;
+
+    // release ExecutionPayload uses a single carrier: transactions[i].raw (no dual
+    // rawTransactions mirror). Empty list is valid (deposit-only / empty blocks).
+    for (std::size_t i = 0; i < payload.transactions.size(); ++i)
+    {
+        if (payload.transactions[i].raw.empty())
+        {
+            return "executionPayload.transactions[" + std::to_string(i) + "] is empty";
+        }
+        if (auto error = engine_common::validateRawTransactionKind(
+                dispatchRawTransaction(bcos::ref(payload.transactions[i].raw)), i))
+        {
+            return error;
+        }
+    }
+    if (!payload.withdrawals.has_value() || !payload.withdrawals->empty())
+    {
+        return std::string("withdrawals must be present and empty on the OP path");
+    }
+    if (!request.expectedBlobVersionedHashes.empty())
+    {
+        return std::string("expectedBlobVersionedHashes must be an empty array on the OP path");
+    }
+    if (!request.parentBeaconBlockRoot.has_value())
+    {
+        return std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV4");
+    }
+    if (isthmus)
+    {
+        if (!payload.withdrawalsRoot.has_value())
+        {
+            return std::string("withdrawalsRoot is required on the OP path (Isthmus+)");
+        }
+    }
+    else if (payload.withdrawalsRoot.has_value())
+    {
+        return std::string("non-nil withdrawalsRoot pre-Isthmus");
+    }
+    if (!payload.excessBlobGas.has_value() || *payload.excessBlobGas != 0)
+    {
+        return std::string("excessBlobGas must be present and zero on the OP path");
+    }
+    if (!payload.blobGasUsed.has_value())
+    {
+        return std::string("blobGasUsed must be present on the OP path");
+    }
+    if (!jovianActive && *payload.blobGasUsed != 0)
+    {
+        return std::string("blobGasUsed must be zero before Jovian (OP Isthmus)");
+    }
+    if (payload.blockNumber < 0)
+    {
+        return std::string("blockNumber must not be negative");
+    }
+    if (!narrowU256ToU64(payload.gasLimit).has_value())
+    {
+        return std::string("gasLimit exceeds the uint64 range of the ETH header field");
+    }
+    if (gasLimitExceedsOpCap(*narrowU256ToU64(payload.gasLimit)))
+    {
+        return std::string(c_opMaxBlockGasLimitMessage);
+    }
+    {
+        const auto& extra = payload.extraData;
+        if (jovianActive)
+        {
+            if (extra.size() != 17)
+            {
+                return std::string("extraData must be exactly 17 bytes on the OP path (Jovian)");
+            }
+            if (extra[0] != 0x01)
+            {
+                return std::string("extraData version byte must be 0x01 on the OP path (Jovian)");
+            }
+        }
+        else
+        {
+            if (extra.size() != 9)
+            {
+                return std::string("extraData must be exactly 9 bytes on the OP path (Isthmus)");
+            }
+            if (extra[0] != 0x00)
+            {
+                return std::string("extraData version byte must be 0x00 on the OP path (Isthmus)");
+            }
+        }
+        // Shared Holocene/Jovian length/version/nonzero rule. Fork-specific
+        // messages above keep the Isthmus-vs-Jovian length discriminator.
+        if (auto error = validateOpExtraDataShape(extra, /*allowEmpty=*/false))
+        {
+            return "executionPayload.extraData " + *error;
+        }
+    }
+    if (!narrowU256ToU64(payload.gasUsed).has_value())
+    {
+        return std::string("gasUsed exceeds the uint64 range of the ETH header field");
+    }
+    if (!narrowU256ToU64(*payload.blobGasUsed).has_value())
+    {
+        return std::string("blobGasUsed exceeds the uint64 range of the ETH header field");
+    }
+    if (jovianActive && *payload.blobGasUsed > payload.gasLimit)
+    {
+        return std::string("DA footprint (blobGasUsed) exceeds the block gas limit");
+    }
+    // Same reasoning as the Eth sibling (EngineServiceImpl.h): the wire already enforces
+    // the fourth newPayloadV4 parameter (parseNewPayloadRequest always sets the list for
+    // V4), so accepting a missing list here would hand in-process callers a laxer
+    // Isthmus contract than the wire — executionRequests must be present and empty.
+    if (!request.executionRequests.has_value() || !request.executionRequests->empty())
+    {
+        return std::string("executionRequests must be a present-but-empty list on the OP path");
+    }
+    return std::nullopt;
+}
+
+bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const h256& transactionsRoot, const h256& parentBeaconBlockRoot)
+{
+    // Intentionally NO setEthBlockVersion (unlike detail::finalizeEthBlockHeader): the OP
+    // header is a FISCO BlockHeader whose ethBlockVersion stays NON_ETH. That is exactly
+    // what EthBlockHeader::computeHash documents itself for ("usable for FISCO-native/OP
+    // headers (EthBlockVersion::NON_ETH) that calculateRLPHash's validateHeader rejects"),
+    // while canonicalBlockHash routes OP-shaped headers (isOpEthereumBlock: NON_ETH plus
+    // the fork fields, BlockHeaderHash.cpp) to that same computeHash. The RLP encoding
+    // cannot depend on the version field: the ctor builds EthBlockHeaderData from field
+    // presence (each optional fork field copied when set) and the shared codec encodes
+    // exactly the set optionals positionally — EthBlockHeaderData carries no version input
+    // at all. With every fork field stamped below, the encoding is the full 21-field form
+    // op-geth produces, and the external-oracle golden test
+    // (op_golden_vector_rebuild_matches_op_geth_block_hash, vendored corpus) pins it byte
+    // for byte. calculateRLPHash (validateHeader path) is not usable on these headers by
+    // design; finalizeEthBlockHeader needs setEthBlockVersion only because it goes through
+    // calculateRLPHash on the Eth lane.
+    auto header = factory->createBlockHeader();
+    const auto number = static_cast<bcos::protocol::BlockNumber>(payload.blockNumber);
+    header->setNumber(number);
+    header->setTimestamp(static_cast<int64_t>(payload.timestamp));
+    header->setParentInfo(
+        bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = payload.parentHash});
+    header->setCoinbase(payload.feeRecipient);
+    header->setStateRoot(payload.stateRoot);
+    header->setTxsRoot(transactionsRoot);
+    header->setReceiptsRoot(payload.receiptsRoot);
+    const auto bloom = toEthLogsBloom(payload.logsBloom);
+    header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+    header->setGasLimit(payload.gasLimit);
+    header->setGasUsed(payload.gasUsed);
+    header->setExtraData(payload.extraData);
+    header->setPrevRandao(payload.prevRandao);
+    header->setBaseFee(payload.baseFeePerGas);
+    header->setWithdrawalsRoot(payload.withdrawalsRoot.value());
+    header->setBlobGasUsed(payload.blobGasUsed.value());
+    header->setExcessBlobGas(bcos::u256(0));
+    header->setParentBeaconBlockRoot(parentBeaconBlockRoot);
+    header->setRequestsHash(engine_common::c_emptyRequestsHash);
+    applyOpHeaderConstants(*header);
+    return header;
+}
+
+}  // namespace bcos::engine::engine_common::op

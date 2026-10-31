@@ -19,21 +19,44 @@
  * @date 2021-06-10
  */
 #pragma once
+#include "AddressTableModeDetection.h"
 #include "bcos-ledger/Ledger.h"
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <optional>
 
 namespace bcos::initializer
 {
+/// The on-chain executor_version and its activation block, read once for both the lane
+/// wiring (Initializer) and the genesis-only boot invariant (validateOpModeGenesisOnly).
+struct OnChainExecutorVersion
+{
+    int version = 0;
+    bcos::protocol::BlockNumber activation = 0;
+    bool present = false;
+};
+
+/// Read executor_version from the ledger. A row that exists but does not parse is a boot
+/// failure with a diagnosable message (never a bare boost::bad_lexical_cast out of the
+/// initializer); an absent row falls back to the genesis config's value.
+OnChainExecutorVersion readOnChainExecutorVersion(
+    bcos::ledger::LedgerInterface& ledger, int fallbackVersion);
+
 class LedgerInitializer
 {
 public:
+    /// @param accountTableBoot the boot-time account-table handling (AccountTableBoot): lane
+    ///        check → layout-flag read (one point Get) → optional one-shot hex→binary
+    ///        migration → node-mode publication, all before buildGenesisBlock. Nullopt skips
+    ///        the whole sequence (tools that never serve execution, e.g. archive-tool): the
+    ///        singleton keeps its Hex default, the pre-detection behavior.
     static std::shared_ptr<bcos::ledger::Ledger> build(
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storage, bcos::tool::NodeConfig::Ptr nodeConfig,
         bcos::storage::StorageInterface::Ptr blockStorage,
-        bcos::IOServicePool::Ptr ioServicePool = nullptr);
+        bcos::IOServicePool::Ptr ioServicePool = nullptr,
+        std::optional<AccountTableBoot> accountTableBoot = std::nullopt);
 };
 }  // namespace bcos::initializer

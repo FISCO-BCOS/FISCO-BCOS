@@ -71,8 +71,8 @@ BOOST_AUTO_TEST_CASE(testQuantity)
     BOOST_CHECK_EQUAL(fromQuantity("0x10"), 0x10u);
     BOOST_CHECK_EQUAL(fromQuantity("0Xff"), 0xffu);
     BOOST_CHECK_EQUAL(fromQuantity("10"), 0x10u);  // bare hex, not decimal
-    BOOST_CHECK_EQUAL(fromQuantity("0x7fffffffffffffff"),
-        static_cast<uint64_t>(0x7fffffffffffffffULL));
+    BOOST_CHECK_EQUAL(
+        fromQuantity("0x7fffffffffffffff"), static_cast<uint64_t>(0x7fffffffffffffffULL));
     BOOST_CHECK_EQUAL(fromQuantity("ffffffffffffffff"), UINT64_MAX);
 
     // Strict: trailing garbage / signs / empty are rejected (previously stoull silently
@@ -212,6 +212,13 @@ BOOST_AUTO_TEST_CASE(testOperators)
     string32 s_32 = {{'a', 'b', 'c'}};
     std::string s = toString(s_32);
     BOOST_CHECK(s == "abc");
+}
+
+BOOST_AUTO_TEST_CASE(testU256FitsUint64)
+{
+    BOOST_CHECK(u256FitsUint64(u256(0)));
+    BOOST_CHECK(u256FitsUint64(u256(std::numeric_limits<uint64_t>::max())));
+    BOOST_CHECK(!u256FitsUint64(u256(std::numeric_limits<uint64_t>::max()) + 1));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

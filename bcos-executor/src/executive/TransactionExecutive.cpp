@@ -48,16 +48,17 @@
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/Common.h"
 #include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <memory>
 #include <string>
-#include <boost/algorithm/string.hpp>
 
 
-using namespace std;
+using std::exception;
+using std::string;
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::storage;
@@ -386,8 +387,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             !callParameters->internalCreate)
         {
             ledger::account::EVMAccount address(*m_blockContext.storage(),
-                callParameters->senderAddress,
-                m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
+                callParameters->senderAddress, ledger::account::nodeAddressTableMode());
             if (m_blockContext.features().get(ledger::Features::Flag::bugfix_nonce_initialize))
             {
                 if (!precompiled::contains(bcos::precompiled::c_systemTxsAddress,
@@ -421,8 +421,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             {
                 // TODO)): set nonce here will be better
                 ledger::account::EVMAccount address(*m_blockContext.storage(),
-                    callParameters->senderAddress,
-                    m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
+                    callParameters->senderAddress, ledger::account::nodeAddressTableMode());
                 task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
                     if (!co_await addr.exists())
                     {
@@ -723,7 +722,9 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
         if (precompiledCallParams->m_gasLeft < 0)
         {
             revert();
-            EXECUTIVE_LOG(INFO) << "Revert transaction: call precompiled out of gas.";
+            EXECUTIVE_LOG(DEBUG) << "Revert transaction: call precompiled out of gas."
+                                 << LOG_KV("number", m_blockContext.number())
+                                 << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
             callParameters->type = CallParameters::REVERT;
             callParameters->status = (int32_t)TransactionStatus::OutOfGas;
             if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
@@ -737,10 +738,12 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     // NotEnoughCashError
     catch (protocol::NotEnoughCashError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "NotEnoughCashError"
-                            << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
-                            << LOG_KV("message", e.what());
+        EXECUTIVE_LOG(DEBUG) << "Revert transaction: "
+                             << "NotEnoughCashError"
+                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
+                             << LOG_KV("message", e.what())
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         writeErrInfoToOutput(e.what(), *callParameters);
         revert();
         callParameters->type = CallParameters::REVERT;
@@ -750,10 +753,12 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     }
     catch (protocol::PrecompiledError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "PrecompiledFailed"
-                            << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
-                            << LOG_KV("message", e.what());
+        EXECUTIVE_LOG(DEBUG) << "Revert transaction: "
+                             << "PrecompiledFailed"
+                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
+                             << LOG_KV("message", e.what())
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         // Note: considering the scenario where the contract calls the contract, the error message
         // still needs to be written to the output
         writeErrInfoToOutput(e.what(), *callParameters);
@@ -863,8 +868,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                 ledger::Features::Flag::bugfix_set_contract_nonce_when_create)) [[unlikely]]
         {
             // set nonce to 1 when create contract
-            ledger::account::EVMAccount account(
-                *m_blockContext.storage(), callParameters->codeAddress, false);
+            ledger::account::EVMAccount account(*m_blockContext.storage(),
+                callParameters->codeAddress, ledger::account::AddressTableMode::Hex);
             task::wait([](decltype(account) contractAccount) -> task::Task<void> {
                 co_await contractAccount.setNonce("1");
             }(std::move(account)));
@@ -892,8 +897,10 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         {
             writeErrInfoToOutput("Contract address already used.", *callParameters);
         }
-        EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("createTable failed")
-                            << callParameters->message << LOG_KV("tableName", tableName);
+        EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << LOG_DESC("createTable failed")
+                             << callParameters->message << LOG_KV("tableName", tableName)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         return {nullptr, std::move(callParameters)};
     }
 
@@ -927,8 +934,10 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         {
             writeErrInfoToOutput("Error occurs in building BFS dir.", *buildCallResults);
         }
-        EXECUTIVE_LOG(INFO) << "Revert transaction: " << buildCallResults->message
-                            << LOG_KV("newAddress", newAddress);
+        EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << buildCallResults->message
+                             << LOG_KV("newAddress", newAddress)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         return buildCallResults;
     }
 
@@ -936,7 +945,16 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
     auto linkTable = m_storageWrapper->createTable(tableName, std::string(STORAGE_VALUE));
 
     /// create code index contract
-    auto codeTable = getContractTableName(newAddress);
+    // Derive the stub's code table through the SAME Hex-era executive rule on both
+    // layouts and re-encode only the physical layout (toNodeLayout): "/apps/<hex>"
+    // becomes "/s/<20 raw bytes>" where EVMAccount execution reads it, and the
+    // executive rule's /sys/ routing of the 35-leading-zero prefix (address(0),
+    // 0x...01-0x...0fff — a wider set than the 8 c_systemTxsAddress members) passes
+    // through untouched. Deriving the Binary name through the shared rule instead
+    // would write the stub to "/s/<zeros>" (canonical "/apps/<hex>") while Hex writes
+    // "/sys/<hex>": different logical rows, different XOR root — a mixed-mode fork on
+    // a create-on-miss from BalancePrecompiled/AccountPrecompiled/AccountManager.
+    auto codeTable = ledger::account::toNodeLayout(getContractTableName(newAddress));
     m_storageWrapper->createTable(codeTable, std::string(STORAGE_VALUE));
 
     if (m_blockContext.features().get(
@@ -1079,11 +1097,13 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
             if (callResults->status != (int32_t)TransactionStatus::None)
             {
-                EXECUTIVE_LOG(INFO)
+                EXECUTIVE_LOG(DEBUG)
                     << "Revert transaction: " << LOG_DESC("deploy failed due to status failed")
                     << LOG_KV("status", callResults->status)
                     << LOG_KV("sender", callResults->senderAddress)
-                    << LOG_KV("address", callResults->codeAddress);
+                    << LOG_KV("address", callResults->codeAddress)
+                    << LOG_KV("number", m_blockContext.number()) << LOG_KV("contextID", m_contextID)
+                    << LOG_KV("seq", m_seq);
                 revert();
                 callResults->type = CallParameters::REVERT;
                 // Clear the creation flag
@@ -1126,12 +1146,14 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     {
                         writeErrInfoToOutput("Exceptional Failed Code Deposit", *callResults);
                     }
-                    EXECUTIVE_LOG(INFO)
+                    EXECUTIVE_LOG(DEBUG)
                         << "Revert transaction: " << LOG_DESC("deploy failed OutOfGas")
                         << LOG_KV("need",
                                (int64_t)(outputRef.size() * hostContext.vmSchedule().createDataGas))
                         << LOG_KV("have", callResults->gas)
-                        << LOG_KV("message", callResults->message);
+                        << LOG_KV("message", callResults->message)
+                        << LOG_KV("number", m_blockContext.number())
+                        << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
                     return callResults;
                 }
             }
@@ -1219,10 +1241,12 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 {
                     writeErrInfoToOutput("Call address error.", *callResult);
                 }
-                EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                                    << LOG_DESC("call address failed, maybe address not exist")
-                                    << LOG_KV("address", callResult->codeAddress)
-                                    << LOG_KV("sender", callResult->senderAddress);
+                EXECUTIVE_LOG(DEBUG) << "Revert transaction: "
+                                     << LOG_DESC("call address failed, maybe address not exist")
+                                     << LOG_KV("address", callResult->codeAddress)
+                                     << LOG_KV("sender", callResult->senderAddress)
+                                     << LOG_KV("number", m_blockContext.number())
+                                     << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
                 return callResult;
             }
             auto code = codeEntry->get();
@@ -1459,8 +1483,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_REVERT:
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM_REVERT") << LOG_KV("to", callResults->receiveAddress)
-                            << LOG_KV("gasLeft", callResults->gas);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("EVM_REVERT") << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("gasLeft", callResults->gas)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         // FIXME: Copy the output for now, but copyless version possible.
         callResults->gas = _result.gasLeft();
         revert();
@@ -1476,9 +1502,11 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_OUT_OF_GAS:
     {
         revert();
-        EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("OutOfGas")
-                            << LOG_KV("to", callResults->receiveAddress)
-                            << LOG_KV("gas", _result.gasLeft());
+        EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << LOG_DESC("OutOfGas")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("gas", _result.gasLeft())
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         callResults->status = (int32_t)TransactionStatus::OutOfGas;
         callResults->gas = _result.gasLeft();
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
@@ -1490,8 +1518,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_FAILURE:
     {
         revert();
-        EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("Execution failure")
-                            << LOG_KV("to", callResults->receiveAddress);
+        EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << LOG_DESC("Execution failure")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         callResults->status = (int32_t)TransactionStatus::WASMTrap;
         callResults->gas = _result.gasLeft();
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
@@ -1503,8 +1533,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
     case EVMC_UNDEFINED_INSTRUCTION:
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_INVALID_INSTRUCTION/EVMC_INVALID_INSTRUCTION")
-                            << LOG_KV("to", callResults->receiveAddress);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("EVMC_INVALID_INSTRUCTION/EVMC_INVALID_INSTRUCTION")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         callResults->status = (int32_t)TransactionStatus::BadInstruction;
         revert();
         if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
@@ -1519,8 +1551,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_BAD_JUMP_DESTINATION:
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_BAD_JUMP_DESTINATION")
-                            << LOG_KV("to", callResults->receiveAddress);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("EVMC_BAD_JUMP_DESTINATION")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::BadJumpDestination;
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
@@ -1537,8 +1571,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_STACK_OVERFLOW:
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_STACK_OVERFLOW")
-                            << LOG_KV("to", callResults->receiveAddress);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("EVMC_STACK_OVERFLOW")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::OutOfStack;
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
@@ -1554,8 +1590,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_STACK_UNDERFLOW:
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_STACK_UNDERFLOW")
-                            << LOG_KV("to", callResults->receiveAddress);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("EVMC_STACK_UNDERFLOW")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
@@ -1571,8 +1609,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_INVALID_MEMORY_ACCESS:
     {
         // m_remainGas = 0;
-        EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, BufferOverrun")
-                            << LOG_KV("to", callResults->receiveAddress);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("VM error, BufferOverrun")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
@@ -1588,8 +1628,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_STATIC_MODE_VIOLATION:
     {
         // m_remainGas = 0;
-        EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, DisallowedStateChange")
-                            << LOG_KV("to", callResults->receiveAddress);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("VM error, DisallowedStateChange")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput(
@@ -1610,8 +1652,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_CONTRACT_VALIDATION_FAILURE:
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("Contract validation failed.")
-                            << LOG_KV("to", callResults->receiveAddress);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("Contract validation failed.")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
@@ -1626,8 +1670,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_ARGUMENT_OUT_OF_RANGE:
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("Argument Out Of Range")
-                            << LOG_KV("to", callResults->receiveAddress);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("Argument Out Of Range")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         callResults->status = (int32_t)TransactionStatus::WASMArgumentOutOfRange;
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
@@ -1646,9 +1692,11 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_WASM_TRAP:
     case EVMC_WASM_UNREACHABLE_INSTRUCTION:
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("WASM Unreachable/Trap Instruction")
-                            << LOG_KV("to", callResults->receiveAddress)
-                            << LOG_KV("status", _result.status());
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("WASM Unreachable/Trap Instruction")
+                             << LOG_KV("to", callResults->receiveAddress)
+                             << LOG_KV("status", _result.status())
+                             << LOG_KV("number", m_blockContext.number())
+                             << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
         callResults->status = (int32_t)TransactionStatus::WASMUnreachableInstruction;
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0 &&
             versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_4_VERSION) < 0)
@@ -1772,8 +1820,10 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
             revertAuth(static_cast<int32_t>(TransactionStatus::AccountFrozen),
                 "Account's status is abnormal");
             callParameters->create = false;
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("origin", callParameters->origin);
+            EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << callParameters->message
+                                 << LOG_KV("origin", callParameters->origin)
+                                 << LOG_KV("number", m_blockContext.number())
+                                 << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
             return false;
         }
         if (accountStatus == AccountStatus::abolish)
@@ -1782,8 +1832,10 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
             revertAuth(static_cast<int32_t>(TransactionStatus::AccountAbolished),
                 "Account's status is abnormal");
             callParameters->create = false;
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("origin", callParameters->origin);
+            EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << callParameters->message
+                                 << LOG_KV("origin", callParameters->origin)
+                                 << LOG_KV("number", m_blockContext.number())
+                                 << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
             return false;
         }
     }
@@ -1807,9 +1859,11 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
             {
                 writeErrInfoToOutput("Create permission denied.", *callParameters);
             }
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("newAddress", newAddress)
-                                << LOG_KV("origin", callParameters->origin);
+            EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << callParameters->message
+                                 << LOG_KV("newAddress", newAddress)
+                                 << LOG_KV("origin", callParameters->origin)
+                                 << LOG_KV("number", m_blockContext.number())
+                                 << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
             return false;
         }
     }
@@ -1849,9 +1903,11 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
             {
                 callParameters->data.clear();
             }
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("tableName", tableName)
-                                << LOG_KV("origin", callParameters->origin);
+            EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << callParameters->message
+                                 << LOG_KV("tableName", tableName)
+                                 << LOG_KV("origin", callParameters->origin)
+                                 << LOG_KV("number", m_blockContext.number())
+                                 << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
             return false;
         }
         if (!checkExecAuth(callParameters))
@@ -1867,9 +1923,11 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
             {
                 callParameters->data.clear();
             }
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("tableName", tableName)
-                                << LOG_KV("origin", callParameters->origin);
+            EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << callParameters->message
+                                 << LOG_KV("tableName", tableName)
+                                 << LOG_KV("origin", callParameters->origin)
+                                 << LOG_KV("number", m_blockContext.number())
+                                 << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
             return false;
         }
     }

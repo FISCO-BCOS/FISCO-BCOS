@@ -110,6 +110,20 @@ constexpr static std::string_view SYSTEM_KEY_EXCESS_BLOB_GAS = magic_enum::enum_
 // A3: eth-genesis (L2) chains store the FISCO genesis pin here instead of in B0's
 // extraData — B0's extraData carries the genesis artifact bytes and enters the RLP hash.
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA = "eth_genesis_data";
+// Derived from the enum like its fork-schedule sibling below: the genesis writer keys the
+// row off this constant while every SYS_CONFIG reader keys rows by
+// magic_enum::enum_name(SystemConfig::op_eip1559_params), so a literal here would keep the
+// writer's key in place through a rename and silently strand the row.
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_OP_EIP1559_PARAMS =
+    magic_enum::enum_name(SystemConfig::op_eip1559_params);
+// OP lane: the RESOLVED canonical fork schedule ("0:isthmus,1000:karst" form), written at
+// genesis from the folded [op_fork_timestamps] so the snapshot read (getLedgerConfig -> RPC
+// estimate gas-cap gate) keys on the chain's own schedule rather than a binary default (M1).
+// The snapshot EXTRACTOR keeps the jovian/karst activations only — the pair that gate keys on —
+// so the row carries the full ladder while a reader of the extract sees that pair alone
+// (opForkScheduleFromCanonical).
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_OP_FORK_SCHEDULE =
+    magic_enum::enum_name(SystemConfig::op_fork_schedule);
 // clang-format on
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
@@ -151,8 +165,31 @@ constexpr static std::string_view SYS_NUMBER_2_HASH{"s_number_2_hash"};
 constexpr static std::string_view SYS_BLOCK_NUMBER_2_NONCES{"s_block_number_2_nonces"};
 constexpr static std::string_view SYS_NUMBER_2_BLOCK_HEADER{"s_number_2_header"};
 constexpr static std::string_view SYS_NUMBER_2_TXS{"s_number_2_txs"};
+// EL-mode (Ethereum L1) per-block EIP-4895 withdrawals, keyed by block number: the RLP
+// list of the block's withdrawal items. The Block structure carries no withdrawals, so
+// the EthereumBlockVerifier commit writes this sidecar row for engine_getPayloadBodies*
+// to serve; only Shanghai+ blocks get a row (pre-Shanghai payloads have no withdrawals).
+constexpr static std::string_view SYS_NUMBER_2_WITHDRAWALS{"s_number_2_withdrawals"};
+// EL-mode (Ethereum L1) per-block EIP-4844 blob sidecars, keyed by block number: the RLP
+// list of the block's [commitment, proof, blob] items in block order. The ExecutionPayload
+// carries only stripped blob transactions, so the engine's built-here commit writes this
+// sidecar row for engine_getBlobsV1 to serve; only Cancun+ blocks that carried blobs get a
+// row. Externally received blocks (newPayload lane) have no blob bodies on the wire, so
+// they get no row — engine_getBlobsV1 answers null for their hashes, as the spec allows
+// for blobs the node does not hold.
+constexpr static std::string_view SYS_NUMBER_2_BLOBS{"s_number_2_blobs"};
+// EL-mode shallow-reorg journal (EthereumChainRollback.h): one row per committed block,
+// keyed by block number, holding the pre-block values of every flat-state row the block
+// touched. Written into the block's own prewrite buffer (same WriteBatch as the block
+// data), pruned once the block leaves the reorg window.
+constexpr static std::string_view SYS_ROLLBACK_JOURNAL{"s_rollback_journal"};
 constexpr static std::string_view SYS_HASH_2_TX{"s_hash_2_tx"};
 constexpr static std::string_view SYS_HASH_2_RECEIPT{"s_hash_2_receipt"};
+// OP fork schedule metadata (all-or-none triple; see OpForkScheduleMetadata.h).
+// New table vs the release-3.18.0 base (the ChainMetadata→OpForkScheduleMetadata rename
+// happened inside this PR's own stack, so against the base this is a net-new surface —
+// the table is empty there, no data migration involved).
+constexpr static std::string_view SYS_OP_CHAIN_METADATA{"s_op_chain_metadata"};
 constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};
 constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};

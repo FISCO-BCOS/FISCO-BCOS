@@ -23,6 +23,7 @@
 #include "bcos-rpc/groupmgr/NodeService.h"
 #include "bcos-task/Task.h"
 #include <json/json.h>
+#include <atomic>
 
 namespace bcos::rpc
 {
@@ -46,6 +47,13 @@ public:
     task::Task<void> newPayloadV2(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV3(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV4(const Json::Value&, Json::Value&);
+    task::Task<void> getPayloadBodiesByHashV1(const Json::Value&, Json::Value&);
+    task::Task<void> getPayloadBodiesByRangeV1(const Json::Value&, Json::Value&);
+    task::Task<void> getBlobsV1(const Json::Value&, Json::Value&);
+    // engine_getClientVersionV1 is the current spec/geth name; engine_exchangeClientVersionV1
+    // is the pre-rename draft name older CLs still call. Both dispatch to the same handler.
+    task::Task<void> getClientVersionV1(const Json::Value&, Json::Value&);
+    task::Task<void> exchangeClientVersionV1(const Json::Value&, Json::Value&);
 
 private:
     task::Task<void> handleForkchoiceUpdated(
@@ -53,11 +61,19 @@ private:
     task::Task<void> handleGetPayload(engine::ApiVersion version, const Json::Value&, Json::Value&);
     task::Task<void> handleNewPayload(engine::ApiVersion version, const Json::Value&, Json::Value&);
 
+    /// The committed block at `number` as an ExecutionPayloadBodyV1 JSON value (raw
+    /// EIP-2718 transactions; withdrawals only for Shanghai+ blocks), or Json::nullValue
+    /// when the block — or a Shanghai+ block's withdrawals sidecar row — is unavailable.
+    task::Task<Json::Value> payloadBodyAtNumber(protocol::BlockNumber number);
+
     /// Build a JSON-RPC error response when the engine service is unavailable.
     void buildEngineNotAvailableError(Json::Value& response) const;
 
     /// Build the -38005 answer for a method version this node does not implement.
     void buildUnimplementedVersionError(std::string_view method, Json::Value& response) const;
+
+    /// One in-flight V4 newPayload; a concurrent second call answers SYNCING.
+    std::atomic<bool> m_opPayloadBusy{false};
 
     NodeService::Ptr m_nodeService;
 };

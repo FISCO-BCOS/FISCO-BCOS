@@ -20,9 +20,10 @@
 
 #include <bcos-cpp-sdk/ws/Common.h>
 #include <bcos-cpp-sdk/ws/HandshakeResponse.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <json/json.h>
 #include <json/value.h>
+#include <boost/exception/diagnostic_information.hpp>
 
 using namespace bcos;
 using namespace bcos::cppsdk;

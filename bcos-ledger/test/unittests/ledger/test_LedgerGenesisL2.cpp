@@ -17,7 +17,6 @@
  * @brief buildGenesisBlock L2 branch: allocs flat-KV writes + persisted op-geth
  *        genesis state root row.
  */
-#include "GenesisFeatureFlagsHelper.h"
 #include "L2GenesisTestStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/Features.h"
@@ -32,6 +31,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include "bcos-task/Wait.h"
+#include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
@@ -75,11 +75,12 @@ BOOST_AUTO_TEST_CASE(L2BranchWritesAllocsToFlatKV)
         GenesisConfig genesisConfig;
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
-            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_15_0_VERSION);
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         genesisConfig.m_chainID = "901";
         genesisConfig.m_groupID = "group0";
+        // compat >= 3.9 seeds SYS_CONFIG/web3_chain_id from m_web3ChainID; it must parse
+        genesisConfig.m_web3ChainID = genesisConfig.m_chainID;
 
         // single predeploy: address 0x43..00c0, 5-byte code, one storage slot
         std::string address = "43000000000000000000000000000000000000c0";
@@ -92,7 +93,6 @@ BOOST_AUTO_TEST_CASE(L2BranchWritesAllocsToFlatKV)
             .nonce = "0",
             .code = code,
             .storage = {{slotKey, slotValue}}});
-        appendGenesisFeatureFlagsSlot(genesisConfig);
 
         co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
 
@@ -141,10 +141,11 @@ BOOST_AUTO_TEST_CASE(L2BranchWritesAllocsToFlatKV)
         auto expectedRoot = co_await ledger::computeGenesisStateRoot(genesisConfig);
         BOOST_CHECK_EQUAL(block->blockHeader()->stateRoot(), expectedRoot);
 
-        // 4) L2 feature flag persisted
-        ledger::Features features;
-        co_await features.readFromStorage(*storage, 0);
-        BOOST_CHECK(features.get(ledger::Features::Flag::feature_l2_ethereum_compat));
+        // 4) the executor_version row persisted: the Ethereum lane is genesis-fixed
+        // through it (SystemConfigPrecompiled refuses governance writes crossing
+        // ETHEREUM_EXECUTOR_VERSION).
+        BOOST_CHECK_EQUAL(
+            co_await ledger->fetchExecutorVersionAt(0), bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
     }());
 }
 
@@ -163,22 +164,21 @@ BOOST_AUTO_TEST_CASE(PbftBranchUnchanged)
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        // pbft mode: no feature_l2_ethereum_compat, no allocs
-        // (validateL2Invariants requires they agree)
+        // pbft mode: executor_version stays 0 (the legacy lane), no allocs
+        // (validateL2Invariants requires the [alloc.*] section and
+        // executor.version >= 2 to agree)
 
         auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
         BOOST_CHECK(ok);
 
         // pbft mode leaves the genesis block stateRoot empty (no allocs; the
-        // eth-block view is L2-only), as it was before this feature.
+        // eth-block view is Ethereum-lane-only), as it was before this feature.
         auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
         BOOST_REQUIRE(block);
         BOOST_CHECK_EQUAL(block->blockHeader()->stateRoot(), bcos::crypto::HashType());
 
-        // pbft mode must NOT enable the L2 feature flag
-        ledger::Features features;
-        co_await features.readFromStorage(*storage, 0);
-        BOOST_CHECK(!features.get(ledger::Features::Flag::feature_l2_ethereum_compat));
+        // pbft mode must NOT record an executor_version row — the legacy lane reads 0
+        BOOST_CHECK_EQUAL(co_await ledger->fetchExecutorVersionAt(0), 0);
     }());
 }
 
@@ -192,8 +192,10 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
         auto hashImpl = std::make_shared<Keccak256>();
         auto storage = makeStorage();
 
-        ledger::Features features;
-        features.set(Features::Flag::feature_raw_address);
+        // Binary layout is a node-local mode now: arm it for this import; the singleton is
+        // process-global, so the guard restores the Hex default on the way out.
+        bcos::test::ScopedNodeAddressTableMode const modeGuard(
+            ledger::account::AddressTableMode::Binary);
 
         std::string goodAddress = "43000000000000000000000000000000000000c0";
         std::string badAddress = "43000000000000000000000000000000000000c1";
@@ -210,8 +212,7 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
             .code = "",
             .storage = {{std::string(64, '0'), "01"}}});
 
-        BOOST_CHECK_EXCEPTION(
-            co_await importEthereumGenesisState(*storage, allocs, *hashImpl, features),
+        BOOST_CHECK_EXCEPTION(co_await importEthereumGenesisState(*storage, allocs, *hashImpl),
             bcos::tool::InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "storage slot value must be exactly 64 hex digits");
             });
@@ -239,15 +240,66 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
             .code = "6080604052",
             .storage = {{std::string(64, '0'), std::string(64, '1')}}});
         BOOST_CHECK_EXCEPTION(
-            co_await importEthereumGenesisState(*storage, badNonceAllocs, *hashImpl, features),
+            co_await importEthereumGenesisState(*storage, badNonceAllocs, *hashImpl),
             bcos::tool::InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "nonce is not a valid uint64"); });
-        auto badNonceRow = co_await storage2::readOne(*storage, executor_v1::StateKeyView(
-                                                                     SYS_TABLES,
-                                                                     std::string(SYS_DIRECTORY::
-                                                                             USER_APPS) +
-                                                                         goodAddress));
+        auto badNonceRow = co_await storage2::readOne(
+            *storage, executor_v1::StateKeyView(
+                          SYS_TABLES, std::string(SYS_DIRECTORY::USER_APPS) + goodAddress));
         BOOST_CHECK(!badNonceRow);
+    }());
+}
+
+// Regression for the EEST test_many_delegations crash (4800-alloc Prague
+// fixture): the legacy-storage coroutine bridge used to resume the awaiting
+// coroutine INSIDE the inline completion callback, so every account write
+// nested one resume deeper — a genesis with tens of thousands of allocs
+// overflowed the thread stack before the import finished. The import below
+// drives ~60k inline-completing writes; it must simply complete.
+BOOST_AUTO_TEST_CASE(LargeAllocImportDoesNotStackOverflow)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
+        genesisConfig.m_chainID = "901";
+        genesisConfig.m_groupID = "group0";
+        // Ethereum executor lane: writes every address under /apps/, so the
+        // legacy-lane system-address guard does not reject the 0x1000-range
+        // addresses the sequential generator below produces.
+        genesisConfig.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
+
+        constexpr size_t c_allocCount = 20000;
+        genesisConfig.m_allocs.reserve(c_allocCount);
+        for (size_t i = 0; i < c_allocCount; ++i)
+        {
+            genesisConfig.m_allocs.push_back(Alloc{.address = fmt::format("{:040x}", i + 1),
+                .balance = u256(i + 1),
+                .nonce = "1",
+                .code = "",
+                .storage = {}});
+        }
+
+        auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+        BOOST_CHECK(ok);
+
+        // The first and last account rows really landed.
+        for (size_t i : {size_t{1}, c_allocCount})
+        {
+            auto tableName = fmt::format("{}{:040x}", SYS_DIRECTORY::USER_APPS, i);
+            auto balanceEntry = co_await storage2::readOne(
+                *storage, executor_v1::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::BALANCE));
+            BOOST_REQUIRE(balanceEntry);
+        }
     }());
 }
 

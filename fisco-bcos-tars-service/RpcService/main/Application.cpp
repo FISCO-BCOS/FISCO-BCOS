@@ -3,9 +3,11 @@
 #include "../RpcServiceServer.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-utilities/BoostLogInitializer.h>
-#include <servant/Application.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/LogStream.h>
+#include <servant/Application.h>
+#include <boost/property_tree/ini_parser.hpp>
 
 using namespace bcostars;
 class RpcServiceApp : public tars::Application
@@ -67,7 +69,7 @@ protected:
         // !!! Notice:
         auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(
             std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        nodeConfig->loadConfig(m_iniConfigPath, false, true, false);
+        nodeConfig->loadConfig(m_iniConfigPath, true, false);
         if (nodeConfig->rpcSmSsl())
         {
             addConfig("sm_ca.crt");

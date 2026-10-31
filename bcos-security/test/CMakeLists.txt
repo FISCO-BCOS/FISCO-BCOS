@@ -22,6 +22,10 @@ set(TEST_BINARY_NAME test-bcos-security)
 find_package(Boost REQUIRED unit_test_framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
+# unittests/main/main.cpp defines BOOST_TEST_MODULE; merged into a unity batch the
+# boost.test entry macro is disabled (headers already included), breaking the link
+# with undefined init_unit_test_suite.
+set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 target_link_libraries(${TEST_BINARY_NAME} PUBLIC security Boost::unit_test_framework)

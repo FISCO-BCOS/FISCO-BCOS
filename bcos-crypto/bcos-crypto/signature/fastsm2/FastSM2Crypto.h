@@ -24,8 +24,6 @@
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <memory>
 
-#ifdef WITH_SM2_OPTIMIZE
-
 namespace bcos::crypto
 {
 class FastSM2Crypto : public SM2Crypto
@@ -41,5 +39,3 @@ public:
     ~FastSM2Crypto() override = default;
 };
 }  // namespace bcos::crypto
-
-#endif

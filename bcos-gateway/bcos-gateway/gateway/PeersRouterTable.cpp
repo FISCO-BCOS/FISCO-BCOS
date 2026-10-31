@@ -18,7 +18,7 @@
  * @date 2021-12-29
  */
 #include "PeersRouterTable.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 
@@ -264,7 +264,7 @@ void PeersRouterTable::removeNodeFromGatewayInfo(P2pID const& _p2pID)
 }
 
 bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_t type,
-    std::string_view group, uint16_t moduleID, const P2PMessageV2& message,
+    std::string_view group, uint16_t moduleID, const Message& message,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
     std::vector<std::string> selectedPeers;
@@ -291,7 +291,7 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
     {
         if (c_fileLogLevel <= TRACE) [[unlikely]]
         {
-            ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
+            ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("broadcastMsg")
                               << LOG_KV("nodeType", type) << LOG_KV("moduleID", moduleID)
                               << LOG_KV("dst", printShortP2pID(peer));
         }

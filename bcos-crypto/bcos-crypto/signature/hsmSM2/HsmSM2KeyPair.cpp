@@ -21,6 +21,7 @@
 #include "hsm-crypto/hsm/CryptoProvider.h"
 #include "hsm-crypto/hsm/SDFCryptoProvider.h"
 #include <bcos-crypto/signature/Exceptions.h>
+#include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
 
 using namespace bcos;
@@ -30,10 +31,10 @@ using namespace hsm;
 #define SDR_OK 0x0
 
 HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath)
-    : KeyPair(HSM_SM2_PUBLIC_KEY_LEN, HSM_SM2_PRIVATE_KEY_LEN, KeyPairType::HsmSM2)
+  : KeyPair(HSM_SM2_PUBLIC_KEY_LEN, HSM_SM2_PRIVATE_KEY_LEN, KeyPairType::HsmSM2)
 {
-        m_hsmLibPath = std::move(_libPath);
-        m_publicKeyDeriver = wedpr_sm2_derive_public_key;
+    m_hsmLibPath = std::move(_libPath);
+    m_publicKeyDeriver = fast_sm2_derive_public_key;
 }
 
 HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath, SecretPtr _secretKey) : HsmSM2KeyPair(_libPath)

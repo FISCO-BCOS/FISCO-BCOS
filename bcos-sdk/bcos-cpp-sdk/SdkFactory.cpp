@@ -37,9 +37,9 @@
 #include <bcos-cpp-sdk/ws/Service.h>
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/LogStream.h>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -89,6 +89,8 @@ Service::Ptr SdkFactory::buildService(std::shared_ptr<bcos::boostssl::ws::WsConf
     auto service = std::make_shared<Service>(groupInfoCodec, groupInfoFactory);
     auto initializer = std::make_shared<WsInitializer>();
     initializer->setConfig(std::move(_config));
+    // initWsService throws without a pool; the factory's pool already serves EventSub
+    initializer->setIOServicePool(m_ioServicePool);
     initializer->initWsService(service->wsService());
     auto weakService = std::weak_ptr<Service>(service);
     service->registerMsgHandler(

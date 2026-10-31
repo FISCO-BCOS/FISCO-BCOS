@@ -28,8 +28,8 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
-#include <memory>
 #include <list>
+#include <memory>
 
 namespace bcos
 {

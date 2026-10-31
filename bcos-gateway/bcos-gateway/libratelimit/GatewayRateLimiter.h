@@ -22,7 +22,7 @@
 
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-gateway/libratelimit/RateLimiterStat.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 
 namespace bcos
 {
@@ -39,7 +39,7 @@ public:
     using UniquePtr = std::unique_ptr<const GatewayRateLimiter>;
 
     GatewayRateLimiter(ratelimiter::RateLimiterManager::Ptr& _rateLimiterManager,
-                ratelimiter::RateLimiterStat::Ptr& _rateLimiterStat);
+        ratelimiter::RateLimiterStat::Ptr& _rateLimiterStat);
 
     GatewayRateLimiter(GatewayRateLimiter&&) = delete;
     GatewayRateLimiter(const GatewayRateLimiter&) = delete;

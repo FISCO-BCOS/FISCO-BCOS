@@ -20,6 +20,8 @@
  */
 #include "AirNodeInitializer.h"
 #include "libinitializer/Common.h"
+#include "libinitializer/EthereumBlockImport.h"
+#include "libinitializer/EthereumSyncInitializer.h"
 #include "libinitializer/MemPoolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -29,9 +31,12 @@
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
+#include <bcos-tool/ChainLaneConfig.h>
+#include <bcos-tool/Exceptions.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/atomic.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 
 using namespace bcos::node;
 using namespace bcos::initializer;
@@ -57,8 +62,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
     nodeConfig->loadGenesisConfig(_genesisFile);
     nodeConfig->loadConfig(_configFilePath);
-    // Cross-file EL-mode invariants (config.ini ethereum.mode=el must be backed by the
-    // genesis EL declaration) — checkable only after BOTH files are loaded.
+    // Cross-file invariants (config.ini settings whose legality depends on the genesis
+    // lane) — checkable only after BOTH files are loaded.
     nodeConfig->validateELModeInvariants();
 
     m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
@@ -88,6 +93,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
             m_nodeInitializer->txPoolInitializer()->txpool(), pbftInitializer->pbft(),
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory(),
             m_nodeInitializer->engineService());
+    // Kept (weakly) for the EL-mode tx-gossip wiring in init(params), which runs after this.
+    m_nodeService = nodeService;
     // eth_getProof node reader (M8.3): committed MPT node rows straight from the state
     // backend. Set unconditionally — feature_mpt_state_root can activate at runtime, and a
     // pre-MPT header's stateRoot simply misses in the node rows (-32004); -32603 stays
@@ -96,6 +103,10 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // declared before m_rpc / m_tarsApplication (the NodeService holders), so it is
     // destroyed after them.
     nodeService->setMPTNodeReader(m_nodeInitializer->mptNodeReader());
+    // MPT pruning retention window ([storage] mpt_prune_window): lets the historical-state
+    // endpoints report a scheduled pruning (-32004 "State pruned: beyond MPT retention
+    // window") instead of a generic node-storage miss. Purely informational; <= 0 = off.
+    nodeService->setMPTPruneWindow(nodeConfig->mptPruneWindow());
 
     // eth_getStorageAt latest-state path: a provider that forks a fresh latest view of
     // GlobalStateStorage per request (see Initializer::stateStorageProvider for the lifetime
@@ -107,14 +118,65 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     nodeService->setSafeBlockDepth(nodeConfig->web3SafeBlockDepth());
     nodeService->setFinalizedBlockDepth(nodeConfig->web3FinalizedBlockDepth());
 
-    // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc]):
-    // route sendRawTransaction to the in-process mempool instead of txpool — the
-    // EngineService seals these txs into blocks (driven by the built-in single-node timer
-    // or by an external op-node), bypassing txpool/sealer/pbft, which are never initialized
-    // in these modes.
-    if (nodeConfig->engineDrivenBlockProduction() || nodeConfig->enableSingleNodeConsensus())
+    // A v2 genesis (the Engine driver, or [debug] enable): eth_sendRawTransaction takes a blob
+    // transaction in its network wrapper and KZG-checks the sidecar, which the L1 payload
+    // builder needs to assemble the blobsBundle under either driver. The blob ADMISSION gate
+    // keys on the executor version below instead.
+    nodeService->setEthereumELMode(
+        nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
+
+    // The chain's executor_version, resolved from the ledger at boot: the RPC blob admission
+    // gate keys on it (RpcChainPolicy admits blob transactions only on executor_version == 2).
+    // EL-mode sidecar handling stays keyed on the EL flag above.
+    nodeService->setExecutorVersion(m_nodeInitializer->executorVersion());
+
+    // EIP-7840 blob schedule ([fork_timestamps] cancun/prague/bpo1/bpo2): eth_blobBaseFee picks
+    // the base-fee update fraction from the head block's timestamp. The block verifier stamps
+    // this schedule into each block's LedgerConfig, but that config is not what the RPC layer
+    // rebuilds from storage, and a v2 genesis records no evmc_revision row — so the fork times
+    // are wired here, from the same NodeConfig the verifier derives them from.
+    // Same source as the setExecutorVersion call above (the ledger-resolved value, not the
+    // local config): the consumer's lane gate reads the chain's executor_version, so gating the
+    // wiring on a different source would let a node answer eth_blobBaseFee on a chain whose
+    // schedule was never installed.
+    if (m_nodeInitializer->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        auto const forks =
+            bcos::initializer::EthereumSyncInitializer::evmcForkSchedule(*nodeConfig);
+        nodeService->setBlobForkTimes(bcos::protocol::BlobForkTimes{.cancunTime = forks.cancunTime,
+            .pragueTime = forks.pragueTime,
+            .bpo1Time = forks.bpo1Time,
+            .bpo2Time = forks.bpo2Time});
+        // Log what the RPC will answer from. [fork_timestamps] is node-local *input*, but it is
+        // part of the genesis pin (generateGenesisData), so a node whose ladder differs from the
+        // chain's cannot start or join in the first place; the value an operator reads here is
+        // how to confirm that without decoding config.genesis.
+        INITIALIZER_LOG(INFO) << LOG_BADGE("eth_blobBaseFee")
+                              << LOG_DESC("blob fork schedule wired")
+                              << LOG_KV("cancun", forks.cancunTime)
+                              << LOG_KV("prague", forks.pragueTime)
+                              << LOG_KV("bpo1", forks.bpo1Time) << LOG_KV("bpo2", forks.bpo2Time);
+    }
+
+    // The DebugSelfProduce driver and every node serving the Engine API route
+    // sendRawTransaction to the in-process mempool instead of txpool — the EngineService
+    // seals these txs into blocks (driven by the built-in single-node timer or by an
+    // external consensus client), bypassing txpool/sealer/pbft, which are never initialized
+    // under these drivers. Under EL mode block import stays with devp2p sync.
+    if (nodeConfig->blockDriver() == bcos::tool::BlockDriver::DebugSelfProduce ||
+        nodeConfig->servesEngineApi())
     {
         nodeService->setMemPool(m_nodeInitializer->memPoolInitializer()->memPool());
+        // Admission travels with the pool it admits into. The context is the only thing the
+        // [executor] eest_replay_mode switch decides -- which column of the routing table the
+        // RPC entry reads, never which checks exist.
+        nodeService->setAdmissionValidator(m_nodeInitializer->memPoolValidator(),
+            nodeConfig->eestReplayMode() ? bcos::txvalidator::AdmissionContext::EESTReplay :
+                                           bcos::txvalidator::AdmissionContext::PoolAdmission);
+    }
+    if (auto daCaps = m_nodeInitializer->daCaps())
+    {
+        nodeService->setDaCaps(daCaps);
     }
 
     // create rpc
@@ -145,6 +207,146 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     }
 }
 
+void AirNodeInitializer::init(bcos::initializer::Params const& _params)
+{
+    // The config file is the source of truth for the devp2p network; the command-line
+    // --bootnodes only mirrors it and any conflict is a hard error (fail fast, never silently
+    // prefer one side).
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
+    nodeConfig->loadGenesisConfig(_params.genesisFilePath);
+    nodeConfig->loadConfig(_params.configFilePath);
+    validateEthereumELParams(_params, *nodeConfig);
+    auto const followDevp2p =
+        nodeConfig->blockDriver() == bcos::tool::BlockDriver::DebugFollowDevp2p;
+
+    // EL mode's NodeConfig-only checks run BEFORE the core node init below: init performs
+    // the MPT pruner's boot-time window walk and, with storage.mpt_prune_sweep_garbage, a
+    // whole-keyspace garbage sweep, so a config error (mis-edited bootnode file, drifting
+    // genesis anchor hash) must fail fast instead of after that side effect — the same
+    // placement rule as the OP-mode mpt_prune_window refusal. The full object-level
+    // validateConfig() still runs after construction below.
+    if (nodeConfig->ethereumELModeEnabled())
+    {
+        bcos::initializer::EthereumSyncInitializer::validateNodeConfig(*nodeConfig);
+    }
+    if (followDevp2p)
+    {
+        bcos::initializer::OpStackSyncInitializer::validateNodeConfig(*nodeConfig);
+    }
+
+    init(_params.configFilePath, _params.genesisFilePath);
+
+    // Ethereum L1 EL mode: after the core node is initialized, build the self-sync driver
+    // over the SAME v2 scheduler + EthereumExecutor + global state storage the rest of the
+    // v2 pipeline uses. It downloads blocks from bootnodes, verifies and commits them.
+    if (nodeConfig->ethereumELModeEnabled())
+    {
+        auto initializer = m_nodeInitializer;
+        if (!initializer->ethereumExecutor() || !initializer->ethereumSerialScheduler())
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "Ethereum L1 EL mode requires executor_version >= 2 "
+                                      "(the v2 EthereumExecutor); set [executor] version=2 "
+                                      "in config.genesis"));
+        }
+        m_ethereumSync = std::make_shared<bcos::initializer::EthereumSyncInitializer>(nodeConfig,
+            initializer->ledger(), initializer->protocolInitializer()->blockFactory(),
+            initializer->ethereumSerialScheduler(), initializer->ethereumExecutor(),
+            initializer->globalStateStorageInitializer(), initializer->ioServicePool(),
+            initializer->mptCommitObserver(), initializer->ledgerConfigState(),
+            initializer->elBlockVerifier(), initializer->clSyncCoordination(),
+            // eth/68 transaction gossip ([ethereum] tx_gossip): the engine mempool and the
+            // same admission validator the RPC entry uses. Either unset keeps gossip off.
+            &initializer->memPoolInitializer()->memPool(), initializer->memPoolValidator());
+        m_ethereumSync->validateConfig();
+        // The RPC side of gossip: eth_sendRawTransaction announces each admitted
+        // transaction through this hook. The NodeService was built in init(config,
+        // genesis) above; the gossip service itself starts with m_ethereumSync->start().
+        if (auto const& gossip = m_ethereumSync->txGossip())
+        {
+            if (auto nodeService = m_nodeService.lock())
+            {
+                nodeService->setTxGossipAnnouncer(
+                    [gossip](bcos::crypto::HashType const& txHash, uint8_t type, uint64_t size,
+                        bcos::bytes const& envelope) {
+                        gossip->announceLocalTransaction(txHash, type, size, envelope);
+                    });
+            }
+        }
+    }
+
+    // [debug] follow_devp2p: same shape, one lane up. The verifier (OpBlockVerifier) builds
+    // its own OpScheduler + OpEthExecutor internally, so the driver needs only the
+    // shared ledger / block factory / global state storage / commit observer.
+    if (followDevp2p)
+    {
+        auto initializer = m_nodeInitializer;
+        m_opStackSync = std::make_shared<bcos::initializer::OpStackSyncInitializer>(nodeConfig,
+            initializer->ledger(), initializer->protocolInitializer()->blockFactory(),
+            initializer->globalStateStorageInitializer(), initializer->ioServicePool(),
+            initializer->mptCommitObserver());
+        m_opStackSync->validateConfig();
+    }
+}
+
+void AirNodeInitializer::validateEthereumELParams(
+    bcos::initializer::Params const& _params, bcos::tool::NodeConfig const& _nodeConfig)
+{
+    if (_params.ethereumBootnodesFile.has_value())
+    {
+        auto const& configured = _nodeConfig.ethereumBootnodesFile();
+        // Normalise a leading "./" so `-b bootnodes.json` matches
+        // bootnodes_file=./bootnodes.json (same file, two spellings).
+        auto normalise = [](std::string const& p) {
+            return p.rfind("./", 0) == 0 ? p.substr(2) : p;
+        };
+        if (normalise(*_params.ethereumBootnodesFile) != normalise(configured))
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "command-line --bootnodes '" + *_params.ethereumBootnodesFile +
+                    "' differs from [ethereum].bootnodes_file='" + configured + "' in " +
+                    _params.configFilePath +
+                    "; the config file is the source of truth — align them "
+                    "or drop --bootnodes"));
+        }
+    }
+}
+
+bcos::initializer::BlockImportSummary AirNodeInitializer::importEthereumBlocks(
+    std::string const& _path)
+{
+    auto initializer = m_nodeInitializer;
+    auto nodeConfig = initializer->nodeConfig();
+    // The import drives the L1 EL pipeline (v2 scheduler + EthereumExecutor +
+    // EthereumBlockVerifier), so it is only meaningful on an executor.version=2 node.
+    if (bcos::tool::laneForExecutorVersion(nodeConfig->executorVersion()) !=
+        bcos::tool::ChainLane::Eth)
+    {
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "--import-blocks requires executor.version=2 (the L1 EL lane) "
+                                  "in config.genesis"));
+    }
+    bcos::initializer::EthereumBlockImporter importer(nodeConfig, initializer->ledger(),
+        initializer->protocolInitializer()->blockFactory(), initializer->ethereumSerialScheduler(),
+        initializer->ethereumExecutor(), initializer->globalStateStorageInitializer(),
+        initializer->mptCommitObserver(), initializer->ledgerConfigState(),
+        initializer->elBlockVerifier());
+    auto summary = importer.import(_path);
+    // Double-write the outcome: stdout for the hive/entrypoint harness, the node log
+    // for operators.
+    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+    std::cout << "import-blocks done: imported=" << summary.imported
+              << " skipped=" << summary.skipped << " headNumber=" << summary.headNumber
+              << " headHash=" << summary.headHash.hex() << std::endl;
+    INITIALIZER_LOG(INFO) << LOG_DESC("import-blocks done") << LOG_KV("imported", summary.imported)
+                          << LOG_KV("skipped", summary.skipped)
+                          << LOG_KV("headNumber", summary.headNumber)
+                          << LOG_KV("headHash", summary.headHash.hex());
+    return summary;
+}
+
 void AirNodeInitializer::start()
 {
     if (m_nodeInitializer)
@@ -152,7 +354,12 @@ void AirNodeInitializer::start()
         m_nodeInitializer->start();
     }
 
-    if (m_gateway)
+    // EL modes (L1 EL mode / [debug] follow_devp2p): the node is a pure execution-layer
+    // client — the FISCO gateway/P2P network is not part of the Ethereum/OP stack, so it
+    // stays dormant. The self-sync driver (bootnode download -> verify -> commit) is what
+    // moves the chain.
+    const bool elMode = (m_ethereumSync != nullptr) || (m_opStackSync != nullptr);
+    if (m_gateway && !elMode)
     {
         m_gateway->start();
     }
@@ -160,6 +367,16 @@ void AirNodeInitializer::start()
     if (m_rpc)
     {
         m_rpc->start();
+    }
+
+    if (m_ethereumSync)
+    {
+        m_ethereumSync->start();
+    }
+
+    if (m_opStackSync)
+    {
+        m_opStackSync->start();
     }
 
     if (m_tarsApplication && m_tarsConfig)
@@ -180,6 +397,14 @@ void AirNodeInitializer::stop()
 {
     try
     {
+        if (m_opStackSync)
+        {
+            m_opStackSync->stop();
+        }
+        if (m_ethereumSync)
+        {
+            m_ethereumSync->stop();
+        }
         if (m_rpc)
         {
             m_rpc->stop();

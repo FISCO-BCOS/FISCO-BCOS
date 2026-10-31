@@ -13,9 +13,8 @@ storage-layout baseline (only if drift is real and intentional), and merge.
 Someone bumps the `commit` field in `op-fork-pin.toml` to a tag that moved a
 storage slot on `SystemConfig` (e.g. inherited a new field from a shared OP
 base contract). Genesis allocs in production already wrote the old layout, so
-the new bytecode reads a non-existent slot: `getValueByKey("chain_id")` — and
-the node's `L2ConfigLoader`, which derives the same `_config` slot address and
-reads it directly — return garbage at block 0, silently. The storage-layout
+the new bytecode reads a non-existent slot: `getValueByKey("chain_id")` returns
+garbage at block 0, silently. The storage-layout
 drift gate (PR-7 CI step) fails the bump before merge:
 
 ```
@@ -40,7 +39,8 @@ writing:
   - `solady` `502cc1ea718e6fa73b380635ee0868b0740595f0`
   - `solmate` `8f9b23f8838670afda0fd8983f2c41e8037ae6bc`
 - The runtime OP predeploy set is asserted by the `expected_predeploys`
-  checklist in `tools/opstack-genesis/chain-config.template.yaml` (existence
+  checklist in the harness's `tools/opstack-genesis/chain-config.template.yaml`
+  (FISCO-BCOS/op-stack-e2e-tests; existence
   + non-empty code against the op-deployer base allocs); `op-fork-pin.toml`
   no longer enumerates source paths.
 

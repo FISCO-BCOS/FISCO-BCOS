@@ -18,7 +18,8 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <bcos-framework/ledger/Features.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-ledger/mpt/Account.h>
@@ -50,12 +51,14 @@ public:
         rpc = factory->buildLocalRpc(groupInfo, nodeService);
         web3JsonRpc = rpc->web3JsonRpc();
         BOOST_TEST(web3JsonRpc != nullptr);
-        // These cases assert scenario-B semantics (feature_l2_ethereum_compat: complete storage
-        // tries, exclusion = provable zero). The scenario-A SlotNotInMPT behavior is covered by
-        // EthGetProofSlotNotInMPTTest.cpp.
-        ledger::Features features;
-        features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-        m_ledger->setFeatures(features);
+        // These cases assert scenario-B semantics (the Ethereum lane, executor_version >= 2:
+        // complete storage tries, exclusion = provable zero). The scenario-A SlotNotInMPT
+        // behavior is covered by EthGetProofSlotNotInMPTTest.cpp. The endpoint resolves the
+        // lane per block from the executor_version SYS_CONFIG entry
+        // (LedgerInterface::fetchExecutorVersionAt).
+        m_ledger->setSystemConfig(
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION));
     }
 
     /// Commit @p entries into a fresh trie in @p storage and flush the produced nodes, returning
@@ -103,8 +106,9 @@ public:
         Json::Value value;
         Json::Reader reader;
         std::promise<bcos::bytes> promise;
-        web3JsonRpc->onRPCRequest(
-            req, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+        web3JsonRpc->onRPCRequest(req, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         std::string_view json((char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
         reader.parse(json.begin(), json.end(), value);
@@ -248,16 +252,83 @@ BOOST_AUTO_TEST_CASE(HappyPathShapeAndRoundTrip)
     BOOST_TEST(verify.storageValid[2]);
 }
 
-// Dormant account (present state root, address not in the trie) -> -32004 "not in trie".
-BOOST_AUTO_TEST_CASE(DormantAccountReturns32004)
+// Dormant account under scenario B (the Ethereum lane — executor_version >=
+// ETHEREUM_EXECUTOR_VERSION, complete trie) -> an empty-account proof with a non-empty
+// non-existence proof, matching geth/reth EIP-1186 semantics (kona-host reads dormant accounts
+// this way during fault-proof replay). The scenario-A -32004 behavior is covered by
+// EthGetProofSlotNotInMPTTest.cpp.
+BOOST_AUTO_TEST_CASE(DormantAccountReturnsEmptyProof)
 {
     buildTrie();
     wireReader();
 
     auto resp = getProof(dormant.hexPrefixed(), {}, "latest");
-    BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
-    BOOST_CHECK(resp["error"]["message"].asString().find("not in trie") != std::string::npos);
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    auto const& result = resp["result"];
+
+    BOOST_TEST(result["address"].asString() == dormant.hexPrefixed());
+    BOOST_TEST(result["balance"].asString() == "0x0");
+    BOOST_TEST(result["nonce"].asString() == "0x0");
+    BOOST_TEST(result["codeHash"].asString() == mpt::emptyCodeHash().hexPrefixed());
+    BOOST_TEST(result["storageHash"].asString() == mpt::emptyRootHash().hexPrefixed());
+    // The non-existence proof is non-empty: it carries the nodes from the state root down to the
+    // dead-end branch, which is exactly what lets a verifier prove the account is absent.
+    BOOST_REQUIRE(result["accountProof"].isArray());
+    BOOST_TEST(result["accountProof"].size() >= 1U);
+
+    // Round trip, the same cross-validation the happy path performs: the serialized
+    // empty-account proof fed back through verifyProof must verify via its exclusion branch
+    // (shape b — valid exclusion + empty-account defaults), so generator and verifier cannot
+    // drift apart.
+    auto const reconstructed = proofFromJson(result);
+    auto const verify = mpt::verifyProof(stateRoot, reconstructed);
+    BOOST_TEST(verify.accountValid);
+    BOOST_TEST(verify.recoveredNonce == 0);
+    BOOST_TEST(verify.recoveredBalance == 0);
+    BOOST_TEST(verify.recoveredCodeHash == mpt::emptyCodeHash());
+    BOOST_TEST(verify.recoveredStorageRoot == mpt::emptyRootHash());
+
+    // A slot-bearing dormant proof round-trips too: each requested slot is provably zero
+    // (empty value + empty proof against the empty storage root).
+    auto respSlots = getProof(dormant.hexPrefixed(), {slotA.hexPrefixed()}, "latest");
+    BOOST_TEST(!respSlots.isMember("error"));
+    BOOST_REQUIRE(respSlots.isMember("result"));
+    auto const reconstructedSlots = proofFromJson(respSlots["result"]);
+    auto const verifySlots = mpt::verifyProof(stateRoot, reconstructedSlots);
+    BOOST_TEST(verifySlots.accountValid);
+    BOOST_REQUIRE_EQUAL(verifySlots.storageValid.size(), 1U);
+    BOOST_TEST(verifySlots.storageValid[0]);
+}
+
+// Scenario-B EMPTY state root (no account anywhere) -> an empty-account proof with an EMPTY
+// accountProof (there are no nodes to walk). This is the other makeEmptyAccountProof branch —
+// stateRoot == emptyRootHash(), fullTrie — distinct from the dormant dead-end walk above.
+BOOST_AUTO_TEST_CASE(EmptyStateRootReturnsEmptyProof)
+{
+    wireReader();
+    // An empty state trie: stateRoot == emptyRootHash(), no nodes committed.
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(mpt::emptyRootHash());
+
+    auto resp = getProof(dormant.hexPrefixed(), {}, "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    auto const& result = resp["result"];
+
+    BOOST_TEST(result["address"].asString() == dormant.hexPrefixed());
+    BOOST_TEST(result["balance"].asString() == "0x0");
+    BOOST_TEST(result["nonce"].asString() == "0x0");
+    BOOST_TEST(result["codeHash"].asString() == mpt::emptyCodeHash().hexPrefixed());
+    BOOST_TEST(result["storageHash"].asString() == mpt::emptyRootHash().hexPrefixed());
+    // The empty state root has no nodes: the non-existence proof is itself empty.
+    BOOST_REQUIRE(result["accountProof"].isArray());
+    BOOST_TEST(result["accountProof"].empty());
+
+    // Round trip: the empty-account proof (empty chain + empty-account defaults) verifies via
+    // verifyProof's exclusion branch too.
+    auto const reconstructed = proofFromJson(result);
+    auto const verify = mpt::verifyProof(mpt::emptyRootHash(), reconstructed);
+    BOOST_TEST(verify.accountValid);
 }
 
 // Header stateRoot absent from the MPT node storage -> -32004 "not in MPT node storage".
@@ -283,6 +354,194 @@ BOOST_AUTO_TEST_CASE(ReaderUnsetReturns32603)
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32603);
     BOOST_CHECK(resp["error"]["message"].asString().find("MPT not enabled") != std::string::npos);
+}
+
+// F4 regression: a 66-char "0x…" third parameter is a block hash (op-node passes it). A
+// malformed hex hash is a client error ("Invalid block hash"), not the misleading
+// "Block not found" the earlier catch-all produced for both malformed hex and storage faults.
+BOOST_AUTO_TEST_CASE(MalformedBlockHashReturnsInvalidBlockHash)
+{
+    buildTrie();
+    wireReader();
+
+    // 66 chars ("0x" + 64) so the hash branch is taken, but the payload is not valid hex — the
+    // decode fails before any ledger lookup, so the fixture needs no hash->number support.
+    std::string malformed = "0x" + std::string(64, 'z');
+    auto resp = getProof(address.hexPrefixed(), {}, malformed);
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);  // InvalidParams
+    BOOST_CHECK(
+        resp["error"]["message"].asString().find("Invalid block hash") != std::string::npos);
+}
+
+// A valid 66-char hash (op-node passes the block hash for output-root computation) resolves to
+// the same proof as the equivalent block number: the hash branch lands on the same header.
+BOOST_AUTO_TEST_CASE(HashFormReturnsSameProofAsNumber)
+{
+    // Capture the latest block hash BEFORE buildTrie — setStateRoot clears dataHash, so
+    // hash() would throw afterwards. The fixture's FakeLedger maps this hash to its number.
+    auto const latestHash = m_ledger->ledgerData().back()->blockHeader()->hash();
+
+    buildTrie();
+    wireReader();
+
+    auto respByHash =
+        getProof(address.hexPrefixed(), {slotA.hexPrefixed()}, latestHash.hexPrefixed());
+    BOOST_REQUIRE(!respByHash.isMember("error"));
+    BOOST_REQUIRE(respByHash.isMember("result"));
+
+    auto respByNumber = getProof(address.hexPrefixed(), {slotA.hexPrefixed()}, "latest");
+    BOOST_REQUIRE(!respByNumber.isMember("error"));
+    BOOST_REQUIRE(respByNumber.isMember("result"));
+
+    // The two paths must produce identical account and slot proofs (same stateRoot).
+    BOOST_CHECK_EQUAL(
+        respByHash["result"]["balance"].asString(), respByNumber["result"]["balance"].asString());
+    BOOST_CHECK_EQUAL(
+        respByHash["result"]["nonce"].asString(), respByNumber["result"]["nonce"].asString());
+    BOOST_CHECK_EQUAL(respByHash["result"]["storageHash"].asString(),
+        respByNumber["result"]["storageHash"].asString());
+    BOOST_REQUIRE(respByHash["result"]["storageProof"].isArray());
+    BOOST_REQUIRE(respByNumber["result"]["storageProof"].isArray());
+    BOOST_CHECK_EQUAL(respByHash["result"]["storageProof"][0U]["value"].asString(),
+        respByNumber["result"]["storageProof"][0U]["value"].asString());
+}
+
+// An unknown 66-char hash answers InvalidParams "Block not found" — the GetStorageError without
+// a chained STDError is a not-found, not a storage fault (which would surface as an internal
+// error instead).
+BOOST_AUTO_TEST_CASE(UnknownHashReturnsBlockNotFound)
+{
+    buildTrie();
+    wireReader();
+
+    // 66-char valid hex that maps to no block in the fake ledger.
+    std::string unknownHash = "0x" + std::string(64, '0');
+    auto resp = getProof(address.hexPrefixed(), {}, unknownHash);
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);  // InvalidParams
+    BOOST_CHECK(resp["error"]["message"].asString().find("Block not found") != std::string::npos);
+}
+
+// EIP-1898 object form: kona-host's alloy provider sends {"blockHash": "0x…"} (BlockId::Hash
+// serialization) for eth_getProof's third parameter. It must resolve to the same block as the
+// plain 66-char hash string — not silently fall through to "latest", which would read the tip
+// block's MessagePasser storage root and break the fault-proof output-root recomputation.
+BOOST_AUTO_TEST_CASE(ObjectBlockHashFormReturnsSameProofAsHash)
+{
+    // Capture the latest block hash BEFORE buildTrie (setStateRoot clears dataHash).
+    auto const latestHash = m_ledger->ledgerData().back()->blockHeader()->hash();
+
+    buildTrie();
+    wireReader();
+
+    Json::Value req;
+    req["jsonrpc"] = "2.0";
+    req["id"] = 1;
+    req["method"] = "eth_getProof";
+    Json::Value params(Json::arrayValue);
+    params.append(address.hexPrefixed());
+    params.append(Json::arrayValue);  // no storage keys
+    Json::Value blockId(Json::objectValue);
+    blockId["blockHash"] = latestHash.hexPrefixed();
+    params.append(blockId);
+    req["params"] = params;
+
+    auto respByObject = request(printJson(req));
+    BOOST_REQUIRE(!respByObject.isMember("error"));
+    BOOST_REQUIRE(respByObject.isMember("result"));
+
+    auto respByHash = getProof(address.hexPrefixed(), {}, latestHash.hexPrefixed());
+    BOOST_REQUIRE(!respByHash.isMember("error"));
+    BOOST_REQUIRE(respByHash.isMember("result"));
+
+    // Same block -> same account state (same stateRoot, same storageHash).
+    BOOST_CHECK_EQUAL(
+        respByObject["result"]["balance"].asString(), respByHash["result"]["balance"].asString());
+    BOOST_CHECK_EQUAL(respByObject["result"]["storageHash"].asString(),
+        respByHash["result"]["storageHash"].asString());
+}
+
+// The {"blockNumber": "0x…"} EIP-1898 object form must resolve identically to the plain
+// quantity/tag string, exercising the helper's blockNumber branch.
+BOOST_AUTO_TEST_CASE(ObjectBlockNumberFormResolvesTag)
+{
+    buildTrie();
+    wireReader();
+
+    Json::Value req;
+    req["jsonrpc"] = "2.0";
+    req["id"] = 1;
+    req["method"] = "eth_getProof";
+    Json::Value params(Json::arrayValue);
+    params.append(address.hexPrefixed());
+    params.append(Json::arrayValue);
+    Json::Value blockId(Json::objectValue);
+    blockId["blockNumber"] = "latest";
+    params.append(blockId);
+    req["params"] = params;
+
+    auto respByObject = request(printJson(req));
+    BOOST_REQUIRE(!respByObject.isMember("error"));
+    BOOST_REQUIRE(respByObject.isMember("result"));
+
+    auto respByTag = getProof(address.hexPrefixed(), {}, "latest");
+    BOOST_REQUIRE(!respByTag.isMember("error"));
+    BOOST_REQUIRE(respByTag.isMember("result"));
+
+    BOOST_CHECK_EQUAL(
+        respByObject["result"]["balance"].asString(), respByTag["result"]["balance"].asString());
+    BOOST_CHECK_EQUAL(respByObject["result"]["storageHash"].asString(),
+        respByTag["result"]["storageHash"].asString());
+}
+
+// An EIP-1898 object that is neither blockHash-string nor blockNumber string/integral is
+// rejected as InvalidParams — it must NOT silently resolve to "latest" (which the shared
+// tag resolver would do for an empty tag).
+BOOST_AUTO_TEST_CASE(UnsupportedObjectBlockTagReturnsInvalidParams)
+{
+    buildTrie();
+    wireReader();
+
+    auto send = [&](Json::Value blockId) {
+        Json::Value req;
+        req["jsonrpc"] = "2.0";
+        req["id"] = 1;
+        req["method"] = "eth_getProof";
+        Json::Value params(Json::arrayValue);
+        params.append(address.hexPrefixed());
+        params.append(Json::arrayValue);
+        params.append(std::move(blockId));
+        req["params"] = params;
+        return request(printJson(req));
+    };
+
+    // {"blockHash": null} — wrong type for blockHash.
+    Json::Value nullHash(Json::objectValue);
+    nullHash["blockHash"] = Json::Value::null;
+    auto respNullHash = send(nullHash);
+    BOOST_REQUIRE(respNullHash.isMember("error"));
+    BOOST_CHECK_EQUAL(respNullHash["error"]["code"].asInt(), -32602);
+
+    // {"blockNumber": true} — wrong type for blockNumber.
+    Json::Value boolNumber(Json::objectValue);
+    boolNumber["blockNumber"] = true;
+    auto respBoolNumber = send(boolNumber);
+    BOOST_REQUIRE(respBoolNumber.isMember("error"));
+    BOOST_CHECK_EQUAL(respBoolNumber["error"]["code"].asInt(), -32602);
+
+    // An explicit EMPTY string is the same wrong-block read as a missing parameter: the shared
+    // resolver answers (latest, true) for an empty tag, so both string arms must reject it
+    // rather than let eth_getProof silently prove against the tip.
+    auto respEmptyString = send(Json::Value(""));
+    BOOST_REQUIRE(respEmptyString.isMember("error"));
+    BOOST_CHECK_EQUAL(respEmptyString["error"]["code"].asInt(), -32602);
+
+    Json::Value emptyBlockNumber(Json::objectValue);
+    emptyBlockNumber["blockNumber"] = "";
+    auto respEmptyBlockNumber = send(emptyBlockNumber);
+    BOOST_REQUIRE(respEmptyBlockNumber.isMember("error"));
+    BOOST_CHECK_EQUAL(respEmptyBlockNumber["error"]["code"].asInt(), -32602);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

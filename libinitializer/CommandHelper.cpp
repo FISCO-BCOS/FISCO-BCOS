@@ -85,9 +85,15 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         "genesis config file path, eg. genesis.ini")("prune,p", "prune the node data")("snapshot,s",
         boost::program_options::value<bool>(),
         "generate snapshot with or without txs and receipts, if true generate snapshot with txs "
-        "and receipts")(
-        "output,o", boost::program_options::value<std::string>(), "snapshot output directory")(
-        "import,i", boost::program_options::value<std::string>(), "import snapshot from directory");
+        "and receipts")("output,o", boost::program_options::value<std::string>(),
+        "snapshot output directory")("import,i", boost::program_options::value<std::string>(),
+        "import snapshot from directory")("import-blocks",
+        boost::program_options::value<std::string>(),
+        "offline import of RLP-encoded Ethereum blocks (a chain.rlp-style file or a "
+        "directory of one-block *.rlp files), then exit — executor.version=2 only")("bootnodes,b",
+        boost::program_options::value<std::string>(),
+        "path to the devp2p bootnodes file (mirror of [ethereum].bootnodes_file; a value that "
+        "differs from the config file is rejected)");
 
     if (_autoSendTx)
     {
@@ -104,7 +110,7 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     {
         std::cout << "invalid parameters" << std::endl;
         std::cout << main_options << std::endl;
-        exit(0);
+        exit(1);
     }
     /// help information
     if (vm.count("help") || vm.count("h"))
@@ -138,13 +144,13 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     }
     if (!boost::filesystem::exists(configPath))
     {
-        std::cout << "config \'" << configPath << "\' not found!";
-        exit(0);
+        std::cout << "config \'" << configPath << "\' not found!" << std::endl;
+        exit(1);
     }
     if (!boost::filesystem::exists(genesisFilePath))
     {
-        std::cout << "genesis config \'" << genesisFilePath << "\' not found!";
-        exit(0);
+        std::cout << "genesis config \'" << genesisFilePath << "\' not found!" << std::endl;
+        exit(1);
     }
     float txSpeed = 10;
     if (_autoSendTx)
@@ -190,6 +196,27 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         op = Params::operation::ImportSnapshot;
         snapshotPath = vm["import"].as<std::string>();
     }
+    std::string importBlocksPath;
+    if (vm.count("import-blocks"))
+    {
+        if (op != Params::operation::None)
+        {
+            std::cout << "import blocks can not be used with other operations";
+            exit(0);
+        }
+        op = Params::operation::ImportBlocks;
+        importBlocksPath = vm["import-blocks"].as<std::string>();
+    }
 
-    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed, op};
+    // devp2p command-line mirror ([ethereum] in config.ini is the source of truth; the flag
+    // only echoes it). The conflict check is done by the caller (AirNodeInitializer) against
+    // the loaded NodeConfig: --bootnodes must agree with ethereum.bootnodes_file.
+    std::optional<std::string> ethereumBootnodesFile;
+    if (vm.count("bootnodes") || vm.count("b"))
+    {
+        ethereumBootnodesFile = vm["bootnodes"].as<std::string>();
+    }
+
+    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed,
+        ethereumBootnodesFile, op, std::move(importBlocksPath)};
 }

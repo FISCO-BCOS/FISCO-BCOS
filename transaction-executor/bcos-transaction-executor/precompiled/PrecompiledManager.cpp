@@ -18,6 +18,7 @@
 #include "bcos-executor/src/precompiled/extension/PaillierPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/RingSigPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/ZkpPrecompiled.h"
+#include "bcos-transaction-executor/precompiled/EvmPrecompiledAdapter.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledImpl.h"
 #include <memory>
 #include <range/v3/algorithm/sort.hpp>
@@ -26,43 +27,51 @@
 bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hashImpl)
   : m_hashImpl(std::move(hashImpl))
 {
+    // EVM built-in precompiles: the execute functions come from the shared
+    // eth::evm implementation (ethereum-executor/EVMPrecompiles.h) via the
+    // adapters in EvmPrecompiledAdapter.h — one canonical implementation for
+    // both executors. Pricing stays on the BCOS side (fixed constants /
+    // registrar pricers below), and ecrecover (0x01) / modexp (0x05) keep
+    // their legacy bcos-evm executors because their edge semantics differ
+    // (see EvmPrecompiledAdapter.h's file comment).
     m_address2Precompiled.emplace_back(
         1, Precompiled{executor::PrecompiledContract(
                            3000, 0, executor::PrecompiledRegistrar::executor("ecrecover")),
                0});
+    m_address2Precompiled.emplace_back(2,
+        Precompiled{executor::PrecompiledContract(60, 12,
+                        adaptEvmPrecompiled(eth_evm::sha256_execute, eth_evm::sha256_analyze, 0)),
+            0});
     m_address2Precompiled.emplace_back(
-        2, Precompiled{executor::PrecompiledContract(
-                           60, 12, executor::PrecompiledRegistrar::executor("sha256")),
+        3, Precompiled{
+               executor::PrecompiledContract(600, 120,
+                   adaptEvmPrecompiled(eth_evm::ripemd160_execute, eth_evm::ripemd160_analyze, 0)),
                0});
     m_address2Precompiled.emplace_back(
-        3, Precompiled{executor::PrecompiledContract(
-                           600, 120, executor::PrecompiledRegistrar::executor("ripemd160")),
-               0});
-    m_address2Precompiled.emplace_back(
-        4, Precompiled{executor::PrecompiledContract(
-                           15, 3, executor::PrecompiledRegistrar::executor("identity")),
-               0});
+        4, Precompiled{executor::PrecompiledContract(15, 3, identityExecutor), 0});
     m_address2Precompiled.emplace_back(5,
         Precompiled{executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("modexp"),
                         executor::PrecompiledRegistrar::executor("modexp")),
             0});
     m_address2Precompiled.emplace_back(
-        6, Precompiled{executor::PrecompiledContract(
-                           150, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_add")),
+        6, Precompiled{executor::PrecompiledContract(150, 0,
+                           adaptEvmPrecompiled(eth_evm::ecadd_execute, eth_evm::ecadd_analyze, 64)),
                0});
     m_address2Precompiled.emplace_back(
-        7, Precompiled{executor::PrecompiledContract(
-                           6000, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_mul")),
+        7, Precompiled{executor::PrecompiledContract(6000, 0,
+                           adaptEvmPrecompiled(eth_evm::ecmul_execute, eth_evm::ecmul_analyze, 64)),
                0});
     m_address2Precompiled.emplace_back(
-        8, Precompiled{executor::PrecompiledContract(
-                           executor::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
-                           executor::PrecompiledRegistrar::executor("alt_bn128_pairing_product")),
+        8, Precompiled{
+               executor::PrecompiledContract(
+                   executor::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
+                   adaptEvmPrecompiled(eth_evm::ecpairing_execute, eth_evm::ecpairing_analyze, 32)),
                0});
     m_address2Precompiled.emplace_back(
         9, Precompiled{executor::PrecompiledContract(
                            executor::PrecompiledRegistrar::pricer("blake2_compression"),
-                           executor::PrecompiledRegistrar::executor("blake2_compression")),
+                           adaptEvmPrecompiled(eth_evm::blake2bf_execute, eth_evm::blake2bf_analyze,
+                               0, blake2InputOk)),
                0});
 
     m_address2Precompiled.emplace_back(

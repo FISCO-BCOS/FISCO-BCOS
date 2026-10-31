@@ -12,12 +12,12 @@ include(Options)
 configure_project()
 
 if (WIN32)
-# to fix boost log link error in Windows8 API
+# boost.atomic 1.90+ unconditionally calls boost::winapi::WaitOnAddress on Windows,
+# which boost.winapi only declares when BOOST_USE_WINAPI_VERSION >= WIN8, so the
+# former WIN7 pin no longer compiles. WIN8 also matches the boost.log nt62 ABI of
+# vcpkg-built boost (built with the default WIN10), see
 # https://github.com/microsoft/vcpkg/discussions/22762
-#    add_definitions(-D_WIN32_WINNT=0x0601)
-#    set(VCPKG_C_FLAGS -D_WIN32_WINNT=0x0601 -DWINVER=0x0601)
-#    set(VCPKG_CXX_FLAGS -D_WIN32_WINNT=0x0601 -DWINVER=0x0601)
-    add_definitions(-DBOOST_USE_WINAPI_VERSION=BOOST_WINAPI_VERSION_WIN7)
+    add_definitions(-DBOOST_USE_WINAPI_VERSION=BOOST_WINAPI_VERSION_WIN8)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "ON")
 endif ()
 
@@ -66,6 +66,12 @@ endif ()
 
 add_subdirectory(legacy)
 
+# bcos-ops (the operator subcommands of the AIR binary) links bcos-cpp-sdk, so a full node
+# always builds the SDK library; WITH_CPPSDK alone still works for SDK-only builds
+if(WITH_CPPSDK OR FULLNODE)
+    add_subdirectory(bcos-sdk)
+endif()
+
 if(WITH_LIGHTNODE)
     add_subdirectory(legacy/lightnode)
 endif()
@@ -74,7 +80,6 @@ if(FULLNODE)
     find_package(group-sig CONFIG REQUIRED)
     find_package(paillier CONFIG REQUIRED)
 
-    add_subdirectory(bcos-evm)
     add_subdirectory(ethereum-executor)
     add_subdirectory(opstack-executor)
     add_subdirectory(bcos-sealer)
@@ -97,6 +102,7 @@ if(FULLNODE)
     add_subdirectory(bcos-sync)
     add_subdirectory(bcos-front)
     add_subdirectory(libinitializer)
+    add_subdirectory(bcos-ops)
     add_subdirectory(fisco-bcos-air)
 
     add_subdirectory(transaction-executor)
@@ -104,26 +110,16 @@ if(FULLNODE)
 
     if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)
-        add_subdirectory(bcos-leader-election)
     endif()
 
     if(TESTS)
         include(CTest)
         enable_testing()
         add_subdirectory(tests)
-        add_subdirectory(benchmark)
+        if(WITH_BENCHMARK)
+            add_subdirectory(benchmark)
+        endif()
     endif()
-
-    # bcos-leader-election can also be built standalone (without the full Tars
-    # stack) when only WITH_LEDGER_ELECTION is set. Place this AFTER
-    # enable_testing() so that the module's UTs are visible to ctest.
-    if(NOT WITH_TARS_SERVICES AND WITH_LEDGER_ELECTION)
-        add_subdirectory(bcos-leader-election)
-    endif()
-endif()
-
-if(WITH_CPPSDK)
-    add_subdirectory(bcos-sdk)
 endif()
 
 if(TOOLS)
@@ -134,20 +130,12 @@ if(WITH_L2_CONTRACTS)
     add_subdirectory(bcos-l2-contracts)
 endif()
 
-# for code coverage
+# for code coverage. The compiler flags live in cmake/CompilerSettings.cmake: that file
+# is included before the add_subdirectory() calls above, so its CMAKE_*_FLAGS reach every
+# module target; a set() here would only reach targets defined in this directory.
 if(COVERAGE)
     include(Coverage)
     set(TESTS ON)
-    if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-        set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS} -fprofile-update=atomic")
-        set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS} -fprofile-update=atomic")
-        set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
-        set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
-    elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-        add_compile_options(-Wno-unused-command-line-argument)
-        set(CMAKE_CXX_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
-        set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
-    endif()
     config_coverage("coverage" "")
 endif()
 

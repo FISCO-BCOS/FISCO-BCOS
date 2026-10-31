@@ -14,9 +14,13 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/MPTDeltaLayer.h"
+#include <bcos-utilities/BlockStat.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/LogStream.h>
 #include <oneapi/tbb/task_group.h>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -30,7 +34,6 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::protocol
 {
@@ -48,7 +51,8 @@ class Hash;
 
 namespace bcos::scheduler_v1
 {
-#define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
+#define BASELINE_SCHEDULER_LOG(LEVEL) \
+    BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
 DERIVE_BCOS_EXCEPTION(NotFoundTransactionError);
 
@@ -71,6 +75,12 @@ task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
  * @return The calculated transaction root hash.
  */
 bcos::h256 calculateTransactionRoot(protocol::Block const& block, crypto::Hash const& hashImpl);
+
+/// Ethereum transactions trie root (txsRoot) for executor_version >= 2 chains: reassembles
+/// each transaction's full EIP-2718 wire bytes (Web3RawTransaction::reassembleWeb3RawTransaction)
+/// and commits to the tx trie (ledger::mpt::calculateTransactionsRoot). Defined in
+/// BaselineScheduler.cpp (block is a concrete protocol::Block). Empty block -> emptyRootHash().
+h256 calculateEthereumTransactionRoot(protocol::Block const& block);
 
 /**
  * Returns the current time in milliseconds since the epoch.
@@ -133,22 +143,49 @@ private:
         /// header row, not from here (buildMPTStateRoot), so this field is not a channel any
         /// consensus-path data flows through.
         std::optional<ledger::mpt::MPTDeltaLayer> m_mptDelta;
+        /// elapsed ms of this block's execution; the commit-time BlockStat prints it
+        int64_t m_executeMs{-1};
     };
     std::deque<std::shared_ptr<ExecuteResult>> m_results;
     std::mutex m_resultsMutex;
 
     /// Post-commit hook over each MPT block's node delta — the pathdb pruning seam
     /// (CommitObserver.h). Defaults to the no-op observer; replaced via setMPTCommitObserver.
-    /// Written only before block flow starts (wiring time), read on the commit path.
+    /// Written at wiring time (setMPTCommitObserver) and reset to the no-op observer at stop()
+    /// time (resetMPTCommitObserver, under a BLOCKING m_commitMutex lock); read only on the
+    /// commit path, which runs under m_commitMutex from beginning to end. The execute path
+    /// never dereferences the pointer: buildMPTStateRoot's needsRefCountDeltas query reads the
+    /// m_trackRefCounts snapshot below instead (needsRefCountDeltas() is a constant per
+    /// observer, so caching it loses nothing). std::atomic<std::shared_ptr> would be the
+    /// direct answer but libc++ (Apple Clang) still lacks the C++20 specialization.
     std::shared_ptr<ledger::mpt::CommitObserver> m_mptCommitObserver =
         std::make_shared<ledger::mpt::NoopCommitObserver>();
+
+    /// Copy of m_mptCommitObserver->needsRefCountDeltas(), maintained by set/reset alongside
+    /// the pointer. Read on the execute path (under m_executeMutex); written at wiring time
+    /// (before block flow starts) and under m_commitMutex at stop() time, so the atomic makes
+    /// the stop()-time store safe against an in-flight execute. A stale read only flips the
+    /// tally off one block early or late — the delta's consumers never read it either way.
+    std::atomic<bool> m_trackRefCounts{false};
+
+    /// executor_version=2 only (setEvmcRevisionSchedule): the dry-run calls stamp the revision
+    /// of the block they execute on from it. Empty on every other lane.
+    ledger::EvmcRevisionSchedule m_evmcRevisionSchedule;
+
+    /// Stamp the EVM revision of @p blockHeader onto @p ledgerConfig when an
+    /// m_evmcRevisionSchedule is set (header timestamp in milliseconds, as the v2 lane stores
+    /// it); otherwise leave the config as getLedgerConfig built it.
+    void stampCallRevision(
+        ledger::LedgerConfig& ledgerConfig, protocol::BlockHeader const& blockHeader) const;
 
     /**
      * Build the block's Ethereum MPT state root over the execute view — the view whose top
      * mutable layer is exactly this block's delta and whose immutable layers are the pending
      * blocks' not-yet-committed deltas, node rows included — and return the trie-node delta.
      *
-     * The parent state root comes from the parent block's HEADER, read through the view.
+     * The parent state root comes from the parent block's HEADER, read through the view —
+     * the shared selection rule ledger::mpt::parentStateRootFor (StateRoots.h), also used by
+     * EngineServiceImpl::calculateStateRoot.
      * finishExecute publishes every non-genesis MPT block's executed header into its own
      * mutable layer, so ONE getBlockData arm covers every case: a pending parent resolves
      * from the view's immutable chain (pipeline), a committed parent — the genesis block
@@ -243,8 +280,8 @@ public:
     /// writes landing in a fresh mutable layer stacked on a HistoricalStateBackend
     /// (read-your-writes inside the call, nothing persisted; HistoricalCallStorage.h).
     ///
-    /// Gated to scenario B (feature_l2_ethereum_compat): only there is the trie the
-    /// COMPLETE state at the root. A scenario-A trie excludes every account dormant since
+    /// Gated to scenario B (the Ethereum lane, executor_version >= 2): only there is the trie
+    /// the COMPLETE state at the root. A scenario-A trie excludes every account dormant since
     /// activation, so a historical call could silently execute against a state where such
     /// accounts read as absent — refused loudly instead (OQ6 resolution, MPTAccount.h:83-85).
     /// Blocks above the latest height and blocks whose header records no state root
@@ -291,6 +328,21 @@ public:
     /// flow starts. A null pointer keeps the current observer — the commit path relies on the
     /// member never being empty.
     void setMPTCommitObserver(std::shared_ptr<ledger::mpt::CommitObserver> observer);
+
+
+    /// executor_version=2 (the L1 EL lane): call() and callAtBlock() (eth_call /
+    /// eth_estimateGas) execute with the EVM revision this schedule assigns to the block they
+    /// run on, since the lane records no evmc_revision row. Call at wiring time.
+    void setEvmcRevisionSchedule(ledger::EvmcRevisionSchedule schedule);
+
+
+    /// Restore the no-op observer. stop() calls this under a BLOCKING m_commitMutex lock, so it
+    /// returns only after any in-flight commit — the commit path is the only code that ever
+    /// dereferences the observer, and it does so while holding the same mutex — has finished.
+    /// The execute path's tally gate reads the atomic m_trackRefCounts flag instead of the
+    /// pointer, so it stays safe against this store. Afterwards every commit goes through the
+    /// no-op observer, so the pruning backend behind a previous observer can be torn down safely.
+    void resetMPTCommitObserver();
 
 
     void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override;

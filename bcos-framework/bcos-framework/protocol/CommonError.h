@@ -32,6 +32,7 @@ enum CommonError : int32_t
     GatewaySendMsgFailed = 1003,
     GatewayBandwidthOverFlow = 1004,
     GatewayQPSOverFlow = 1005,
+    MessageDecodeFailed = 1006,  // front failed to decode the received message
     TransactionsMissing = 2000,  // for transaction sync
     InconsistentTransactions = 2001,
     TxsSignatureVerifyFailed = 2002,

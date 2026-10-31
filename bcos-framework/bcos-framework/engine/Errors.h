@@ -17,6 +17,9 @@
 #pragma once
 
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <optional>
+#include <system_error>
 
 namespace bcos::engine
 {
@@ -26,12 +29,85 @@ namespace bcos::engine
 /// engine library) so opstack-executor can throw it without depending on bcos-engine.
 DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
 
-// Engine API errors for EngineErrorMapper — forward reference: the mapper lands with
-// split C (#5521); until then only InvalidForkchoiceState has a throw site. Do not
-// redeclare Types.h's UnknownPayload / IncompatiblePayloadVersion. -38002 forkchoice,
-// -38005 unsupported fork, -38003 attributes.
+// Engine API exceptions (bcos-framework so RPC can map them without linking bcos-engine).
+DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
 DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
+DERIVE_BCOS_EXCEPTION(InvalidPayloadAttributes);
+DERIVE_BCOS_EXCEPTION(UnknownPayload);
+DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+/// A tracker guard (Exclusive/SharedAccess) was used after move or without owning
+/// its lock — a programming error inside the tracker's callers.
+DERIVE_BCOS_EXCEPTION(InvalidGuardState);
+/// An Engine-API byte payload (attribute/payload-id encoding) is malformed —
+/// length, range or shape violation in a wire-shaped byte sequence.
+DERIVE_BCOS_EXCEPTION(InvalidEngineEncoding);
+
+/// JSON-RPC -38005 Unsupported fork. Isthmus+ requiring payload V4 is one use;
+/// other fork-shape mismatches share this channel (see #5517).
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);
-DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
+
+/// An Engine service was constructed with a malformed or missing dependency
+/// (e.g. a null block factory) — a startup/wiring fault of the composition root,
+/// not a request fault and not a storage fault.
+DERIVE_BCOS_EXCEPTION(InvalidEngineConfig);
+
+/// Structured carrier for the OP build-loop's poisoned-tx eviction: the OpScheduler
+/// catch attaches the offending tx hash to the boundary bcos::Error as a typed
+/// boost::error_info slot, and buildOpPayload reads it back to evict the culprit from
+/// the pool — the same structured-member contract OpConsensusError documents at
+/// opstack-executor/OpCommon.h. Never route this through the message text.
+using OpCulpritTxHash = boost::error_info<struct OpCulpritTxHashTag, bcos::h256>;
+
+/// True when the reject is a block-gas-pool capacity fault (skip this build, do not evict).
+/// Named separately from executor_v1::opstack::OpBlockGasPoolFull (the prepare-time exception).
+using OpRejectIsCapacity = boost::error_info<struct OpRejectIsCapacityTag, bool>;
+
+/// opValidate table classification from OpConsensusError::validateErrorCode.
+/// Empty/default error_code is not attached. Never route this through the message text.
+using OpValidateErrorCode = boost::error_info<struct OpValidateErrorCodeTag, std::error_code>;
+
+/// True when a commit failed because the pending block it named is gone — superseded or
+/// already committed by a concurrent call ("Unexpected empty results!"). The engine may
+/// re-execute such a payload; every other commit fault must keep its routing.
+/// A tag rather than an error code because OpScheduler::classifyException's catch (...)
+/// returns SchedulerError::UnknownError for every unclassified commit fault, so the code
+/// cannot tell a dropped pending from a storage fault.
+using OpPendingDropped = boost::error_info<struct OpPendingDroppedTag, bool>;
+
+/// True when execution failed because the block is a same-height sibling of the committed
+/// tip and this scheduler slice has no one-level tip-reorg (ReorgUndo follow-up). The
+/// Engine-API answer for that is SYNCING (the CL retries after re-parenting), never -32603.
+/// The producer (the scheduler's classifyException) and the Engine-API consumer land with the
+/// scheduler slice; declared here so both sides share one tag.
+using OpSiblingReorgUnsupported = boost::error_info<struct OpSiblingReorgUnsupportedTag, bool>;
+
+/// True when an Engine API payload carries a transaction envelope this service cannot
+/// decode: a payload-content fault the FCU/newPayload paths map to a consensus INVALID
+/// (fcuInvalidIfUndecodable), never to -32603 — an untagged OpExecutionInternalError must
+/// keep propagating as an internal error. Same carrier convention as
+/// OpCulpritTxHash/OpRejectIsCapacity; shared by the Eth and OP build paths.
+using OpPayloadUndecodable = boost::error_info<struct OpPayloadUndecodableTag, bool>;
+
+/// Consumed by OpEngineService (#5549) to classify execute-reject culprits; unused
+/// within #5547 itself.
+[[nodiscard]] inline std::optional<bcos::h256> culpritTxHashFromError(boost::exception const& error)
+{
+    if (auto const* hash = boost::get_error_info<OpCulpritTxHash>(error))
+    {
+        return *hash;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] inline std::optional<std::error_code> validateErrorCodeFromError(
+    boost::exception const& error)
+{
+    if (auto const* code = boost::get_error_info<OpValidateErrorCode>(error))
+    {
+        return *code;
+    }
+    return std::nullopt;
+}
+
 }  // namespace bcos::engine

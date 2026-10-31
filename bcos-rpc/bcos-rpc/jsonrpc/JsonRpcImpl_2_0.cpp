@@ -27,11 +27,10 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/validator/CallValidator.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -46,7 +45,9 @@
 #include <string_view>
 #include <utility>
 
-using namespace std;
+#include "bcos-protocol/TransactionStatus.h"
+
+using std::string;
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::group;
@@ -250,7 +251,10 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         auto extraBytesRef =
             bcos::bytesRef(const_cast<byte*>(transaction.extraTransactionBytes().data()),
                 transaction.extraTransactionBytes().size());
-        codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
+        // The decode result is intentionally ignored (unchanged from the base behaviour):
+        // on undecodable extraTransactionBytes the fields decoded before the failure are
+        // emitted as-is.
+        (void)codec::rlp::tryDecodeFromPayload(extraBytesRef, web3Tx);
         jResp["value"] = web3Tx.value.str();
         jResp["gasLimit"] = web3Tx.gasLimit;
         if (web3Tx.type >= TransactionType::EIP1559)
@@ -557,17 +561,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         }
         catch (bcos::Error& e)
         {
-            auto info = boost::diagnostic_information(e);
-            if (e.errorCode() == (int64_t)bcos::protocol::TransactionStatus::TxPoolIsFull)
-            {
-                RPC_IMPL_LOG(DEBUG) << "sendTransaction error" << LOG_KV("errCode", e.errorCode())
-                                    << LOG_KV("msg", info);
-            }
-            else
-            {
-                RPC_IMPL_LOG(WARNING) << "sendTransaction error" << LOG_KV("errCode", e.errorCode())
-                                      << LOG_KV("msg", info);
-            }
+            // The refusal reaches the client in the RPC error; the txpool prints the per-tx
+            // TxRejected line (DEBUG) with the reason.
             respFunc(std::make_shared<bcos::Error>(std::move(e)), jResp);
         }
         catch (std::exception& e)
@@ -1229,28 +1224,28 @@ void JsonRpcImpl_2_0::getPeers(RespFunc _respFunc)
 {
     RPC_IMPL_LOG(TRACE) << LOG_DESC("getPeers");
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
-    m_gatewayInterface->asyncGetPeers([m_respFunc = std::move(_respFunc), self](Error::Ptr _error,
-                                          bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
-                                          bcos::gateway::GatewayInfosPtr _peersInfo) {
+    task::wait([](std::weak_ptr<JsonRpcImpl_2_0> self, RespFunc m_respFunc,
+                   bcos::gateway::GatewayInterface::Ptr gateway) -> task::Task<void> {
+        auto [error, localP2pInfo, peersInfo] = co_await gateway->getPeers();
         auto rpc = self.lock();
         if (!rpc)
         {
-            return;
+            co_return;
         }
         Json::Value jResp;
-        if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
+        if (!error || (error->errorCode() == bcos::protocol::CommonError::SUCCESS))
         {
-            rpc->gatewayInfoToJson(jResp, _localP2pInfo, _peersInfo);
+            rpc->gatewayInfoToJson(jResp, localP2pInfo, peersInfo);
         }
         else
         {
             RPC_IMPL_LOG(INFO) << LOG_BADGE("getPeers failed")
-                               << LOG_KV("code", _error ? _error->errorCode() : 0)
-                               << LOG_KV("message", _error ? _error->errorMessage() : "success");
+                               << LOG_KV("code", error ? error->errorCode() : 0)
+                               << LOG_KV("message", error ? error->errorMessage() : "success");
         }
 
-        m_respFunc(_error, jResp);
-    });
+        m_respFunc(error, jResp);
+    }(self, std::move(_respFunc), m_gatewayInterface));
 }
 
 NodeService::Ptr JsonRpcImpl_2_0::getNodeService(
@@ -1431,27 +1426,28 @@ void JsonRpcImpl_2_0::getGroupPeers(Json::Value& _response, std::string_view _gr
 void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFunc)
 {
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
-    m_gatewayInterface->asyncGetPeers(
-        [_respFunc, group = std::string(_groupID), self](Error::Ptr _error,
-            bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
-            bcos::gateway::GatewayInfosPtr _peersInfo) {
-            Json::Value jResp(Json::arrayValue);
-            if (_error)
-            {
-                RPC_IMPL_LOG(INFO)
-                    << LOG_BADGE("getGroupPeers failed") << LOG_KV("code", _error->errorCode())
-                    << LOG_KV("message", _error->errorMessage());
-                _respFunc(_error, jResp);
-                return;
-            }
-            auto rpc = self.lock();
-            if (!rpc)
-            {
-                return;
-            }
-            rpc->getGroupPeers(jResp, std::string_view(group), _localP2pInfo, _peersInfo);
-            _respFunc(_error, jResp);
-        });
+    task::wait([](std::weak_ptr<JsonRpcImpl_2_0> self, RespFunc respFunc, std::string group,
+                   bcos::gateway::GatewayInterface::Ptr gateway) -> task::Task<void> {
+        auto [error, localP2pInfo, peersInfo] = co_await gateway->getPeers();
+        Json::Value jResp(Json::arrayValue);
+        if (error)
+        {
+            // clang-format off
+            RPC_IMPL_LOG(INFO)
+                << LOG_BADGE("getGroupPeers failed") << LOG_KV("code", error->errorCode())
+                << LOG_KV("message", error->errorMessage());
+            // clang-format on
+            respFunc(error, jResp);
+            co_return;
+        }
+        auto rpc = self.lock();
+        if (!rpc)
+        {
+            co_return;
+        }
+        rpc->getGroupPeers(jResp, std::string_view(group), localP2pInfo, peersInfo);
+        respFunc(error, jResp);
+    }(self, std::move(_respFunc), std::string(_groupID), m_gatewayInterface));
 }
 
 void JsonRpcImpl_2_0::newBlockFilter(std::string_view _groupID, RespFunc _respFunc)
@@ -1480,12 +1476,15 @@ void JsonRpcImpl_2_0::newFilter(
         Json::Value jRes;
         // Resolve "latest"/"safe"/"finalized" against the real head and the configured
         // depths, exactly like the Web3 entry — fromJson has no defaults, so a filter's
-        // blockTags cannot silently degrade to block 0 / depth 0 here.
+        // blockTags cannot silently degrade to block 0 / depth 0 here. The FISCO-native
+        // JSON-RPC entry deliberately keeps PBFT static-depth semantics for safe/finalized
+        // (nullopt forkchoice + failClosed=false): it predates the Engine API and is not
+        // op-node-facing, so it never resolves against the forkchoice heads.
         auto const nodeService = self->getNodeService(groupID, "", "newFilter");
         auto const latest = co_await ledger::getCurrentBlockNumber(*nodeService->ledger());
         auto params = self->filterSystem().requestFactory()->create();
-        params->fromJson(
-            jParams, latest, nodeService->safeBlockDepth(), nodeService->finalizedBlockDepth());
+        params->fromJson(jParams, latest, nodeService->safeBlockDepth(),
+            nodeService->finalizedBlockDepth(), std::nullopt, std::nullopt, false);
         jRes = co_await self->filterSystem().newFilter(groupID, std::move(params));
         respFunc(nullptr, jRes);
     }(this, _groupID, std::move(_respFunc)));
@@ -1528,12 +1527,15 @@ void JsonRpcImpl_2_0::getLogs(
                    RespFunc respFunc) -> task::Task<void> {
         // Resolve blockTags against the real head + configured depths, exactly like the
         // Web3 entry (fromJson has no defaults) — otherwise "latest" would silently mean
-        // block 0 here.
+        // block 0 here. The FISCO-native JSON-RPC entry deliberately keeps PBFT static-depth
+        // semantics for safe/finalized (nullopt forkchoice + failClosed=false): it predates
+        // the Engine API and is not op-node-facing, so it never resolves against the
+        // forkchoice heads.
         auto const nodeService = self->getNodeService(groupID, "", "getLogs");
         auto const latest = co_await ledger::getCurrentBlockNumber(*nodeService->ledger());
         auto params = self->filterSystem().requestFactory()->create();
-        params->fromJson(
-            jParams, latest, nodeService->safeBlockDepth(), nodeService->finalizedBlockDepth());
+        params->fromJson(jParams, latest, nodeService->safeBlockDepth(),
+            nodeService->finalizedBlockDepth(), std::nullopt, std::nullopt, false);
         Json::Value jRes = co_await self->filterSystem().getLogs(groupID, std::move(params));
         respFunc(nullptr, jRes);
     }(this, _groupID, jParams, std::move(_respFunc)));

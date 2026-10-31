@@ -111,8 +111,8 @@ BOOST_AUTO_TEST_CASE(CalculateEncodingLength)
 
     // Encoding of tuple<string, tuple<uint32[], string>>("Alice", ([0, 1], "Dwell not negative
     // signs"))
-    encodedBytes = fromHex(
-        "14416c696365080000000001000000604477656c6c206e6f74206e65676174697665207369676e73");
+    encodedBytes =
+        fromHex("14416c696365080000000001000000604477656c6c206e6f74206e65676174697665207369676e73");
     paramAbi.type = "tuple";
     paramAbi.components.clear();
     paramAbi.components.push_back(ParameterAbi("string"));

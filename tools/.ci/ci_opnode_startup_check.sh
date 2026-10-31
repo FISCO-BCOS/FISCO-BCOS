@@ -3,14 +3,17 @@
 #
 # op-node startup quick check (K0):
 #   1. start anvil as L1
-#   2. build a single-node AIR chain with [op_engine_rpc] enabled (external-driver
-#      mode: no built-in single-node consensus), executor_version=2
+#   2. build a single-node AIR chain with build_chain.sh and turn it into an OP-lane chain
+#      (executor_version=3, driven by op-node over the [engine_rpc] Engine API listener)
 #   3. generate rollup.json from the live L1/L2 genesis via gen_rollup_config.py
 #   4. start op-node --sequencer.stopped and require it to survive rollup
 #      Config.Check() + L1/L2 genesis validation
 #
-# If op-node or anvil is not installed the script reports SKIP and exits 0, so it
-# is safe to wire into CI before the toolchain image carries those binaries.
+# If op-node or anvil is not installed, or the harness checkout is absent, the script reports
+# SKIP and exits 0, so it is safe to wire into CI before the toolchain image carries those
+# binaries — the SKIP line is the signal, and the step that runs it must not be read as "op-node
+# was checked" when it prints one. A caller that does provision the harness should grep for the
+# SKIP instead of relying on the exit code; a knob that no caller sets would not change that.
 #
 # Usage: bash tools/.ci/ci_opnode_startup_check.sh [REPO_ROOT]
 set -euo pipefail
@@ -18,7 +21,14 @@ set -euo pipefail
 REPO_ROOT="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 BINARY="${REPO_ROOT}/build/fisco-bcos-air/fisco-bcos"
 BUILDER="${REPO_ROOT}/tools/BcosAirBuilder/build_chain.sh"
-GEN_ROLLUP="${REPO_ROOT}/tools/opstack-genesis/gen_rollup_config.py"
+# gen_rollup_config.py lives in FISCO-BCOS/op-stack-e2e-tests (tools/opstack-genesis);
+# point OP_E2E_DIR at a checkout of it. Missing checkout is a SKIP, like the binaries.
+OP_E2E_DIR="${OP_E2E_DIR:-${REPO_ROOT}/.ci-op-e2e-tests}"
+GEN_ROLLUP="${OP_E2E_DIR}/tools/opstack-genesis/gen_rollup_config.py"
+if [ ! -f "${GEN_ROLLUP}" ]; then
+    echo "SKIP: ${GEN_ROLLUP} not found — check out FISCO-BCOS/op-stack-e2e-tests into ${OP_E2E_DIR}"
+    exit 0
+fi
 WORK_ROOT="${REPO_ROOT}/tools/opnode-check"
 NODE_DIR="${WORK_ROOT}/nodes/127.0.0.1/node0"
 
@@ -82,23 +92,24 @@ rpc_call "${L1_RPC_URL}" '"eth_chainId"' '[]' | grep -q result || fail "anvil di
 L1_GENESIS_HASH=$(rpc_call "${L1_RPC_URL}" '"eth_getBlockByNumber"' '["0x0", false]' | jq -r .result.hash)
 [ "${L1_GENESIS_HASH}" != "null" ] || fail "cannot read anvil genesis hash"
 
-# ---- 2. FISCO chain with [op_engine_rpc] enabled ----
-log "building single-node chain (op_engine_rpc enabled, executor_version=2)"
+# ---- 2. FISCO OP-lane chain driven over [engine_rpc] ----
+log "building single-node chain (build_chain.sh, then patched to executor_version=3)"
 rm -rf "${WORK_ROOT}/nodes"
-(cd "${WORK_ROOT}" && bash "${BUILDER}" -l "127.0.0.1:1" -v 3.18.0 -e "${BINARY}" -O \
+(cd "${WORK_ROOT}" && bash "${BUILDER}" -l "127.0.0.1:1" -e "${BINARY}" \
     >/dev/null 2>&1) || fail "build_chain.sh failed"
 [ -f "${NODE_DIR}/config.genesis" ] || fail "config.genesis not generated"
 
 cd "${NODE_DIR}"
-# build_chain.sh -O already pins the genesis to the v2 executor with an explicit
-# evm_revision (op_engine_rpc refuses anything else); assert instead of patching
-grep -qE '^\s*version=2' config.genesis || fail "build_chain -O did not pin executor version=2"
-grep -qE '^\s*evm_revision=' config.genesis || fail "build_chain -O did not pin an evm_revision"
-perl -p -i -e "s/chain_id=20200/chain_id=${L2_CHAIN_ID}/" config.genesis
+# build_chain.sh builds executor version 1 chains only: move the genesis to the OP lane
+# (executor version=3), whose chain id is the decimal [chain] chain_id and whose forks come
+# from [op_fork_timestamps].
+perl -p -i -e 's/^(\s*)version=1\s*$/${1}version=3\n/' config.genesis
+perl -p -i -e "s/chain_id=chain0/chain_id=${L2_CHAIN_ID}/" config.genesis
+grep -qE '^\s*version=3' config.genesis || fail "could not set executor version=3"
 cat >> config.genesis <<'GENESIS_EOF'
 
-[features]
-    feature_l2_ethereum_compat=1
+[op_fork_timestamps]
+    isthmus_time=0
 
 [alloc.0]
     address=0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0
@@ -107,7 +118,7 @@ cat >> config.genesis <<'GENESIS_EOF'
     code=
 GENESIS_EOF
 
-# L2 mode (feature_l2_ethereum_compat) now REQUIRES an [eth_genesis_header]
+# The Ethereum lane (executor_version >= 2, set above) REQUIRES an [eth_genesis_header]
 # section (NodeConfig::validateL2Invariants, upstream #5420): an L2 chain
 # without it would mint a Tars-hashed B0 that no op-node/op-reth can match.
 # Identical alloc to ci_check_eth_executor.sh, so the same precomputed
@@ -127,7 +138,7 @@ number=0x0
 gas_limit=0x1c9c380
 gas_used=0x0
 timestamp=0x689d5c00
-extra_data=0x00000000fa000000060000000000000000
+extra_data=0x01000000fa000000060000000000000000
 mix_hash=0x0000000000000000000000000000000000000000000000000000000000000000
 nonce=0x0000000000000000
 base_fee_per_gas=0x3b9aca00
@@ -136,15 +147,23 @@ blob_gas_used=0x0
 excess_blob_gas=0x0
 parent_beacon_block_root=0x0000000000000000000000000000000000000000000000000000000000000000
 requests_hash=0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-hash=0x7436ff78906787c6f56b2035f9da8232e04d3a4043eb6dc422b668f5830c3f6c
+hash=0xf66beef79256c0b3f1fd2852040413c5dffa1ff44f0f78421ae17cf8f397a1a5
 GENESIS_EOF
 
-# external-driver mode: web3_rpc on, single-node consensus stays off;
-# [op_engine_rpc] is already emitted with enable=true by build_chain.sh -O
+# op-node drives the chain over the authenticated Engine API ([engine_rpc] has no enable
+# key: executor_version >= 2 always serves it); web3_rpc is on for the genesis reads below
 perl -p -i -e 'if (/\[web3_rpc\]/) { $f=1 } elsif ($f && s/enable\s*=\s*false/enable=true/) { $f=0 }' config.ini
-grep -q '^\[op_engine_rpc\]' config.ini || fail "[op_engine_rpc] section not in config.ini"
-grep -q "conf/op-engine/jwt.hex" config.ini || fail "jwt_secret_file not in config.ini"
-[ "$(wc -c <conf/op-engine/jwt.hex)" -eq 65 ] || fail "jwt.hex is not 64 hex chars + newline"
+cat >> config.ini <<'INI_EOF'
+
+[engine_rpc]
+    listen_ip=127.0.0.1
+    listen_port=8551
+    ; JWT shared secret (op-node --l2.jwt-secret points at the same file)
+    jwt_secret_file=conf/engine/jwt.hex
+INI_EOF
+mkdir -p conf/engine
+(umask 077 && openssl rand -hex 32 >conf/engine/jwt.hex) || fail "cannot generate the JWT secret"
+[ "$(wc -c <conf/engine/jwt.hex)" -eq 65 ] || fail "jwt.hex is not 64 hex chars + newline"
 
 log "starting fisco-bcos node"
 bash start.sh >/dev/null 2>&1 || fail "start.sh failed"
@@ -207,7 +226,7 @@ L1CFG_EOF
 log "starting op-node (--sequencer.stopped)"
 op-node \
     --l1="${L1_RPC_URL}" --l1.trustrpc --l1.rpckind=any --l1.beacon.ignore=true \
-    --l2="${ENGINE_URL}" --l2.jwt-secret="${NODE_DIR}/conf/op-engine/jwt.hex" \
+    --l2="${ENGINE_URL}" --l2.jwt-secret="${NODE_DIR}/conf/engine/jwt.hex" \
     --rollup.config="${WORK_ROOT}/rollup.json" \
     --rollup.l1-chain-config="${WORK_ROOT}/l1-chain-config.json" \
     --sequencer.enabled --sequencer.stopped --sequencer.l1-confs=0 \

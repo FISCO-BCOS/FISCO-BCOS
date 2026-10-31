@@ -19,8 +19,7 @@
  */
 
 #include "bcos-gateway/Gateway.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/ServiceV2.h"
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -43,10 +42,9 @@ public:
     void start() override {}
     void stop() override {}
 
-    void callOnReceiveP2PMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+    void callOnReceiveP2PMessage(NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
     {
-        onReceiveP2PMessage(_e, _session, _msg);
+        onReceiveP2PMessage(_e, _session, std::move(_msg));
     }
 };
 
@@ -60,22 +58,21 @@ public:
       : ServiceV2(_info, std::move(_factory), _ioContext)
     {}
     void callOnReceiveRouterSeq(
-        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+        NetworkException _error, std::shared_ptr<P2PSession> _session, Message _message)
     {
-        onReceiveRouterSeq(std::move(_error), std::move(_session), std::move(_message));
+        onReceiveRouterSeq(std::move(_error), std::move(_session), _message);
     }
 };
 
-// Fix A: a P2PMessage whose decoded options carry zero dstNodeIDs must not be
+// Fix A: a Message whose decoded options carry zero dstNodeIDs must not be
 // indexed (dstNodeIDs[0] on an empty vector is OOB). The guard drops it before
 // touching m_gatewayNodeManager (which is null here), so no crash occurs.
 BOOST_AUTO_TEST_CASE(EmptyDstNodeIDsIsDropped)
 {
-    // Build a real P2PMessage with a non-zero moduleID (so the front-message
+    // Build a real Message with a non-zero moduleID (so the front-message
     // moduleID-decode branch is skipped) and an empty dstNodeIDs list.
-    auto factory = std::make_shared<P2PMessageFactory>();
-    auto msg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
-    msg->setPacketType(GatewayMessageType::PeerToPeerMessage);
+    Message msg;
+    msg.setPacketType(GatewayMessageType::PeerToPeerMessage);
 
     P2PMessageOptions options;
     options.setGroupID("group0");
@@ -83,12 +80,13 @@ BOOST_AUTO_TEST_CASE(EmptyDstNodeIDsIsDropped)
     std::string srcNodeID = "srcNode";
     options.setSrcNodeID(bytes(srcNodeID.begin(), srcNodeID.end()));
     // Intentionally leave dstNodeIDs empty.
-    msg->setOptions(options);
-    BOOST_CHECK(msg->options().dstNodeIDs().empty());
+    msg.setOptions(options);
+    BOOST_CHECK(msg.options().dstNodeIDs().empty());
 
     auto gateway = std::make_shared<FakeGatewayFIB183>();
     // Must not crash / must not dereference the null GatewayNodeManager.
-    BOOST_CHECK_NO_THROW(gateway->callOnReceiveP2PMessage(NetworkException(0, ""), nullptr, msg));
+    BOOST_CHECK_NO_THROW(
+        gateway->callOnReceiveP2PMessage(NetworkException(0, ""), nullptr, std::move(msg)));
 }
 
 // Sanity check: confirm that a message decoded straight off the wire can legitimately
@@ -122,20 +120,19 @@ BOOST_AUTO_TEST_CASE(ShortRouterSeqPayloadIsDropped)
     auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
     boost::asio::io_context ioContext;
     auto service = std::make_shared<FakeServiceV2FIB183>(selfInfo, routerTableFactory, ioContext);
-    auto factory = std::make_shared<P2PMessageFactoryV2>();
 
     for (size_t len = 0; len < sizeof(uint32_t); ++len)
     {
-        auto msg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
-        msg->setPacketType(GatewayMessageType::RouterTableSyncSeq);
+        Message msg;
+        msg.setPacketType(GatewayMessageType::RouterTableSyncSeq);
         if (len > 0)
         {
-            msg->setPayload(bytes(len, 0xAB));
+            msg.setPayload(bytes(len, 0xAB));
         }
-        BOOST_CHECK_EQUAL(msg->payload().size(), len);
+        BOOST_CHECK_EQUAL(msg.payload().size(), len);
         // Session is nullptr on purpose: the guard returns before it is used.
         BOOST_CHECK_NO_THROW(
-            service->callOnReceiveRouterSeq(NetworkException(0, ""), nullptr, msg));
+            service->callOnReceiveRouterSeq(NetworkException(0, ""), nullptr, std::move(msg)));
     }
 
     service->stop();

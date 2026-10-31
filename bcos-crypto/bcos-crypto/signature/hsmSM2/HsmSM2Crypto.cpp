@@ -22,7 +22,7 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <hsm-crypto/hsm/CryptoProvider.h>
 #include <hsm-crypto/hsm/SDFCryptoProvider.h>
 #include <algorithm>
@@ -122,6 +122,11 @@ bool HsmSM2Crypto::verify(
     // get provider
     CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
 
+    // reject undersized inputs before the fixed-length copies below
+    if (_pubKey->size() < HSM_SM2_PUBLIC_KEY_LEN || _signatureData.size() < HSM_SM2_SIGNATURE_LEN)
+    {
+        return false;
+    }
     // parse input
     Key key = Key();
     auto pubKey = std::make_shared<const std::vector<byte>>(

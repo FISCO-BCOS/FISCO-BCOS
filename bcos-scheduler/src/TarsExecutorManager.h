@@ -23,7 +23,7 @@
 #include "bcos-tars-protocol/client/ExecutorServiceClient.h"
 #include "bcos-tars-protocol/tars/ExecutorService.h"
 #include "bcos-tool/NodeConfig.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include "bcos-utilities/Timer.h"
 
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
@@ -35,7 +35,8 @@
 #include <string>
 #include <utility>
 
-#define TARS_EXECUTOR_MANAGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TARS_EXECUTOR_MANAGER")
+#define TARS_EXECUTOR_MANAGER_LOG(LEVEL) \
+    BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("TARS_EXECUTOR_MANAGER")
 
 namespace bcos::scheduler
 {
@@ -47,7 +48,7 @@ public:
     using EndPointSet = std::shared_ptr<std::set<std::pair<std::string, uint16_t>>>;
 
     TarsExecutorManager(boost::asio::io_context& _ioService,
-                const std::string& _executorServiceName, bcos::tool::NodeConfig::Ptr& _nodeConfig);
+        const std::string& _executorServiceName, bcos::tool::NodeConfig::Ptr& _nodeConfig);
 
     TarsExecutorManager(TarsExecutorManager&&) = delete;
     TarsExecutorManager(const TarsExecutorManager&) = delete;

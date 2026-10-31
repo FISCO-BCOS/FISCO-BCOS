@@ -1,6 +1,6 @@
 #pragma once
-#include <bcos-concepts/ByteBuffer.h>
 #include "../protocol/Block.h"
+#include <bcos-concepts/ByteBuffer.h>
 #include <range/v3/range/concepts.hpp>
 #include <range/v3/range/traits.hpp>
 
@@ -64,8 +64,7 @@ public:
 
 
     auto getTransactions(::ranges::range auto const& hashes, ::ranges::range auto& out)
-        requires TransactionOrReceipt<
-            ::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>>
+        requires TransactionOrReceipt<::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>>
     {
         return impl().impl_getTransactions(hashes, out);
     }

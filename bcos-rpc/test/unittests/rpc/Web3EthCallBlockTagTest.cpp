@@ -16,8 +16,14 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/ledger/Features.h>
+#include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Constants.h>
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
+#include <bcos-storage/MPTNodeReadStorage.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <string>
@@ -39,6 +45,10 @@ public:
 
     int m_latestCalls{0};
     std::vector<protocol::BlockNumber> m_historicalCalls;
+    /// When set, callAtBlock answers with this error instead of a receipt — pins the
+    /// endpoint's handling of SchedulerError::MPTStateUnavailable (the pruned-walk mapping)
+    /// versus every other scheduler error (passed through untouched).
+    std::optional<int64_t> m_callAtBlockErrorCode;
 
     void call(protocol::Transaction::Ptr,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) noexcept
@@ -51,22 +61,99 @@ public:
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
         m_historicalCalls.push_back(blockNumber);
+        if (m_callAtBlockErrorCode)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                         static_cast<bcos::scheduler::SchedulerError>(*m_callAtBlockErrorCode),
+                         "callAtBlock stub error"),
+                nullptr);
+            return;
+        }
         callback({}, std::make_shared<bcostars::protocol::TransactionReceiptImpl>());
     }
+};
+
+/// An engine service whose tracker has never received a forkchoice — safe/finalized answer
+/// nullopt, the exact state an EL is in before op-node's first engine_forkchoiceUpdated. Used to
+/// pin the endpoint-level not-found (JSON null) behaviour the fail-closed resolver drives.
+class EmptyEngineService
+{
+public:
+    task::Task<std::vector<std::string>> exchangeCapabilities(
+        std::vector<std::string> remoteCapabilities)
+    {
+        co_return remoteCapabilities;
+    }
+    task::Task<bcos::engine::ForkchoiceUpdatedResult> updateForkchoice(
+        const bcos::engine::ForkchoiceState&, const bcos::engine::PayloadAttributes*, std::uint32_t)
+    {
+        co_return bcos::engine::ForkchoiceUpdatedResult{};
+    }
+    task::Task<bcos::engine::GetPayloadResult> getPayload(
+        const bcos::engine::PayloadID&, std::uint32_t)
+    {
+        co_return std::make_unique<bcos::engine::GetPayloadData>();
+    }
+    task::Task<bcos::engine::PayloadStatus> newPayload(
+        const bcos::engine::NewPayloadRequest&, std::uint32_t)
+    {
+        co_return bcos::engine::PayloadStatus{};
+    }
+    std::optional<protocol::BlockNumber> getSafeBlockNumber() const { return std::nullopt; }
+    std::optional<protocol::BlockNumber> getFinalizedBlockNumber() const { return std::nullopt; }
+    std::optional<protocol::BlockNumber> getHeadBlockNumber() const { return std::nullopt; }
 };
 
 class Web3EthCallBlockTagFixture : public RPCFixture
 {
 public:
+    /// MPT node row plane kept for the NodeService reader (still used by the direct
+    /// historical endpoints such as eth_getBalance). eth_call itself no longer probes it —
+    /// pruned-state detection moved into callAtBlock's MPTStateUnavailable error (round-14
+    /// F5).
+    using StateRowStorage =
+        bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+            bcos::executor_v1::StateValue, bcos::storage2::memory_storage::ORDERED>;
+
     Web3JsonRpcImpl::Ptr buildWeb3Rpc(std::shared_ptr<bcos::scheduler::SchedulerInterface> sched,
-        protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0)
+        protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0,
+        std::int64_t mptPruneWindow = -1, bool withMptReader = true)
     {
-        auto service = std::make_shared<rpc::NodeService>(
-            m_ledger, std::move(sched), txPool, nullptr, nullptr, m_blockFactory, nullptr);
+        return buildWeb3RpcWithEngine(
+            std::move(sched), nullptr, safeDepth, finalizedDepth, mptPruneWindow, withMptReader);
+    }
+
+    Web3JsonRpcImpl::Ptr buildWeb3RpcWithEngine(
+        std::shared_ptr<bcos::scheduler::SchedulerInterface> sched,
+        std::shared_ptr<bcos::engine::AnyEngineService> engine, protocol::BlockNumber safeDepth = 0,
+        protocol::BlockNumber finalizedDepth = 0, std::int64_t mptPruneWindow = -1,
+        bool withMptReader = true)
+    {
+        auto service = std::make_shared<rpc::NodeService>(m_ledger, std::move(sched), txPool,
+            nullptr, nullptr, m_blockFactory, std::move(engine));
         // The default depths are 0 (safe/finalized == latest); a positive depth routes them
         // through callAtBlock (covered in configuredDepthsRouteThroughCallAtBlock).
         service->setSafeBlockDepth(safeDepth);
         service->setFinalizedBlockDepth(finalizedDepth);
+        // withMptReader=false simulates a node with no local MPT node reader; irrelevant to
+        // eth_call itself since the endpoint-side root probe was removed (round-14 F5).
+        if (withMptReader)
+        {
+            service->setMPTNodeReader(storage2::makeMPTNodeReader(m_stateRows));
+        }
+        service->setMPTPruneWindow(mptPruneWindow);
+        // Give every fake block a resolvable committed root (the empty root is a legal
+        // "no accounts" root) so header-root lookups never interfere with the scheduler
+        // routing under test. setStateRoot clears dataHash (BlockHeaderImpl), so recompute the
+        // hash afterwards — eth_getBlockByNumber needs a hashable header.
+        for (auto const& block : m_ledger->ledgerData())
+        {
+            if (block && block->blockHeader())
+            {
+                block->blockHeader()->setStateRoot(bcos::ledger::mpt::emptyRootHash());
+                block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+            }
+        }
         rpc = factory->buildLocalRpc(groupInfo, service);
         auto web3 = rpc->web3JsonRpc();
         BOOST_REQUIRE(web3 != nullptr);
@@ -80,8 +167,9 @@ public:
                 R"({"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":"0x1234567890123456789012345678901234567890","data":"0x"},)") +
             std::string(blockTag) + "]}";
         std::promise<bcos::bytes> promise;
-        web3->onRPCRequest(
-            payload, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+        web3->onRPCRequest(payload, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;
@@ -90,6 +178,26 @@ public:
         return value;
     }
 
+    /// eth_getBlockByNumber(tag, false) → the parsed JSON-RPC response envelope.
+    static Json::Value requestBlockByNumber(
+        Web3JsonRpcImpl::Ptr const& web3, std::string_view blockTag)
+    {
+        auto payload =
+            std::string(R"({"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":[)") +
+            std::string(blockTag) + ",false]}";
+        std::promise<bcos::bytes> promise;
+        web3->onRPCRequest(payload, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
+        auto jsonBytes = promise.get_future().get();
+        Json::Value value;
+        Json::Reader reader;
+        std::string_view json((char*)jsonBytes.data(), jsonBytes.size());
+        reader.parse(json.begin(), json.end(), value);
+        return value;
+    }
+
+    StateRowStorage m_stateRows;
     Rpc::Ptr rpc;
 };
 
@@ -175,6 +283,82 @@ BOOST_AUTO_TEST_CASE(defaultImplementationKeepsLegacySchedulersWorking)
     BOOST_CHECK(resp.isMember("result"));
 }
 
+// Round-14 F5: callAtBlock maps a pruned historical walk (missing root or internal MPT node)
+// to SchedulerError::MPTStateUnavailable, and the endpoint maps that to -32004 — one
+// resolution path, no endpoint-side root probe. The message picks the pruned-window wording
+// from the queried height versus the caller-resolved head.
+BOOST_AUTO_TEST_CASE(historicalCallBeyondPruneWindowAnswers32004)
+{
+    auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    recording->m_callAtBlockErrorCode = bcos::scheduler::SchedulerError::MPTStateUnavailable;
+    auto web3 = buildWeb3Rpc(recording, 0, 0, /*mptPruneWindow=*/10);
+
+    // The head is 19 and the window 10, so block 1 < 19 - 10: inside the pruned region.
+    auto resp = request(web3, R"("0x1")");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
+    BOOST_CHECK(resp["error"]["message"].asString().find("State pruned") != std::string::npos);
+    // Unlike the removed endpoint-side probe, the scheduler DOES see the request — the
+    // -32004 answer comes back out of callAtBlock's own error.
+    BOOST_CHECK_EQUAL(recording->m_latestCalls, 0);
+    BOOST_REQUIRE_EQUAL(recording->m_historicalCalls.size(), 1U);
+    BOOST_CHECK_EQUAL(recording->m_historicalCalls[0], 1);
+
+    // The same error inside the retention window (block 15 > 19 - 10) is a genuinely
+    // missing root, so the message stays the generic miss wording.
+    auto respInWindow = request(web3, R"("0xf")");
+    BOOST_REQUIRE(respInWindow.isMember("error"));
+    BOOST_CHECK_EQUAL(respInWindow["error"]["code"].asInt(), -32004);
+    BOOST_CHECK(respInWindow["error"]["message"].asString().find(
+                    "Block stateRoot not in MPT node storage") != std::string::npos);
+    BOOST_CHECK(
+        respInWindow["error"]["message"].asString().find("State pruned") == std::string::npos);
+}
+
+// Only MPTStateUnavailable is remapped: any other scheduler error (here InvalidStatus, the
+// pre-MPT-activation rejection a scenario-A chain produces) must pass through untouched —
+// the endpoint must NOT dress it up as -32004 "State pruned".
+BOOST_AUTO_TEST_CASE(historicalCallOtherSchedulerErrorsPassThrough)
+{
+    auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    recording->m_callAtBlockErrorCode = bcos::scheduler::SchedulerError::InvalidStatus;
+    auto web3 = buildWeb3Rpc(recording, 0, 0, /*mptPruneWindow=*/10);
+
+    auto resp = request(web3, R"("0x1")");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK(resp["error"]["code"].asInt() != -32004);
+    BOOST_CHECK(resp["error"]["message"].asString().find("State pruned") == std::string::npos);
+    BOOST_REQUIRE_EQUAL(recording->m_historicalCalls.size(), 1U);
+    BOOST_CHECK_EQUAL(recording->m_historicalCalls[0], 1);
+}
+
+// A node without MPT (no local node reader) serves historical eth_call exactly like any
+// other: the request reaches callAtBlock and the scheduler answers for itself.
+BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderStillReachesScheduler)
+{
+    auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    auto web3 = buildWeb3Rpc(recording, 0, 0, -1, /*withMptReader=*/false);
+
+    auto resp = request(web3, R"("0x1")");
+    auto const failureDetail = resp.isMember("error") ? resp["error"]["message"].asString() :
+                                                        std::string{"no result, no error"};
+    BOOST_REQUIRE_MESSAGE(resp.isMember("result"), failureDetail);
+    BOOST_REQUIRE_EQUAL(recording->m_historicalCalls.size(), 1U);
+    BOOST_CHECK_EQUAL(recording->m_historicalCalls[0], 1);
+    BOOST_CHECK_EQUAL(recording->m_latestCalls, 0);
+}
+
+// Same for a legacy scheduler that only implements call(): the interface's default
+// callAtBlock forwarding keeps it working.
+BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderKeepsLegacySchedulerWorking)
+{
+    auto web3 = buildWeb3Rpc(std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory), 0, 0, -1,
+        /*withMptReader=*/false);
+
+    auto resp = request(web3, R"("0x1")");
+    BOOST_CHECK(resp.isMember("result"));
+}
+
 // Direct unit coverage of bcos::rpc::getBlockNumberByTag (round-2 Finding G/Q): default
 // depths keep safe/finalized on latest (isLatest), configured depths subtract and clamp at
 // 0, and an overflowing hex tag is rejected with InvalidParams instead of wrapping to a
@@ -215,8 +399,8 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByTagDirect)
         BOOST_CHECK(!isLatest);
         // 0x8000000000000000 = 2^63 > INT64_MAX: would wrap to a negative height if
         // unchecked.
-        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "0x8000000000000000", 0, 0),
-            bcos::rpc::JsonRpcException);
+        BOOST_CHECK_THROW(
+            getBlockNumberByTag(latest, "0x8000000000000000", 0, 0), bcos::rpc::JsonRpcException);
         // > UINT64_MAX: fromQuantity rejects it too.
         BOOST_CHECK_THROW(getBlockNumberByTag(latest, "0xffffffffffffffffffff", 0, 0),
             bcos::rpc::JsonRpcException);
@@ -227,6 +411,75 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByTagDirect)
         BOOST_CHECK_EQUAL(number, 0);
         BOOST_CHECK(!isLatest);
     }
+}
+
+// Forkchoice overrides (op-node drives safe/finalized via engine_forkchoiceUpdated): the
+// tracker values are preferred over the depth fallback, and on the engine lane an unset value
+// fails closed (JsonRpcException -32000 "header not found") rather than silently reporting the
+// unsafe tip.
+BOOST_AUTO_TEST_CASE(getBlockNumberByTagForkchoiceOverride)
+{
+    using bcos::rpc::getBlockNumberByTag;
+    auto const latest = protocol::BlockNumber{19};
+
+    // Forkchoice value present: preferred over the depth.
+    {
+        auto [number, isLatest] = getBlockNumberByTag(latest, "safe", 0, 0,
+            /*forkchoiceSafe=*/protocol::BlockNumber{12}, std::nullopt, false);
+        BOOST_CHECK_EQUAL(number, 12);
+        BOOST_CHECK(!isLatest);
+        auto [num2, isLatest2] = getBlockNumberByTag(latest, "finalized", 0, 0, std::nullopt,
+            /*forkchoiceFinalized=*/protocol::BlockNumber{7}, false);
+        BOOST_CHECK_EQUAL(num2, 7);
+        BOOST_CHECK(!isLatest2);
+    }
+    // Forkchoice == latest is the isLatest case.
+    {
+        auto [number, isLatest] = getBlockNumberByTag(latest, "safe", 0, 0,
+            /*forkchoiceSafe=*/latest, std::nullopt, false);
+        BOOST_CHECK_EQUAL(number, latest);
+        BOOST_CHECK(isLatest);
+    }
+    // Engine lane, no forkchoice value yet: fail closed with geth's -32000 "header not found",
+    // not the depth fallback.
+    {
+        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "safe", 0, 0, std::nullopt, std::nullopt,
+                              /*failClosedOnMissingForkchoice=*/true),
+            bcos::rpc::JsonRpcException);
+        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "finalized", 0, 0, std::nullopt, std::nullopt,
+                              /*failClosedOnMissingForkchoice=*/true),
+            bcos::rpc::JsonRpcException);
+    }
+    // PBFT lane (failClosed=false), no forkchoice value: depth fallback still applies.
+    {
+        auto [number, isLatest] =
+            getBlockNumberByTag(latest, "safe", 2, 0, std::nullopt, std::nullopt, false);
+        BOOST_CHECK_EQUAL(number, 17);
+        BOOST_CHECK(!isLatest);
+    }
+}
+
+// F4(a): the op-node-facing shape for an unset engine-lane safe/finalized — eth_getBlockByNumber
+// answers JSON null (via its local catch) rather than -32603 or the unsafe tip. op-node's head
+// discovery depends on exactly this null, not a node-internal error.
+BOOST_AUTO_TEST_CASE(engineLaneUnsetSafeAnswersNull)
+{
+    auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    auto emptyEngine = std::make_shared<bcos::engine::AnyEngineService>(EmptyEngineService{});
+    auto web3 = buildWeb3RpcWithEngine(recording, std::move(emptyEngine));
+
+    for (auto tag : {R"("safe")", R"("finalized")"})
+    {
+        auto resp = requestBlockByNumber(web3, tag);
+        BOOST_REQUIRE(!resp.isMember("error"));
+        BOOST_REQUIRE(resp.isMember("result"));
+        BOOST_CHECK(resp["result"].isNull());
+    }
+    // "latest" is still served normally on the engine lane (only safe/finalized fail closed).
+    auto respLatest = requestBlockByNumber(web3, R"("latest")");
+    BOOST_REQUIRE(!respLatest.isMember("error"));
+    BOOST_REQUIRE(respLatest.isMember("result"));
+    BOOST_CHECK(!respLatest["result"].isNull());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

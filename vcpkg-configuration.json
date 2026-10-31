@@ -7,25 +7,25 @@
       "packages": [
         "ethash",
         "fiscobcos",
-        "wedprcrypto",
         "hsm-crypto"
       ]
     }
   ],
   "overlay-ports": [
     "./ports/boost-context",
+    "./ports/s2n",
     "./ports/tarscpp",
-    "./ports/rapidhash",
     "./ports/openssl",
+    "./ports/secp256k1",
     "./ports/evmc",
     "./ports/evmone",
     "./ports/intx",
     "./ports/blst",
+    "./ports/c-kzg-4844",
     "./ports/ittapi",
     "./ports/group-sig",
     "./ports/paillier",
-    "./ports/tikv-client-cpp",
-    "./ports/benchmark",
+    "./ports/libsodium",
     "./ports-data/ethereum-tests"
   ]
 }

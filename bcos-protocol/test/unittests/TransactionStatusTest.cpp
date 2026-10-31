@@ -8,8 +8,9 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
-#include "bcos-protocol/TransactionStatus.h"
 #include <boost/test/unit_test.hpp>
+
+#include "bcos-protocol/TransactionStatus.h"
 
 using namespace bcos::protocol;
 
@@ -70,6 +71,7 @@ constexpr Expectation kExpectations[] = {
     {TransactionStatus::NonceHasMaxValue, "NonceHasMaxValue"},
     {TransactionStatus::FeeCapLessThanBaseFee, "FeeCapLessThanBaseFee"},
     {TransactionStatus::MaxGasLimitExceeded, "MaxGasLimitExceeded"},
+    {TransactionStatus::BcosTxNotAllowed, "BcosTxNotAllowed"},
 };
 }  // namespace
 

@@ -20,9 +20,9 @@
 
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/post.hpp>
 #include <chrono>
 #include <exception>
@@ -470,7 +470,11 @@ void WsSession::asyncSendMessage(const WsMessage& _msg, Options _options, RespCa
 
     if (_msg.raw() != m_rawMessage)
     {
-        if (_respFunc) { _respFunc(BCOS_ERROR_PTR(WsError::MessageEncodeError, "raw mode mismatch"), WsMessage(), nullptr); }
+        if (_respFunc)
+        {
+            _respFunc(BCOS_ERROR_PTR(WsError::MessageEncodeError, "raw mode mismatch"), WsMessage(),
+                nullptr);
+        }
         return;
     }
 

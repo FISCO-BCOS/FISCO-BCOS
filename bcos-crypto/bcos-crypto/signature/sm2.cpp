@@ -22,14 +22,9 @@
 #include <bcos-crypto/signature/sm2.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
 
-#if WITH_SM2_OPTIMIZE
 #include "fastsm2/FastSM2Crypto.h"
 bcos::crypto::FastSM2Crypto c_sm2Crypto;
 bcos::crypto::FastSM2KeyPair c_sm2KeyPair;
-#else
-bcos::crypto::SM2Crypto c_sm2Crypto;
-bcos::crypto::SM2KeyPair c_sm2KeyPair;
-#endif
 
 
 using namespace bcos;

@@ -24,7 +24,7 @@
 #include "../protocol/TransactionImpl.h"
 #include "../protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 using namespace bcostars;
 
@@ -73,7 +73,8 @@ void SchedulerServiceClient::getCode(
         {}
         ~Callback() override {}
 
-        void callback_getCode(const bcostars::Error& ret, const std::vector<tars::Char>& code) override
+        void callback_getCode(
+            const bcostars::Error& ret, const std::vector<tars::Char>& code) override
         {
             bcos::bytes outCode(code.begin(), code.end());
 

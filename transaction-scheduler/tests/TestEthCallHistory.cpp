@@ -33,14 +33,13 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
-#include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Immediate.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-transaction-executor/vm/HostContext.h"
 #include "bcos-transaction-scheduler/HistoricalCallStorage.h"
@@ -50,6 +49,8 @@
 #include <optional>
 #include <string>
 #include <vector>
+
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 
 // Anonymous namespace (unity-build friendly). The storage stack, mock executor /
 // scheduler and the getLedgerConfig stub are the SHARED test mocks
@@ -72,8 +73,9 @@ using HCViewType = HCMultiLayerStorage::ViewType;
 using HCHistoricalBackend = HistoricalStateBackend<HCViewType>;
 using HCHistoricalView = View<HCMutableStorage, void, HCHistoricalBackend>;
 
-/// The Features the shared getLedgerConfig stub hands out — set per test.
+/// The Features / executor_version the shared getLedgerConfig stub hands out — set per test.
 auto& g_hcFeatures = bcos::test::sharedmock::g_stubFeatures;
+auto& g_hcExecutorVersion = bcos::test::sharedmock::g_stubExecutorVersion;
 
 task::Task<std::vector<protocol::Transaction::ConstPtr>> hcEmptyTxsTask()
 {
@@ -167,9 +169,10 @@ public:
         baselineScheduler(multiLayerStorage, mockScheduler, probeExecutor, *blockFactory,
             mockLedger.get(), mockTxPool.get(), *transactionSubmitResultFactory, *hashImpl)
     {
-        ledger::Features features;
-        features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-        g_hcFeatures = features;
+        // The Ethereum lane (executor_version >= 2, scenario B): the full-fidelity MPT is
+        // built from genesis on, so historical calls are servable at every height.
+        g_hcFeatures = ledger::Features{};
+        g_hcExecutorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         mockScheduler.m_plan = &plan;
         probeExecutor.m_mode = bcos::test::sharedmock::SharedMockExecutor::Mode::ReadSlot;
         probeExecutor.m_probeAddress = hcEvmcAddress();
@@ -225,9 +228,11 @@ public:
         blockHeader->setNumber(number);
         blockHeader->setVersion(blockVersion);
         blockHeader->calculateHash(*hashImpl);
-        bytes input;
-        block->appendTransaction(transactionFactory->createTransaction(
-            0, "to", input, std::to_string(number), 100, "chain", "group", 0));
+        // This fixture drives the Ethereum lane (executor_version = 2), where finishExecute
+        // commits the txsRoot over EIP-2718 wire bytes (calculateEthereumTransactionRoot) —
+        // it throws on a FISCO-shaped payload, so the filler transaction is Web3-shaped.
+        block->appendTransaction(
+            bcos::test::sharedmock::makeWeb3FillerTx(static_cast<uint64_t>(number), *hashImpl));
 
         Error::Ptr execError;
         protocol::BlockHeader::Ptr executedHeader;
@@ -288,11 +293,11 @@ public:
     std::vector<protocol::BlockHeader::Ptr> runCanonicalChain()
     {
         // Seed the genesis header (Ledger::buildGenesisBlock's job in production): scenario-B
-        // block 1 resolves its parent root from it, and an empty-alloc L2 genesis commits the
-        // empty trie.
+        // block 1 resolves its parent root from it, and an empty-alloc Ethereum-lane genesis
+        // commits the empty trie.
         writeHeaderToBackend(makeHeader(0, ledger::mpt::emptyRootHash()));
 
-        auto const table = ledger::mpt::accountTableName(hcAddress());
+        auto const table = ledger::account::hexAccountTableName(hcAddress());
         plan[1] = {{table, "balance", "1000"}, {table, "nonce", "5"},
             {table, hcSlotRowKey(), hcRawValue(0x01)}};
         plan[2] = {{table, hcSlotRowKey(), hcRawValue(0x02)}};
@@ -342,7 +347,8 @@ public:
     fakeit::Mock<txpool::TxPoolInterface> mockTxPool;
     HCMultiLayerStorage multiLayerStorage;
     bcos::test::sharedmock::SharedMockExecutor probeExecutor;
-    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    // Resets the shared g_stubFeatures / g_stubExecutorVersion at fixture teardown
+    // (SharedBaselineSchedulerMock.h).
     bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
@@ -364,10 +370,11 @@ BOOST_FIXTURE_TEST_SUITE(TestEthCallHistory, EthCallHistoryFixture)
 BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
 {
     auto headers = runCanonicalChain();
-    auto const table = ledger::mpt::accountTableName(hcAddress());
+    auto const table = ledger::account::hexAccountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend backendAt1(latestView, headers[0]->stateRoot());
+    HCHistoricalBackend backendAt1(
+        latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
 
     // Slot: the block-1 value, not the block-2 overwrite.
     auto slotEntry =
@@ -390,7 +397,8 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
     BOOST_CHECK(existsEntry.has_value());
 
     // A root later in the chain serves the overwrite and the balance bump.
-    HCHistoricalBackend backendAt3(latestView, headers[2]->stateRoot());
+    HCHistoricalBackend backendAt3(
+        latestView, headers[2]->stateRoot(), ledger::account::AddressTableMode::Hex);
     auto slotAt3 =
         task::syncWait(storage2::readOne(backendAt3, StateKeyView{table, hcSlotRowKey()}));
     BOOST_REQUIRE(slotAt3);
@@ -402,7 +410,7 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
     // An account with no leaf at the root reads as absent, all four row kinds.
     Address stranger{};
     stranger.data()[0] = 0xBB;
-    auto strangerTable = ledger::mpt::accountTableName(stranger);
+    auto strangerTable = ledger::account::hexAccountTableName(stranger);
     BOOST_CHECK(
         !task::syncWait(storage2::readOne(backendAt1, StateKeyView{strangerTable, "balance"})));
     BOOST_CHECK(!task::syncWait(
@@ -422,10 +430,11 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
 BOOST_AUTO_TEST_CASE(historicalViewReadYourWrites)
 {
     auto headers = runCanonicalChain();
-    auto const table = ledger::mpt::accountTableName(hcAddress());
+    auto const table = ledger::account::hexAccountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot());
+    HCHistoricalBackend historicalBackend(
+        latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
 
@@ -492,6 +501,44 @@ BOOST_AUTO_TEST_CASE(callAtBlockServesEachHeight)
     BOOST_CHECK(outputOf(latestReceipt) == toBytes(hcEvmcValue(0x02)));
 }
 
+// executor_version=2 dry runs take their EVM revision from the Initializer-provided schedule
+// (stampCallRevision): it receives the called block's header timestamp in seconds and its
+// difficulty, and the executor runs with the revision it returns — on the historical path
+// (block 2) and the latest path (block 3) alike.
+BOOST_AUTO_TEST_CASE(callStampsRevisionFromSchedule)
+{
+    auto headers = runCanonicalChain();
+    headers[1]->setTimestamp(1700000000123);  // block 2, milliseconds
+    headers[1]->setDifficulty(0);
+    headers[2]->setTimestamp(1800000000999);  // block 3 (latest)
+    headers[2]->setDifficulty(7);
+    writeHeaderToBackend(headers[1]);
+    writeHeaderToBackend(headers[2]);
+
+    std::vector<std::pair<int64_t, u256>> scheduleCalls;
+    baselineScheduler.setEvmcRevisionSchedule(
+        [&scheduleCalls](int64_t timestampSeconds, u256 const& difficulty) {
+            scheduleCalls.emplace_back(timestampSeconds, difficulty);
+            return timestampSeconds >= 1800000000 ? EVMC_PRAGUE : EVMC_CANCUN;
+        });
+
+    auto [error2, receipt2] = callAt(2);
+    BOOST_REQUIRE_MESSAGE(!error2, (error2 ? error2->errorMessage() : std::string{}));
+    BOOST_REQUIRE_EQUAL(scheduleCalls.size(), 1U);
+    BOOST_CHECK_EQUAL(scheduleCalls[0].first, 1700000000);
+    BOOST_CHECK_EQUAL(scheduleCalls[0].second, u256(0));
+    BOOST_REQUIRE(probeExecutor.m_lastExecutedRevision);
+    BOOST_CHECK_EQUAL(*probeExecutor.m_lastExecutedRevision, EVMC_CANCUN);
+
+    auto [error3, receipt3] = callAt(3);
+    BOOST_REQUIRE_MESSAGE(!error3, (error3 ? error3->errorMessage() : std::string{}));
+    BOOST_REQUIRE_EQUAL(scheduleCalls.size(), 2U);
+    BOOST_CHECK_EQUAL(scheduleCalls[1].first, 1800000000);
+    BOOST_CHECK_EQUAL(scheduleCalls[1].second, u256(7));
+    BOOST_REQUIRE(probeExecutor.m_lastExecutedRevision);
+    BOOST_CHECK_EQUAL(*probeExecutor.m_lastExecutedRevision, EVMC_PRAGUE);
+}
+
 // The PR #5324 review blocker, pinned green on the real stack: an SSTORE inside a
 // historical call reads back within that call, leaks into no other call and never reaches
 // the committed state.
@@ -513,8 +560,8 @@ BOOST_AUTO_TEST_CASE(writeThenReadInsideHistoricalCall)
 
     // And the live chain state is untouched.
     auto latestView = multiLayerStorage.fork();
-    auto liveValue = task::syncWait(storage2::readOne(
-        latestView, StateKeyView{ledger::mpt::accountTableName(hcAddress()), hcSlotRowKey()}));
+    auto liveValue = task::syncWait(storage2::readOne(latestView,
+        StateKeyView{ledger::account::hexAccountTableName(hcAddress()), hcSlotRowKey()}));
     BOOST_REQUIRE(liveValue);
     BOOST_CHECK(liveValue->get() == hcRawValue(0x02));
 }
@@ -531,23 +578,24 @@ BOOST_AUTO_TEST_CASE(callAtBlockRefusalPaths)
     BOOST_CHECK(beyondError->errorMessage().find("does not exist") != std::string::npos);
     BOOST_CHECK(!beyondReceipt);
 
-    // Scenario A (mid-chain MPT activation) is refused: the trie there is not the complete
-    // state, so a historical call could silently mis-read dormant accounts.
+    // Scenario A (mid-chain MPT activation on the legacy lane) is refused: the trie there
+    // is not the complete state, so a historical call could silently mis-read dormant
+    // accounts.
     ledger::Features scenarioA;
     scenarioA.set(ledger::Features::Flag::feature_mpt_state_root);
     scenarioA.setActivationBlock(ledger::Features::Flag::feature_mpt_state_root, 0);
     g_hcFeatures = scenarioA;
+    g_hcExecutorVersion = 0;
     auto [scenarioAError, scenarioAReceipt] = callAt(1);
     BOOST_REQUIRE(scenarioAError);
-    BOOST_CHECK(
-        scenarioAError->errorMessage().find("feature_l2_ethereum_compat") != std::string::npos);
+    BOOST_CHECK(scenarioAError->errorMessage().find("executor_version >= 2") != std::string::npos);
     BOOST_CHECK(!scenarioAReceipt);
 
-    // Back to scenario B: the empty-root genesis header serves an EMPTY state — the slot
-    // reads as zero, which is Ethereum's answer for "before anything was written".
-    ledger::Features scenarioB;
-    scenarioB.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-    g_hcFeatures = scenarioB;
+    // Back on the Ethereum lane (executor_version = 2, scenario B): the empty-root genesis
+    // header serves an EMPTY state — the slot reads as zero, which is Ethereum's answer for
+    // "before anything was written".
+    g_hcFeatures = ledger::Features{};
+    g_hcExecutorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
     auto [genesisError, genesisReceipt] = callAt(0);
     BOOST_REQUIRE_MESSAGE(
         !genesisError, (genesisError ? genesisError->errorMessage() : std::string{}));
@@ -581,7 +629,8 @@ BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
     task::syncWait(storage2::writeOne(hostcontext::getCacheExecutables(), cachedAddress, poisoned));
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot());
+    HCHistoricalBackend historicalBackend(
+        latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
     Rollbackable<HCHistoricalView> rollbackable(historicalView);
@@ -589,7 +638,7 @@ BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
     // Historical storage: the poisoned cache entry must NOT be served. The address has no
     // leaf at the block-1 root, so its code resolves to nothing — "no executable".
     auto historicalResult = task::syncWait(hostcontext::getExecutable(
-        rollbackable, cachedAddress, EVMC_CANCUN, /*binaryAddress*/ false));
+        rollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
     BOOST_CHECK(!historicalResult);
 
     // Positive control: a latest-state storage IS served from the cache for the same
@@ -598,7 +647,7 @@ BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
     plainView.newMutable();
     Rollbackable<decltype(plainView)> plainRollbackable(plainView);
     auto latestResult = task::syncWait(hostcontext::getExecutable(
-        plainRollbackable, cachedAddress, EVMC_CANCUN, /*binaryAddress*/ false));
+        plainRollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
     BOOST_CHECK_EQUAL(latestResult.get(), poisoned.get());
 
     // Clean up the global cache so no other test sees this entry.

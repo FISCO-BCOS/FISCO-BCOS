@@ -2,7 +2,6 @@
 project(bcos-executor VERSION ${VERSION})
 
 find_package(TBB CONFIG REQUIRED)
-find_package(wedprcrypto REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -15,12 +14,9 @@ file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(executor ${SRCS})
 target_include_directories(executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
-target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table wedprcrypto::fisco-bcos bcos-protocol
+target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table bcos-protocol
         Boost::context evmone::evmone GroupSig Paillier blst)
 
-set_source_files_properties(
-    "src/vm/VMFactory.cpp"
-    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # Exclude CoroutineTransactionExecutive from unity build to allow per-file
 # ASan flags. boost::context coroutines trigger false-positive
 # stack-use-after-scope errors under -fsanitize-address-use-after-scope.
@@ -40,7 +36,6 @@ if(SANITIZE_ADDRESS)
         "src/executive/CoroutineTransactionExecutive.cpp"
         PROPERTIES COMPILE_FLAGS "-fno-sanitize-address-use-after-scope")
 endif()
-set_target_properties(executor PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()

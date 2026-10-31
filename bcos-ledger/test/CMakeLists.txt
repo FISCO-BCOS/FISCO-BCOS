@@ -22,6 +22,10 @@ list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
 set(TEST_BINARY_NAME test-bcos-ledger)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
+# main/main.cpp defines BOOST_TEST_MODULE; merged into the unity batch
+# the boost.test entry macro is disabled, breaking the link with undefined
+# init_unit_test_suite.
+set_source_files_properties("main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/bcos-framework)
 # header-only bcos-storage/KeyPrefixes.h ("/mpt/" node-row keys), same as the ledger target
@@ -30,12 +34,15 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/bcos-
 find_package(Boost REQUIRED unit_test_framework)
 
 target_link_libraries(${TEST_BINARY_NAME} PRIVATE ledger bcos-crypto protocol-tars Boost::unit_test_framework)
+# `storage` (RocksDB + StateKVResolver headers) is linked into the TEST binary only — the
+# ledger library itself deliberately keeps RocksDB out of its exported target (see
+# bcos-ledger/CMakeLists.txt); MPTPrunerTest's parallel-sweep case runs on a real RocksDB.
+target_link_libraries(${TEST_BINARY_NAME} PRIVATE storage)
 target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
 # ethereum/tests vectors (EthereumTrieVectorsTest.cpp), installed by the ethereum-tests
 # data port (ports-data/) under the tests manifest feature
 target_compile_definitions(${TEST_BINARY_NAME} PRIVATE
     ETHEREUM_TESTS_DIR="${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/ethereum-tests")
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 # add_test(NAME test-ledger WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 include(SearchTestCases)
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "${EXCLUDE_SUITES}" "")

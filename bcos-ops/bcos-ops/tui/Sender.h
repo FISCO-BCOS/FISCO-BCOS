@@ -1,0 +1,122 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @brief the send page's worker: one thread owns the signing key and runs every request the
+ *        page submits (load a key, a preset write or read, the HelloWorld deploy, a custom call,
+ *        a raw transaction, feature enabling) through the same code the CLI uses, then publishes
+ *        a one-line outcome into the Model. The view never encodes or sends anything.
+ * @file Sender.h
+ */
+#pragma once
+
+#include "Model.h"
+#include "bcos-ops/RpcCall.h"
+#include "bcos-ops/cmd/TxContext.h"
+#include "bcos-ops/tx/PresetCall.h"
+#include "bcos-ops/tx/Presets.h"
+#include "bcos-ops/tx/TxSender.h"
+#include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <thread>
+#include <vector>
+
+namespace bcos::ops::tui
+{
+struct SendRequest
+{
+    enum class Kind
+    {
+        loadKey,         // keyFile
+        preset,          // preset (+ to override, params, value)
+        helloDeploy,     // the embedded HelloWorld
+        custom,          // to, signature, params, value
+        raw,             // raw: hex or @file
+        enableFeatures,  // features
+        readFeatures,    // refresh Model.send.features
+    };
+    Kind kind = Kind::preset;
+    std::string keyFile;
+    Preset const* preset = nullptr;
+    std::string to;
+    std::string signature;
+    std::vector<std::string> params;
+    std::string value;  // decimal wei; empty = none
+    std::string raw;
+    // EL modes: the raw transaction goes to eth_sendRawTransaction on the web3 listener (an
+    // Ethereum RLP transaction) instead of sendTransaction (a tars-encoded FISCO transaction)
+    bool web3Raw = false;
+    std::vector<std::string> features;
+    bool openTxDetail = true;  // open the produced tx in a detail page (gov votes stay put)
+    // the direct | proposal decision the confirmation layer showed; the worker sends exactly
+    // that (it never re-asks the chain), so the layer cannot lie
+    Routing routing;
+    bool needsKey() const;
+    /// whether a request of _kind for _preset can route through a proposal (its routing must
+    /// be known before the confirmation layer opens)
+    static bool mayRouteThroughProposal(Kind _kind, Preset const* _preset);
+};
+
+/// how long an EL raw send waits for its receipt before reporting it pending
+constexpr int c_senderWeb3WaitMs = 30000;
+
+class Sender
+{
+public:
+    Sender(Connection _connection, Model& _model, std::function<void()> _onUpdate);
+    ~Sender();
+    void start();
+    /// stops before the next RPC (every call checks the flag) and joins
+    void stop();
+    void submit(SendRequest _request);
+    /// runs one request on the calling thread and publishes its outcome; the worker calls it,
+    /// tests call it directly
+    void execute(SendRequest const& _request);
+    bool hasKey() const { return m_hasKey.load(); }
+
+private:
+    void loop();
+    SendOutcome run(SendRequest const& _request);
+    ChainFacts const& facts();
+    TxSender& sender(bool _needsKey);
+    bool proposals();
+    void publish(SendOutcome _outcome);
+
+    Connection m_connection;
+    std::optional<RpcCall> m_web3;  // EL raw sends: the web3 listener, stop-aware
+    Model& m_model;
+    std::function<void()> m_onUpdate;
+    std::thread m_thread;
+    std::mutex m_queueMutex;
+    std::condition_variable m_wake;
+    std::deque<SendRequest> m_queue;
+    std::atomic<bool> m_stop{false};
+    std::atomic<bool> m_hasKey{false};
+    std::optional<ChainFacts> m_facts;
+    std::unique_ptr<TxSender> m_sender;        // the loaded key
+    std::unique_ptr<TxSender> m_readerSender;  // a random key for reads
+    std::optional<bool> m_proposals;
+    uint64_t m_seq = 0;
+};
+
+/// the line the page shows for a preset result: `tx <hash> → block N ok` / the code name /
+/// `proposal <id> <status>`
+std::string sendOutcomeLine(PresetResult const& _result);
+}  // namespace bcos::ops::tui

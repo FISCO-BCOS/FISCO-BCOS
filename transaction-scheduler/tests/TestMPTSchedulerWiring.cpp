@@ -39,7 +39,6 @@
 #include "bcos-ledger/mpt/Errors.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-ledger/mpt/StorageValueCodec.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-storage/KeyPrefixes.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
@@ -47,7 +46,7 @@
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
-#include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Immediate.h"
 #include "bcos-transaction-scheduler/MPTNodeStorage.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
@@ -55,6 +54,8 @@
 #include <optional>
 #include <string>
 #include <vector>
+
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 
 // Everything in an anonymous namespace (unity-build friendly). The storage stack and the
 // mock executor / scheduler / getLedgerConfig stub are the SHARED test mocks
@@ -77,7 +78,7 @@ using MWCheckpointBackend = bcos::test::sharedmock::SharedCheckpointBackend;
 using MWMultiLayerStorage = bcos::test::sharedmock::SharedMultiLayerStorage;
 
 /// Read one trie-node row from the backend under its ordinary StateKey.
-std::optional<bytes> backendNode(MWBackendStorage& backend, h256 const& hash)
+std::optional<bcos::bytes> backendNode(MWBackendStorage& backend, h256 const& hash)
 {
     auto entry = task::syncWait(storage2::readOne(backend, storage2::mptNodeStateKey(hash)));
     if (!entry)
@@ -85,7 +86,7 @@ std::optional<bytes> backendNode(MWBackendStorage& backend, h256 const& hash)
         return std::nullopt;
     }
     auto raw = entry->get();
-    return bytes(raw.begin(), raw.end());
+    return bcos::bytes(raw.begin(), raw.end());
 }
 
 /// Count the backend rows living in the "/mpt/" table (committed trie nodes).
@@ -112,8 +113,10 @@ using MWRowOp = bcos::test::sharedmock::SharedMockScheduler::RowOp;
 
 /// Scheduler impl that replays a per-block write plan through the storage argument
 /// BaselineScheduler hands it — the production write path (view mutable layer).
-/// The Features the shared getLedgerConfig stub hands to every execute — set per test.
+/// The Features / executor_version the shared getLedgerConfig stub hands to every execute —
+/// set per test.
 auto& g_mwFeatures = bcos::test::sharedmock::g_stubFeatures;
+auto& g_mwExecutorVersion = bcos::test::sharedmock::g_stubExecutorVersion;
 
 task::Task<std::vector<protocol::Transaction::ConstPtr>> emptyTxsTaskMW()
 {
@@ -187,6 +190,7 @@ public:
             mockLedger.get(), mockTxPool.get(), *transactionSubmitResultFactory, *hashImpl)
     {
         g_mwFeatures = ledger::Features{};
+        g_mwExecutorVersion = 0;
         mockScheduler.m_plan = &plan;
 
         observer = std::make_shared<MWProbeObserver>();
@@ -243,12 +247,14 @@ public:
         features.setActivationBlock(
             ledger::Features::Flag::feature_mpt_state_root, activationBlock);
         g_mwFeatures = features;
+        g_mwExecutorVersion = 0;  // scenario A lives on the legacy lane
     }
     static void useScenarioB()
     {
-        ledger::Features features;
-        features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-        g_mwFeatures = features;
+        // Scenario B is the Ethereum lane (executor_version >= 2): MPT from genesis on,
+        // no feature flag involved.
+        g_mwFeatures = ledger::Features{};
+        g_mwExecutorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
     }
 
     std::tuple<Error::Ptr, protocol::BlockHeader::Ptr> executeBlockRaw(protocol::BlockNumber number)
@@ -258,9 +264,20 @@ public:
         blockHeader->setNumber(number);
         blockHeader->setVersion(blockVersion);
         blockHeader->calculateHash(*hashImpl);
-        bytes input;
-        block->appendTransaction(transactionFactory->createTransaction(
-            0, "to", input, std::to_string(number), 100, "chain", "group", 0));
+        // Ethereum-lane blocks must carry an EIP-2718 transaction: finishExecute commits the
+        // txsRoot over the wire bytes (calculateEthereumTransactionRoot), which throws on a
+        // FISCO-shaped payload. The legacy lane keeps the plain filler transaction.
+        if (g_mwExecutorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+        {
+            block->appendTransaction(
+                bcos::test::sharedmock::makeWeb3FillerTx(static_cast<uint64_t>(number), *hashImpl));
+        }
+        else
+        {
+            bcos::bytes input;
+            block->appendTransaction(transactionFactory->createTransaction(
+                0, "to", input, std::to_string(number), 100, "chain", "group", 0));
+        }
 
         Error::Ptr execError;
         protocol::BlockHeader::Ptr executedHeader;
@@ -306,7 +323,7 @@ public:
 
     void writeHeaderToBackend(protocol::BlockHeader::Ptr const& header)
     {
-        bytes headerBuffer;
+        bcos::bytes headerBuffer;
         header->encode(headerBuffer);
         storage::Entry entry;
         entry.set(std::move(headerBuffer));
@@ -351,27 +368,28 @@ public:
     static h256 mptOracle(std::map<Address, bcos::ledger::mpt::Account> const& accounts)
     {
         namespace mpt = bcos::ledger::mpt;
-        std::map<h256, std::optional<bytes>> accountChanges;
+        std::map<h256, std::optional<bcos::bytes>> accountChanges;
         for (auto const& [address, account] : accounts)
         {
             accountChanges[mpt::accountKeyHash(address)] = account.encode();
         }
-        memory_storage::MemoryStorage<h256, bytes, memory_storage::ORDERED> scratch;
+        memory_storage::MemoryStorage<h256, bcos::bytes, memory_storage::ORDERED> scratch;
         auto merged =
             task::syncWait(mpt::commitTrie(scratch, mpt::emptyRootHash(), accountChanges));
         return merged.root;
     }
 
-    static h256 storageTrieOracle(std::map<h256, bytes> const& slots)  // slot -> 32-byte raw value
+    static h256 storageTrieOracle(std::map<h256, bcos::bytes> const& slots)  // slot -> 32-byte raw
+                                                                             // value
     {
         namespace mpt = bcos::ledger::mpt;
-        std::map<h256, std::optional<bytes>> changes;
+        std::map<h256, std::optional<bcos::bytes>> changes;
         for (auto const& [slot, rawValue] : slots)
         {
             changes[mpt::slotKeyHash(slot)] =
                 mpt::encodeStorageValue(bytesConstRef(rawValue.data(), rawValue.size()));
         }
-        memory_storage::MemoryStorage<h256, bytes, memory_storage::ORDERED> scratch;
+        memory_storage::MemoryStorage<h256, bcos::bytes, memory_storage::ORDERED> scratch;
         auto merged = task::syncWait(mpt::commitTrie(scratch, mpt::emptyRootHash(), changes));
         return merged.root;
     }
@@ -403,7 +421,8 @@ public:
     MWMultiLayerStorage multiLayerStorage;
     bcos::test::sharedmock::SharedMockExecutor mockExecutor;
     std::shared_ptr<MWProbeObserver> observer;
-    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    // Resets the shared g_stubFeatures / g_stubExecutorVersion at fixture teardown
+    // (SharedBaselineSchedulerMock.h).
     bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
@@ -422,8 +441,8 @@ BOOST_AUTO_TEST_CASE(scenarioATransition)
 
     auto const addressA = makeAddress(0xAA);
     auto const addressB = makeAddress(0xBB);
-    auto const tableA = mpt::accountTableName(addressA);
-    auto const tableB = mpt::accountTableName(addressB);
+    auto const tableA = bcos::ledger::account::hexAccountTableName(addressA);
+    auto const tableB = bcos::ledger::account::hexAccountTableName(addressB);
 
     // Block 500 (activation block, XOR): A gets balance + nonce.
     plan[500] = {{tableA, "balance", "1000000"}, {tableA, "nonce", "1"}};
@@ -463,7 +482,7 @@ BOOST_AUTO_TEST_CASE(scenarioATransition)
     accountA.balance = 42;
     accountA.nonce = 1;  // from the flat rows block 500 wrote — first-touch metadata read
     accountA.storageRoot =
-        storageTrieOracle({{slot, bytes(slotValueRaw.begin(), slotValueRaw.end())}});
+        storageTrieOracle({{slot, bcos::bytes(slotValueRaw.begin(), slotValueRaw.end())}});
     BOOST_CHECK_EQUAL(
         header502->stateRoot(), mptOracle({{addressA, accountA}, {addressB, accountB}}));
     commitOneBlock(header502);
@@ -481,9 +500,9 @@ BOOST_AUTO_TEST_CASE(pipelineVisibility)
 
     auto const addressA = makeAddress(0xA1);
     auto const addressB = makeAddress(0xB2);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "5"}};
-    plan[501] = {{mpt::accountTableName(addressA), "balance", "11"}};
-    plan[502] = {{mpt::accountTableName(addressB), "balance", "13"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "5"}};
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "11"}};
+    plan[502] = {{bcos::ledger::account::hexAccountTableName(addressB), "balance", "13"}};
 
     auto header500 = executeOneBlock(500);  // XOR
     commitOneBlock(header500);
@@ -520,8 +539,8 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
 
     auto const addressA = makeAddress(0xA7);
     auto const addressB = makeAddress(0xB8);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "5"}};
-    plan[501] = {{mpt::accountTableName(addressA), "balance", "11"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "5"}};
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "11"}};
 
     auto header500 = executeOneBlock(500);  // XOR
     commitOneBlock(header500);
@@ -543,7 +562,8 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
         storage::Entry entry;
         entry.set("13");
         task::syncWait(storage2::writeOne(mutableStorage(view),
-            StateKey{mpt::accountTableName(addressB), "balance"}, std::move(entry)));
+            StateKey{bcos::ledger::account::hexAccountTableName(addressB), "balance"},
+            std::move(entry)));
     };
     writeDelta(freshView);
     writeDelta(staleView);
@@ -553,8 +573,8 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
     // GREEN: the view whose immutable chain carries 501's node rows resolves the parent trie.
     {
         ViewNodeStorage<MWMultiLayerStorage::ViewType> nodeStorage(freshView);
-        auto delta =
-            task::syncWait(mpt::buildAndCollect(nodeStorage, parentRoot, freshView, false));
+        auto delta = task::syncWait(mpt::buildAndCollect(
+            nodeStorage, parentRoot, freshView, false, ledger::account::AddressTableMode::Hex));
         mpt::Account accountA;
         accountA.balance = 11;
         mpt::Account accountB;
@@ -566,8 +586,8 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
     // walk must fail with the missing-node invariant, never silently rebuild from empty.
     {
         ViewNodeStorage<MWMultiLayerStorage::ViewType> nodeStorage(staleView);
-        BOOST_CHECK_THROW(
-            task::syncWait(mpt::buildAndCollect(nodeStorage, parentRoot, staleView, false)),
+        BOOST_CHECK_THROW(task::syncWait(mpt::buildAndCollect(nodeStorage, parentRoot, staleView,
+                              false, ledger::account::AddressTableMode::Hex)),
             mpt::MPTInvariantViolation);
     }
 }
@@ -582,8 +602,8 @@ BOOST_AUTO_TEST_CASE(commitAtomicityAndObserverTiming)
     useScenarioA(500);
 
     auto const addressA = makeAddress(0xC3);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "9"}};
-    plan[501] = {{mpt::accountTableName(addressA), "nonce", "2"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "9"}};
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(addressA), "nonce", "2"}};
 
     auto header500 = executeOneBlock(500);  // XOR
     commitOneBlock(header500);
@@ -616,11 +636,12 @@ BOOST_AUTO_TEST_CASE(commitAtomicityAndObserverTiming)
     }
 }
 
-// Scenario B (L2, restart case): every block is MPT-rooted; the first executed block after a
-// restart resolves its parent root from the parent's SIGNED HEADER in the backend — what
-// commit left behind. Part 1: a parent header carrying emptyRootHash() chains cleanly. Part 2
-// (separate case below): a parent header carrying a root whose nodes do not exist must fail
-// the execute loudly — proving the header value is actually consumed, not silently defaulted.
+// Scenario B (Ethereum lane, restart case): every block is MPT-rooted; the first executed
+// block after a restart resolves its parent root from the parent's SIGNED HEADER in the
+// backend — what commit left behind. Part 1: a parent header carrying emptyRootHash() chains
+// cleanly. Part 2 (separate case below): a parent header carrying a root whose nodes do not
+// exist must fail the execute loudly — proving the header value is actually consumed, not
+// silently defaulted.
 BOOST_AUTO_TEST_CASE(scenarioBParentFromLedgerHeader)
 {
     namespace mpt = bcos::ledger::mpt;
@@ -629,7 +650,7 @@ BOOST_AUTO_TEST_CASE(scenarioBParentFromLedgerHeader)
     writeHeaderToBackend(makeExecutedShapeHeader(499, mpt::emptyRootHash()));
 
     auto const addressA = makeAddress(0xD4);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "21"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "21"}};
 
     auto header500 = executeOneBlock(500);
     mpt::Account accountA;
@@ -648,7 +669,7 @@ BOOST_AUTO_TEST_CASE(scenarioBBogusParentRootFailsLoud)
     writeHeaderToBackend(makeExecutedShapeHeader(499, bogusRoot));
 
     auto const addressA = makeAddress(0xE5);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "1"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "1"}};
 
     auto [error, header] = executeBlockRaw(500);
     BOOST_REQUIRE(error);
@@ -664,7 +685,7 @@ BOOST_AUTO_TEST_CASE(mptParentHeaderMissingFailsLoud)
     useScenarioB();
 
     auto const addressA = makeAddress(0xE8);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "2"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "2"}};
 
     auto [error, header] = executeBlockRaw(500);
     BOOST_REQUIRE(error);
@@ -716,8 +737,8 @@ BOOST_AUTO_TEST_CASE(viewNodeStorageBatchReadWrite)
     h256 absent;
     absent[0] = 0xC3;
 
-    std::vector<std::pair<h256, bytes>> nodes{
-        {hashA, bytes{0x01, 0x02}}, {hashB, bytes{0x03, 0x04, 0x05}}};
+    std::vector<std::pair<h256, bcos::bytes>> nodes{
+        {hashA, bcos::bytes{0x01, 0x02}}, {hashB, bcos::bytes{0x03, 0x04, 0x05}}};
     task::syncWait(nodeStorage.writeSome(nodes));
 
     // Written through the batch path, readable as ordinary "/mpt/" rows of the mutable layer.
@@ -752,8 +773,8 @@ BOOST_AUTO_TEST_CASE(executeTimeHeaderRowOnlyForMPTBlocks)
     useScenarioA(500);
 
     auto const address = makeAddress(0xD4);
-    plan[500] = {{mpt::accountTableName(address), "balance", "3"}};
-    plan[501] = {{mpt::accountTableName(address), "balance", "4"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(address), "balance", "3"}};
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(address), "balance", "4"}};
 
     // Block 500 is the activation block itself: XOR root, so no header row.
     auto header500 = executeOneBlock(500);
@@ -784,7 +805,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockPublishesNoExecuteTimeHeader)
     useScenarioB();
 
     auto const address = makeAddress(0xE2);
-    plan[0] = {{mpt::accountTableName(address), "balance", "1"}};
+    plan[0] = {{bcos::ledger::account::hexAccountTableName(address), "balance", "1"}};
 
     auto header0 = executeOneBlock(0);
     // The block really went down the MPT arm (an XOR root here would make the test vacuous).
@@ -797,8 +818,9 @@ BOOST_AUTO_TEST_CASE(genesisBlockPublishesNoExecuteTimeHeader)
 }
 
 // Guard: a stray row under the reserved "/mpt/" table in the block's TOP delta layer must be
-// skipped by the build's account scan — parseAccountTable only accepts "/apps/<40-hex>"
-// tables — never classified as an account, and must not perturb the state root.
+// skipped by the build's account scan — parseAccountTable only accepts the account-table
+// shapes ("/apps/<40-hex>", "/s/<20 raw bytes>") — never classified as an account, and must
+// not perturb the state root.
 BOOST_AUTO_TEST_CASE(strayMptRowIsNotAnAccount)
 {
     namespace mpt = bcos::ledger::mpt;
@@ -806,12 +828,12 @@ BOOST_AUTO_TEST_CASE(strayMptRowIsNotAnAccount)
 
     useScenarioA(500);
     auto const addressA = makeAddress(0xC9);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "9"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "9"}};
 
     h256 strayHash;
     strayHash.data()[0] = 0x5A;
     std::string const strayKey(reinterpret_cast<char const*>(strayHash.data()), h256::SIZE);
-    plan[501] = {{mpt::accountTableName(addressA), "balance", "10"},
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "10"},
         {std::string(storage2::kMPTTable), strayKey, "not-a-real-node"}};
 
     auto header500 = executeOneBlock(500);  // XOR
@@ -834,9 +856,9 @@ BOOST_AUTO_TEST_CASE(buildFailureNoXorFallback)
     useScenarioA(500);
 
     auto const addressA = makeAddress(0xF6);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "8"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "8"}};
     // Lone deletion of a core-field row: not a tombstone (nonce/codeHash not deleted).
-    plan[501] = {{mpt::accountTableName(addressA), "balance", std::nullopt}};
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", std::nullopt}};
 
     auto header500 = executeOneBlock(500);  // XOR
     commitOneBlock(header500);

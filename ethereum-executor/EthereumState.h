@@ -9,15 +9,22 @@
 ///   * the initial state is read straight from BCOS storage via
 ///     ledger::account::EVMAccount + storage2 (synchronous, fail-safe — the
 ///     evmc::Host interface is noexcept, so a failed read is reported as
-///     "absent / empty" like the old StorageStateView adapter did);
+///     "absent / empty" like the old StorageStateView adapter did). An
+///     OPTIONAL observer hook (setStorageErrorHandler) reports each swallowed
+///     read failure before the zero value is returned: default-empty keeps the
+///     legacy behaviour byte-identical (eth_call, tests), while the consensus
+///     block lanes inject a recorder and fail loud at the block boundary —
+///     OP via OpStorageErrorGuard (OpStorageError), the L1 EL builder/verifier
+///     via EthStorageErrorGuard (EthStorageError), both mapped away from
+///     INVALID and from any commit;
 ///   * the final write-back is applyToStorage(), which writes the modified
 ///     accounts directly to BCOS storage via EVMAccount/storage2 — there is no
 ///     evmone::state::StateDiff struct and no separate applyStateDiff function.
 ///
 /// Types are renamed (EthAccount / EthStorageValue / EthereumState) so this
-/// port never collides with the unchanged bcos-evm library's
-/// evmone::state::{Account, StorageValue, State} (both may be linked into the
-/// same binary — bcos-evm keeps serving the opstack layer and its tests).
+/// port never collided with the retired bcos-evm library's
+/// evmone::state::{Account, StorageValue, State} while both were linked into
+/// the same binary.
 ///
 /// Known limitation — code hash algorithm:
 /// applyToStorage() keys the SYS_CODE_BINARY table by the code hash, and the
@@ -31,12 +38,15 @@
 #pragma once
 
 #include "EVMSupport.h"
+#include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage2/RollbackableStorage.h"
 #include "bcos-task/TBBWait.h"
 #include <evmc/evmc.h>
 #include <cassert>
 #include <evmc/evmc.hpp>
+#include <exception>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <string>
@@ -168,6 +178,24 @@ task::Task<void> clearAccountStorage(
         co_await storage2::removeSome(storage, keysToRemove);
 }
 
+/// Construct the account accessor for the Ethereum state view. The LOGICAL table name is
+/// always "/apps/<40 lowercase hex>": in the Ethereum execution world the FISCO system
+/// addresses (c_systemTxsAddress) are ordinary accounts, so EVMAccount's mode-taking
+/// constructors — which route them to "/sys/" — must NOT be used here (this is the
+/// semantic the old treatSystemAsUser=true flag carried). The physical name is derived by
+/// bcos::ledger::account::ethLaneAccountTableName (EVMAccount.h): the lane rule above,
+/// re-encoded to this node's layout ("/s/<20 raw bytes>" in Binary mode), so Hex and
+/// Binary nodes running this lane commit identical roots.
+template <class Storage>
+bcos::ledger::account::EVMAccount<Storage> ethViewAccount(Storage& storage, const address& addr)
+{
+    // bytesConstRef right-aligns by default; a 20-byte address fills it exactly, so the
+    // alignment has no effect.
+    return {storage, bcos::ledger::account::FromTableName{},
+        bcos::ledger::account::ethLaneAccountTableName(
+            bcos::Address{bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)}})};
+}
+
 /// Ported evmone::state::State, reading/writing BCOS storage directly.
 ///
 /// @tparam Storage the storage backend (raw scheduler storage or a
@@ -232,6 +260,28 @@ class EthereumState
 
     Storage& m_storage;
 
+    /// Optional storage-failure observer (the OP fail-loud channel). Empty by
+    /// default — the three synchronous read wrappers below then keep the legacy
+    /// fail-safe behaviour exactly (a failed read is "absent / empty"). When
+    /// set, every swallowed read exception is handed to the observer BEFORE the
+    /// default value is returned, so an OP-side block-boundary check can fail
+    /// loud instead of executing on silent zero reads. The observer MUST NOT
+    /// throw (it runs inside a noexcept read wrapper); a throwing observer is
+    /// swallowed too, preserving the noexcept contract.
+    std::function<void(std::exception_ptr)> m_onStorageError;
+
+    void reportStorageError(std::exception_ptr error) const noexcept
+    {
+        if (!m_onStorageError)
+            return;
+        try
+        {
+            m_onStorageError(error);
+        }
+        catch (...)
+        {}
+    }
+
     // ---- Direct BCOS storage reads (synchronous, fail-safe) ----
 
     task::Task<std::optional<eth_state_detail::ReadAccount>> readAccountImpl(address addr) const
@@ -239,7 +289,7 @@ class EthereumState
         using namespace bcos::ledger::account;
         auto& storage = m_storage;
 
-        EVMAccount<Storage> evmAccount(storage, addr, false);
+        auto evmAccount = ethViewAccount(storage, addr);
 
         // Do NOT gate on SYS_TABLES existence alone: the PoW reward path writes
         // the flat BALANCE row but (historically) never registers the account
@@ -322,6 +372,17 @@ class EthereumState
             if (view.m_table != tableName)
                 break;  // Left this account's table.
 
+            // The multi-layer range iterator also yields logically-deleted
+            // (tombstone) rows. A slot cleared earlier in the same block (e.g.
+            // by a selfdestruct cleanup) must NOT count as initial storage —
+            // otherwise a later CREATE at this address is misjudged as an
+            // EIP-7610 collision and the re-creation fails (observed on
+            // Sepolia block 4913057, where a metamorphic contract is
+            // selfdestructed and re-created within one block).
+            if (std::holds_alternative<storage2::DELETED_TYPE>(v) ||
+                std::holds_alternative<storage2::NOT_EXISTS_TYPE>(v))
+                continue;
+
             auto key = view.m_key;
             if (key != ACCOUNT_TABLE_FIELDS::NONCE && key != ACCOUNT_TABLE_FIELDS::BALANCE &&
                 key != ACCOUNT_TABLE_FIELDS::CODE_HASH && key != ACCOUNT_TABLE_FIELDS::CODE &&
@@ -343,6 +404,7 @@ class EthereumState
         }
         catch (...)
         {
+            reportStorageError(std::current_exception());
             return std::nullopt;
         }
     }
@@ -351,7 +413,7 @@ class EthereumState
     {
         using namespace bcos::ledger::account;
         auto& storage = m_storage;
-        EVMAccount<Storage> evmAccount(storage, addr, false);
+        auto evmAccount = ethViewAccount(storage, addr);
 
         if (!co_await evmAccount.exists())
             co_return {};
@@ -372,6 +434,7 @@ class EthereumState
         }
         catch (...)
         {
+            reportStorageError(std::current_exception());
             return {};
         }
     }
@@ -380,7 +443,7 @@ class EthereumState
     {
         using namespace bcos::ledger::account;
         auto& storage = m_storage;
-        EVMAccount<Storage> evmAccount(storage, addr, false);
+        auto evmAccount = ethViewAccount(storage, addr);
 
         // SLOAD on a non-existent account returns 0 per EVM spec.
         // EVMAccount::storage() already returns empty bytes32 for missing
@@ -396,12 +459,24 @@ class EthereumState
         }
         catch (...)
         {
+            reportStorageError(std::current_exception());
             return {};
         }
     }
 
 public:
     explicit EthereumState(Storage& storage) noexcept : m_storage(storage) {}
+
+    /// Install the optional storage-failure observer (see m_onStorageError).
+    /// Default-constructed EthereumState has none: legacy fail-safe behaviour
+    /// is unchanged. The consensus block-execution paths inject a first-error
+    /// recorder here and check it at the block boundary
+    /// (opstack-executor/OpStorageErrorGuard.h for OP,
+    /// ethereum-executor/EthStorageErrorGuard.h for the L1 lanes).
+    void setStorageErrorHandler(std::function<void(std::exception_ptr)> handler) noexcept
+    {
+        m_onStorageError = std::move(handler);
+    }
 
     /// Inserts the new account at the address.
     /// There must not exist any account under this address before.
@@ -668,7 +743,7 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
         if (acc.erase_if_empty && rev >= EVMC_SPURIOUS_DRAGON && acc.is_empty())
             continue;
 
-        EVMAccount<Storage> bcosAcc(m_storage, addr, false);
+        auto bcosAcc = ethViewAccount(m_storage, addr);
         if (!co_await bcosAcc.exists())
             co_await bcosAcc.create();
         co_await bcosAcc.setNonce(std::to_string(acc.nonce));
@@ -712,7 +787,7 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
         {
             // Genuine deletion: clear account state (including storage, so that
             // a later CREATE/CREATE2 at this address is not an EIP-7610 collision).
-            EVMAccount<Storage> bcosAcc(m_storage, addr, false);
+            auto bcosAcc = ethViewAccount(m_storage, addr);
             if (co_await bcosAcc.exists())
             {
                 co_await bcosAcc.setBalance(0);
@@ -725,7 +800,7 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
                  !acc.just_created)
         {
             // EIP-161: empty touched account is deleted.
-            EVMAccount<Storage> bcosAcc(m_storage, addr, false);
+            auto bcosAcc = ethViewAccount(m_storage, addr);
             if (co_await bcosAcc.exists())
             {
                 co_await bcosAcc.setBalance(0);

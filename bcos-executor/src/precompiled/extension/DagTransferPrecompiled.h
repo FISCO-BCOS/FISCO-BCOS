@@ -22,7 +22,7 @@
 #include "../../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-framework/storage/Table.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace bcos
 {
@@ -33,7 +33,7 @@ class DagTransferPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<DagTransferPrecompiled>;
     DagTransferPrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~DagTransferPrecompiled(){};
+    virtual ~DagTransferPrecompiled() {};
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,

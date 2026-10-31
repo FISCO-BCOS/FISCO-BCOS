@@ -29,17 +29,16 @@
  *        on it.
  */
 #include "transaction-scheduler/tests/FullChainFixture.h"
-// Shared test-asset helper (see bcos-ledger genesis tests): the SystemConfig
-// predeploy alloc must carry the feature_flags Entry slot Ledger verifies.
-#include "../../../../bcos-ledger/test/unittests/ledger/GenesisFeatureFlagsHelper.h"
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>
+#include <boost/test/unit_test.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -49,11 +48,12 @@ namespace bcos
 // Linkage-only definition. The BaselineScheduler instantiation inside FullChainFixture
 // references bcos::unhexAddress (declared in bcos-executor/src/Common.h, pulled in by
 // BaselineScheduler.h) from its getABI/getCode members — which this test never calls.
-// The producing library (`executor`) is deliberately NOT linked into test-bcos-rpc:
-// it PUBLIC-links wedprcrypto's Rust static libraries, whose bundled runtime breaks
-// libc++ exception catching binary-wide (see bcos-rpc/test/CMakeLists.txt). This is a
-// verbatim copy of bcos-executor/src/Common.cpp's definition; the linker guarantees it
-// is the only one in this binary.
+// The producing library (`executor`) is deliberately NOT linked into test-bcos-rpc
+// (historically because it PUBLIC-linked wedprcrypto's Rust static libraries, whose
+// bundled runtime broke libc++ exception catching binary-wide; wedprcrypto is gone now,
+// see bcos-rpc/test/CMakeLists.txt). This is a verbatim copy of
+// bcos-executor/src/Common.cpp's definition; the linker guarantees it is the only one in
+// this binary.
 evmc_address unhexAddress(std::string_view view)
 {
     if (view.empty())
@@ -264,8 +264,15 @@ BOOST_AUTO_TEST_CASE(ScenarioB_AllAllocAccountsProve)
 {
     FullChainFixture fixture{"epi_scenario_b"};
     auto genesis = FullChainFixture::baseGenesis();
-    genesis.m_features.push_back(
-        ledger::FeatureSet{ledger::Features::Flag::feature_l2_ethereum_compat, 1});
+    // Scenario B IS the Ethereum lane now: executor_version >= 2 (not a feature flag).
+    // Ledger::buildGenesisBlock only persists the executor_version SYS_CONFIG row for
+    // compatibilityVersion >= 3.15 (Ledger.cpp) — and the endpoint resolves the lane from
+    // exactly that row (fetchExecutorVersionAt) — so the fixture's 3.6 default must move up.
+    // >= 3.9 also seeds SYS_CONFIG/web3_chain_id from m_web3ChainID, which must parse.
+    genesis.m_compatibilityVersion =
+        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_15_0_VERSION);
+    genesis.m_web3ChainID = genesis.m_chainID;
+    genesis.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
     genesis.m_allocs.push_back(ledger::Alloc{.address = std::string(c_epiContractAddress),
         .balance = u256(500),
         .nonce = "1",
@@ -277,10 +284,6 @@ BOOST_AUTO_TEST_CASE(ScenarioB_AllAllocAccountsProve)
         .nonce = "0",
         .code = "",
         .storage = {}});
-    // The contract sits at the SystemConfig predeploy address: Ledger verifies
-    // the feature_flags Entry slot is IN the alloc (P0: the state root commits
-    // it), so the fixture must carry it like real build-allocs.py output.
-    bcos::test::appendGenesisFeatureFlagsSlot(genesis);
     fixture.buildGenesis(genesis);
 
     Address eoa;

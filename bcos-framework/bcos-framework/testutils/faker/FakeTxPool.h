@@ -23,20 +23,28 @@
 #include "../../txpool/TxPoolInterface.h"
 #include <bcos-utilities/IOServicePool.h>
 
-using namespace bcos;
+namespace bcos::test
+{
+// Using-directives live INSIDE bcos::test on purpose: at global scope they leak into
+// every consumer TU (and every unity-build batch-mate), making names shared by
+// bcos::txpool / bcos::protocol / bcos::crypto ambiguous for unrelated files. From
+// here they still reach all consumers - test code lives in bcos::test, and
+// [namespace.udir] nominates the names into the enclosing bcos - while batch-mates
+// outside bcos::test no longer see them.
 using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 using namespace bcos::consensus;
 
-
-namespace bcos::test
-{
 class FakeTxPool : public TxPoolInterface
 {
 public:
     using Ptr = std::shared_ptr<FakeTxPool>;
-    FakeTxPool() { m_worker = std::make_shared<IOServicePool>(1, "txpool"); m_strand = std::make_unique<Strand>(m_worker); }
+    FakeTxPool()
+    {
+        m_worker = std::make_shared<IOServicePool>(1, "txpool");
+        m_strand = std::make_unique<Strand>(m_worker);
+    }
     ~FakeTxPool() override {}
 
     void start() override {}
@@ -68,10 +76,12 @@ public:
     {}
 
     // notify related interfaces: useless for the PBFT module
-    void notifyConsensusNodeList(ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
+    void notifyConsensusNodeList(
+        bcos::consensus::ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
     {}
     // notify related interfaces: useless for the PBFT module
-    void notifyObserverNodeList(ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
+    void notifyObserverNodeList(
+        bcos::consensus::ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
     {}
 
     void notifyConnectedNodes(

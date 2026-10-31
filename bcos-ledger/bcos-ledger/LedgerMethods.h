@@ -1,3 +1,23 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file LedgerMethods.h
+ * @brief Storage-level ledger primitives: table/row access, system-config reads and the
+ *        genesis/schedule metadata helpers.
+ */
+
 #pragma once
 
 #include "ConsensusNode.h"
@@ -13,25 +33,27 @@
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-rlp-protocol/BlockHeaderHash.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
-#include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Immediate.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <concepts>
 #include <optional>
 #include <type_traits>
 
-#define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
+#define LEDGER2_LOG(LEVEL) BCOS_MODULE_LOG(LEDGER, LEVEL) << LOG_BADGE("LEDGER2")
 namespace bcos::ledger
 {
 
@@ -39,8 +61,8 @@ struct InvalidConsensusType : public bcos::Exception
 {
 };
 
-inline task::AwaitableValue<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/,
-    auto& ledger, GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
+inline task::Immediate<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/, auto& ledger,
+    GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
 {
     return {ledger.buildGenesisBlock(genesis, ledgerConfig)};
 }
@@ -79,6 +101,88 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInter
 
 task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block);
+
+/// A transaction pending persistence: its hash and encoded body. When the transaction
+/// came from an external @c ConstTransactionsPtr list, @p tx points at it so the caller
+/// can mark it persisted via setStoreToBackend() (a const method on a mutable flag)
+/// after the write succeeds; it stays null for block-carried (inline) transactions,
+/// which are never marked — matching the historical behavior of both write paths.
+struct EncodedBlockTransaction
+{
+    bcos::crypto::HashType hash;
+    bcos::bytes encoded;
+    bcos::protocol::Transaction const* tx = nullptr;
+};
+
+/// Select the transactions of @p block that still need persisting and encode them, in
+/// block order. With an external @p blockTxs list, transactions whose storeToBackend()
+/// flag is already set are skipped (dedup) and the resulting items carry the external
+/// transaction pointer for post-write marking. With @p blockTxs null the block's inline
+/// transactions are used and always emitted. Shared by Ledger::storeTransactionsAndReceipts
+/// (Ledger.cpp) and the storage2 prewriteBlockToBuffer path below so the dedup/encode
+/// decision lives in exactly one place.
+inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
+    bcos::protocol::Block::ConstPtr block, bcos::protocol::ConstTransactionsPtr blockTxs)
+{
+    // An external tx list is iterated by its own size (the historical needStoreUnsavedTxs
+    // semantics): indexing it by the block's tx count would overrun a shorter list and
+    // silently drop the tail of a longer one.
+    auto const txCount = blockTxs ?
+                             blockTxs->size() :
+                             std::max(block->transactionsSize(), block->transactionsMetaDataSize());
+    auto inlineTxs = block->transactions();
+    std::vector<EncodedBlockTransaction> out;
+    out.reserve(txCount);
+    for (size_t i = 0; i < txCount; ++i)
+    {
+        bcos::protocol::Transaction const* tx = nullptr;
+        std::optional<bcos::protocol::AnyTransaction> anyTx;
+        if (blockTxs)
+        {
+            tx = (*blockTxs)[i].get();
+        }
+        else
+        {
+            anyTx = inlineTxs[i];
+            tx = anyTx->get();
+        }
+        if (blockTxs && tx->storeToBackend())
+        {
+            continue;
+        }
+
+        bcos::bytes encoded;
+        tx->encode(encoded);
+        // Only externally owned transactions may be marked persisted after the write;
+        // for inline transactions tx points into the per-iteration anyTx holder and
+        // must not escape the loop.
+        out.push_back(
+            EncodedBlockTransaction{tx->hash(), std::move(encoded), blockTxs ? tx : nullptr});
+    }
+    return out;
+}
+
+/// The metadata row set of a block prewrite (Ledger::asyncPrewriteBlock rows 1-6), in the
+/// historical write order: number→hash, hash→number, number→header, (optional) number→
+/// nonces, current-number, number→tx-metadata. The SYS_KEY_TOTAL_* counter rows are NOT
+/// included — they depend on the totals already stored — and the sys-contract-deploy
+/// short-circuit stays in the caller.
+struct PrewriteBlockRows
+{
+    std::vector<std::pair<executor_v1::StateKey, storage::Entry>> rows;
+    // The tx-metadata block backing the SYS_NUMBER_2_TXS row, kept for callers that key
+    // receipts by transactionHash(i) (Ledger::asyncPrewriteBlock's receipt fan-out).
+    protocol::Block::Ptr transactionsBlock;
+};
+
+/// Data-pure construction of the PrewriteBlockRows for @p block. The legacy method fans
+/// the rows out via asyncSetRow; a storage2-native prewrite could writeOne/writeSome the
+/// same list. @p blockHash is the mapping key for both hash rows; the header row encodes
+/// the header itself, whose hash() differs from @p blockHash when it came from a
+/// blockHashOverride (OP path) — OP-aware readers must use the override hash.
+PrewriteBlockRows buildPrewriteBlockRows(protocol::Block::ConstPtr block,
+    protocol::ConstTransactionsPtr blockTxs, protocol::BlockFactory& blockFactory,
+    bcos::crypto::HashType const& blockHash, bool writeNonces);
 
 // FIB-104: Unified prewrite — routes block, transaction, and receipt data into
 // the caller-provided storage buffer. Phase 1 reuses the existing prewriteBlock
@@ -126,51 +230,75 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
             std::move(receiptEntry));
     }
 
-    // SYS_HASH_2_TX — encoded transactions keyed by tx hash. Skip txs already
-    // persisted (storeToBackend flag) to match existing dedup semantics.
-    for (size_t i = 0; i < txSize; ++i)
+    // SYS_HASH_2_TX — encoded transactions keyed by tx hash, deduped by the
+    // storeToBackend flag (same shared logic as storeTransactionsAndReceipts /
+    // asyncPreStoreBlockTxs); txs already persisted are skipped.
+    for (auto& pending : encodeUnsavedBlockTransactions(block, blockTxs))
     {
-        const protocol::Transaction* tx = nullptr;
-        std::optional<protocol::AnyTransaction> anyTx;
-        if (blockTxs)
-        {
-            tx = blockTxs->at(i).get();
-        }
-        else
-        {
-            anyTx = inlineTxs[i];
-            tx = anyTx->get();
-        }
-        if (blockTxs && tx->storeToBackend())
-        {
-            continue;
-        }
-
-        bytes encodedTx;
-        tx->encode(encodedTx);
-        auto txHash = tx->hash();
-
         storage::Entry txEntry;
-        txEntry.set(std::move(encodedTx));
+        txEntry.set(std::move(pending.encoded));
         co_await storage2::writeOne(storage,
-            executor_v1::StateKey{SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)},
+            executor_v1::StateKey{SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(pending.hash)},
             std::move(txEntry));
 
-        if (blockTxs)
+        if (pending.tx)
         {
-            tx->setStoreToBackend(true);
+            pending.tx->setStoreToBackend(true);
         }
     }
 }
 
-void tag_invoke(ledger::tag_t<removeExpiredNonce>, LedgerInterface& ledger,
-    protocol::BlockNumber expiredNumber);
-
 task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber, int32_t blockFlag);
 
-task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
+// Shared SYS_NUMBER_2_TXS read: decode the stored block and return its transaction hash
+// list. A missing row throws GetStorageError — the contract getBlockDataFromStorages has
+// always exposed; callback-style callers map it back to their error contract.
+task::Task<std::vector<bcos::crypto::HashType>> getBlockTransactionHashList(
     storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
+    protocol::BlockNumber blockNumber, protocol::BlockFactory& blockFactory)
+{
+    auto blockNumberStr = std::to_string(blockNumber);
+    auto txsEntry = co_await storage2::readOne(
+        storage, executor_v1::StateKeyView{SYS_NUMBER_2_TXS, blockNumberStr});
+    if (!txsEntry)
+    {
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(LedgerError::GetStorageError, "missing SYS_NUMBER_2_TXS row"));
+    }
+    auto txs = txsEntry->get();
+    auto blockWithTxs =
+        blockFactory.createBlock(bcos::bytesConstRef((bcos::byte*)txs.data(), txs.size()));
+    auto hashes = blockWithTxs->transactionHashes() | ::ranges::to<std::vector>();
+    LEDGER_LOG(TRACE) << "Get transactions hash list success, size:" << hashes.size();
+    co_return hashes;
+}
+
+// Raw-byte-string flavor (NOT hex) of the hash list above — the form the deleted
+// Ledger::asyncGetBlockTransactionHashes returned; callers feed the strings back as
+// SYS_HASH_2_TX / SYS_HASH_2_RECEIPT row keys.
+task::Task<std::vector<std::string>> getBlockTransactionHashStrings(
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
+    protocol::BlockNumber blockNumber, protocol::BlockFactory& blockFactory)
+{
+    auto hashes = co_await getBlockTransactionHashList(storage, blockNumber, blockFactory);
+    std::vector<std::string> hashList(hashes.size());
+    for (size_t i = 0; i < hashes.size(); ++i)
+    {
+        hashList[i].assign(hashes[i].begin(), hashes[i].end());
+    }
+    co_return hashList;
+}
+
+// Shared two-storage block assembly. The header / tx-hash list / archived-number rows live
+// in the state storage (@p metaStorage), while the SYS_HASH_2_TX / SYS_HASH_2_RECEIPT rows
+// live in the block storage (@p dataStorage) — the same object unless the node runs with a
+// separate block storage (enableSeparateBlockAndState). Ledger::asyncGetBlockDataByNumber
+// passes {m_stateStorage, getBlockStorage()}; the single-storage tag_invoke below passes the
+// same storage for both so the block assembly stays in exactly one place.
+task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& metaStorage,
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& dataStorage,
     protocol::BlockNumber _blockNumber, int32_t _blockFlag, protocol::BlockFactory& blockFactory)
 {
     LEDGER_LOG(TRACE) << "GetBlockDataByNumber request" << LOG_KV("blockNumber", _blockNumber)
@@ -189,7 +317,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
     if ((_blockFlag & TRANSACTIONS) != 0 || (_blockFlag & RECEIPTS) != 0)
     {
         if (auto entry = co_await storage2::readOne(
-                storage, executor_v1::StateKeyView{SYS_CURRENT_STATE, SYS_KEY_ARCHIVED_NUMBER}))
+                metaStorage, executor_v1::StateKeyView{SYS_CURRENT_STATE, SYS_KEY_ARCHIVED_NUMBER}))
         {
             auto archivedBlockNumber = boost::lexical_cast<int64_t>(entry->get());
             if (_blockNumber < archivedBlockNumber)
@@ -207,7 +335,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
     if (_blockFlag & HEADER)
     {
         if (auto entry = co_await storage2::readOne(
-                storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
+                metaStorage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
         {
             auto field = entry->get();
             auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
@@ -222,64 +350,134 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
     if (((_blockFlag & TRANSACTIONS) != 0) || ((_blockFlag & RECEIPTS) != 0) ||
         (_blockFlag & TRANSACTIONS_HASH) != 0)
     {
-        if (auto txsEntry = co_await storage2::readOne(
-                storage, executor_v1::StateKeyView{SYS_NUMBER_2_TXS, blockNumberStr}))
+        auto hashes = co_await getBlockTransactionHashList(metaStorage, _blockNumber, blockFactory);
+
+        if ((_blockFlag & TRANSACTIONS) != 0)
         {
-            auto txs = txsEntry->get();
-            auto blockWithTxs =
-                blockFactory.createBlock(bcos::bytesConstRef((bcos::byte*)txs.data(), txs.size()));
-            auto hashes = blockWithTxs->transactionHashes() | ::ranges::to<std::vector>();
-            LEDGER_LOG(TRACE) << "Get transactions hash list success, size:" << hashes.size();
-
-            if ((_blockFlag & TRANSACTIONS) != 0)
+            auto transactions = co_await storage2::readSome(
+                dataStorage, hashes | ::ranges::views::transform([](auto& hash) {
+                    return executor_v1::StateKeyView{
+                        SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(hash)};
+                }));
+            for (auto& txEntry : transactions)
             {
-                auto transactions = co_await storage2::readSome(
-                    storage, hashes | ::ranges::views::transform([](auto& hash) {
-                        return executor_v1::StateKeyView{
-                            SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(hash)};
-                    }));
-                for (auto& txEntry : transactions)
+                if (!txEntry)
                 {
-                    auto field = txEntry->get();
-                    auto transaction = blockFactory.transactionFactory()->createTransaction(
-                        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false,
-                        false);
-                    block->appendTransaction(std::move(transaction));
+                    // Fail closed like the base batchGetTransactions path: a
+                    // missing SYS_HASH_2_TX row (lagging or pruned block storage) is a
+                    // storage error, not a reason to dereference a disengaged optional.
+                    BOOST_THROW_EXCEPTION(
+                        BCOS_ERROR(LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
                 }
+                auto field = txEntry->get();
+                auto transaction = blockFactory.transactionFactory()->createTransaction(
+                    bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false,
+                    false);
+                block->appendTransaction(std::move(transaction));
             }
+        }
 
-            if ((_blockFlag & RECEIPTS) != 0)
+        if ((_blockFlag & RECEIPTS) != 0)
+        {
+            auto receipts = co_await storage2::readSome(
+                dataStorage, ::ranges::views::transform(hashes, [](auto& hash) {
+                    return executor_v1::StateKeyView{
+                        SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(hash)};
+                }));
+            for (auto& receiptEntry : receipts)
             {
-                auto receipts = co_await storage2::readSome(
-                    storage, ::ranges::views::transform(hashes, [](auto& hash) {
-                        return executor_v1::StateKeyView{
-                            SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(hash)};
-                    }));
-                for (auto& receiptEntry : receipts)
+                if (!receiptEntry)
                 {
-                    auto field = receiptEntry->get();
-                    auto receipt = blockFactory.receiptFactory()->createReceipt(
-                        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
-                    block->appendReceipt(std::move(receipt));
+                    // Same fail-closed contract as the base asyncBatchGetReceipts path.
+                    BOOST_THROW_EXCEPTION(
+                        BCOS_ERROR(LedgerError::GetStorageError, "missing SYS_HASH_2_RECEIPT row"));
                 }
+                auto field = receiptEntry->get();
+                auto receipt = blockFactory.receiptFactory()->createReceipt(
+                    bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
+                block->appendReceipt(std::move(receipt));
             }
+        }
 
-            if ((_blockFlag & TRANSACTIONS_HASH) != 0)
+        if ((_blockFlag & TRANSACTIONS_HASH) != 0)
+        {
+            for (auto& hash : hashes)
             {
-                for (auto& hash : hashes)
-                {
-                    auto txMeta = blockFactory.createTransactionMetaData();
-                    txMeta->setHash(hash);
-                    block->appendTransactionMetaData(std::move(txMeta));
-                }
+                auto txMeta = blockFactory.createTransactionMetaData();
+                txMeta->setHash(hash);
+                block->appendTransactionMetaData(std::move(txMeta));
             }
         }
     }
     co_return block;
 }
 
+task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
+    protocol::BlockNumber _blockNumber, int32_t _blockFlag, protocol::BlockFactory& blockFactory)
+{
+    // Single-storage flavor (storage2 views hold meta + tx/receipt rows together): both
+    // storages are the same object.
+    co_return co_await getBlockDataFromStorages(
+        storage, storage, _blockNumber, _blockFlag, blockFactory);
+}
+
 task::Task<TransactionCount> tag_invoke(
     ledger::tag_t<getTransactionCount> /*unused*/, LedgerInterface& ledger);
+
+// Storage2-native total-count read over SYS_CURRENT_STATE. A missing row means 0 with a
+// warning (NOT an error); an unparseable value throws — historically a
+// BOOST_THROW_EXCEPTION inside an async callback that nothing caught (a latent crash); in
+// coroutine form the throw properly propagates to the caller, preserving that intent.
+task::Task<TransactionCount> tag_invoke(ledger::tag_t<getTransactionCount> /*unused*/,
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage, FromStorage /*unused*/)
+{
+    static std::string_view keys[] = {
+        SYS_KEY_TOTAL_TRANSACTION_COUNT, SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER};
+
+    auto entries = co_await storage2::readSome(
+        storage, keys | ::ranges::views::transform([](std::string_view key) {
+            return executor_v1::StateKeyView{SYS_CURRENT_STATE, key};
+        }));
+
+    TransactionCount count{};
+    size_t i = 0;
+    for (auto& entry : entries)
+    {
+        int64_t value = 0;
+        if (!entry)
+        {
+            LEDGER_LOG(WARNING) << "GetTotalTransactionCount failed" << LOG_KV("index", i)
+                                << " empty";
+        }
+        else
+        {
+            try
+            {
+                value = boost::lexical_cast<int64_t>(entry->get());
+            }
+            catch (boost::bad_lexical_cast& e)
+            {
+                LEDGER_LOG(WARNING)
+                    << "Lexical cast transaction count failed, entry value: " << entry->get();
+                BOOST_THROW_EXCEPTION(e);
+            }
+        }
+        switch (i++)
+        {
+        case 0:
+            count.total = value;
+            break;
+        case 1:
+            count.failed = value;
+            break;
+        case 2:
+            count.blockNumber = value;
+            break;
+        }
+    }
+    co_return count;
+}
 
 task::Task<protocol::BlockNumber> tag_invoke(
     ledger::tag_t<getCurrentBlockNumber> /*unused*/, LedgerInterface& ledger);
@@ -296,20 +494,38 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
 task::Task<void> tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger, LedgerConfig& ledgerConfig);
 
-task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& storage,
-    LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber,
-    protocol::BlockFactory& blockFactory)
+/// The executor_version a SYS_CONFIG snapshot records; 0 (the legacy lane) when absent.
+/// Both getLedgerConfig overloads key on it to skip the Features read on Ethereum lanes,
+/// which fork on the Ethereum / OP schedule only and write no Features rows.
+inline int executorVersionOf(ledger::SystemConfigs const& sysConfig)
 {
-    auto nodeList = co_await ledger::getNodeList(storage);
-    ledgerConfig.setConsensusNodeList(::ranges::views::filter(nodeList, [](auto& node) {
+    auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
+    return versionConfig ? boost::lexical_cast<int>(versionConfig->first) : 0;
+}
+
+/// Shared LedgerConfig assembly used by both getLedgerConfig overloads (the
+/// LedgerInterface-based one in LedgerMethods.cpp and the storage2-view one below). The two
+/// call sites only differ in how they fetch their inputs (node list, system configs /
+/// features at their respective block basis, header hash / timestamp); this helper performs
+/// the pure mapping so the consensus-relevant assembly cannot drift between the paths.
+/// Callers resolve an absent committed header to a disengaged hash/timestamp/baseFee, leaving
+/// the previous values untouched — matching the historical behavior of both call sites.
+inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
+    bcos::consensus::ConsensusNodeList const& nodeList, ledger::SystemConfigs const& sysConfig,
+    ledger::Features const& features, protocol::BlockNumber blockNumber,
+    std::optional<int64_t> const& timestamp, std::optional<crypto::HashType> const& blockHash,
+    std::optional<u256> const& headBaseFee)
+{
+    if (headBaseFee)
+    {
+        ledgerConfig.setBaseFeePerGas(headBaseFee);
+    }
+    ledgerConfig.setConsensusNodeList(::ranges::views::filter(nodeList, [](auto const& node) {
         return node.type == consensus::Type::consensus_sealer;
     }) | ::ranges::to<std::vector>());
-    ledgerConfig.setObserverNodeList(::ranges::views::filter(nodeList, [](auto& node) {
+    ledgerConfig.setObserverNodeList(::ranges::views::filter(nodeList, [](auto const& node) {
         return node.type == consensus::Type::consensus_observer;
     }) | ::ranges::to<std::vector>());
-
-    ledger::SystemConfigs sysConfig;
-    co_await readFromStorage(sysConfig, storage, blockNumber);
 
     if (auto txLimitConfig = sysConfig.get(ledger::SystemConfig::tx_count_limit))
     {
@@ -341,23 +557,15 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
         ledgerConfig.setExcessBlobGas(boost::lexical_cast<uint64_t>(excessBlobGas.value().first));
     }
 
-    // Get block header to retrieve timestamp
-    auto blockNumberStr = std::to_string(blockNumber);
-    if (auto entry = co_await storage2::readOne(
-            storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
-    {
-        auto field = entry->get();
-        auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
-            bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
-        ledgerConfig.setTimestamp(headerPtr->timestamp());
-        ledgerConfig.setHash(headerPtr->hash());
-    }
     ledgerConfig.setBlockNumber(blockNumber);
-    // auto blockHash = co_await getBlockHash(storage, blockNumber, fromStorage);
-    // ledgerConfig.setHash(blockHash.value_or(crypto::HashType{}));
-
-    Features features;
-    co_await readFromStorage(features, storage, blockNumber);
+    if (blockHash)
+    {
+        ledgerConfig.setHash(*blockHash);
+    }
+    if (timestamp)
+    {
+        ledgerConfig.setTimestamp(*timestamp);
+    }
     ledgerConfig.setFeatures(features);
 
     auto enableRPBFT =
@@ -398,27 +606,28 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
-    int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
+    int const executorVersion = executorVersionOf(sysConfig);
+    if (sysConfig.get(ledger::SystemConfig::executor_version))
     {
-        executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
         ledgerConfig.setExecutorVersion(executorVersion);
     }
+    if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        // Ethereum lanes write no compatibility_version row; the block header version and
+        // the PBFT/sealer path read the lane constant instead.
+        ledgerConfig.setCompatibilityVersion(ledger::ETHEREUM_LANE_COMPATIBILITY_VERSION);
+    }
 
-    // EVMC revision — consumed only by the pure-Ethereum EthereumExecutor
-    // (executor_version=2); v0/v1 schedulers never read evmcRevision()/evmcRevisionForBlock(),
-    // so a non-v2 chain is left untouched (no implicit default injection, which would be an
-    // unnoticed behavior change if a future v0/v1 path started reading it). For v2, an
-    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock).
-    // A v2 chain WITHOUT one stays UNCONFIGURED here (no binary-side default injected): the
-    // consumers fail closed — EthereumExecutor throws EvmcRevisionNotConfigured and
-    // EngineService buildPayload throws UnsupportedFork — rather than hash state or block
-    // headers under a fork the chain never configured. The initializer already refuses to
-    // boot such a chain, so this branch only fires on corrupt/legacy state.
+    // EVMC revision row — read on executor_version >= 2 only. No genesis writes it any more:
+    // a v2 genesis derives the revision from [fork_timestamps] (the block verifier stamps it
+    // per block; the dry run and admission get ledger::EvmcRevisionSchedule), and the OP lane
+    // from [op_fork_timestamps]. The row is still parsed when a datadir carries one (the
+    // Initializer's runtime-switch probe, engine tests that seed it). Absent, the revision
+    // stays UNCONFIGURED here (no binary-side default injected): a consumer with no other
+    // source fails closed — EthereumExecutor throws EvmcRevisionNotConfigured and
+    // EngineService buildPayload throws UnsupportedFork.
     //
     // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
-    // The effective revision is parsed and logged once at startup (Initializer), which the
-    // CI pins and where a corrupt value becomes a boot refusal.
     if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)
@@ -428,6 +637,101 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
             ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
         }
     }
+    if (ledger::isOpLaneVersion(executorVersion))
+    {
+        // The OP lane's declared EIP-1559 triple rides the same snapshot so the RPC fee
+        // prediction (part B — at this head bcos-rpc still prices pre-Holocene blocks with
+        // the preset constants, FeeHistory.cpp) can price with the chain's own parameters.
+        // Fail closed on a malformed row, same policy as evmc_revision above.
+        if (auto opEip1559 = sysConfig.get(ledger::SystemConfig::op_eip1559_params); opEip1559)
+        {
+            ledgerConfig.setOpEip1559Params(ledger::parseOpEip1559Params(opEip1559.value().first));
+        }
+        // The resolved fork schedule rides the snapshot too: the RPC estimate gas-cap gate
+        // (M1, part B) will apply EIP-7825 only where the chain has actually activated
+        // Karst at the target block. Absent on OP chains initialized before the row
+        // existed — the gate treats that as "no Karst activation known" and leaves the
+        // budget unclamped.
+        if (auto opForkSchedule = sysConfig.get(ledger::SystemConfig::op_fork_schedule);
+            opForkSchedule)
+        {
+            ledgerConfig.setOpForkSchedule(
+                ledger::opForkScheduleFromCanonical(opForkSchedule.value().first));
+        }
+    }
+}
+
+/// The boot probe's integrity-triple validation, with the binding target resolved HERE so
+/// a schedule-carrying genesis built without a config-side [eth_genesis_header] boots
+/// instead of being unbootable (review F5): the config's declared hash when the node
+/// carries the section, else the chain's OWN block-0 header (the writer bound the triple
+/// to exactly that hash at genesis, so a self-consistent datadir passes while a tampered
+/// or foreign triple still refuses). Absent rows co_return nullopt (a pre-triple chain is
+/// legal); partial/corrupt/mis-bound rows throw InvalidOpForkSchedule, as before.
+template <class Storage>
+task::Task<std::optional<OpForkScheduleMetadata>> readValidatedOpForkScheduleMetadataForBoot(
+    Storage& storage, protocol::BlockFactory& blockFactory,
+    std::optional<crypto::HashType> const& configGenesisHash)
+{
+    auto rows = co_await readOpForkScheduleMetadataRows(storage);
+    if (opForkScheduleMetadataRowsAbsent(rows))
+    {
+        co_return std::nullopt;
+    }
+    if (configGenesisHash.has_value())
+    {
+        co_return validateOpForkScheduleMetadataRows(std::move(rows), *configGenesisHash);
+    }
+    auto entry = co_await storage2::readOne(
+        storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, "0"});
+    if (!entry)
+    {
+        BOOST_THROW_EXCEPTION(InvalidOpForkSchedule() << errinfo_comment(
+                                  "SYS_OP_CHAIN_METADATA triple is present but the chain's "
+                                  "genesis block (block 0) cannot be read to validate its "
+                                  "genesis binding against"));
+    }
+    auto field = entry->get();
+    auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
+        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
+    co_return validateOpForkScheduleMetadataRows(std::move(rows), headerPtr->hash());
+}
+
+task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& storage,
+    LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber,
+    protocol::BlockFactory& blockFactory)
+{
+    // Resolve all inputs first (node list, system configs at @p blockNumber's basis, the
+    // committed header's hash / timestamp), then let applyLedgerConfig do the shared
+    // assembly. Block hash / timestamp come from the SYS_NUMBER_2_BLOCK_HEADER row.
+    auto nodeList = co_await ledger::getNodeList(storage);
+
+    ledger::SystemConfigs sysConfig;
+    co_await readFromStorage(sysConfig, storage, blockNumber);
+
+    std::optional<int64_t> timestamp;
+    std::optional<crypto::HashType> blockHash;
+    std::optional<u256> headBaseFee;
+    auto blockNumberStr = std::to_string(blockNumber);
+    if (auto entry = co_await storage2::readOne(
+            storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
+    {
+        auto field = entry->get();
+        auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
+            bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
+        timestamp = headerPtr->timestamp();
+        blockHash = headerPtr->hash();
+        headBaseFee = protocol::blockBaseFee(*headerPtr);
+    }
+
+    Features features;
+    if (executorVersionOf(sysConfig) < ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        co_await readFromStorage(features, storage, blockNumber);
+    }
+
+    applyLedgerConfig(ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp,
+        blockHash, headBaseFee);
 }
 
 task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger);

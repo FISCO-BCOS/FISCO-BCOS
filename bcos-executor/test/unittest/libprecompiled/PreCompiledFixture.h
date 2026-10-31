@@ -55,6 +55,7 @@
 #include <libinitializer/AuthInitializer.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <boost/log/core/core.hpp>
 #include <string>
 
 using namespace bcos;

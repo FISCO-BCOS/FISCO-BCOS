@@ -23,15 +23,21 @@
 #include "PBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
+#include "ethereum-executor/EthereumExecutor.h"
 #include "libinitializer/MultiVersionScheduler.h"
+#include <bcos-framework/engine/DACaps.h>
 #ifdef TOOLS
 #include "tools/archive-tool/ArchiveService.h"
 #endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
+#include <bcos-transaction-scheduler/EthereumBlockVerifier.h>
+#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+#include <bcos-tx-validator/TxValidator.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <oneapi/tbb/global_control.h>
@@ -59,10 +65,18 @@ class SchedulerInterface;
 namespace engine
 {
 class AnyEngineService;
+namespace engine_common
+{
+class ClSyncCoordination;
 }
+}  // namespace engine
 namespace single_consensus
 {
 class SingleNodeConsensus;
+}
+namespace ledger::mpt
+{
+class CommitObserver;
 }
 namespace storage2
 {
@@ -78,6 +92,7 @@ class EngineServiceInitializer;
 class Initializer
 {
 public:
+    std::shared_ptr<bcos::engine::DACaps> daCaps() const { return m_daCaps; }
     using Ptr = std::shared_ptr<Initializer>;
     Initializer() = default;
     virtual ~Initializer() { stop(); }
@@ -91,6 +106,11 @@ public:
     PBFTInitializer::Ptr pbftInitializer() { return m_pbftInitializer; }
     TxPoolInitializer::Ptr txPoolInitializer() { return m_txpoolInitializer; }
     std::shared_ptr<MemPoolInitializer> memPoolInitializer() { return m_memPoolInitializer; }
+    /// Admission for the mempool path; null in every mode that has no mempool.
+    std::shared_ptr<bcos::txvalidator::TxValidator> memPoolValidator()
+    {
+        return m_memPoolValidator;
+    }
     std::shared_ptr<EngineServiceInitializer> engineServiceInitializer()
     {
         return m_engineServiceInitializer;
@@ -104,6 +124,42 @@ public:
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     std::shared_ptr<bcos::scheduler::SchedulerInterface> scheduler() { return m_scheduler; }
+
+    // Ethereum L1 EL-mode wiring: the v2 EthereumExecutor and its serial scheduler, plus the
+    // global state storage and IO pool. Only valid after initNode() on an executor_version>=2
+    // node (EL mode); callers must guard on nodeConfig->ethereumELModeEnabled() first.
+    std::shared_ptr<executor_v1::eth::EthereumExecutor> ethereumExecutor()
+    {
+        return m_ethereumExecutor;
+    }
+    std::shared_ptr<scheduler_v1::SchedulerSerialImpl> ethereumSerialScheduler()
+    {
+        return m_ethereumSerialScheduler;
+    }
+    /// The EL-mode ([engine_rpc]) block verifier, shared between the Engine API external
+    /// newPayload lane and the devp2p sync loop (AirNodeInitializer forwards it to
+    /// EthereumSyncInitializer); both lanes serialize on the verifier's m_commitMutex.
+    /// Null unless initNode() built it (EL mode: executor.version=2 under the Engine driver).
+    std::shared_ptr<scheduler_v1::EthereumBlockVerifier<scheduler_v1::SchedulerSerialImpl,
+        executor_v1::eth::EthereumExecutor>>
+    elBlockVerifier()
+    {
+        return m_elBlockVerifier;
+    }
+    /// The CL-driven coordination state shared between the Engine API service (which
+    /// latches CL-driven mode on the first forkchoiceUpdated and records a backfill
+    /// target on every SYNCING answer) and the devp2p sync loop (AirNodeInitializer
+    /// forwards it to EthereumSyncInitializer). Null unless initNode() built the
+    /// [engine_rpc] EL wiring.
+    std::shared_ptr<bcos::engine::engine_common::ClSyncCoordination> clSyncCoordination()
+    {
+        return m_clSyncCoordination;
+    }
+    std::shared_ptr<GlobalStateStorageInitializer> globalStateStorageInitializer()
+    {
+        return m_globalStateStorageInitializer;
+    }
+    bcos::IOServicePool::Ptr ioServicePool() { return m_ioServicePool; }
 
     FrontServiceInitializer::Ptr frontService() { return m_frontServiceInitializer; }
 
@@ -140,6 +196,21 @@ public:
     /// nullptr before initNode() built the global state storage (e.g. config-only usage).
     std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> mptNodeReader();
 
+    /// The shared MPT pruner as a CommitObserver (storage.mpt_prune_window > 0), wired into
+    /// every baseline scheduler variant at build time and forwarded to the EL-mode sync path
+    /// (AirNodeInitializer hands it to EthereumSyncInitializer). Null when pruning is
+    /// disabled — callers keep their built-in NoopCommitObserver.
+    std::shared_ptr<bcos::ledger::mpt::CommitObserver> mptCommitObserver()
+    {
+        return m_mptCommitObserver;
+    }
+
+    /// The node-wide admission configuration holder, republished by every commit lane.
+    /// Forwarded to the EL-mode sync path (AirNodeInitializer hands it to
+    /// EthereumSyncInitializer) so devp2p-synced commits republish too — that lane bypasses
+    /// MultiVersionScheduler's publishing wrapper. Valid after initNode().
+    bcos::ledger::LedgerConfigState::Ptr ledgerConfigState() { return m_ledgerConfigState; }
+
     /// Provider for eth_getStorageAt's latest-state path: each call forks a fresh latest view
     /// of GlobalStateStorage and returns an AnyStorage handle owning it (see
     /// forkLatestStateView). Captures a shared_ptr to the GlobalStateStorageInitializer, so
@@ -148,6 +219,11 @@ public:
     std::function<std::shared_ptr<
         bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
     stateStorageProvider();
+    /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
+    /// 2 = EthereumExecutor, >= 3 = OP mode). Valid after initNode resolved it; the RPC blob
+    /// gate and eth_getStorageAt's prefix selection key on it through NodeService.
+    int executorVersion() const noexcept { return m_executorVersion; }
+
     bcos::Error::Ptr generateSnapshot(const std::string& snapshotPath, bool withTxAndReceipts,
         const tool::NodeConfig::Ptr& nodeConfig);
     bcos::Error::Ptr importSnapshot(
@@ -164,6 +240,10 @@ private:
     ProtocolInitializer::Ptr m_protocolInitializer;
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
     bcos::IOServicePool::Ptr m_ioServicePool;
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
+    /// Built only in engine-driven mode, where the mempool is the pool a transaction enters.
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
+    std::shared_ptr<bcos::txvalidator::TxValidator> m_memPoolValidator;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
 #ifdef WITH_LIGHTNODE
@@ -180,6 +260,11 @@ private:
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
 #endif
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
+    /// The shared MPT pruner (storage.mpt_prune_window > 0), injected into every baseline
+    /// scheduler variant at build time. Declared right after the storage initializer so the
+    /// pruner — which borrows the committed backend — is always destroyed before it.
+    /// Null when pruning is disabled (the schedulers then keep their NoopCommitObserver).
+    std::shared_ptr<bcos::ledger::mpt::CommitObserver> m_mptCommitObserver;
     std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> m_singleNodeConsensus;
     std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;
@@ -198,9 +283,31 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setEthereumSchedulerBlockNumberNotifier;
+    /// EthereumExecutor (executor_version=2) instance + its serial scheduler. Saved as members
+    /// (the executor is otherwise only captured by the holder lambda) so the Ethereum L1
+    /// EL-mode sync path (EthereumSyncInitializer) can drive the SAME executor/scheduler that
+    /// the rest of the v2 pipeline uses. Only meaningful when executor_version >= 2.
+    std::shared_ptr<executor_v1::eth::EthereumExecutor> m_ethereumExecutor;
+    std::shared_ptr<scheduler_v1::SchedulerSerialImpl> m_ethereumSerialScheduler;
+    /// The EL-mode block verifier shared between the Engine API external newPayload lane
+    /// (via ExternalPayloadVerifierImpl) and the devp2p sync loop. Built only in EL mode
+    /// (executor.version=2 under the Engine driver).
+    std::shared_ptr<scheduler_v1::EthereumBlockVerifier<scheduler_v1::SchedulerSerialImpl,
+        executor_v1::eth::EthereumExecutor>>
+        m_elBlockVerifier;
+    /// The CL-driven coordination state shared between the Engine API service and the
+    /// devp2p sync loop. Built with m_elBlockVerifier (the [engine_rpc] EL wiring);
+    /// AirNodeInitializer forwards it to EthereumSyncInitializer like elBlockVerifier().
+    std::shared_ptr<bcos::engine::engine_common::ClSyncCoordination> m_clSyncCoordination;
+    /// OP scheduler (executor_version >= 3), wired to MultiVersionScheduler slot 3.
+    std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
+    /// Installs the OP block-number notifier on the OpScheduler.
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setOpSchedulerBlockNumberNotifier;
     /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
-    /// 2 = EthereumExecutor). Cached during initNode so initSysContract can decide whether the
-    /// FISCO system-contract deployment block applies (it does not for the ethereum executor).
+    /// 2 = EthereumExecutor, >= 3 = OP mode). Cached during initNode so initSysContract can
+    /// decide whether the FISCO system-contract deployment block applies (it does not for the
+    /// ethereum executor).
     int m_executorVersion = 0;
 
     protocol::BlockNumber getCurrentBlockNumber(

@@ -1,7 +1,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 

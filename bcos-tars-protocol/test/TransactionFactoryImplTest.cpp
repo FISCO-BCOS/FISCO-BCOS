@@ -65,7 +65,7 @@ static void expectReassembleThrows(
 
 namespace
 {
-CryptoSuite::Ptr makeSuite()
+CryptoSuite::Ptr makeTxFactorySuite()
 {
     return std::make_shared<CryptoSuite>(
         std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_SUITE(TarsTransactionFactoryImplTest)
 
 BOOST_AUTO_TEST_CASE(buildWithAllGasFields)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     auto tx = factory.createTransaction(/*version=*/1, "0xto", bcos::bytes{0x01}, "0xnonce",
         /*blockLimit=*/500, "chain0", "group0", /*importTime=*/123, "abi", "0x64", "0x10",
@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(buildWithAllGasFields)
 
 BOOST_AUTO_TEST_CASE(buildWithKeyPairSignsAndVerifies)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     auto keyPair = suite->signatureImpl()->generateKeyPair();
     auto tx = factory.createTransaction(
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(buildWithKeyPairSignsAndVerifies)
 
 BOOST_AUTO_TEST_CASE(encodeDecodeRoundTripWithSigCheck)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     auto keyPair = suite->signatureImpl()->generateKeyPair();
     auto tx = factory.createTransaction(
@@ -138,7 +138,7 @@ BOOST_AUTO_TEST_CASE(encodeDecodeRoundTripWithSigCheck)
 
 BOOST_AUTO_TEST_CASE(decodeTransactionStandalone)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     auto tx =
         factory.createTransaction(1, "0xto", bcos::bytes{0x01}, "0x1", 100, "chain0", "group0", 0);
@@ -151,10 +151,10 @@ BOOST_AUTO_TEST_CASE(decodeTransactionStandalone)
 
 BOOST_AUTO_TEST_CASE(cryptoSuiteAccessorRoundTrips)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     BOOST_CHECK(factory.cryptoSuite() == suite);
-    auto other = makeSuite();
+    auto other = makeTxFactorySuite();
     factory.setCryptoSuite(other);
     BOOST_CHECK(factory.cryptoSuite() == other);
 }
@@ -165,7 +165,7 @@ BOOST_AUTO_TEST_CASE(cryptoSuiteAccessorRoundTrips)
 // createTransaction() with no args returns a fresh, tainted transaction.
 BOOST_AUTO_TEST_CASE(createEmptyTransactionIsTainted)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     auto tx = factory.createTransaction();
     BOOST_REQUIRE(tx);
@@ -178,7 +178,7 @@ BOOST_AUTO_TEST_CASE(createEmptyTransactionIsTainted)
 // assert each one explicitly.
 BOOST_AUTO_TEST_CASE(createFromInputPreservesAllFlags)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     auto src =
         factory.createTransaction(0, "0xto", bcos::bytes{0x01}, "0x9", 77, "chainA", "groupA", 555);
@@ -218,7 +218,7 @@ BOOST_AUTO_TEST_CASE(createFromInputPreservesAllFlags)
 // This is the txpool-facing guard against malformed quantity fields.
 BOOST_AUTO_TEST_CASE(decodeRejectsNonHexQuantityV1)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     auto tx = factory.createTransaction(
         1, "0xto", bcos::bytes{0x01}, "0x1", 100, "chain0", "group0", 0, "abi", "0x64", "0x10");
@@ -239,7 +239,7 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonHexQuantityV1)
 // silent regression.
 BOOST_AUTO_TEST_CASE(decodeAcceptsEmptyQuantityV1)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     auto tx = factory.createTransaction(
         1, "0xto", bcos::bytes{0x01}, "0x1", 100, "chain0", "group0", 0, "abi", "0x64", "0x10");
@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE(decodeAcceptsEmptyQuantityV1)
 // does not match the recomputed hash — the anti-tamper guard on the wire form.
 BOOST_AUTO_TEST_CASE(decodeRejectsHashMismatch)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     auto tx =
         factory.createTransaction(0, "0xto", bcos::bytes{0x02}, "0x1", 100, "chain0", "group0", 0);
@@ -281,7 +281,7 @@ BOOST_AUTO_TEST_CASE(decodeRejectsHashMismatch)
 // The full builder rejects a non-hex quantity up front for V1 transactions.
 BOOST_AUTO_TEST_CASE(builderRejectsNonHexQuantityV1)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     expectThrowMessage(
         [&] {
@@ -295,7 +295,7 @@ BOOST_AUTO_TEST_CASE(builderRejectsNonHexQuantityV1)
 // canonical zero regardless of what the caller passes.
 BOOST_AUTO_TEST_CASE(builderV0ForcesZeroGasFields)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     TransactionFactoryImpl factory(suite);
     auto tx = factory.createTransaction(0, "0xto", bcos::bytes{0x01}, "0x1", 100, "chain0",
         "group0", 0, "abi", "0xdeadbeef", "0xdeadbeef", 999, "0xdeadbeef", "0xdeadbeef");
@@ -397,6 +397,65 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     BOOST_CHECK(!forgedBcos->isDepositTx());
 }
 
+// U9-F4: TransactionImpl::size() must count the variable-length EIP-7702 authorizationList
+// (address/signer/r/s strings) and EIP-4844 blobVersionedHashes payloads, consistent with how
+// the other variable-length fields (accessList, signature, extraTransactionBytes) are counted.
+// Without this, a 0x04 SetCode tx makes BlockResponse["size"] under-report. 0x04 requires the
+// Prague revision (OP Isthmus+), so it is config-gated; blobVersionedHashes is defensive only
+// (0x03 is refused at admission). PER-FIELD deltas: the authorization strings are width-fixed
+// by their formats (address/signer 40, r/s 66 with the 0x prefix), so one sum over them cannot
+// attribute a copy-paste error — each field is added alone and its delta asserted against its
+// own width. The envelope's remaining variable-length fields (chainID/groupID/dataHash) are
+// pinned the same way.
+BOOST_AUTO_TEST_CASE(sizeCountsEachVariableLengthFieldSeparately)
+{
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = static_cast<tars::Char>(4);  // EIP-7702 SetCode
+
+    // One authorization entry per field, only that field set: each push's delta is exactly
+    // that field's width — an implementation that counts address twice and never signer
+    // (both 40) fails on the signer push.
+    auto const pushEntryWith = [&](std::string bcostars::AuthorizationEntry::* field,
+                                   std::string value) {
+        bcostars::AuthorizationEntry entry;
+        entry.*field = std::move(value);
+        inner.data.authorizationList.push_back(entry);
+    };
+    std::size_t const base = tx->size();
+    pushEntryWith(&bcostars::AuthorizationEntry::address, std::string(40, 'a'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 40U);
+    pushEntryWith(&bcostars::AuthorizationEntry::signer, std::string(40, 'b'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 80U);
+    pushEntryWith(&bcostars::AuthorizationEntry::r, "0x" + std::string(64, 'c'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 80U + 66U);
+    pushEntryWith(&bcostars::AuthorizationEntry::s, "0x" + std::string(64, 'd'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 80U + 2U * 66U);
+
+    // Blob commitments (32 bytes each) and the sibling variable-length gas field.
+    std::size_t const afterAuth = tx->size();
+    inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x11));
+    inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x22));
+    BOOST_CHECK_EQUAL(tx->size() - afterAuth, 64U);
+    std::size_t const afterBlobs = tx->size();
+    inner.data.maxFeePerBlobGas = "0x" + std::string(64, 'f');
+    BOOST_CHECK_EQUAL(tx->size() - afterBlobs, 66U);
+
+    // The envelope's remaining variable-length fields (counted since the
+    // every-variable-length-field sweep): chainID/groupID hex strings and the dataHash
+    // byte payload that mirrors extraTransactionHash.
+    std::size_t const afterGas = tx->size();
+    inner.data.chainID = std::string(42, '1');
+    BOOST_CHECK_EQUAL(tx->size() - afterGas, 42U);
+    std::size_t const afterChainId = tx->size();
+    inner.data.groupID = std::string(7, '2');
+    BOOST_CHECK_EQUAL(tx->size() - afterChainId, 7U);
+    std::size_t const afterGroupId = tx->size();
+    inner.dataHash = std::vector<tars::Char>(32, 0x33);
+    BOOST_CHECK_EQUAL(tx->size() - afterGroupId, 32U);
+}
+
 // Deposit hash: the canonical txHash of a 0x7e tx is keccak256 of the full envelope (type byte
 // + RLP fields) — op-geth DepositTx.Hash() / op-reth TxDeposit::tx_hash(). calculateHash must
 // handle the deposit branch (deposits carry no signature, so the normal reassemble path would
@@ -404,7 +463,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
 // check extraTransactionHash equals keccak of those bytes verbatim.
 BOOST_AUTO_TEST_CASE(depositHashIsKeccakOfEnvelope)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     auto tx = std::make_shared<TransactionImpl>();
     auto& inner = tx->mutableInner();
     inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
@@ -434,7 +493,7 @@ BOOST_AUTO_TEST_CASE(depositHashIsKeccakOfEnvelope)
 // mirror is deliberately forged to 999.
 BOOST_AUTO_TEST_CASE(web3ChainIdFromEnvelopeReadsEnvelopeNotTarsMirror)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     namespace rlp = bcos::codec::rlp;
 
     bcos::bytes items;
@@ -473,7 +532,7 @@ BOOST_AUTO_TEST_CASE(web3ChainIdFromEnvelopeReadsEnvelopeNotTarsMirror)
 // std::array::end() is a non-null pointer; `if (!expected)` never fired.
 BOOST_AUTO_TEST_CASE(typedUnknownTypeReassembleThrows)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     namespace rlp = bcos::codec::rlp;
     bcos::bytes items;
     rlp::encode(items, static_cast<uint64_t>(1));
@@ -832,7 +891,7 @@ BOOST_AUTO_TEST_CASE(reassembleLegacyChainId27And28Preimages)
 // hashes as keccak(reassemble), not keccak(extraBytes).
 BOOST_AUTO_TEST_CASE(calculateHashIgnoresForgeableDepositKindMirror)
 {
-    auto suite = makeSuite();
+    auto suite = makeTxFactorySuite();
     namespace rlp = bcos::codec::rlp;
     bcos::bytes items;
     rlp::encode(items, static_cast<uint64_t>(1));      // chainId

@@ -19,14 +19,36 @@
 
 #add_definitions(-Wno-unused-value -Wunused-parameter)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(Boost_NO_WARN_NEW_VERSIONS ON)
+
+# Repo-wide unity build defaults (option declared in Options.cmake). These
+# variables initialize the UNITY_BUILD / UNITY_BUILD_BATCH_SIZE property of
+# every target created after this point; per-target set_target_properties
+# still overrides them (ethereum-executor / opstack-executor stay OFF).
+if(UNITY_BUILD)
+    set(CMAKE_UNITY_BUILD ON)
+    set(CMAKE_UNITY_BUILD_BATCH_SIZE ${UNITY_BUILD_BATCH_SIZE})
+endif()
+
+# C++23 std::expected floor: GCC 12+ / Clang 16+ (Xcode 16+) / VS2022 17.3+ (MSVC 19.33+).
+if(("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12) OR
+   ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16) OR
+   (MSVC AND MSVC_VERSION LESS 1933))
+    message(FATAL_ERROR "FISCO-BCOS requires GCC 12+ / Clang 16+ (Xcode 16+) / VS2022 17.3+ for C++23 std::expected (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}${MSVC_VERSION})")
+endif()
+
 message(STATUS "COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang"))
     find_program(CCACHE_PROGRAM ccache)
 
-    if(CCACHE_PROGRAM)
+    # Only auto-wrap when the caller has not already chosen a launcher: the CI passes
+    # -DCMAKE_CXX_COMPILER_LAUNCHER=ccache, and setting both mechanisms makes the two
+    # launchers stack in generators that expand RULE_LAUNCH_* and COMPILER_LAUNCHER
+    # separately (the Ninja generator collapses them into one LAUNCHER variable, but
+    # the Makefile generators used for release builds do not).
+    if(CCACHE_PROGRAM AND NOT CMAKE_C_COMPILER_LAUNCHER AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
         set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}")
     endif()
@@ -68,6 +90,16 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         # Note: If bring the -static option, apple will fail to link
         if(NOT APPLE)
             SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+            # GCC 16's C driver routes libgcc/libatomic through the
+            # libgcc_s_asneeded.so/libatomic_asneeded.so linker scripts, which CMake
+            # records in CMAKE_*_IMPLICIT_LINK_LIBRARIES and appends when C static
+            # libs are linked into C++ targets; under -static there is no .a for
+            # them and the link fails with "cannot find -lgcc_s_asneeded". The
+            # scripts only add AS_NEEDED entries that are meaningless for a static
+            # link (the g++ driver already supplies libgcc/libgcc_eh itself), so
+            # drop them from the implicit lists.
+            list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES gcc_s_asneeded atomic_asneeded)
+            list(REMOVE_ITEM CMAKE_CXX_IMPLICIT_LINK_LIBRARIES gcc_s_asneeded atomic_asneeded)
         endif()
 
         # SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-Bdynamic -ldl -lpthread -Wl,-Bstatic")
@@ -89,9 +121,48 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
             set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=gold")
             set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
         endif()
-    elseif("${LINKER}" MATCHES "mold")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=mold")
+    elseif("${LINKER}" MATCHES "^(lld|mold)$")
+        # GCC 16 routes libgcc/libatomic through the libgcc_s_asneeded.so linker script
+        # (INPUT(AS_NEEDED(-lgcc_s))). mold < 2.41.0 cannot parse it, while lld handles
+        # it fine, so an explicitly requested linker is verified with a real link rather
+        # than assumed. A failed probe is a hard error: silently falling back would make
+        # CI link with a different linker than the one it asked for, and the static link
+        # path (-static, below) is exactly the configuration that ships as a release.
+        set(_fisco_ld_flag "-fuse-ld=${LINKER}")
+        set(_fisco_ld_probe_src "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/linker-probe.cpp")
+        file(WRITE "${_fisco_ld_probe_src}" "int main() { return 0; }\n")
+        # CMAKE_EXE_LINKER_FLAGS may already carry -static for BUILD_STATIC, so the probe
+        # covers the static link path that motivates it. Flags added later in this file
+        # (MARCH_TYPE, sanitizers, coverage) do not affect the linker-script parsing the
+        # probe guards, so probing here is sufficient.
+        separate_arguments(_fisco_ld_probe_extra UNIX_COMMAND "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_CXX_FLAGS}")
+        execute_process(
+            COMMAND ${CMAKE_CXX_COMPILER} ${_fisco_ld_probe_extra} ${_fisco_ld_flag}
+                    "${_fisco_ld_probe_src}" -o "${_fisco_ld_probe_src}.out"
+            RESULT_VARIABLE _fisco_ld_probe_result
+            OUTPUT_QUIET ERROR_VARIABLE _fisco_ld_probe_error)
+        file(REMOVE "${_fisco_ld_probe_src}" "${_fisco_ld_probe_src}.out")
+        if(_fisco_ld_probe_result EQUAL 0)
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_fisco_ld_flag}")
+            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${_fisco_ld_flag}")
+            message(STATUS "LINKER: ${LINKER} verified and enabled (${_fisco_ld_flag})")
+        else()
+            message(FATAL_ERROR
+                "LINKER=${LINKER} requested but a probe link with ${_fisco_ld_flag} failed. "
+                "mold < 2.41.0 cannot parse GCC 16's libgcc_s_asneeded.so linker script; "
+                "install a newer mold, use -DLINKER=lld, or omit -DLINKER for the default "
+                "linker. Linker output: ${_fisco_ld_probe_error}")
+        endif()
+        unset(_fisco_ld_flag)
+        unset(_fisco_ld_probe_src)
+        unset(_fisco_ld_probe_extra)
+        unset(_fisco_ld_probe_result)
+        unset(_fisco_ld_probe_error)
+    elseif(NOT "${LINKER}" STREQUAL "default")
+        # Options.cmake defaults LINKER to "default"; anything else that matched neither
+        # branch above (typo, versioned name like lld-21) would otherwise silently link
+        # with the default linker.
+        message(FATAL_ERROR "Unknown LINKER=${LINKER}; supported values: default, gold, lld, mold")
     endif()
 
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
@@ -122,9 +193,8 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         # -Wmissing-field-initializers case; the per-target downgrade
         # (`set_source_files_properties/set_target_properties ... COMPILE_OPTIONS
         # -Wno-missing-field-initializers`) is reserved for vendored upstream code that cannot
-        # carry those initializers. bcos-evm/CMakeLists.txt applies it that way today; the OP
-        # executor modules (bcos-evm-opstack / opstack-executor) will add it where their
-        # upstream-derived code needs it when they land (part 3+).
+        # carry those initializers; the OP executor module (opstack-executor) adds it where its
+        # upstream-derived code needs it.
 
         # gcc bug, refer to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105595
         add_compile_options(-Wno-subobject-linkage)
@@ -137,11 +207,14 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
 
         if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
-            # set(CMAKE_CXX_STANDARD 23)
             add_compile_options(-Wno-error=uninitialized)
             add_compile_options(-Wno-error=tsan)
-            add_compile_options(-fconcepts-diagnostics-depth=10)
-            add_compile_options(-fdiagnostics-all-candidates)
+            # -fconcepts-diagnostics-depth=10 and -fdiagnostics-all-candidates used to be
+            # set here. They only shape template/concept *diagnostics*, but GCC still pays
+            # for candidate tracking on every overload resolution: dropping them measured
+            # ~10% off the CI compile time on this codebase (6 heaviest unity TUs, same
+            # machine). Add them back locally (or on a single target) when a concept error
+            # needs the full candidate list.
         endif()
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
@@ -165,25 +238,51 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     if(SANITIZE_ADDRESS)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize-address-use-after-scope -fsanitize-recover=all")
+        # ASan + UBSan. Alignment checks stay off: packed protocol structs are
+        # intentional. recover=all keeps a test run going so we see every report.
+        set(_fisco_asan_flags "-ggdb -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize-address-use-after-scope -fsanitize-recover=all")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_fisco_asan_flags}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_fisco_asan_flags}")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined")
+        unset(_fisco_asan_flags)
     endif()
 
     if(SANITIZE_THREAD)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer -fsanitize=thread")
+        set(_fisco_tsan_flags "-ggdb -fno-omit-frame-pointer -fsanitize=thread")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_fisco_tsan_flags}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_fisco_tsan_flags}")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=thread")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=thread")
+        unset(_fisco_tsan_flags)
     endif()
 
     if(COVERAGE)
         set(TESTS ON)
 
+        # gcov reads the .gcno/.gcda pairs the instrumentation emits, not DWARF, so
+        # -g only inflates compile memory and object size. -O0 keeps each line's
+        # counter on its own line; -O2 inlining and block merging misattribute
+        # counters and multiply compile memory on template-heavy TUs. So a coverage
+        # build replaces the active configuration's flags with -O0, whatever
+        # CMAKE_BUILD_TYPE says. It deliberately does not switch the build type to
+        # Debug: vcpkg maps Debug to the debug/ variant of every dependency, which
+        # the *-release triplets the CI uses do not build.
+        string(TOUPPER "${CMAKE_BUILD_TYPE}" _fisco_coverage_config)
+        set(CMAKE_CXX_FLAGS_${_fisco_coverage_config} "-O0")
+        set(CMAKE_C_FLAGS_${_fisco_coverage_config} "-O0")
+        unset(_fisco_coverage_config)
         if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-            set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
-            set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS}")
+            # -fprofile-update=atomic: the tests are multi-threaded, and racing
+            # non-atomic counter updates are what lcov's "negative" counts come from.
+            set(CMAKE_CXX_FLAGS "--coverage -fprofile-update=atomic ${CMAKE_CXX_FLAGS}")
+            set(CMAKE_C_FLAGS "--coverage -fprofile-update=atomic ${CMAKE_C_FLAGS}")
             set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
             set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
         elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
             add_compile_options(-Wno-unused-command-line-argument)
-            set(CMAKE_CXX_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
-            set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
+            set(CMAKE_CXX_FLAGS "-fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
+            set(CMAKE_C_FLAGS "-fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
         endif()
     endif()
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")

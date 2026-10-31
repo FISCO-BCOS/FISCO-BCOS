@@ -20,6 +20,7 @@
 
 #pragma once
 #include <bcos-framework/ledger/Ledger.h>
+#include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
@@ -77,13 +78,39 @@ public:
     task::Task<void> getLogs(const Json::Value&, Json::Value&);
     task::Task<std::tuple<protocol::BlockNumber, bool>> getBlockNumberByTag(
         std::string_view blockTag);
+    task::Task<std::tuple<protocol::BlockNumber, protocol::BlockNumber>> getBlockNumberAndHeadByTag(
+        std::string_view blockTag);
     task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
+    // Ethereum/OP lane only (requireEthereumLane / executor_version >= 2): geth-standard
+    // methods with no meaning on the legacy FISCO lane.
+    task::Task<void> blobBaseFee(const Json::Value&, Json::Value&);
+    task::Task<void> feeHistory(const Json::Value&, Json::Value&);
+    task::Task<void> getBlockReceipts(const Json::Value&, Json::Value&);
+    // OP lane only (requireOpStackLane): the OP mempool snapshot the batcher/proposer call.
+    task::Task<void> txpoolStatus(const Json::Value&, Json::Value&);
+    task::Task<void> txpoolContent(const Json::Value&, Json::Value&);
     task::Task<void> getProof(const Json::Value&, Json::Value&);
 
 private:
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;
+
+    /// eth_getTransactionReceipt's result for @p hash; throws when the tx or receipt is absent.
+    task::Task<Json::Value> receiptJson(crypto::HashType const& hash);
+    /// The OP mempool split by sealability (empty when this node has no mempool).
+    task::Task<std::vector<txpool::PooledTransaction>> pooledTransactions();
+
+    // The engine lane's forkchoice safe/finalized heads, plus whether the engine is wired
+    // (which switches safe/finalized to fail-closed rather than the static-depth fallback).
+    // Shared by getBlockNumberByTag and the filter endpoints so one tag has one resolver.
+    struct ForkchoiceContext
+    {
+        std::optional<protocol::BlockNumber> safe;
+        std::optional<protocol::BlockNumber> finalized;
+        bool engineLane = false;
+    };
+    ForkchoiceContext forkchoiceContext() const;
 
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
 };

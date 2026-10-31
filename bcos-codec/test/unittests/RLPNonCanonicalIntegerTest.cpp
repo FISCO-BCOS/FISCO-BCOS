@@ -1,0 +1,85 @@
+/*
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * @brief Regression test for issue #5353: the RLP integer decoder must reject non-canonical
+ *        integer payloads (leading zero bytes, and the single byte 0x00 for zero), matching
+ *        go-ethereum's ErrCanonInt. Length prefixes were already checked; values were not.
+ */
+#include "bcos-codec/rlp/Exceptions.h"
+#include "bcos-codec/rlp/RLPDecode.h"
+#include <bcos-utilities/DataConvertUtility.h>
+#include <boost/test/unit_test.hpp>
+#include <limits>
+
+using namespace bcos;
+using namespace bcos::codec::rlp;
+
+namespace bcos::test
+{
+BOOST_AUTO_TEST_SUITE(RLPNonCanonicalIntegerTest)
+
+namespace
+{
+template <typename T>
+int32_t decodeError(std::string_view hex)
+{
+    bcos::bytes bytes = fromHex(hex);
+    auto ref = bcos::ref(bytes);
+    T value{};
+    // -1 means "no error" (decode succeeded); any thrown code is returned as-is, so a real
+    // DecodingError::Overflow (== 0) is still distinguishable from success.
+    try
+    {
+        bcos::codec::rlp::decode(ref, value);
+        return -1;
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const& e)
+    {
+        // INT32_MIN is neither the success sentinel nor a DecodingError value: an exception
+        // without the code info fails loudly here instead of being masked.
+        constexpr int32_t c_noCode = std::numeric_limits<int32_t>::min();
+        auto const code = bcos::codec::rlp::rlpErrorCode(e, c_noCode);
+        BOOST_REQUIRE_NE(code, c_noCode);
+        return code;
+    }
+}
+template <typename T>
+T decodeOk(std::string_view hex)
+{
+    bcos::bytes bytes = fromHex(hex);
+    auto ref = bcos::ref(bytes);
+    T value{};
+    bcos::codec::rlp::decode(ref, value);
+    return value;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(leadingZeroPayloadRejected)
+{
+    // 0x820001: two-byte string 00 01 == value 1 written non-minimally
+    BOOST_CHECK_EQUAL(decodeError<uint64_t>("820001"), NonCanonicalSize);
+    BOOST_CHECK_EQUAL(decodeError<u256>("820001"), NonCanonicalSize);
+    // three-byte with leading zero
+    BOOST_CHECK_EQUAL(decodeError<uint64_t>("83000102"), NonCanonicalSize);
+    // 0x00 alone: zero must be the empty string 0x80, not a single zero byte
+    BOOST_CHECK_EQUAL(decodeError<uint64_t>("00"), NonCanonicalSize);
+    BOOST_CHECK_EQUAL(decodeError<u256>("00"), NonCanonicalSize);
+}
+
+BOOST_AUTO_TEST_CASE(canonicalPayloadsStillDecode)
+{
+    BOOST_CHECK_EQUAL(decodeOk<uint64_t>("80"), 0U);
+    BOOST_CHECK_EQUAL(decodeOk<uint64_t>("01"), 1U);
+    BOOST_CHECK_EQUAL(decodeOk<uint64_t>("8180"), 0x80U);
+    BOOST_CHECK_EQUAL(decodeOk<uint64_t>("820100"), 0x100U);  // trailing zero is fine
+    BOOST_CHECK_EQUAL(decodeOk<u256>("820100"), u256(0x100));
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+}  // namespace bcos::test

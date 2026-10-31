@@ -23,7 +23,6 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::codec;
 using namespace bcos::codec::abi;
 
 // uint<M>: unsigned integer type of M bits, 0 < M <= 256, M % 8 == 0. e.g. uint32, uint8,

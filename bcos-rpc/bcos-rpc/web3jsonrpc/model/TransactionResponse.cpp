@@ -1,8 +1,8 @@
 #include "TransactionResponse.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rpc/web3jsonrpc/model/DepositTransaction.h"
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-rpc/jsonrpc/Common.h>  // WEB3_LOG
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
@@ -26,19 +26,14 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);
     result["transactionIndex"] = toQuantity(transactionIndex);
-    auto from = toHex(tx.sender());
-    toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
-    result["from"] = "0x" + std::move(from);
+    result["from"] = "0x" + checksummedHexAddress(toHex(tx.sender()));
     if (tx.to().empty())
     {
         result["to"] = Json::nullValue;
     }
     else
     {
-        auto toView = tx.to();
-        auto to = std::string(toView.starts_with("0x") ? toView.substr(2) : toView);
-        toChecksumAddress(to, bcos::crypto::keccak256Hash(bcos::bytesConstRef(to)).hex());
-        result["to"] = "0x" + std::move(to);
+        result["to"] = "0x" + checksummedHexAddressFromHex(tx.to());
     }
     result["gas"] = toQuantity(tx.gasLimit());
     auto gasPrice = tx.gasPrice();
@@ -73,6 +68,9 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         return;
     }
 
+    // Legacy (type-0) EVM transactions carry an EIP-155 `v` in geth's JSON encoding
+    // (chainId*2 + 35 + yParity, or 27 + yParity pre-EIP-155); typed transactions carry the
+    // raw yParity. The `v` value is emitted per-branch below (see the BCOS and Web3 branches).
     if (tx.type() == bcos::protocol::TransactionType::BCOSTransaction) [[unlikely]]
     {
         result["type"] = toQuantity(0);
@@ -82,20 +80,23 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         result["maxPriorityFeePerGas"] = toQuantity(tx.maxPriorityFeePerGas().value_or(0));
         result["maxFeePerGas"] = toQuantity(tx.maxFeePerGas().value_or(0));
         result["chainId"] = "0x0";
+        // BCOS signature is r(32) || s(32) || v(1), v already the 0/1 recovery id.
+        result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
     }
     else [[likely]]
     {
         Web3Transaction web3Tx;
         auto extraBytesRef = bcos::bytesRef(const_cast<byte*>(tx.extraTransactionBytes().data()),
             tx.extraTransactionBytes().size());
-        if (auto error = codec::rlp::decodeFromPayload(extraBytesRef, web3Tx); error != nullptr)
+        if (auto decodeResult = codec::rlp::tryDecodeFromPayload(extraBytesRef, web3Tx);
+            !decodeResult)
         {
             // Undecodable web3 payload (corrupt extraTransactionBytes, or a tars mirror that
             // diverged from the envelope): never serialize half-decoded state. Emit zeroed
             // web3 fields instead (same posture as the deposit fallback above) and log once.
             WEB3_LOG(WARNING) << LOG_DESC("TransactionResponse: undecodable web3 payload")
                               << LOG_KV("hash", tx.hash().hexPrefixed())
-                              << LOG_KV("reason", error->errorMessage());
+                              << LOG_KV("reason", decodeResult.error().message);
             result["nonce"] = "0x0";
             result["type"] = toQuantity(0);
             result["value"] = "0x0";
@@ -161,8 +162,21 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
                 result["authorizationList"].append(std::move(entry));
             }
         }
+        // v field: typed transactions expose the raw yParity (0/1); legacy transactions expose
+        // the full recovery id (27/28 pre-EIP-155, or chainId*2+35+parity with EIP-155) — the
+        // form op-geth's legacy JSON decoder requires to reproduce the canonical tx hash.
+        //
+        // extraTransactionBytes is the signing preimage on the txpool lane (no signature
+        // trailer, so the decoder leaves signatureV at its default 0) and the sealed envelope
+        // only on the engine lane. The tars signature carries the parity on BOTH layouts, and it
+        // is exactly what reassembleWeb3RawTransaction uses for the canonical txHash, so read
+        // the parity from it rather than the decoded payload — otherwise typed v regresses to
+        // 0x0 and legacy drops the parity on the txpool lane.
+        auto const sig = tx.signatureData();
+        web3Tx.signatureV = sig.size() >= 65 ? static_cast<uint64_t>(sig[64]) : 0;
+        result["v"] = toQuantity(
+            web3Tx.type == TransactionType::Legacy ? web3Tx.getSignatureV() : web3Tx.signatureV);
     }
     result["r"] = toQuantity(tx.signatureData().getCroppedData(0, 32));
     result["s"] = toQuantity(tx.signatureData().getCroppedData(32, 32));
-    result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
 }

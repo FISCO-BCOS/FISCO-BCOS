@@ -18,14 +18,29 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/storage/Entry.h>
+#include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
+#include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
+#include <bcos-tars-protocol/protocol/BlockImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <memory>
+#include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <stdexcept>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -56,7 +71,15 @@ public:
         std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
         std::optional<std::uint32_t> capturedNewPayloadVersion;
         bool throwUnknownPayload = false;
+        bool throwInvalidPayloadAttributes = false;
         bool throwUnsupportedFork = false;
+        bool throwUnsupportedEngineApiVersion = false;
+        bool throwInvalidForkchoiceState = false;
+        bool throwOpExecutionInternalError = false;
+        bool throwStdRuntimeError = false;
+        bool throwBcosError = false;
+        std::atomic<bool> hangNewPayload{false};
+        std::atomic<bool> enteredNewPayload{false};
     };
     std::shared_ptr<State> m_state = std::make_shared<State>();
 
@@ -74,9 +97,35 @@ public:
     {
         m_state->capturedForkchoiceState = forkchoiceState;
         m_state->capturedForkchoiceVersion = static_cast<int>(version);
+        if (m_state->throwInvalidPayloadAttributes)
+        {
+            BOOST_THROW_EXCEPTION(engine::InvalidPayloadAttributes{});
+        }
         if (m_state->throwUnsupportedFork)
         {
             BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
+        }
+        if (m_state->throwUnsupportedEngineApiVersion)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
+        }
+        if (m_state->throwInvalidForkchoiceState)
+        {
+            BOOST_THROW_EXCEPTION(engine::InvalidForkchoiceState{});
+        }
+        if (m_state->throwOpExecutionInternalError)
+        {
+            BOOST_THROW_EXCEPTION(engine::OpExecutionInternalError{}
+                                  << bcos::errinfo_comment{"Null receipt returned by scheduler"});
+        }
+        if (m_state->throwStdRuntimeError)
+        {
+            throw std::runtime_error{"untreated scheduler fault"};
+        }
+        if (m_state->throwBcosError)
+        {
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
         }
         co_return m_state->forkchoiceUpdatedResult;
     }
@@ -86,9 +135,33 @@ public:
     {
         m_state->capturedPayloadId = payloadId;
         m_state->capturedGetPayloadVersion = version;
+        if (m_state->throwUnsupportedFork)
+        {
+            BOOST_THROW_EXCEPTION(
+                engine::UnsupportedFork{} << bcos::errinfo_comment{"engine_getPayloadV5 requires a "
+                                                                   "Karst payload"});
+        }
         if (m_state->throwUnknownPayload)
         {
             BOOST_THROW_EXCEPTION(engine::UnknownPayload{});
+        }
+        if (m_state->throwUnsupportedEngineApiVersion)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
+        }
+        if (m_state->throwOpExecutionInternalError)
+        {
+            BOOST_THROW_EXCEPTION(engine::OpExecutionInternalError{}
+                                  << bcos::errinfo_comment{"Null receipt returned by scheduler"});
+        }
+        if (m_state->throwStdRuntimeError)
+        {
+            throw std::runtime_error{"untreated scheduler fault"};
+        }
+        if (m_state->throwBcosError)
+        {
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
         }
         co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
     }
@@ -96,8 +169,39 @@ public:
     task::Task<engine::PayloadStatus> newPayload(
         const engine::NewPayloadRequest& request, std::uint32_t version)
     {
+        m_state->enteredNewPayload.store(true);
+        while (m_state->hangNewPayload.load())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
         m_state->capturedNewPayloadRequest = request;
         m_state->capturedNewPayloadVersion = version;
+        if (m_state->throwInvalidPayloadAttributes)
+        {
+            BOOST_THROW_EXCEPTION(engine::InvalidPayloadAttributes{});
+        }
+        if (m_state->throwUnsupportedFork)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
+        }
+        if (m_state->throwUnsupportedEngineApiVersion)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
+        }
+        if (m_state->throwOpExecutionInternalError)
+        {
+            BOOST_THROW_EXCEPTION(engine::OpExecutionInternalError{}
+                                  << bcos::errinfo_comment{"Null receipt returned by scheduler"});
+        }
+        if (m_state->throwStdRuntimeError)
+        {
+            throw std::runtime_error{"untreated scheduler fault"};
+        }
+        if (m_state->throwBcosError)
+        {
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
+        }
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
     }
 
@@ -106,6 +210,7 @@ public:
     {
         return std::nullopt;
     }
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const { return std::nullopt; }
 };
 
 class EngineRpcTestFixture : public RPCFixture
@@ -190,6 +295,144 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV2)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 2);
 }
 
+// UnsupportedFork maps to -38005, not -32603.
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedWithAttrsUnsupportedForkMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    Json::Value attrs;
+    attrs["timestamp"] = "0x1";
+    attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
+    attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
+    params.append(attrs);
+
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV2, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+// InvalidPayloadAttributes -> -38003, UnsupportedFork -> -38005, InvalidForkchoiceState -> -38002.
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedTypedFailuresMapToSpecErrorCodes)
+{
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    Json::Value attrs;
+    attrs["timestamp"] = "0x1";
+    attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
+    attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
+    params.append(attrs);
+
+    auto expectCode = [&](Json::Value params, int code) {
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+            [code](JsonRpcException const& e) { return e.code() == code; });
+    };
+
+    mockService.m_state->throwInvalidPayloadAttributes = true;
+    expectCode(params, EngineError::InvalidPayloadAttributes);
+
+    mockService.m_state->throwInvalidPayloadAttributes = false;
+    mockService.m_state->throwUnsupportedFork = true;
+    expectCode(params, EngineError::UnsupportedFork);
+
+    mockService.m_state->throwUnsupportedFork = false;
+    mockService.m_state->throwInvalidForkchoiceState = true;
+    // The state-only shape (no attributes) exercises the same catch ladder.
+    Json::Value stateOnly(Json::arrayValue);
+    stateOnly.append(fc);
+    expectCode(stateOnly, EngineError::InvalidForkchoiceState);
+
+    mockService.m_state->throwInvalidForkchoiceState = false;
+    mockService.m_state->throwUnsupportedEngineApiVersion = true;
+    expectCode(params, EngineError::UnsupportedFork);
+}
+
+namespace
+{
+bool isShortInternalError(JsonRpcException const& e, char const* needle)
+{
+    auto const& msg = e.msg();
+    return e.code() == InternalError && msg.find("Internal error") != std::string::npos &&
+           msg.find(needle) != std::string::npos && msg.find("boost") == std::string::npos &&
+           msg.find("Diagnostic") == std::string::npos;
+}
+
+Json::Value makeForkchoiceParams()
+{
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    return params;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(engineRpcInternalFaultsMapToShort32603)
+{
+    auto const params = makeForkchoiceParams();
+
+    mockService.m_state->throwOpExecutionInternalError = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "Null receipt returned by scheduler");
+        });
+
+    mockService.m_state->throwOpExecutionInternalError = false;
+    mockService.m_state->throwStdRuntimeError = true;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "untreated scheduler fault");
+        });
+
+    mockService.m_state->throwStdRuntimeError = false;
+    mockService.m_state->throwOpExecutionInternalError = true;
+    Json::Value getParams(Json::arrayValue);
+    getParams.append("0x00000000deadbeef");
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(getPayloadV3, getParams, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "Null receipt returned by scheduler");
+        });
+}
+
+// A bcos::Error from the scheduler/ledger carries its reason in ErrorMessage, not in what()
+// (Exception::what() returns only errinfo_comment, which BCOS_ERROR never sets). The catch-all
+// must not collapse it to a bare "Internal error" — the reason is the operator's only
+// diagnostic on the -32603.
+BOOST_AUTO_TEST_CASE(bcosErrorReasonSurvivesInternalError)
+{
+    auto const params = makeForkchoiceParams();
+
+    mockService.m_state->throwBcosError = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "missing SYS_HASH_2_TX row");
+        });
+
+    Json::Value getParams(Json::arrayValue);
+    getParams.append("0x00000000deadbeef");
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(getPayloadV3, getParams, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "missing SYS_HASH_2_TX row");
+        });
+
+    mockService.m_state->throwBcosError = false;
+}
+
+
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
 {
     Json::Value params(Json::arrayValue);
@@ -216,9 +459,6 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
 }
 
-// The one method version this node really does not implement: the service-layer forkchoice
-// window tops out at V3 (isForkchoiceVersionSupported), so V4 answers -38005 without
-// reaching the engine service.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 {
     Json::Value params(Json::arrayValue);
@@ -382,6 +622,37 @@ BOOST_AUTO_TEST_CASE(getPayloadV5UnknownPayload)
         [](JsonRpcException const& e) { return e.code() == EngineError::UnknownPayload; });
 }
 
+BOOST_AUTO_TEST_CASE(getPayloadUnsupportedEngineApiVersionMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedEngineApiVersion = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append("0x00000000deadbeef");
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(getPayloadV3, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+// The payload's fork is outside the method's window: execution-apis osaka.md requires -38005
+// (EngineError::UnsupportedFork), not the generic -32603 the catch-all would produce.
+BOOST_AUTO_TEST_CASE(getPayloadForkOutsideMethodWindowMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append("0x00000000deadbeef");
+    Json::Value response;
+
+    auto const isUnsupportedFork = [](JsonRpcException const& e) {
+        return e.code() == EngineError::UnsupportedFork &&
+               e.msg() == "Unsupported fork: engine_getPayloadV5 requires a Karst payload";
+    };
+    BOOST_CHECK_EXCEPTION(
+        CALL_ENGINE(getPayloadV5, params, response), JsonRpcException, isUnsupportedFork);
+    BOOST_CHECK_EXCEPTION(
+        CALL_ENGINE(getPayloadV4, params, response), JsonRpcException, isUnsupportedFork);
+}
+
 BOOST_AUTO_TEST_CASE(getPayloadV5MissingParams)
 {
     Json::Value params(Json::arrayValue);
@@ -432,6 +703,50 @@ Json::Value makeV1ExecutionPayloadJson()
     return ep;
 }
 }  // namespace
+
+BOOST_AUTO_TEST_CASE(newPayloadInternalFaultsMapToShort32603)
+{
+    mockService.m_state->throwOpExecutionInternalError = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV1ExecutionPayloadJson());
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "Null receipt returned by scheduler");
+        });
+
+    mockService.m_state->throwOpExecutionInternalError = false;
+    mockService.m_state->throwStdRuntimeError = true;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "untreated scheduler fault");
+        });
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadUnsupportedForkMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV1ExecutionPayloadJson());
+
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadUnsupportedEngineApiVersionMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedEngineApiVersion = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV1ExecutionPayloadJson());
+
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
 
 BOOST_AUTO_TEST_CASE(newPayloadV1)
 {
@@ -523,6 +838,143 @@ BOOST_AUTO_TEST_CASE(newPayloadV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 3);
 }
 
+BOOST_AUTO_TEST_CASE(newPayloadV3CompareFieldsSurviveEngineHelper)
+{
+    auto ep = makeV4ExecutionPayloadJson();
+    ep.removeMember("withdrawalsRoot");
+    ep["extraData"] = "0xabcdef";
+    ep["gasLimit"] = "0x5208";
+    ep["gasUsed"] = "0x21";
+    ep["baseFeePerGas"] = "0x7";
+    ep["blockNumber"] = "0xb";
+    ep["timestamp"] = "0xa";
+    ep["transactions"].append("0xaa");
+    ep["blobGasUsed"] = "0xd";
+    ep["excessBlobGas"] = "0xe";
+
+    Json::Value params(Json::arrayValue);
+    params.append(ep);
+    params.append(Json::Value(Json::arrayValue));
+    params.append(c_beaconRootHex);
+
+    Json::Value response;
+    CALL_ENGINE(newPayloadV3, params, response);
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
+    auto const& first = mockService.m_state->capturedNewPayloadRequest->executionPayload;
+
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(first.extraData), "0xabcdef");
+    BOOST_CHECK_EQUAL(first.parentHash.hexPrefixed(), ep["parentHash"].asString());
+    BOOST_CHECK_EQUAL(first.stateRoot.hexPrefixed(), ep["stateRoot"].asString());
+    BOOST_CHECK_EQUAL(first.receiptsRoot.hexPrefixed(), ep["receiptsRoot"].asString());
+    BOOST_CHECK_EQUAL(first.prevRandao.hexPrefixed(), ep["prevRandao"].asString());
+    BOOST_CHECK_EQUAL(first.blockHash.hexPrefixed(), ep["blockHash"].asString());
+    BOOST_CHECK_EQUAL(first.feeRecipient.hexPrefixed(), ep["feeRecipient"].asString());
+    BOOST_CHECK_EQUAL(first.gasLimit, u256(0x5208));
+    BOOST_CHECK_EQUAL(first.gasUsed, u256(0x21));
+    BOOST_CHECK_EQUAL(first.baseFeePerGas, u256(7));
+    BOOST_CHECK_EQUAL(first.blockNumber, 11);
+    BOOST_CHECK_EQUAL(first.timestamp, 10 * 1000);
+    BOOST_REQUIRE_EQUAL(first.transactions.size(), 1);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(first.transactions.front().raw), "0xaa");
+    BOOST_REQUIRE(first.blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*first.blobGasUsed, u256(0xd));
+    BOOST_REQUIRE(first.excessBlobGas.has_value());
+    BOOST_CHECK_EQUAL(*first.excessBlobGas, u256(0xe));
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(bytes(first.logsBloom.begin(), first.logsBloom.end())),
+        ep["logsBloom"].asString());
+
+    auto serialized = serializeExecutionPayload(first, engine::ApiVersion::V3);
+    Json::Value roundTrip(Json::arrayValue);
+    roundTrip.append(serialized);
+    roundTrip.append(Json::Value(Json::arrayValue));
+    roundTrip.append(c_beaconRootHex);
+    auto parsed = parseNewPayloadRequest(roundTrip, engine::ApiVersion::V3);
+    auto const& second = parsed.executionPayload;
+    BOOST_CHECK(first.extraData == second.extraData);
+    BOOST_CHECK(first.parentHash == second.parentHash);
+    BOOST_CHECK(first.stateRoot == second.stateRoot);
+    BOOST_CHECK(first.receiptsRoot == second.receiptsRoot);
+    BOOST_CHECK(first.logsBloom == second.logsBloom);
+    BOOST_CHECK(first.prevRandao == second.prevRandao);
+    BOOST_CHECK(first.gasLimit == second.gasLimit);
+    BOOST_CHECK(first.gasUsed == second.gasUsed);
+    BOOST_CHECK(first.baseFeePerGas == second.baseFeePerGas);
+    BOOST_CHECK(first.blockHash == second.blockHash);
+    BOOST_CHECK(first.feeRecipient == second.feeRecipient);
+    BOOST_CHECK_EQUAL(first.timestamp, second.timestamp);
+    BOOST_CHECK_EQUAL(first.blockNumber, second.blockNumber);
+    BOOST_REQUIRE_EQUAL(first.transactions.size(), second.transactions.size());
+    BOOST_CHECK(first.transactions.front().raw == second.transactions.front().raw);
+    BOOST_CHECK(first.blobGasUsed == second.blobGasUsed);
+    BOOST_CHECK(first.excessBlobGas == second.excessBlobGas);
+    // The withdrawals list is strictly compared by compareWithBuiltPayload — pin its
+    // round trip too.
+    BOOST_CHECK(first.withdrawals == second.withdrawals);
+    BOOST_CHECK(first.withdrawalsRoot == second.withdrawalsRoot);
+}
+
+// The production version pair: getPayloadV5 responses are re-submitted as
+// newPayloadV4 (EngineServiceImpl getPayloadV5 -> newPayloadV4). Pin the full
+// compared-field set across that dialect pair, including withdrawalsRoot and the
+// withdrawals list — the fields the compare gate treats most strictly.
+BOOST_AUTO_TEST_CASE(newPayloadV4CompareFieldsSurviveV5RoundTrip)
+{
+    auto ep = makeV4ExecutionPayloadJson();
+    ep["extraData"] = "0xabcdef";
+    ep["gasUsed"] = "0x21";
+    ep["baseFeePerGas"] = "0x7";
+    ep["logsBloom"] = "0x" + std::string(512, 'a');  // non-zero: a dropped/padded bloom must fail
+    ep["transactions"].append("0xaa");
+
+    Json::Value params(Json::arrayValue);
+    params.append(ep);
+    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes
+    params.append(c_beaconRootHex);                // parentBeaconBlockRoot
+    params.append(Json::Value(Json::arrayValue));  // executionRequests
+
+    Json::Value response;
+    CALL_ENGINE(newPayloadV4, params, response);
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
+    auto const& firstRequest = *mockService.m_state->capturedNewPayloadRequest;
+
+    auto serialized =
+        serializeExecutionPayload(firstRequest.executionPayload, engine::ApiVersion::V5);
+    Json::Value roundTrip(Json::arrayValue);
+    roundTrip.append(serialized);
+    roundTrip.append(Json::Value(Json::arrayValue));
+    roundTrip.append(c_beaconRootHex);
+    roundTrip.append(Json::Value(Json::arrayValue));
+    auto parsed = parseNewPayloadRequest(roundTrip, engine::ApiVersion::V4);
+    auto const& second = parsed.executionPayload;
+
+    // Pin every field compareWithBuiltPayload strictly compares (both-sides-and-equal):
+    // the 13 scalar fields + the withdrawals list + per-transaction raw bytes, plus the
+    // three presence-XOR optionals (withdrawalsRoot/blobGasUsed/excessBlobGas).
+    auto const& fp = firstRequest.executionPayload;
+    BOOST_CHECK(fp.parentHash == second.parentHash);
+    BOOST_CHECK(fp.stateRoot == second.stateRoot);
+    BOOST_CHECK(fp.receiptsRoot == second.receiptsRoot);
+    BOOST_CHECK(fp.logsBloom == second.logsBloom);
+    BOOST_CHECK(fp.prevRandao == second.prevRandao);
+    BOOST_CHECK(fp.gasLimit == second.gasLimit);
+    BOOST_CHECK(fp.gasUsed == second.gasUsed);
+    BOOST_CHECK(fp.baseFeePerGas == second.baseFeePerGas);
+    BOOST_CHECK(fp.blockHash == second.blockHash);
+    BOOST_CHECK(fp.feeRecipient == second.feeRecipient);
+    BOOST_CHECK(fp.extraData == second.extraData);
+    BOOST_CHECK(fp.timestamp == second.timestamp);
+    BOOST_CHECK(fp.blockNumber == second.blockNumber);
+    BOOST_REQUIRE_EQUAL(fp.transactions.size(), second.transactions.size());
+    BOOST_CHECK(fp.transactions.front().raw == second.transactions.front().raw);
+    BOOST_CHECK(fp.withdrawals == second.withdrawals);
+    BOOST_CHECK(fp.withdrawalsRoot == second.withdrawalsRoot);
+    BOOST_CHECK(fp.blobGasUsed == second.blobGasUsed);
+    BOOST_CHECK(fp.excessBlobGas == second.excessBlobGas);
+    BOOST_REQUIRE(parsed.parentBeaconBlockRoot.has_value());
+    BOOST_REQUIRE(firstRequest.parentBeaconBlockRoot.has_value());
+    BOOST_CHECK(*parsed.parentBeaconBlockRoot == *firstRequest.parentBeaconBlockRoot);
+}
+
 BOOST_AUTO_TEST_CASE(newPayloadV4)
 {
     auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
@@ -564,6 +1016,71 @@ BOOST_AUTO_TEST_CASE(newPayloadV4)
     BOOST_CHECK(capturedReq.expectedBlobVersionedHashes.empty());
     BOOST_REQUIRE(capturedReq.executionRequests.has_value());
     BOOST_CHECK(capturedReq.executionRequests->empty());
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4BusyReturnsSyncing)
+{
+    mockService.m_state->hangNewPayload.store(true);
+    mockService.m_state->enteredNewPayload.store(false);
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV4ExecutionPayloadJson());
+    params.append(Json::Value(Json::arrayValue));
+    params.append(c_beaconRootHex);
+    params.append(Json::Value(Json::arrayValue));
+
+    Json::Value firstResponse;
+    std::thread first([&] { CALL_ENGINE(newPayloadV4, params, firstResponse); });
+
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!mockService.m_state->enteredNewPayload.load() &&
+           std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    BOOST_REQUIRE_MESSAGE(mockService.m_state->enteredNewPayload.load(),
+        "first newPayloadV4 never entered the engine service");
+
+    Json::Value busyResponse;
+    CALL_ENGINE(newPayloadV4, params, busyResponse);
+    BOOST_REQUIRE(busyResponse.isMember("result"));
+    BOOST_CHECK_EQUAL(busyResponse["result"]["status"].asString(), "SYNCING");
+    BOOST_CHECK(!busyResponse["result"].isMember("latestValidHash"));
+
+    mockService.m_state->hangNewPayload.store(false);
+    first.join();
+    BOOST_REQUIRE(firstResponse.isMember("result"));
+    BOOST_CHECK_EQUAL(firstResponse["result"]["status"].asString(), "VALID");
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4TypedVersionGateMapsToSpecErrorCode)
+{
+    Json::Value params(Json::arrayValue);
+    params.append(makeV4ExecutionPayloadJson());
+    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes (empty)
+    params.append(c_beaconRootHex);                // parentBeaconBlockRoot
+    params.append(Json::Value(Json::arrayValue));  // executionRequests (empty)
+
+    mockService.m_state->throwUnsupportedFork = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4InvalidPayloadAttributesMapsTo38003)
+{
+    Json::Value params(Json::arrayValue);
+    params.append(makeV4ExecutionPayloadJson());
+    params.append(Json::Value(Json::arrayValue));
+    params.append(c_beaconRootHex);
+    params.append(Json::Value(Json::arrayValue));
+
+    mockService.m_state->throwInvalidPayloadAttributes = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return e.code() == EngineError::InvalidPayloadAttributes;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV4MissingParams)
@@ -1041,6 +1558,425 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
         "0x9999999999999999999999999999999999999999999999999999999999999999");
     BOOST_CHECK_EQUAL(result["blockValue"].asString(), largeQuantity);
     BOOST_CHECK_EQUAL(result["executionRequests"].size(), 0);
+}
+
+// ---------------------------------------------------------------------------
+// engine_getPayloadBodiesByHashV1 / ByRangeV1 / getClientVersionV1
+// ---------------------------------------------------------------------------
+namespace
+{
+/// A Web3-typed tars transaction in the shape the txpool admission path stores: the
+/// legacy EIP-155 signing preimage (chainId 1) in extraTransactionBytes plus a 65-byte
+/// r||s||yParity signature.
+std::shared_ptr<bcostars::protocol::TransactionImpl> makeWeb3Tx()
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, uint64_t{0});      // nonce
+    rlp::encode(items, uint64_t{1});      // gasPrice
+    rlp::encode(items, uint64_t{21000});  // gasLimit
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, uint64_t{0});    // value
+    rlp::encode(items, bcos::bytes{});  // data
+    rlp::encode(items, uint64_t{1});    // chainId (EIP-155 preimage trailer)
+    rlp::encode(items, uint64_t{0});
+    rlp::encode(items, uint64_t{0});
+    bcos::bytes preimage;
+    rlp::encodeHeader(preimage, rlp::Header{true, items.size()});
+    preimage.insert(preimage.end(), items.begin(), items.end());
+
+    bcos::bytes signature(65, 0x00);
+    std::fill(signature.begin(), signature.begin() + 32, 0x11);       // r
+    std::fill(signature.begin() + 32, signature.begin() + 64, 0x22);  // s
+    signature[64] = 1;                                                // yParity
+
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.extraTransactionBytes.assign(preimage.begin(), preimage.end());
+    inner.signature.assign(signature.begin(), signature.end());
+    return tx;
+}
+
+/// The wire bytes makeWeb3Tx()'s preimage + signature reassemble into: the same list with
+/// the (chainId, 0, 0) trailer replaced by (v = chainId * 2 + 35 + yParity, r, s).
+bcos::bytes expectedWireForWeb3Tx()
+{
+    namespace rlp = bcos::codec::rlp;
+    bcos::bytes items;
+    rlp::encode(items, uint64_t{0});
+    rlp::encode(items, uint64_t{1});
+    rlp::encode(items, uint64_t{21000});
+    rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
+    rlp::encode(items, uint64_t{0});
+    rlp::encode(items, bcos::bytes{});
+    rlp::encode(items, uint64_t{38});  // v = 1 * 2 + 35 + 1
+    rlp::encode(items, bcos::bytes(32, 0x11));
+    rlp::encode(items, bcos::bytes(32, 0x22));
+    bcos::bytes wire;
+    rlp::encodeHeader(wire, rlp::Header{true, items.size()});
+    wire.insert(wire.end(), items.begin(), items.end());
+    return wire;
+}
+
+/// The fake ledger's blocks carry BCOS-typed transactions; a committed EL block carries
+/// Web3 ones. Replace a fake block's transaction list in place.
+void replaceBlockTransactions(bcos::protocol::Block::Ptr const& block,
+    std::vector<std::shared_ptr<bcostars::protocol::TransactionImpl>> const& txs)
+{
+    auto& inner = std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(block)->inner();
+    inner.transactions.clear();
+    for (auto const& tx : txs)
+    {
+        inner.transactions.emplace_back(tx->inner());
+    }
+}
+
+/// Write the SYS_NUMBER_2_WITHDRAWALS sidecar row exactly as EthereumBlockVerifier's
+/// commit does: the RLP LIST of the block's per-item withdrawal RLP.
+void writeWithdrawalsRow(FakeLedger* ledger, protocol::BlockNumber number,
+    std::vector<bcos::protocol::EthWithdrawalData> const& withdrawals)
+{
+    bcos::bytes payload;
+    for (auto const& data : withdrawals)
+    {
+        bcos::protocol::EthWithdrawal item(data);
+        item.rlpEncode(payload);
+    }
+    bcos::bytes row;
+    bcos::codec::rlp::encodeHeader(
+        row, bcos::codec::rlp::Header{.isList = true, .payloadLength = payload.size()});
+    row.insert(row.end(), payload.begin(), payload.end());
+    storage::Entry entry;
+    entry.set(std::move(row));
+    task::syncWait(storage2::writeOne(*ledger->getStateStorage(),
+        executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_WITHDRAWALS, std::to_string(number)},
+        std::move(entry)));
+}
+
+/// Mark a fake block header Shanghai+ (carries a withdrawalsRoot) and recompute its hash.
+void makeShanghaiBlock(FakeLedger* ledger, size_t index, bcos::crypto::Hash& hashImpl)
+{
+    auto const& header = ledger->ledgerData()[index]->blockHeader();
+    header->setWithdrawalsRoot(
+        bcos::h256("0x4242424242424242424242424242424242424242424242424242424242424242"));
+    header->calculateHash(hashImpl);
+}
+
+bool isEngineInvalidParams(JsonRpcException const& e)
+{
+    return e.code() == InvalidParams;
+}
+bool isEngineInternalError(JsonRpcException const& e)
+{
+    return e.code() == InternalError;
+}
+}  // namespace
+
+// These cases drive the endpoint's ledger reads through the FakeLedger, whose async
+// methods invoke their callbacks SYNCHRONOUSLY. With task::wait (the CALL_ENGINE macro
+// above) an exception thrown by the endpoint after such an await escapes the nested
+// resume() back through the LedgerMethods awaitable's await_suspend, where the coroutine
+// machinery re-resumes an already-completed frame (ASan heap-use-after-free). Production
+// is unaffected: real ledger callbacks are asynchronous, and Web3JsonRpcImpl::handleRequest
+// catches endpoint exceptions inside the coroutine. syncWait mirrors that: the SyncTask
+// body catches the exception inside the coroutine and rethrows only after completion.
+#define CALL_ENGINE_SYNC(method, params, response)                                         \
+    task::syncWait([&](Endpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> { \
+        co_await ep->method(p, r);                                                         \
+    }(endpoints.get(), params, response))
+
+BOOST_AUTO_TEST_CASE(getClientVersionV1)
+{
+    Json::Value params(Json::arrayValue);
+    Json::Value cl(Json::objectValue);
+    cl["code"] = "NB";
+    cl["name"] = "Nethermind";
+    cl["version"] = "1.30.0";
+    cl["commit"] = "0x12345678";
+    params.append(cl);
+
+    // The current spec name and the pre-rename draft alias answer the same self-report.
+    for (int i = 0; i < 2; ++i)
+    {
+        Json::Value response;
+        if (i == 0)
+        {
+            CALL_ENGINE_SYNC(getClientVersionV1, params, response);
+        }
+        else
+        {
+            CALL_ENGINE_SYNC(exchangeClientVersionV1, params, response);
+        }
+        auto const& result = response["result"];
+        BOOST_REQUIRE(result.isArray());
+        BOOST_REQUIRE_EQUAL(result.size(), 1);
+        auto const& self = result[0u];
+        BOOST_CHECK_EQUAL(self["code"].asString(), "FB");
+        BOOST_CHECK_EQUAL(self["name"].asString(), "FISCO-BCOS");
+        BOOST_CHECK(!self["version"].asString().empty());
+        // commit is DATA, 4 bytes: "0x" + 8 hex chars.
+        auto const commit = self["commit"].asString();
+        BOOST_CHECK_EQUAL(commit.size(), 10);
+        BOOST_CHECK_EQUAL(commit.substr(0, 2), "0x");
+    }
+
+    // A non-object params[0] is a shape error (-32602).
+    Json::Value badParams(Json::arrayValue);
+    badParams.append("not-an-object");
+    Json::Value badResponse;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getClientVersionV1, badParams, badResponse),
+        JsonRpcException, isEngineInvalidParams);
+}
+
+BOOST_AUTO_TEST_CASE(getPayloadBodiesByHashV1)
+{
+    // Block 5 carries the fake BCOS transactions; give it the Web3 shape a committed EL
+    // block has, so the body answers the reassembled wire bytes.
+    replaceBlockTransactions(m_ledger->ledgerData()[5], {makeWeb3Tx()});
+    auto const hash5 = m_ledger->ledgerData()[5]->blockHeader()->hash();
+    auto const unknownHash =
+        bcos::h256("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+    Json::Value params(Json::arrayValue);
+    Json::Value hashes(Json::arrayValue);
+    hashes.append("0x" + unknownHash.hex());
+    hashes.append("0x" + hash5.hex());
+    hashes.append("0x" + unknownHash.hex());
+    params.append(hashes);
+
+    Json::Value response;
+    CALL_ENGINE_SYNC(getPayloadBodiesByHashV1, params, response);
+    auto const& result = response["result"];
+    BOOST_REQUIRE(result.isArray());
+    BOOST_REQUIRE_EQUAL(result.size(), 3);
+    // Unknown hashes answer null elements, in order.
+    BOOST_CHECK(result[0u].isNull());
+    BOOST_CHECK(result[2u].isNull());
+    auto const& body = result[1u];
+    BOOST_REQUIRE(body.isObject());
+    BOOST_REQUIRE_EQUAL(body["transactions"].size(), 1);
+    BOOST_CHECK_EQUAL(
+        body["transactions"][0u].asString(), toHexStringWithPrefix(expectedWireForWeb3Tx()));
+    // Pre-Shanghai header: withdrawals must be JSON null, not omitted.
+    BOOST_CHECK(body.isMember("withdrawals"));
+    BOOST_CHECK(body["withdrawals"].isNull());
+}
+
+BOOST_AUTO_TEST_CASE(getPayloadBodiesByHashV1RejectsBadParams)
+{
+    // params[0] not an array.
+    {
+        Json::Value params(Json::arrayValue);
+        params.append("0x11");
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByHashV1, params, response),
+            JsonRpcException, isEngineInvalidParams);
+    }
+    // Malformed hash element.
+    {
+        Json::Value params(Json::arrayValue);
+        Json::Value hashes(Json::arrayValue);
+        hashes.append("0xnothex");
+        params.append(hashes);
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByHashV1, params, response),
+            JsonRpcException, isEngineInvalidParams);
+    }
+    // Non-string element.
+    {
+        Json::Value params(Json::arrayValue);
+        Json::Value hashes(Json::arrayValue);
+        hashes.append(1);
+        params.append(hashes);
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByHashV1, params, response),
+            JsonRpcException, isEngineInvalidParams);
+    }
+    // Above the 1024 ceiling is -38004 Too large request, same as ByRangeV1/getBlobsV1.
+    {
+        Json::Value params(Json::arrayValue);
+        Json::Value hashes(Json::arrayValue);
+        for (int i = 0; i < 1025; ++i)
+        {
+            hashes.append("0x" + bcos::h256(i).hex());
+        }
+        params.append(hashes);
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByHashV1, params, response),
+            JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == EngineError::TooLargeRequest; });
+    }
+}
+
+BOOST_AUTO_TEST_CASE(getPayloadBodiesByHashV1NonWeb3TxIsInternalError)
+{
+    // Untouched fake block 3 carries BCOS-typed transactions: no EIP-2718 wire form, so
+    // the body is node-local data corruption (-32603), never a fabricated body.
+    auto const hash3 = m_ledger->ledgerData()[3]->blockHeader()->hash();
+    Json::Value params(Json::arrayValue);
+    Json::Value hashes(Json::arrayValue);
+    hashes.append("0x" + hash3.hex());
+    params.append(hashes);
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByHashV1, params, response),
+        JsonRpcException, isEngineInternalError);
+}
+
+BOOST_AUTO_TEST_CASE(getPayloadBodiesByRangeV1RejectsBadParams)
+{
+    // Fewer than two params.
+    {
+        Json::Value params(Json::arrayValue);
+        params.append("0x1");
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByRangeV1, params, response),
+            JsonRpcException, isEngineInvalidParams);
+    }
+    // start or count below 1 is -32602.
+    for (auto const* bad : {"0x0", "0x", "0xnothex"})
+    {
+        Json::Value params(Json::arrayValue);
+        params.append(bad);
+        params.append("0x1");
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByRangeV1, params, response),
+            JsonRpcException, isEngineInvalidParams);
+
+        Json::Value swapped(Json::arrayValue);
+        swapped.append("0x1");
+        swapped.append(bad);
+        Json::Value swappedResponse;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByRangeV1, swapped, swappedResponse),
+            JsonRpcException, isEngineInvalidParams);
+    }
+    // A JSON number is not a quantity string.
+    {
+        Json::Value params(Json::arrayValue);
+        params.append(1);
+        params.append("0x1");
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByRangeV1, params, response),
+            JsonRpcException, isEngineInvalidParams);
+    }
+    // count above the 1024 ceiling is -38004 Too large request.
+    {
+        Json::Value params(Json::arrayValue);
+        params.append("0x1");
+        params.append("0x401");
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByRangeV1, params, response),
+            JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == EngineError::TooLargeRequest; });
+    }
+}
+
+BOOST_AUTO_TEST_CASE(getPayloadBodiesByRangeV1ClampsToHead)
+{
+    // The fixture chain has blocks 0..19 (head = 19). Blocks 17 and 18 are emptied,
+    // block 19 carries one Web3 transaction.
+    replaceBlockTransactions(m_ledger->ledgerData()[17], {});
+    replaceBlockTransactions(m_ledger->ledgerData()[18], {});
+    replaceBlockTransactions(m_ledger->ledgerData()[19], {makeWeb3Tx()});
+
+    Json::Value params(Json::arrayValue);
+    params.append("0x12");  // 18
+    params.append("0x10");  // asks for 18..33, truncated to the head
+    Json::Value response;
+    CALL_ENGINE_SYNC(getPayloadBodiesByRangeV1, params, response);
+    auto const& result = response["result"];
+    BOOST_REQUIRE(result.isArray());
+    BOOST_REQUIRE_EQUAL(result.size(), 2);
+    BOOST_REQUIRE(result[0u].isObject());
+    BOOST_CHECK_EQUAL(result[0u]["transactions"].size(), 0);
+    BOOST_CHECK(result[0u]["withdrawals"].isNull());
+    BOOST_REQUIRE(result[1u].isObject());
+    BOOST_REQUIRE_EQUAL(result[1u]["transactions"].size(), 1);
+    BOOST_CHECK_EQUAL(
+        result[1u]["transactions"][0u].asString(), toHexStringWithPrefix(expectedWireForWeb3Tx()));
+
+    // A range entirely beyond the head answers an empty array, no trailing nulls.
+    Json::Value beyond(Json::arrayValue);
+    beyond.append("0x100");
+    beyond.append("0x1");
+    Json::Value beyondResponse;
+    CALL_ENGINE_SYNC(getPayloadBodiesByRangeV1, beyond, beyondResponse);
+    BOOST_REQUIRE(beyondResponse["result"].isArray());
+    BOOST_CHECK_EQUAL(beyondResponse["result"].size(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(getPayloadBodiesShanghaiWithdrawals)
+{
+    bcos::protocol::EthWithdrawalData const w1{
+        .index = 1,
+        .validatorIndex = 2,
+        .address = bcos::Address("0x7777777777777777777777777777777777777777"),
+        .amount = 12345,
+    };
+    bcos::protocol::EthWithdrawalData const w2{
+        .index = 3,
+        .validatorIndex = 4,
+        .address = bcos::Address("0x8888888888888888888888888888888888888888"),
+        .amount = 0,
+    };
+
+    // Block 7: Shanghai+ with two withdrawals; block 8: Shanghai+ with an empty list;
+    // block 9: Shanghai+ WITHOUT the sidecar row -> unavailable body -> null.
+    for (size_t index : {7, 8, 9})
+    {
+        replaceBlockTransactions(m_ledger->ledgerData()[index], {});
+        makeShanghaiBlock(m_ledger.get(), index, *m_blockFactory->cryptoSuite()->hashImpl());
+    }
+    writeWithdrawalsRow(m_ledger.get(), 7, {w1, w2});
+    writeWithdrawalsRow(m_ledger.get(), 8, {});
+
+    Json::Value params(Json::arrayValue);
+    params.append("0x7");
+    params.append("0x3");
+    Json::Value response;
+    CALL_ENGINE_SYNC(getPayloadBodiesByRangeV1, params, response);
+    auto const& result = response["result"];
+    BOOST_REQUIRE(result.isArray());
+    BOOST_REQUIRE_EQUAL(result.size(), 3);
+
+    auto const& withdrawals1 = result[0u]["withdrawals"];
+    BOOST_REQUIRE(withdrawals1.isArray());
+    BOOST_REQUIRE_EQUAL(withdrawals1.size(), 2);
+    BOOST_CHECK_EQUAL(withdrawals1[0u]["index"].asString(), "0x1");
+    BOOST_CHECK_EQUAL(withdrawals1[0u]["validatorIndex"].asString(), "0x2");
+    BOOST_CHECK_EQUAL(
+        withdrawals1[0u]["address"].asString(), "0x7777777777777777777777777777777777777777");
+    BOOST_CHECK_EQUAL(withdrawals1[0u]["amount"].asString(), "0x3039");
+    BOOST_CHECK_EQUAL(withdrawals1[1u]["index"].asString(), "0x3");
+    BOOST_CHECK_EQUAL(withdrawals1[1u]["amount"].asString(), "0x0");
+
+    // Shanghai+ with an empty list answers [], not null.
+    auto const& withdrawals2 = result[1u]["withdrawals"];
+    BOOST_REQUIRE(withdrawals2.isArray());
+    BOOST_CHECK_EQUAL(withdrawals2.size(), 0);
+
+    // Shanghai+ without the sidecar row is an unavailable body.
+    BOOST_CHECK(result[2u].isNull());
+}
+
+BOOST_AUTO_TEST_CASE(getPayloadBodiesMalformedWithdrawalsRowIsInternalError)
+{
+    replaceBlockTransactions(m_ledger->ledgerData()[10], {});
+    makeShanghaiBlock(m_ledger.get(), 10, *m_blockFactory->cryptoSuite()->hashImpl());
+
+    // A corrupt sidecar row is node-local data corruption (-32603), not a null body.
+    storage::Entry entry;
+    entry.set(bcos::bytes{0x01, 0x02, 0x03});
+    task::syncWait(storage2::writeOne(*m_ledger->getStateStorage(),
+        executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_WITHDRAWALS, std::to_string(10)},
+        std::move(entry)));
+
+    Json::Value params(Json::arrayValue);
+    params.append("0xa");
+    params.append("0x1");
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByRangeV1, params, response),
+        JsonRpcException, isEngineInternalError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

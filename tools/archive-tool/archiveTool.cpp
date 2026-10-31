@@ -22,8 +22,8 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/Ledger.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
-#include "bcos-storage/TiKVStorage.h"
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "boost/filesystem.hpp"
@@ -33,7 +33,6 @@
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
-#include "tikv_client.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -41,6 +40,7 @@
 #include <bcos-security/bcos-security/BcosKmsDataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-table/src/KeyPageStorage.h>
+#include <bcos-task/Wait.h>
 #include <json/value.h>
 #include <sys/queue.h>
 #include <boost/algorithm/hex.hpp>
@@ -56,6 +56,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/program_options.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstdlib>
@@ -98,10 +99,7 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         "genesis config file path")("path,p", boost::program_options::value<std::string>(),
         "the path to store the archived data or read archived data if reimport, if set path then "
         "use rocksDB")("endpoint,e", boost::program_options::value<std::string>(),
-        "the ip and port of node archive service in format of IP:Port, ipv6 is not supported")("pd",
-        boost::program_options::value<std::string>(),
-        "pd address of TiKV, if set use TiKV to archive data of reimport from TiKV, multi address "
-        "is split by comma");
+        "the ip and port of node archive service in format of IP:Port, ipv6 is not supported");
     po::variables_map varMap;
     try
     {
@@ -144,8 +142,8 @@ DB* createSecondaryRocksDB(const std::string& path, const std::string& secondary
 }
 
 std::pair<TransactionalStorageInterface::Ptr, TransactionalStorageInterface::Ptr>
-createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const std::string& logPath,
-    bool write, const std::string& secondaryPath)
+createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig,
+    [[maybe_unused]] const std::string& logPath, bool write, const std::string& secondaryPath)
 {
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr blockStorage = nullptr;
@@ -194,13 +192,6 @@ createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const s
                     std::unique_ptr<rocksdb::DB>(blockRocksDB), dataEncryption);
             }
         }
-    }
-    else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
-    {
-#ifdef WITH_TIKV
-        storage = StorageInitializer::build(nodeConfig->pdAddrs(), logPath, nodeConfig->pdCaPath(),
-            nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
-#endif
     }
     else
     {
@@ -366,8 +357,6 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
     // create factory
     auto protocolInitializer = std::make_shared<ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
-    auto ledger = std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(),
-        localStorage, nodeConfig->blockLimit(), localBlockStorage);
     auto blockFactory = protocolInitializer->blockFactory();
     auto transactionFactory = blockFactory->transactionFactory();
     auto receiptFactory = blockFactory->receiptFactory();
@@ -391,18 +380,18 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
     for (int64_t blockNumber = startBlockNumber; blockNumber < endBlockNumber; ++blockNumber)
     {
         // getBlockByNumber
-        std::promise<std::vector<std::string>> promiseHashes;
-        ledger->asyncGetBlockTransactionHashes(
-            blockNumber, [&](Error::Ptr&& error, std::vector<std::string>&& txHashes) {
-                if (error)
-                {
-                    std::cerr << "get block transaction hash list failed: "
-                              << error->errorMessage();
-                    exit(1);
-                }
-                promiseHashes.set_value(std::move(txHashes));
-            });
-        auto txHashes = promiseHashes.get_future().get();
+        std::vector<std::string> txHashes;
+        try
+        {
+            txHashes = task::syncWait(
+                ledger::getBlockTransactionHashStrings(*localStorage, blockNumber, *blockFactory));
+        }
+        catch (std::exception& e)
+        {
+            std::cerr << "get block transaction hash list failed: "
+                      << boost::diagnostic_information(e);
+            exit(1);
+        }
 
         // get transactions from archive database
         std::promise<std::vector<std::optional<Entry>>> promiseTxs;
@@ -581,11 +570,6 @@ int main(int argc, const char* argv[])
     {
         archivePath = params["path"].as<std::string>();
     }
-    std::string pdAddresses;
-    if (params.count("pd") != 0U)
-    {
-        pdAddresses = params["pd"].as<std::string>();
-    }
     std::string endpoint;
     if (params.count("endpoint") != 0U)
     {
@@ -596,22 +580,15 @@ int main(int argc, const char* argv[])
         cout << "the IP::Port of node's archive service is empty" << endl;
         return 1;
     }
-    std::vector<std::string> pdAddrs;
 
     std::string archiveType = "RocksDB";
-    if (!archivePath.empty() && pdAddresses.empty())
+    if (!archivePath.empty())
     {
         cout << "use rocksDB as archive DB, path: " << archivePath << endl;
     }
-    else if (archivePath.empty() && !pdAddresses.empty())
-    {
-        archiveType = "TiKV";
-        boost::split(pdAddrs, pdAddresses, boost::is_any_of(","));
-        cout << "use TiKV as archive DB, pd address: " << pdAddresses << endl;
-    }
     else
     {
-        cerr << "please set archive rocksDB path or pd address, not both." << endl;
+        cerr << "please set archive rocksDB path." << endl;
         return 1;
     }
 
@@ -730,16 +707,10 @@ int main(int argc, const char* argv[])
         archiveStorage = StorageInitializer::build(
             StorageInitializer::createRocksDB(archivePath, option), nullptr);
     }
-    else if (boost::iequals(archiveType, "TiKV"))
-    {  // create archive TiKV storage
-#ifdef WITH_TIKV
-        archiveStorage = StorageInitializer::build(pdAddrs, logInitializer->logPath(), "", "", "");
-#endif
-    }
     else
     {
-        std::cerr << "archive storage type not support, only support RocksDB and TiKV, type: "
-                  << archiveType << std::endl;
+        std::cerr << "archive storage type not support, only support RocksDB, type: " << archiveType
+                  << std::endl;
         return 1;
     }
     if (isArchive)

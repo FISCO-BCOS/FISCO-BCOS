@@ -54,8 +54,7 @@ bcos::crypto::HashType bcostars::protocol::TransactionSubmitResultImpl::blockHas
     return {};
 }
 
-void bcostars::protocol::TransactionSubmitResultImpl::setBlockHash(
-    bcos::crypto::HashType blockHash)
+void bcostars::protocol::TransactionSubmitResultImpl::setBlockHash(bcos::crypto::HashType blockHash)
 {
     m_inner()->blockHash.assign(blockHash.begin(), blockHash.end());
 }

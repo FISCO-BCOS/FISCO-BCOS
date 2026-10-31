@@ -48,7 +48,7 @@ class BaseStorage : public virtual storage::StateStorageInterface,
 public:
     using Ptr = std::shared_ptr<BaseStorage<enableLRU>>;
 
-        BaseStorage(std::shared_ptr<StorageInterface> prev, bool setRowWithDirtyFlag);
+    BaseStorage(std::shared_ptr<StorageInterface> prev, bool setRowWithDirtyFlag);
 
     BaseStorage(const BaseStorage&) = delete;
     BaseStorage& operator=(const BaseStorage&) = delete;
@@ -66,11 +66,12 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override;
 
     void asyncGetRows(std::string_view tableView,
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access |
-                ::ranges::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys,
-        std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) override;
+        std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
+        override;
 
     void asyncSetRow(std::string_view tableView, std::string_view keyView, Entry entry,
         std::function<void(Error::UniquePtr)> callback) override;

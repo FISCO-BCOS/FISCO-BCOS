@@ -9,7 +9,6 @@ if (ONLY_CPP_SDK AND (NOT WITH_SWIG_SDK))
 endif ()
 
 find_package(Boost REQUIRED log serialization)
-find_package(wedprcrypto REQUIRED)
 find_package(jsoncpp REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Microsoft.GSL REQUIRED)
@@ -21,7 +20,6 @@ target_include_directories(${BCOS_CPP_SDK_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-cpp-sdk>)
 target_link_libraries(${BCOS_CPP_SDK_TARGET} PUBLIC ${LINK_LIB_LIST})
-set_target_properties(${BCOS_CPP_SDK_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()

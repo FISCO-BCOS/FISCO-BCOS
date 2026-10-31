@@ -30,7 +30,10 @@ enum HashImplType : int
 {
     Keccak256Hash,
     Sm3Hash,
-    Sha3
+    Sha3,
+    // "Hash" suffix on purpose: this enum is unscoped, so a bare `Sha256` would shadow class
+    // Sha256 in bcos::crypto (the existing `Sha3` value already does that to class Sha3).
+    Sha256Hash
 };
 class Hash
 {
@@ -44,14 +47,10 @@ public:
     {
         return hash(bytesConstRef((const unsigned char*)view.data(), view.size()));
     }
-    virtual HashType emptyHash()
-    {
-        if (HashType() == m_emptyHash)
-        {
-            m_emptyHash = hash(bytesConstRef());
-        }
-        return m_emptyHash;
-    }
+    /// The hash of the empty input under this hasher. Const so callers holding a `const Hash&`
+    /// (HostContext) can use it; the concrete implementations override it with a function-local
+    /// static so the digest is computed once per process without a data race (issue #5578).
+    virtual HashType emptyHash() const { return hash(bytesConstRef()); }
     virtual HashType hash(bytes const& _data) const
     {
         return hash(bytesConstRef(_data.data(), _data.size()));
@@ -73,7 +72,6 @@ public:
     virtual bcos::crypto::hasher::AnyHasher hasher() const = 0;
 
 private:
-    HashType m_emptyHash = HashType();
     HashImplType m_type = Keccak256Hash;
 };
 }  // namespace bcos::crypto

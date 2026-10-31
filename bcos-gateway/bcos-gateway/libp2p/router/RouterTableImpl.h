@@ -30,8 +30,8 @@ class RouterTableEntry : public RouterTableEntryInterface
 {
 public:
     using Ptr = std::shared_ptr<RouterTableEntry>;
-        RouterTableEntry();
-        RouterTableEntry(std::function<bcostars::RouterTableEntry*()> _inner);
+    RouterTableEntry();
+    RouterTableEntry(std::function<bcostars::RouterTableEntry*()> _inner);
     RouterTableEntry(RouterTableEntry&&) = delete;
     RouterTableEntry(const RouterTableEntry&) = delete;
     RouterTableEntry& operator=(const RouterTableEntry&) = delete;

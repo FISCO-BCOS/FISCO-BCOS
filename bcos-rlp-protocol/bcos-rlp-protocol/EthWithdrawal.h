@@ -23,7 +23,6 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
 #include <bcos-utilities/FixedBytes.h>
 
 namespace bcos::protocol
@@ -56,7 +55,8 @@ public:
 
     void rlpEncode(bcos::bytes& out) const;
     // Decodes a single withdrawal item (a 4-element list) from `data`.
-    bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);
+    // Throws codec::rlp::RlpDecodeException on malformed input.
+    void rlpDecode(bcos::bytesConstRef data);
 
     const EthWithdrawalData& data() const { return m_data; }
     EthWithdrawalData& data() { return m_data; }
@@ -69,38 +69,17 @@ private:
 namespace bcos::codec::rlp
 {
 // Overloads so EthWithdrawalData works as an item inside the generic list/vector codecs.
-inline size_t length(const protocol::EthWithdrawalData& _withdrawal) noexcept
-{
-    return length(
-        _withdrawal.index, _withdrawal.validatorIndex, _withdrawal.address, _withdrawal.amount);
-}
-inline void encode(bcos::bytes& _out, const protocol::EthWithdrawalData& _withdrawal) noexcept
-{
-    encode(_out, _withdrawal.index, _withdrawal.validatorIndex, _withdrawal.address,
-        _withdrawal.amount);
-}
-inline bcos::Error::UniquePtr decode(
-    bcos::bytesRef& _in, protocol::EthWithdrawalData& _withdrawal) noexcept
-{
-    return decode(_in, _withdrawal.index, _withdrawal.validatorIndex, _withdrawal.address,
-        _withdrawal.amount);
-}
+// decode throws RlpDecodeException on malformed input.
+size_t length(const protocol::EthWithdrawalData& _withdrawal) noexcept;
+void encode(bcos::bytes& _out, const protocol::EthWithdrawalData& _withdrawal) noexcept;
+void decode(bcos::bytesRef& _in, protocol::EthWithdrawalData& _withdrawal);
 }  // namespace bcos::codec::rlp
 
 namespace bcos::protocol
 {
 // ADL-visible delegators (see EthLog.h): let EthWithdrawalData participate in
 // std::vector<EthWithdrawalData> / variadic-list encode/decode.
-inline size_t length(const EthWithdrawalData& _withdrawal) noexcept
-{
-    return codec::rlp::length(_withdrawal);
-}
-inline void encode(bcos::bytes& _out, const EthWithdrawalData& _withdrawal) noexcept
-{
-    codec::rlp::encode(_out, _withdrawal);
-}
-inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, EthWithdrawalData& _withdrawal) noexcept
-{
-    return codec::rlp::decode(_in, _withdrawal);
-}
+size_t length(const EthWithdrawalData& _withdrawal) noexcept;
+void encode(bcos::bytes& _out, const EthWithdrawalData& _withdrawal) noexcept;
+void decode(bcos::bytesRef& _in, EthWithdrawalData& _withdrawal);
 }  // namespace bcos::protocol

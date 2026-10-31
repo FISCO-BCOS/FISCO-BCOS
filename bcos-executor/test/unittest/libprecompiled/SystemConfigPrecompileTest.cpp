@@ -1,5 +1,6 @@
 #include "../mock/MockLedger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -10,6 +11,7 @@
 #include "precompiled/SystemConfigPrecompiled.h"
 #include "precompiled/common/PrecompiledResult.h"
 #include <boost/test/unit_test.hpp>
+#include <magic_enum/magic_enum.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -129,6 +131,65 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
     BOOST_CHECK_THROW(systemConfigPrecompiled.call(newExecutive, setParameters), PrecompiledError);
 }
 
+BOOST_AUTO_TEST_CASE(executorVersionOffTheOpstackSlotIsRefused)
+{
+    // The other half of the genesis-only invariant: the write-path gate refuses a write TO the
+    // OPSTACK slot, and this refuses a write OFF it. The runtime freeze keeps the running process
+    // on the OP lane but still lands the row, and the next start re-derives the lane from that
+    // row — so an accepted downgrade moves the chain off OP at the first restart. Version-scoped
+    // like the other gates, so a pre-3.18 block that moved it still replays.
+    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
+    auto setParameters = std::make_shared<PrecompiledExecResult>();
+    CodecWrapper codec(hashImpl);
+    auto const key =
+        std::string(magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version));
+    auto const opstack = std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
+    auto const callOn = [&](uint32_t blockVersion, std::string const& value) {
+        std::shared_ptr<BlockContext> blockContext =
+            std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache,
+                executive->blockContext().hashHandler(), 1, h256(), utcTime(), blockVersion, false,
+                backendStorage);
+        auto executiveForVersion =
+            std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0);
+        auto input = codec.encodeWithSig("setValueByKey(string,string)", key, value);
+        setParameters->m_input = bcos::ref(input);
+        return systemConfigPrecompiled.call(executiveForVersion, setParameters);
+    };
+
+    // "No throw" cannot tell an accepted write from an ignored one: read the row back the way a
+    // client would.
+    auto const readBack = [&](uint32_t blockVersion) {
+        auto readParameters = std::make_shared<PrecompiledExecResult>();
+        auto readInput = codec.encodeWithSig("getValueByKey(string)", key);
+        readParameters->m_input = bcos::ref(readInput);
+        std::shared_ptr<BlockContext> blockContext =
+            std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache,
+                executive->blockContext().hashHandler(), 1, h256(), utcTime(), blockVersion, false,
+                backendStorage);
+        auto readExecutive = std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0);
+        auto const result = systemConfigPrecompiled.call(readExecutive, readParameters);
+        std::string value;
+        codec.decode(bcos::ref(result->execResult()), value);
+        return value;
+    };
+    auto const v3_17 = static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION);
+    auto const v3_18 = static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION);
+
+    // An OP chain carries the OPSTACK row; a pre-3.18 block may still land it through here.
+    BOOST_CHECK_NO_THROW(callOn(v3_17, opstack));
+    BOOST_CHECK_EQUAL(readBack(v3_17), opstack);
+
+    BOOST_CHECK_THROW(
+        callOn(v3_18, std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION)), PrecompiledError);
+    BOOST_CHECK_EQUAL(readBack(v3_18), opstack);  // refused: the OP row is still there
+    // The refused write left the row alone: the next write is still judged against the OP slot.
+    BOOST_CHECK_THROW(callOn(v3_18, std::to_string(0)), PrecompiledError);
+    BOOST_CHECK_EQUAL(readBack(v3_18), opstack);
+    // A pre-3.18 block that moved the row off OP still replays.
+    BOOST_CHECK_NO_THROW(callOn(v3_17, std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION)));
+    BOOST_CHECK_EQUAL(readBack(v3_17), std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION));
+}
+
 BOOST_AUTO_TEST_CASE(upgradeVersion)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -218,6 +279,107 @@ BOOST_AUTO_TEST_CASE(web3ChainIdSharesParseWeb3ChainId)
     BOOST_CHECK_THROW(trySet("-0"), PrecompiledError);
     BOOST_CHECK_THROW(trySet("not-a-number"), PrecompiledError);
     BOOST_CHECK_THROW(trySet("4294967296"), PrecompiledError);
+}
+
+// An unknown feature name is refused by governance instead of silently enabling nothing.
+// SystemConfigPrecompiled::validate rethrows NoSuchFeatureError as "unsupported key".
+BOOST_AUTO_TEST_CASE(unknownFlagNameIsRefusedByGovernance)
+{
+    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
+    auto setParameters = std::make_shared<PrecompiledExecResult>();
+    CodecWrapper codec(hashImpl);
+
+    auto setInput = codec.encodeWithSig("setValueByKey(string,string)",
+        std::string("reserved_removed_l2_ethereum_compat"), std::string("1"));
+    setParameters->m_input = bcos::ref(setInput);
+    BOOST_CHECK_EXCEPTION(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError,
+        [](PrecompiledError const& e) {
+            auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
+            return msg != nullptr && msg->find("unsupported key") != std::string::npos;
+        });
+
+    // The refusal is the unknown-key rule, so a recognised feature on the same channel is
+    // still settable by governance.
+    setInput = codec.encodeWithSig("setValueByKey(string,string)",
+        std::string("bugfix_eip161_1052_account_semantics"), std::string("1"));
+    setParameters->m_input = bcos::ref(setInput);
+    BOOST_CHECK_NO_THROW(systemConfigPrecompiled.call(executive, setParameters));
+}
+
+// Governance holds feature flags to the dependency table: feature_balance_precompiled needs
+// feature_balance already enabled.
+BOOST_AUTO_TEST_CASE(featureWithoutDependencyIsRefusedByGovernance)
+{
+    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
+    auto setParameters = std::make_shared<PrecompiledExecResult>();
+    CodecWrapper codec(hashImpl);
+
+    auto setInput = codec.encodeWithSig("setValueByKey(string,string)",
+        std::string("feature_balance_precompiled"), std::string("1"));
+    setParameters->m_input = bcos::ref(setInput);
+    BOOST_CHECK_EXCEPTION(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError,
+        [](PrecompiledError const& e) {
+            auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
+            return msg != nullptr && msg->find("feature_balance") != std::string::npos;
+        });
+}
+
+// The Ethereum lane (executor_version >= ledger::ETHEREUM_EXECUTOR_VERSION: L1 EL at 2, OP-Stack
+// at 3+) is chosen once at boot from the on-chain executor_version row: it decides the
+// account-table lane, the state-root scheme, the block producer and the fork schedule. This
+// precompile is the only RUNTIME writer of that row -- genesis writes it directly, without
+// validate() -- so refusing the crossing here is what makes the boundary un-crossable on a
+// running chain. Versioned on 3.18.0 so replaying a pre-3.18.0 block that already wrote such a
+// value still reproduces the old acceptance.
+BOOST_AUTO_TEST_CASE(executorVersionEthereumLaneIsNotGovernable)
+{
+    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
+    CodecWrapper codec(hashImpl);
+    auto const executorVersionKey =
+        std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
+
+    // Accepted values must actually be WRITTEN, not merely not-thrown: the guard sits before
+    // the write, so a check that only asserts "no throw" would still pass if the whole setter
+    // silently became a no-op.
+    auto expectWritten = [&](PrecompiledExecResult::Ptr const& result) {
+        bcos::s256 code = -1;
+        codec.decode(bcos::ref(result->execResult()), code);
+        BOOST_CHECK_EQUAL(code, (int)CODE_SUCCESS);
+    };
+    auto trySetAt = [&](protocol::BlockVersion blockVersion, std::string const& value) {
+        auto ledgerCacheAt =
+            std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
+        auto contextAt = std::make_shared<BlockContext>(stateStorage, ledgerCacheAt, hashImpl, 0,
+            h256(), utcTime(), static_cast<uint32_t>(blockVersion), false, backendStorage);
+        auto executiveAt = std::make_shared<MockTransactionExecutive>(*contextAt, "", 100, 0);
+        executiveAt->setStorageWrapper();
+
+        auto setParameters = std::make_shared<PrecompiledExecResult>();
+        auto setInput =
+            codec.encodeWithSig("setValueByKey(string,string)", executorVersionKey, value);
+        setParameters->m_input = bcos::ref(setInput);
+        return systemConfigPrecompiled.call(executiveAt, setParameters);
+    };
+
+    // 3.18.0: the Ethereum boundary is closed. 2 is the first Ethereum-lane value (L1 EL);
+    // 3 and above are OP -- every value at or over the boundary is refused.
+    for (auto const* refused : {"2", "3", "4"})
+    {
+        BOOST_CHECK_EXCEPTION(trySetAt(protocol::BlockVersion::V3_18_0_VERSION, refused),
+            PrecompiledError, [](PrecompiledError const& e) {
+                auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
+                return msg != nullptr && msg->find("is a genesis property") != std::string::npos;
+            });
+    }
+    // ...and only the crossing is closed: consortium-lane values stay governable.
+    for (auto const* accepted : {"1", "0"})
+    {
+        expectWritten(trySetAt(protocol::BlockVersion::V3_18_0_VERSION, accepted));
+    }
+    // Pre-3.18.0 blocks keep the old acceptance: the gate is the on-chain compatibility
+    // version, and making the refusal unconditional would be an unversioned consensus change
+    // that breaks replay/resync of a chain which already wrote 3.
+    expectWritten(trySetAt(protocol::BlockVersion::V3_17_0_VERSION, "3"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

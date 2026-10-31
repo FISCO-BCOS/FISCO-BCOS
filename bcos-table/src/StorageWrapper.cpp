@@ -89,8 +89,7 @@ std::optional<Entry> StorageWrapper::getRow(
 
 std::vector<std::optional<Entry>> StorageWrapper::getRows(const std::string_view& table,
     ::ranges::any_view<std::string_view,
-        ::ranges::category::input | ::ranges::category::random_access |
-            ::ranges::category::sized>
+        ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
         keys)
 {
     GetRowsResponse value;
@@ -107,8 +106,7 @@ std::vector<std::optional<Entry>> StorageWrapper::getRows(const std::string_view
     return std::move(entries);
 }
 
-void StorageWrapper::setRow(
-    const std::string_view& table, const std::string_view& key, Entry entry)
+void StorageWrapper::setRow(const std::string_view& table, const std::string_view& key, Entry entry)
 {
     SetRowResponse value;
 
@@ -122,8 +120,7 @@ void StorageWrapper::setRow(
     }
 }
 
-std::optional<Table> StorageWrapper::createTable(
-    std::string _tableName, std::string _valueFields)
+std::optional<Table> StorageWrapper::createTable(std::string _tableName, std::string _valueFields)
 {
     auto ret = createTableWithoutException(std::move(_tableName), std::move(_valueFields));
     if (std::get<0>(ret))
@@ -172,8 +169,8 @@ std::pair<size_t, bcos::Error::Ptr> StorageWrapper::count(const std::string_view
     return m_storage->count(_table);
 }
 
-std::tuple<bcos::Error::UniquePtr, std::optional<Table>>
-StorageWrapper::openTableWithoutException(std::string_view tableName)
+std::tuple<bcos::Error::UniquePtr, std::optional<Table>> StorageWrapper::openTableWithoutException(
+    std::string_view tableName)
 {
     std::promise<OpenTableResponse> openPromise;
     m_storage->asyncOpenTable(tableName, [&](auto&& error, auto&& table) mutable {

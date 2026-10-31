@@ -22,8 +22,10 @@
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/LogStream.h>
+#include <boost/property_tree/ini_parser.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -58,16 +60,16 @@ int main(int argc, char** argv)
 
 
     service->registerHandlerByMsgType(
-        999, [](NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _msg) {
+        999, [](NetworkException _e, std::shared_ptr<P2PSession> _session, Message _msg) {
             if (_e.errorCode())
             {
                 return;
             }
             auto startT = utcTime();
-            _msg->setRespPacket();
+            _msg.setRespPacket();
             _session->session()->asyncSendMessage(_msg);
             BCOS_LOG(INFO) << LOG_DESC("sendResponse") << LOG_KV("timeCost", (utcTime() - startT))
-                           << LOG_KV("msgSize", (_msg->payload().size()));
+                           << LOG_KV("msgSize", (_msg.payload().size()));
         });
     while (true)
     {

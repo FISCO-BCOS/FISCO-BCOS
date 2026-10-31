@@ -1,7 +1,27 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
+/// @file MemoryStorage.h
+/// @brief In-memory Storage2 backend: ordered/concurrent buckets, logical deletion
+/// and the merge primitives (each merge destination needs its own copy of a row).
+
 #pragma once
 
 #include "Storage.h"
-#include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Immediate.h"
 #include "bcos-utilities/Overloaded.h"
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/rw_mutex.h>
@@ -363,7 +383,7 @@ public:
             .has_value();
     }
 
-    task::AwaitableValue<void> writeOne(auto key, auto value)
+    task::Immediate<void> writeOne(auto key, auto value)
     {
         auto& bucket = getBucket(key);
         Lock lock(bucket.mutex, true);
@@ -371,14 +391,14 @@ public:
         return {};
     }
 
-    task::AwaitableValue<bool> insertIfAbsent(auto key, auto value)
+    task::Immediate<bool> insertIfAbsent(auto key, auto value)
     {
         auto& bucket = getBucket(key);
         Lock lock(bucket.mutex, true);
         return {writeOne(bucket, std::move(key), std::move(value), false, /*insertOnly=*/true)};
     }
 
-    task::AwaitableValue<bool> writeOneIf(
+    task::Immediate<bool> writeOneIf(
         auto key, auto value, std::predicate<Value const&> auto predicate)
     {
         auto& bucket = getBucket(key);
@@ -416,7 +436,7 @@ public:
         co_return;
     }
 
-    task::AwaitableValue<void> removeOne(auto key)
+    task::Immediate<void> removeOne(auto key)
     {
         removeSome(::ranges::views::single(std::move(key)), false);
         return {};
@@ -426,7 +446,7 @@ public:
     // only if predicate(existing) is true. The read, predicate evaluation and remove all
     // happen under the same bucket-level writer lock, so a concurrent writer cannot publish
     // a fresher value between the read and the remove.
-    task::AwaitableValue<bool> removeOneIf(auto key, std::predicate<Value const&> auto predicate)
+    task::Immediate<bool> removeOneIf(auto key, std::predicate<Value const&> auto predicate)
     {
         auto& bucket = getBucket(key);
         [[maybe_unused]] Lock lock(bucket.mutex, true);
@@ -454,7 +474,7 @@ public:
         return {true};
     }
 
-    task::AwaitableValue<void> removeOne(auto key, auto... tags)
+    task::Immediate<void> removeOne(auto key, auto... tags)
     {
         constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
         removeSome(::ranges::views::single(std::move(key)), physical);
@@ -474,7 +494,7 @@ public:
         co_return;
     }
 
-    task::AwaitableValue<void> merge(MemoryStorage& fromStorage)
+    task::Immediate<void> merge(MemoryStorage& fromStorage)
         requires(!std::is_const_v<decltype(fromStorage)>)
     {
         for (auto&& [bucket, fromBucket] : ::ranges::views::zip(m_buckets, fromStorage.m_buckets))
@@ -533,7 +553,7 @@ public:
                 auto const& data = *m_begin;
                 result.emplace(std::make_tuple(std::cref(data.key), std::cref(data.value)));
                 ++m_begin;
-                return task::AwaitableValue(std::move(result));
+                return task::Immediate(std::move(result));
             }
 
             if (m_bucketIndex + 1 < m_buckets.get().size())
@@ -542,7 +562,7 @@ public:
                 updateIterator();
                 return next();
             }
-            return task::AwaitableValue(std::move(result));
+            return task::Immediate(std::move(result));
         }
 
         auto seek(const auto& key)
@@ -555,7 +575,7 @@ public:
         }
     };
 
-    auto range() { return task::AwaitableValue(Iterator(m_buckets)); }
+    auto range() { return task::Immediate(Iterator(m_buckets)); }
 
     auto range(RANGE_SEEK_TYPE /*unused*/, const auto& key)
         // TODO: need !withConcurrent, fix benchmarkScheduler
@@ -564,7 +584,7 @@ public:
     {
         auto iterator = Iterator(m_buckets);
         iterator.seek(key);
-        return task::AwaitableValue(std::move(iterator));
+        return task::Immediate(std::move(iterator));
     }
 
     void mergeConcurrent(MemoryStorage& toStorage)
@@ -602,9 +622,21 @@ public:
                 for (auto& [data, _] : chunk)
                 {
                     auto&& [key, value] = *data;
+                    // A copy, spelled as one. The source is const-bound (the transform
+                    // lambda above takes Data const&), so innerValue deduces const and
+                    // this line was ALREADY a copy when it read std::move(innerValue) —
+                    // a const rvalue selects the copy constructor. Keep it explicit so
+                    // nobody "optimizes" it into a real move: mergeIntoBackends merges
+                    // the SAME source storage into the backend and the cache in
+                    // parallel (tbb::parallel_invoke), so two mergeConcurrent passes
+                    // read this source concurrently, and a real move here would let the
+                    // second pass write a moved-from (gutted) Entry — one layer silently
+                    // corrupted. Recovering the move needs an explicit move-and-erase
+                    // contract on the source, agreed with every caller of
+                    // mergeBackStorage/mergeToBackends — not a silent move here.
                     std::visit(
                         [&](auto& innerValue) {
-                            toStorage.writeOne(bucket, key, std::move(innerValue), false);
+                            toStorage.writeOne(bucket, key, innerValue, false);
                         },
                         value);
                 }
@@ -615,7 +647,7 @@ public:
 
     template <class... FromStorages>
         requires(withConcurrent && (... && (!FromStorages::withConcurrent)))
-    task::AwaitableValue<void> merge(FromStorages&... fromStorage)
+    task::Immediate<void> merge(FromStorages&... fromStorage)
     {
         mergeConcurrent(*this, fromStorage...);
         return {};

@@ -20,16 +20,19 @@
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
 
+#include "bcos-utilities/Common.h"
 #include <boost/test/unit_test.hpp>
-using namespace std;
+using std::string;
+using std::vector;
+using namespace std::literals;
 using namespace bcos;
+using bcos::codec::fromString32;
+using bcos::codec::toString32;
 using namespace bcos::codec::abi;
-using namespace bcos::codec;
 using namespace bcos::crypto;
 
 namespace bcos

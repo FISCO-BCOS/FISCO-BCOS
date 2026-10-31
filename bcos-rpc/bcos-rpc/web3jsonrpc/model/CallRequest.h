@@ -26,6 +26,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
+#include <optional>
 
 namespace bcos::rpc
 {
@@ -58,9 +59,18 @@ struct CallRequest
         _out << "maxFeePerGas: " << _in.maxFeePerGas.value_or("") << ", ";
         return _out;
     }
+    /// Convert a pending-nonce storage row (FISCO stores DECIMAL strings) to the hex quantity
+    /// the executor parses; nullopt when the row is absent or non-numeric, so the executor
+    /// falls back to the sender's state nonce instead of aborting the RPC.
+    [[nodiscard]] static std::optional<std::string> nonceFromPendingEntry(
+        std::optional<bcos::storage::Entry> const& entry);
+
+    /// @param pendingNonce the sender's committed nonce, already awaited by the caller
+    ///        (EthEndpoint::call). Passing it in keeps this function synchronous and noexcept:
+    ///        the scheduler read must not block the RPC handler thread.
     bcos::protocol::Transaction::Ptr takeToTransaction(
-        bcos::protocol::TransactionFactory::Ptr const&,
-        bcos::scheduler::SchedulerInterface::Ptr const&) noexcept;
+        bcos::protocol::TransactionFactory::Ptr const&, std::optional<std::string> pendingNonce,
+        std::optional<uint64_t> chainBlockGasLimit = std::nullopt) noexcept;
 };
 [[maybe_unused]] std::tuple<bool, CallRequest> decodeCallRequest(Json::Value const& _root);
 }  // namespace bcos::rpc

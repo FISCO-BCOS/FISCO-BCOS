@@ -24,14 +24,13 @@ find_package(fmt CONFIG REQUIRED)
 find_package(TBB REQUIRED)
 
 # LedgerConfig.h includes <evmc/evmc.hpp> — evmone installs the evmc headers. Header-only usage:
-# the seven framework sources reference no evmone symbol, and linking evmone on a STATIC target
+# the six framework sources reference no evmone symbol, and linking evmone on a STATIC target
 # would land libevmone.a on every consumer's link line regardless of PUBLIC/PRIVATE — so no
 # evmone find_package/link at all; the include dirs propagate PUBLIC-ly from evmone's interface
 # (a generate-time genex; the target is created by the root's find_package(evmone) in FULLNODE
 # builds, which also creates blst via its config's find_dependency(blst) — later calls no-op).
 set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/ledger/Features.cpp
-    bcos-framework/ledger/L2ConfigLoader.cpp
     bcos-framework/multigroup/ChainNodeInfo.cpp
     bcos-framework/multigroup/GroupInfo.cpp
     bcos-framework/protocol/Protocol.cpp
@@ -53,10 +52,6 @@ target_link_libraries(bcos-framework PUBLIC
     Microsoft.GSL::GSL
     fmt::fmt
     TBB::tbb)
-set_target_properties(bcos-framework PROPERTIES UNITY_BUILD "ON")
-# Entry.cpp uses namespace bcos::storage which conflicts with unity build
-# namespace stacking from other translation units in the same batch.
-set_source_files_properties(bcos-framework/storage/Entry.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 if (TESTS)
     enable_testing()

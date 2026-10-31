@@ -22,6 +22,22 @@
 using namespace bcos;
 using namespace bcos::codec::rlp;
 
+namespace bcos::codec::rlp
+{
+size_t length(const protocol::EthLogData& _log) noexcept
+{
+    return length(_log.address, _log.topics, _log.data);
+}
+void encode(bcos::bytes& _out, const protocol::EthLogData& _log) noexcept
+{
+    encode(_out, _log.address, _log.topics, _log.data);
+}
+void decode(bcos::bytesRef& _in, protocol::EthLogData& _log)
+{
+    decode(_in, _log.address, _log.topics, _log.data);
+}
+}  // namespace bcos::codec::rlp
+
 namespace bcos::protocol
 {
 void EthLog::rlpEncode(bcos::bytes& out) const
@@ -29,22 +45,21 @@ void EthLog::rlpEncode(bcos::bytes& out) const
     codec::rlp::encode(out, m_data);
 }
 
-bcos::Error::UniquePtr EthLog::rlpDecode(bcos::bytesConstRef data)
+void EthLog::rlpDecode(bcos::bytesConstRef data)
 {
-    // The codec's decode only advances a view cursor and never writes the buffer, so
-    // take the view directly; the const_cast is confined to this read-only entry point.
-    bytesRef in(const_cast<bcos::byte*>(data.data()), data.size());
-    if (auto err = codec::rlp::decode(in, m_data))
-    {
-        return err;
-    }
-    // geth's rlp.DecodeBytes rejects trailing bytes (ErrMoreThanOneValue); mirror that so
-    // two distinct wire encodings cannot map to the same decoded object.
-    if (!in.empty())
-    {
-        return BCOS_ERROR_UNIQUE_PTR(
-            DecodingError::UnexpectedListElements, "trailing bytes after top-level RLP item");
-    }
-    return nullptr;
+    codec::rlp::decodeExact(data, m_data);
+}
+
+size_t length(const EthLogData& _log) noexcept
+{
+    return codec::rlp::length(_log);
+}
+void encode(bcos::bytes& _out, const EthLogData& _log) noexcept
+{
+    codec::rlp::encode(_out, _log);
+}
+void decode(bcos::bytesRef& _in, EthLogData& _log)
+{
+    codec::rlp::decode(_in, _log);
 }
 }  // namespace bcos::protocol

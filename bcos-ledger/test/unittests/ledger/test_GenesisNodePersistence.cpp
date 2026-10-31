@@ -19,7 +19,6 @@
  *        incremental MPT build (buildAndCollect over the genesis root) can read its parents.
  */
 #include "../mpt/TestHelpers.h"
-#include "GenesisFeatureFlagsHelper.h"
 #include "L2GenesisTestStorage.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
@@ -283,11 +282,9 @@ BOOST_AUTO_TEST_CASE(L2GenesisPersistsAllTrieNodes)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
         auto genesisConfig = baseConfig();
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         genesisConfig.m_allocs.push_back(contractAlloc());
         genesisConfig.m_allocs.push_back(eoaAlloc());
-        appendGenesisFeatureFlagsSlot(genesisConfig);
 
         auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, makeParam());
         BOOST_REQUIRE(ok);
@@ -311,7 +308,7 @@ BOOST_AUTO_TEST_CASE(L2GenesisPersistsAllTrieNodes)
     }());
 }
 
-// (b) L2 flag with an empty alloc set (root = empty-trie root): nothing to persist.
+// (b) Ethereum lane with an empty alloc set (root = empty-trie root): nothing to persist.
 BOOST_AUTO_TEST_CASE(EmptyAllocsWriteNoNodeRows)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -319,8 +316,7 @@ BOOST_AUTO_TEST_CASE(EmptyAllocsWriteNoNodeRows)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
         auto genesisConfig = baseConfig();
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
 
         auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, makeParam());
         BOOST_REQUIRE(ok);
@@ -329,8 +325,8 @@ BOOST_AUTO_TEST_CASE(EmptyAllocsWriteNoNodeRows)
 }
 
 // (c) Non-MPT chains write no node rows: neither a plain pbft genesis nor an alloc-carrying
-// genesis without feature_l2_ethereum_compat (the header still pins the alloc root, but no
-// block will ever build an MPT on top of it).
+// genesis on the legacy lane (executor_version < 2 — the header still pins the alloc root, but
+// no block will ever build an MPT on top of it).
 BOOST_AUTO_TEST_CASE(NonL2ChainsWriteNoNodeRows)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -346,7 +342,6 @@ BOOST_AUTO_TEST_CASE(NonL2ChainsWriteNoNodeRows)
             auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
             auto genesisConfig = baseConfig();
             genesisConfig.m_allocs.push_back(contractAlloc());
-            appendGenesisFeatureFlagsSlot(genesisConfig);
             auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, makeParam());
             BOOST_REQUIRE(ok);
             BOOST_CHECK_EQUAL(countMPTRows(*storage), 0);
@@ -366,11 +361,9 @@ BOOST_AUTO_TEST_CASE(BlockOneIncrementalBuildOverGenesisRoot)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
         auto genesisConfig = baseConfig();
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         genesisConfig.m_allocs.push_back(contractAlloc());
         genesisConfig.m_allocs.push_back(eoaAlloc());
-        appendGenesisFeatureFlagsSlot(genesisConfig);
 
         auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, makeParam());
         BOOST_REQUIRE(ok);
@@ -400,8 +393,8 @@ BOOST_AUTO_TEST_CASE(BlockOneIncrementalBuildOverGenesisRoot)
                 reinterpret_cast<char const*>(newSlotValue.data()), newSlotValue.size()}));
 
         LedgerNodeStorage nodeStorage(*storage);
-        auto output =
-            co_await mpt::buildAndCollect(nodeStorage, genesisRoot, view, /*l2Mode=*/true);
+        auto output = co_await mpt::buildAndCollect(nodeStorage, genesisRoot, view, /*l2Mode=*/true,
+            bcos::ledger::account::AddressTableMode::Hex);
 
         // Oracle: from-scratch trie over the expected post-block state.
         auto keccak = [](bcos::bytes const& data) {
@@ -409,8 +402,7 @@ BOOST_AUTO_TEST_CASE(BlockOneIncrementalBuildOverGenesisRoot)
         };
 
         std::map<h256, bcos::bytes> storageEntries;
-        // iterate the ACTUAL genesis alloc (includes the feature_flags Entry
-        // slot the helper appended), not a fresh contractAlloc()
+        // iterate the ACTUAL genesis alloc, not a fresh contractAlloc()
         for (auto const& [slotHexKey, valueHex] : genesisConfig.m_allocs[0].storage)
         {
             auto slotBytes = bcos::fromHex(slotHexKey);

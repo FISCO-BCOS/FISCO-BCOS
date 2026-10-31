@@ -1,8 +1,8 @@
 #include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include "unittests/common/RPCFixture.h"
 #include <bcos-rpc/filter/FilterSystem.h>
-#include <bcos-utilities/Common.h>
 
+#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;
@@ -29,7 +29,9 @@ public:
         {
             std::promise<bcos::bytes> promise;
             web3JsonRpc->onRPCRequest(
-                request, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+                request, [&promise](bcos::bytes resp, boost::beast::http::status) {
+                    promise.set_value(std::move(resp));
+                });
             auto jsonBytes = promise.get_future().get();
             std::string_view json(
                 (char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
@@ -197,7 +199,7 @@ BOOST_AUTO_TEST_CASE(filterBlockTagResolvesAgainstHeadAndDepths)
         auto request = std::make_shared<Web3FilterRequest>();
         request->fromJson(parse(R"({"fromBlock":"latest","toBlock":"latest",
             "address":"0x1234","topics":[]})"),
-            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2);
+            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
         BOOST_CHECK_EQUAL(request->fromBlock(), latest);
         BOOST_CHECK(request->fromIsLatest());
         BOOST_CHECK_EQUAL(request->toBlock(), latest);
@@ -209,7 +211,7 @@ BOOST_AUTO_TEST_CASE(filterBlockTagResolvesAgainstHeadAndDepths)
         auto request = std::make_shared<Web3FilterRequest>();
         request->fromJson(parse(R"({"fromBlock":"safe","toBlock":"finalized",
             "address":"0x1234","topics":[]})"),
-            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2);
+            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
         BOOST_CHECK_EQUAL(request->fromBlock(), latest - 1);
         BOOST_CHECK(!request->fromIsLatest());
         BOOST_CHECK_EQUAL(request->toBlock(), (std::max)(latest - 2, protocol::BlockNumber{0}));
@@ -221,7 +223,7 @@ BOOST_AUTO_TEST_CASE(filterBlockTagResolvesAgainstHeadAndDepths)
         auto request = std::make_shared<Web3FilterRequest>();
         request->fromJson(parse(R"({"fromBlock":"0x0","toBlock":"0x5",
             "address":"0x1234","topics":[]})"),
-            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2);
+            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
         BOOST_CHECK_EQUAL(request->fromBlock(), 0);
         BOOST_CHECK_EQUAL(request->toBlock(), 5);
     }

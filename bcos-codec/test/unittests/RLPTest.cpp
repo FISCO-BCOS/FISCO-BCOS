@@ -19,12 +19,18 @@
  */
 
 #include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
+#include <limits>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -35,6 +41,8 @@ using namespace std::literals;
 
 namespace bcos::test
 {
+constexpr int32_t c_noCode = std::numeric_limits<int32_t>::min();
+
 template <typename T>
 static std::string staticEncode(T const& in)
 {
@@ -60,64 +68,75 @@ static std::string staticEncode(T const& in, T2 const& in2, const Args&... args)
 }
 
 template <typename T>
-static T decode(std::string_view hex, int32_t expectedErrorCode = -1)
+static T decodeRlp(std::string_view hex, int32_t expectedErrorCode = -1)
 {
     bcos::bytes bytes = fromHex(hex);
     auto bytesRef = bcos::ref(bytes);
     T result{};
-    auto&& error = bcos::codec::rlp::decode(bytesRef, result);
     // expectedErrorCode < 0 means "expect success"; note DecodingError::Overflow
     // is enum value 0, so 0 must mean "expect Overflow" (not success).
     if (expectedErrorCode < 0)
     {
-        BOOST_CHECK(!error);
+        bcos::codec::rlp::decode(bytesRef, result);
     }
     else
     {
-        // A regression where decode fails but error is null would be a null deref below — assert
-        // the error exists first so the failure is readable, not a UB crash.
-        BOOST_REQUIRE(error);
-        BOOST_CHECK_EQUAL(error->errorCode(), expectedErrorCode);
+        // decode now throws; the former errorCode() travels in errinfo_rlpErrorCode.
+        try
+        {
+            bcos::codec::rlp::decode(bytesRef, result);
+            BOOST_FAIL("expected RlpDecodeException with code " << expectedErrorCode);
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
+        {
+            // c_noCode is neither success nor a DecodingError value, so missing error info fails.
+            BOOST_CHECK_EQUAL(bcos::codec::rlp::rlpErrorCode(e, c_noCode), expectedErrorCode);
+        }
     }
     return result;
 }
 
 template <typename T, typename T2>
-static std::tuple<T, T2> decode(std::string_view hex, int32_t expectedErrorCode = -1)
+static std::tuple<T, T2> decodeRlp(std::string_view hex, int32_t expectedErrorCode = -1)
 {
     bcos::bytes bytes = fromHex(hex);
     auto bytesRef = bcos::ref(bytes);
     T r1{};
     T2 r2{};
-    auto&& error = bcos::codec::rlp::decode(bytesRef, r1, r2);
     // expectedErrorCode < 0 means "expect success"; see the single-arg helper.
     if (expectedErrorCode < 0)
     {
-        BOOST_CHECK(!error);
+        bcos::codec::rlp::decode(bytesRef, r1, r2);
     }
     else
     {
-        BOOST_REQUIRE(error);
-        BOOST_CHECK_EQUAL(error->errorCode(), expectedErrorCode);
+        try
+        {
+            bcos::codec::rlp::decode(bytesRef, r1, r2);
+            BOOST_FAIL("expected RlpDecodeException with code " << expectedErrorCode);
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
+        {
+            BOOST_CHECK_EQUAL(bcos::codec::rlp::rlpErrorCode(e, c_noCode), expectedErrorCode);
+        }
     }
     return {std::move(r1), std::move(r2)};
 }
 
 template <typename T, typename T2, typename... Args>
-static bcos::Error::UniquePtr decode(std::string_view hex, T& r1, T2& r2, Args&... r3)
+static void decodeRlp(std::string_view hex, T& r1, T2& r2, Args&... r3)
 {
     bcos::bytes bytes = fromHex(hex);
     auto bytesRef = bcos::ref(bytes);
-    auto&& error = bcos::codec::rlp::decode(bytesRef, r1, r2, r3...);
-    return error;
+    bcos::codec::rlp::decode(bytesRef, r1, r2, r3...);
 }
 
 // template <typename T, typename T2, typename... Args>
 // static std::tuple<T, T2, Args...> decodeSuccess(std::string_view hex)
 // {
 //     std::tuple<T, T2, Args...> tuple;
-//     auto error = decode(hex, std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple));
-//     // auto error = decode()
+//     auto error = decodeRlp(hex, std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple));
+//     // auto error = decodeRlp()
 // }
 
 template <typename T>
@@ -221,91 +240,93 @@ BOOST_AUTO_TEST_CASE(vectorsEncode)
 
 BOOST_AUTO_TEST_CASE(stringsDecode)
 {
-    BOOST_CHECK_EQUAL(toHex(decode<bcos::bytes>("00"sv)), "00");
-    BOOST_CHECK_EQUAL(
-        toHex(decode<bcos::bytes>("8D6F62636465666768696A6B6C6D"sv)), "6f62636465666768696a6b6c6d");
-    BOOST_CHECK_EQUAL(toHex(decode<bcos::bytes>("C0", UnexpectedList)), "");
-    BOOST_CHECK_EQUAL(decode<std::string>("83646f67"sv), "dog");
-    BOOST_CHECK_EQUAL(decode<std::string>("83636174"sv), "cat");
-    BOOST_CHECK_EQUAL(decode<std::string>("84646f6765"sv), "doge");
-    BOOST_CHECK_EQUAL(decode<std::string>("80"sv), "");
-    BOOST_CHECK_EQUAL(decode<std::string>("8ce4b8ade59bbde58aa0e6b2b9"sv), "中国加油");
+    BOOST_CHECK_EQUAL(toHex(decodeRlp<bcos::bytes>("00"sv)), "00");
+    BOOST_CHECK_EQUAL(toHex(decodeRlp<bcos::bytes>("8D6F62636465666768696A6B6C6D"sv)),
+        "6f62636465666768696a6b6c6d");
+    BOOST_CHECK_EQUAL(toHex(decodeRlp<bcos::bytes>("C0", UnexpectedList)), "");
+    BOOST_CHECK_EQUAL(decodeRlp<std::string>("83646f67"sv), "dog");
+    BOOST_CHECK_EQUAL(decodeRlp<std::string>("83636174"sv), "cat");
+    BOOST_CHECK_EQUAL(decodeRlp<std::string>("84646f6765"sv), "doge");
+    BOOST_CHECK_EQUAL(decodeRlp<std::string>("80"sv), "");
+    BOOST_CHECK_EQUAL(decodeRlp<std::string>("8ce4b8ade59bbde58aa0e6b2b9"sv), "中国加油");
     // clang-format off
-    BOOST_CHECK_EQUAL(decode<std::string>("b904004c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e73656374657475722061646970697363696e6720656c69742e20437572616269747572206d6175726973206d61676e612c20737573636970697420736564207665686963756c61206e6f6e2c20696163756c697320666175636962757320746f72746f722e2050726f696e20737573636970697420756c74726963696573206d616c6573756164612e204475697320746f72746f7220656c69742c2064696374756d2071756973207472697374697175652065752c20756c7472696365732061742072697375732e204d6f72626920612065737420696d70657264696574206d6920756c6c616d636f7270657220616c6971756574207375736369706974206e6563206c6f72656d2e2041656e65616e2071756973206c656f206d6f6c6c69732c2076756c70757461746520656c6974207661726975732c20636f6e73657175617420656e696d2e204e756c6c6120756c74726963657320747572706973206a7573746f2c20657420706f73756572652075726e6120636f6e7365637465747572206e65632e2050726f696e206e6f6e20636f6e76616c6c6973206d657475732e20446f6e65632074656d706f7220697073756d20696e206d617572697320636f6e67756520736f6c6c696369747564696e2e20566573746962756c756d20616e746520697073756d207072696d697320696e206661756369627573206f726369206c756374757320657420756c74726963657320706f737565726520637562696c69612043757261653b2053757370656e646973736520636f6e76616c6c69732073656d2076656c206d617373612066617563696275732c2065676574206c6163696e6961206c616375732074656d706f722e204e756c6c61207175697320756c747269636965732070757275732e2050726f696e20617563746f722072686f6e637573206e69626820636f6e64696d656e74756d206d6f6c6c69732e20416c697175616d20636f6e73657175617420656e696d206174206d65747573206c75637475732c206120656c656966656e6420707572757320656765737461732e20437572616269747572206174206e696268206d657475732e204e616d20626962656e64756d2c206e6571756520617420617563746f72207472697374697175652c206c6f72656d206c696265726f20616c697175657420617263752c206e6f6e20696e74657264756d2074656c6c7573206c65637475732073697420616d65742065726f732e20437261732072686f6e6375732c206d65747573206163206f726e617265206375727375732c20646f6c6f72206a7573746f20756c747269636573206d657475732c20617420756c6c616d636f7270657220766f6c7574706174"sv), "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur mauris magna, suscipit sed vehicula non, iaculis faucibus tortor. Proin suscipit ultricies malesuada. Duis tortor elit, dictum quis tristique eu, ultrices at risus. Morbi a est imperdiet mi ullamcorper aliquet suscipit nec lorem. Aenean quis leo mollis, vulputate elit varius, consequat enim. Nulla ultrices turpis justo, et posuere urna consectetur nec. Proin non convallis metus. Donec tempor ipsum in mauris congue sollicitudin. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Suspendisse convallis sem vel massa faucibus, eget lacinia lacus tempor. Nulla quis ultricies purus. Proin auctor rhoncus nibh condimentum mollis. Aliquam consequat enim at metus luctus, a eleifend purus egestas. Curabitur at nibh metus. Nam bibendum, neque at auctor tristique, lorem libero aliquet arcu, non interdum tellus lectus sit amet eros. Cras rhoncus, metus ac ornare cursus, dolor justo ultrices metus, at ullamcorper volutpat"sv);
-    BOOST_CHECK_EQUAL(decode<std::string>("b8384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c6974"sv), "Lorem ipsum dolor sit amet, consectetur adipisicing elit"sv);
+    BOOST_CHECK_EQUAL(decodeRlp<std::string>("b904004c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e73656374657475722061646970697363696e6720656c69742e20437572616269747572206d6175726973206d61676e612c20737573636970697420736564207665686963756c61206e6f6e2c20696163756c697320666175636962757320746f72746f722e2050726f696e20737573636970697420756c74726963696573206d616c6573756164612e204475697320746f72746f7220656c69742c2064696374756d2071756973207472697374697175652065752c20756c7472696365732061742072697375732e204d6f72626920612065737420696d70657264696574206d6920756c6c616d636f7270657220616c6971756574207375736369706974206e6563206c6f72656d2e2041656e65616e2071756973206c656f206d6f6c6c69732c2076756c70757461746520656c6974207661726975732c20636f6e73657175617420656e696d2e204e756c6c6120756c74726963657320747572706973206a7573746f2c20657420706f73756572652075726e6120636f6e7365637465747572206e65632e2050726f696e206e6f6e20636f6e76616c6c6973206d657475732e20446f6e65632074656d706f7220697073756d20696e206d617572697320636f6e67756520736f6c6c696369747564696e2e20566573746962756c756d20616e746520697073756d207072696d697320696e206661756369627573206f726369206c756374757320657420756c74726963657320706f737565726520637562696c69612043757261653b2053757370656e646973736520636f6e76616c6c69732073656d2076656c206d617373612066617563696275732c2065676574206c6163696e6961206c616375732074656d706f722e204e756c6c61207175697320756c747269636965732070757275732e2050726f696e20617563746f722072686f6e637573206e69626820636f6e64696d656e74756d206d6f6c6c69732e20416c697175616d20636f6e73657175617420656e696d206174206d65747573206c75637475732c206120656c656966656e6420707572757320656765737461732e20437572616269747572206174206e696268206d657475732e204e616d20626962656e64756d2c206e6571756520617420617563746f72207472697374697175652c206c6f72656d206c696265726f20616c697175657420617263752c206e6f6e20696e74657264756d2074656c6c7573206c65637475732073697420616d65742065726f732e20437261732072686f6e6375732c206d65747573206163206f726e617265206375727375732c20646f6c6f72206a7573746f20756c747269636573206d657475732c20617420756c6c616d636f7270657220766f6c7574706174"sv), "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur mauris magna, suscipit sed vehicula non, iaculis faucibus tortor. Proin suscipit ultricies malesuada. Duis tortor elit, dictum quis tristique eu, ultrices at risus. Morbi a est imperdiet mi ullamcorper aliquet suscipit nec lorem. Aenean quis leo mollis, vulputate elit varius, consequat enim. Nulla ultrices turpis justo, et posuere urna consectetur nec. Proin non convallis metus. Donec tempor ipsum in mauris congue sollicitudin. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Suspendisse convallis sem vel massa faucibus, eget lacinia lacus tempor. Nulla quis ultricies purus. Proin auctor rhoncus nibh condimentum mollis. Aliquam consequat enim at metus luctus, a eleifend purus egestas. Curabitur at nibh metus. Nam bibendum, neque at auctor tristique, lorem libero aliquet arcu, non interdum tellus lectus sit amet eros. Cras rhoncus, metus ac ornare cursus, dolor justo ultrices metus, at ullamcorper volutpat"sv);
+    BOOST_CHECK_EQUAL(decodeRlp<std::string>("b8384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c6974"sv), "Lorem ipsum dolor sit amet, consectetur adipisicing elit"sv);
     // clang-format on
 }
 
 BOOST_AUTO_TEST_CASE(uintDecode)
 {
-    BOOST_CHECK_EQUAL(decode<uint64_t>("80"sv), 0u);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("01"sv), 1u);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("7f"sv), 0x7Fu);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("8180"sv), 0x80u);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("820400"sv), 0x400u);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("83ffccb5"sv), 0xFFCCB5u);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("84ffccb5dd"sv), 0xFFCCB5DDu);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("85CE05050505"sv), 0xCE05050505u);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("85ffccb5ddff"sv), 0xFFCCB5DDFFu);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("86ffccb5ddffee"sv), 0xFFCCB5DDFFEEu);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("87ffccb5ddffee14"sv), 0xFFCCB5DDFFEE14u);
-    BOOST_CHECK_EQUAL(decode<uint64_t>("88ffccb5ddffee1483"sv), 0xFFCCB5DDFFEE1483u);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("80"sv), 0u);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("01"sv), 1u);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("7f"sv), 0x7Fu);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("8180"sv), 0x80u);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("820400"sv), 0x400u);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("83ffccb5"sv), 0xFFCCB5u);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("84ffccb5dd"sv), 0xFFCCB5DDu);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("85CE05050505"sv), 0xCE05050505u);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("85ffccb5ddff"sv), 0xFFCCB5DDFFu);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("86ffccb5ddffee"sv), 0xFFCCB5DDFFEEu);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("87ffccb5ddffee14"sv), 0xFFCCB5DDFFEE14u);
+    BOOST_CHECK_EQUAL(decodeRlp<uint64_t>("88ffccb5ddffee1483"sv), 0xFFCCB5DDFFEE1483u);
 
-    decode<uint64_t>("C0", UnexpectedList);
-    decode<uint64_t>("8105", NonCanonicalSize);
-    decode<uint64_t>("B8020004", NonCanonicalSize);
+    decodeRlp<uint64_t>("C0", UnexpectedList);
+    decodeRlp<uint64_t>("8105", NonCanonicalSize);
+    decodeRlp<uint64_t>("B8020004", NonCanonicalSize);
     // 10-byte payload into uint64: the width gate rejects it (UnexpectedLength). Note the old
     // "Overflow" expectation was a silent no-op — DecodingError::Overflow == 0, so the helper
     // treated it as "expect success" and the wide value was silently truncated.
-    decode<uint64_t>("8AFFFFFFFFFFFFFFFFFF7C", UnexpectedLength);
+    decodeRlp<uint64_t>("8AFFFFFFFFFFFFFFFFFF7C", UnexpectedLength);
 }
 
 BOOST_AUTO_TEST_CASE(uint256Decode)
 {
-    BOOST_CHECK_EQUAL(decode<u256>("80"sv), 0u);
-    BOOST_CHECK_EQUAL(decode<u256>("01"sv), 1u);
-    BOOST_CHECK_EQUAL(decode<u256>("7f"sv), 0x7Fu);
-    BOOST_CHECK_EQUAL(decode<u256>("8180"sv), 0x80u);
-    BOOST_CHECK_EQUAL(decode<u256>("820400"sv), 0x400u);
-    BOOST_CHECK_EQUAL(decode<u256>("83ffccb5"sv), 0xFFCCB5u);
-    BOOST_CHECK_EQUAL(decode<u256>("84ffccb5dd"sv), 0xFFCCB5DDu);
-    BOOST_CHECK_EQUAL(decode<u256>("85ffccb5ddff"sv), 0xFFCCB5DDFFu);
-    BOOST_CHECK_EQUAL(decode<u256>("86ffccb5ddffee"sv), 0xFFCCB5DDFFEEu);
-    BOOST_CHECK_EQUAL(decode<u256>("87ffccb5ddffee14"sv), 0xFFCCB5DDFFEE14u);
-    BOOST_CHECK_EQUAL(decode<u256>("88ffccb5ddffee1483"sv), 0xFFCCB5DDFFEE1483u);
-    BOOST_CHECK_EQUAL(decode<u256>("8AFFFFFFFFFFFFFFFFFF7C"sv), u256("0xFFFFFFFFFFFFFFFFFF7C"));
-    BOOST_CHECK_EQUAL(decode<u256>("8f10203e405060708090a0b0c0d0e0f2"sv),
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("80"sv), 0u);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("01"sv), 1u);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("7f"sv), 0x7Fu);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("8180"sv), 0x80u);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("820400"sv), 0x400u);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("83ffccb5"sv), 0xFFCCB5u);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("84ffccb5dd"sv), 0xFFCCB5DDu);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("85ffccb5ddff"sv), 0xFFCCB5DDFFu);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("86ffccb5ddffee"sv), 0xFFCCB5DDFFEEu);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("87ffccb5ddffee14"sv), 0xFFCCB5DDFFEE14u);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("88ffccb5ddffee1483"sv), 0xFFCCB5DDFFEE1483u);
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("8AFFFFFFFFFFFFFFFFFF7C"sv), u256("0xFFFFFFFFFFFFFFFFFF7C"));
+    BOOST_CHECK_EQUAL(decodeRlp<u256>("8f10203e405060708090a0b0c0d0e0f2"sv),
         u256("0x10203E405060708090A0B0C0D0E0F2"));
-    BOOST_CHECK_EQUAL(decode<u256>("9c0100020003000400050006000700080009000a0b4b000c000d000e01"sv),
+    BOOST_CHECK_EQUAL(
+        decodeRlp<u256>("9c0100020003000400050006000700080009000a0b4b000c000d000e01"sv),
         u256("0x0100020003000400050006000700080009000A0B4B000C000D000E01"));
 
-    decode<u256>("8BFFFFFFFFFFFFFFFFFF7C"sv, InputTooShort);
-    decode<u256>("C0"sv, UnexpectedList);
-    decode<u256>("8105"sv, NonCanonicalSize);
-    decode<u256>("B8020004"sv, NonCanonicalSize);
+    decodeRlp<u256>("8BFFFFFFFFFFFFFFFFFF7C"sv, InputTooShort);
+    decodeRlp<u256>("C0"sv, UnexpectedList);
+    decodeRlp<u256>("8105"sv, NonCanonicalSize);
+    decodeRlp<u256>("B8020004"sv, NonCanonicalSize);
     // 33-byte payload into u256: rejected by the width gate (was silently truncated before).
-    decode<u256>(
+    decodeRlp<u256>(
         "A101000000000000000000000000000000000000008B000000000000000000000000"sv, UnexpectedLength);
 }
 
 BOOST_AUTO_TEST_CASE(vectorsDecode)
 {
-    BOOST_CHECK(checkVectorEqual(decode<std::vector<uint64_t>>("c0"sv), std::vector<uint64_t>{}));
-    BOOST_CHECK(checkVectorEqual(decode<std::vector<uint64_t>>("c883ffccb583ffc0b5"sv),
+    BOOST_CHECK(
+        checkVectorEqual(decodeRlp<std::vector<uint64_t>>("c0"sv), std::vector<uint64_t>{}));
+    BOOST_CHECK(checkVectorEqual(decodeRlp<std::vector<uint64_t>>("c883ffccb583ffc0b5"sv),
         std::vector<uint64_t>({0xFFCCB5, 0xFFC0B5})));
-    BOOST_CHECK(checkVectorEqual(decode<std::vector<uint32_t>>("c883ffccb583ffc0b5"sv),
+    BOOST_CHECK(checkVectorEqual(decodeRlp<std::vector<uint32_t>>("c883ffccb583ffc0b5"sv),
         std::vector<uint32_t>({0xFFCCB5, 0xFFC0B5})));
-    BOOST_CHECK(checkVectorEqual(decode<std::vector<std::string>>("c88363617483646f67"sv),
+    BOOST_CHECK(checkVectorEqual(decodeRlp<std::vector<std::string>>("c88363617483646f67"sv),
         std::vector<std::string>({"cat", "dog"})));
-    BOOST_CHECK(checkVectorEqual(decode<std::vector<std::string>>("cc83646f6783676f6483636174"sv),
-        std::vector<std::string>({"dog", "god", "cat"})));
+    BOOST_CHECK(
+        checkVectorEqual(decodeRlp<std::vector<std::string>>("cc83646f6783676f6483636174"sv),
+            std::vector<std::string>({"dog", "god", "cat"})));
     // multi vector test 1
     {
         std::string zw;
         std::vector<uint64_t> v;
         uint16_t one;
-        auto error = decode("c6827a77c10401"sv, zw, v, one);
-        BOOST_CHECK(!error);
+        decodeRlp("c6827a77c10401"sv, zw, v, one);
         BOOST_CHECK_EQUAL(zw, "zw");
         BOOST_CHECK_EQUAL(v.size(), 1u);
         BOOST_CHECK_EQUAL(v[0], 4u);
@@ -315,8 +336,7 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
     {
         std::vector<std::vector<std::string>> a;
         std::vector<uint64_t> b;
-        auto error = decode("c4c2c0c0c0"sv, a, b);
-        BOOST_CHECK(!error);
+        decodeRlp("c4c2c0c0c0"sv, a, b);
         BOOST_CHECK_EQUAL(a.size(), 2u);
         BOOST_CHECK_EQUAL(a[0].size(), 0u);
         BOOST_CHECK_EQUAL(a[1].size(), 0u);
@@ -327,8 +347,7 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
         std::vector<uint64_t> b;
         std::vector<std::vector<std::string>> a2;
         std::vector<std::vector<std::vector<std::string>>> a3;
-        auto error = decode("c7c0c1c0c3c0c1c0"sv, b, a2, a3);
-        BOOST_CHECK(!error);
+        decodeRlp("c7c0c1c0c3c0c1c0"sv, b, a2, a3);
         BOOST_CHECK_EQUAL(a2.size(), 1u);
         BOOST_CHECK_EQUAL(a2[0].size(), 0u);
         BOOST_CHECK_EQUAL(a3.size(), 2u);
@@ -345,59 +364,165 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
 // the error so a missing error aborts cleanly instead of dereferencing null.
 BOOST_AUTO_TEST_CASE(decodeRejectsMalformedInputs)
 {
-    auto decodeErr = [](std::string_view hex, auto& out) {
+    // std::nullopt means "decoded without error"; a value is the former DecodingError code
+    // extracted from the thrown RlpDecodeException.
+    auto decodeErr = [](std::string_view hex, auto& out) -> std::optional<int32_t> {
         bcos::bytes buffer = fromHex(hex);
         auto view = bcos::ref(buffer);
-        return bcos::codec::rlp::decode(view, out);
+        try
+        {
+            bcos::codec::rlp::decode(view, out);
+            return std::nullopt;
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
+        {
+            // c_noCode is neither success nor a DecodingError value, so missing error info fails
+            // the caller's equality check instead of being masked.
+            return bcos::codec::rlp::rlpErrorCode(e, c_noCode);
+        }
     };
 
     {  // empty buffer: nothing to read
         uint64_t value{};
         auto err = decodeErr(""sv, value);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), InputTooShort);
+        BOOST_CHECK_EQUAL(*err, InputTooShort);
     }
     {  // short-string header claims one content byte but none follows
         std::string str;
         auto err = decodeErr("81"sv, str);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), InputTooShort);
+        BOOST_CHECK_EQUAL(*err, InputTooShort);
     }
     {  // long-string header (0xb8) announces 56 bytes but the payload is missing
         std::string str;
         auto err = decodeErr("b838"sv, str);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), InputTooShort);
+        BOOST_CHECK_EQUAL(*err, InputTooShort);
     }
     {  // a byte < 0x80 wrapped in a 1-byte string is a non-canonical encoding
         std::string str;
         auto err = decodeErr("8100"sv, str);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+        BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
     {  // a list where a scalar is expected
         uint64_t value{};
         auto err = decodeErr("c0"sv, value);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), UnexpectedList);
+        BOOST_CHECK_EQUAL(*err, UnexpectedList);
     }
     {  // a FixedBytes target with a payload shorter than its fixed size: must be rejected
         // (previously right-aligned/zero-padded silently, which would re-encode differently)
         bcos::h256 value{};
         auto err = decodeErr("9e" + std::string(60, '1'), value);  // 30-byte payload
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), UnexpectedLength);
+        BOOST_CHECK_EQUAL(*err, UnexpectedLength);
     }
     {  // a FixedBytes target with a payload longer than its fixed size: must be rejected
         bcos::h256 value{};
         auto err = decodeErr("a1" + std::string(66, '1'), value);  // 33-byte payload
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), UnexpectedLength);
+        BOOST_CHECK_EQUAL(*err, UnexpectedLength);
     }
     {  // a FixedBytes<32> target with an exactly-32-byte payload still decodes fine
         bcos::h256 value{};
         auto err = decodeErr("a0" + std::string(64, '1'), value);  // 32-byte payload
         BOOST_REQUIRE(!err);
+    }
+}
+
+// The non-throwing cores (tryDecodeHeader / tryDecode / decodeExact) are the single home of
+// the canonical rules for the hot ingress paths — pin that they reject the same malformed
+// inputs the throwing wrappers above reject, with the same codes, so a divergence between
+// decodeRlp() and tryDecode() is caught here instead of silently reaching devp2p.
+BOOST_AUTO_TEST_CASE(nonThrowingCoresRejectSameMalformedInputs)
+{
+    struct Uint64Vector
+    {
+        std::string_view hex;
+        DecodingError code;
+    };
+    constexpr Uint64Vector uint64Vectors[] = {
+        {""sv, InputTooShort},         // empty buffer: nothing to read
+        {"81"sv, InputTooShort},       // header claims one content byte but none follows
+        {"b838"sv, InputTooShort},     // long-string header announces 56 bytes, none follows
+        {"8100"sv, NonCanonicalSize},  // a byte < 0x80 wrapped in a 1-byte string
+        {"c0"sv, UnexpectedList},      // a list where a scalar is expected
+    };
+    for (auto const& v : uint64Vectors)
+    {
+        bcos::bytes buffer = fromHex(v.hex);
+        auto view = bcos::ref(buffer);
+        uint64_t value{};
+        auto result = tryDecode(view, value);
+        BOOST_REQUIRE(!result);
+        BOOST_CHECK_EQUAL(result.error().code, static_cast<int32_t>(v.code));
+    }
+
+    struct FixedBytesVector
+    {
+        std::string hex;
+        DecodingError code;
+    };
+    FixedBytesVector const fixedBytesVectors[] = {
+        {"9e" + std::string(60, '1'), UnexpectedLength},  // 30-byte payload for h256
+        {"a1" + std::string(66, '1'), UnexpectedLength},  // 33-byte payload for h256
+    };
+    for (auto const& v : fixedBytesVectors)
+    {
+        bcos::bytes buffer = fromHex(v.hex);
+        auto view = bcos::ref(buffer);
+        bcos::h256 value{};
+        auto result = tryDecode(view, value);
+        BOOST_REQUIRE(!result);
+        BOOST_CHECK_EQUAL(result.error().code, static_cast<int32_t>(v.code));
+    }
+    {  // canonical input still round-trips through the core and consumes the whole view
+        bcos::bytes buffer = fromHex("a0" + std::string(64, '1'));
+        auto view = bcos::ref(buffer);
+        bcos::h256 value{};
+        auto result = tryDecode(view, value);
+        BOOST_REQUIRE(result);
+        BOOST_CHECK(view.empty());
+    }
+
+    // tryDecodeHeader on its own: empty input, and a long-form header whose length byte is
+    // missing entirely.
+    {
+        bcos::bytes buffer;
+        auto view = bcos::ref(buffer);
+        auto header = tryDecodeHeader(view);
+        BOOST_REQUIRE(!header);
+        BOOST_CHECK_EQUAL(header.error().code, static_cast<int32_t>(InputTooShort));
+    }
+    {
+        bcos::bytes buffer = fromHex("b8"sv);  // long-string form, length byte missing
+        auto view = bcos::ref(buffer);
+        auto header = tryDecodeHeader(view);
+        BOOST_REQUIRE(!header);
+        BOOST_CHECK_EQUAL(header.error().code, static_cast<int32_t>(InputTooShort));
+    }
+
+    // decodeExact: trailing bytes after the top-level item are rejected (geth
+    // ErrMoreThanOneValue semantics); the exact item alone succeeds.
+    {
+        bcos::bytes good = fromHex("01"sv);
+        uint64_t value{};
+        BOOST_REQUIRE_NO_THROW(decodeExact(bcos::ref(good), value));
+        BOOST_CHECK_EQUAL(value, 1);
+
+        bcos::bytes trailing = fromHex("0102"sv);
+        try
+        {
+            decodeExact(bcos::ref(trailing), value);
+            BOOST_FAIL("expected RlpDecodeException for trailing bytes");
+        }
+        catch (RlpDecodeException const& e)
+        {
+            BOOST_CHECK_EQUAL(
+                rlpErrorCode(e, c_noCode), static_cast<int32_t>(UnexpectedListElements));
+        }
     }
 }
 
@@ -408,10 +533,22 @@ BOOST_AUTO_TEST_CASE(decodeRejectsMalformedInputs)
 // and long-list header branches must enforce this (fixing only one is the classic failure mode).
 BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
 {
-    auto decodeErr = [](std::string_view hex, auto& out) {
+    // std::nullopt means "decoded without error"; a value is the former DecodingError code
+    // extracted from the thrown RlpDecodeException.
+    auto decodeErr = [](std::string_view hex, auto& out) -> std::optional<int32_t> {
         bcos::bytes buffer = fromHex(hex);
         auto view = bcos::ref(buffer);
-        return bcos::codec::rlp::decode(view, out);
+        try
+        {
+            bcos::codec::rlp::decode(view, out);
+            return std::nullopt;
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
+        {
+            // c_noCode is neither success nor a DecodingError value, so missing error info fails
+            // the caller's equality check instead of being masked.
+            return bcos::codec::rlp::rlpErrorCode(e, c_noCode);
+        }
     };
     // 60 bytes of 0xaa as a hex payload, and 60 canonical single-byte list items (each 0x01).
     std::string const payload60(120, 'a');    // "aa" * 60
@@ -422,7 +559,7 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         std::string str;
         auto err = decodeErr("b9003c" + payload60, str);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+        BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
     {  // canonical 60-byte string, single-byte length 0xb8 3c — MUST STILL DECODE.
         std::string str;
@@ -436,7 +573,7 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         std::string str;
         auto err = decodeErr("b800"sv, str);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+        BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
     {  // canonical 2-byte length that is NOT a leading zero (256-byte string, 0xb9 01 00) — the
        // length prefix's first byte is 0x01, so it must decode, proving we reject only leading
@@ -452,7 +589,7 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         std::vector<uint64_t> items;
         auto err = decodeErr("f9003c" + listItems60, items);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+        BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
     {  // canonical 60-byte list, single-byte length 0xf8 3c — MUST STILL DECODE (60 items).
         std::vector<uint64_t> items;
@@ -472,8 +609,20 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         std::vector<uint64_t> items;
         auto err = decodeErr("f800"sv, items);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+        BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
+}
+
+// Negative control for captureRlp's boost::exception arm: a BOOST_THROW_EXCEPTION'd
+// std::invalid_argument lands there as a boost::wrapexcept with no errinfo_comment, and the
+// adapter must fall back to what() rather than blanking the message into RlpError{-1, ""}.
+BOOST_AUTO_TEST_CASE(captureRlpRecoversWhatForBoostWrappedStdException)
+{
+    auto result =
+        captureRlp([] { BOOST_THROW_EXCEPTION(std::invalid_argument("hostile what()")); });
+    BOOST_REQUIRE(!result);
+    BOOST_CHECK_EQUAL(result.error().code, c_rlpGenericError);
+    BOOST_CHECK_EQUAL(result.error().message, "hostile what()");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

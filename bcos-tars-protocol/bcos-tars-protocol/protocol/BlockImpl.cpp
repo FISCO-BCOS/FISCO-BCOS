@@ -35,7 +35,9 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-utilities/AnyHolder.h"
+#include <algorithm>
 #include <range/v3/view/transform.hpp>
+#include <stdexcept>
 
 bcostars::protocol::BlockImpl::BlockImpl(bcostars::Block _block) : BlockImpl()
 {
@@ -87,6 +89,11 @@ void bcostars::protocol::BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::
 void bcostars::protocol::BlockImpl::setReceipt(
     uint64_t _index, bcos::protocol::TransactionReceipt::Ptr _receipt)
 {
+    // issue #5355: reject before the lazy resize so the error path has no side effect
+    if (_index >= std::max(m_inner.receipts.size(), m_inner.transactions.size()))
+    {
+        throw std::out_of_range("BlockImpl::setReceipt index out of range");
+    }
     if (_index >= m_inner.receipts.size())
     {
         m_inner.receipts.resize(m_inner.transactions.size());
@@ -119,7 +126,7 @@ void bcostars::protocol::BlockImpl::setNonceList(::ranges::any_view<std::string>
 
 bcos::crypto::HashType bcostars::protocol::BlockImpl::transactionHash(uint64_t _index) const
 {
-    const auto& hashBytes = m_inner.transactionsMetaData[_index].hash;
+    const auto& hashBytes = m_inner.transactionsMetaData.at(_index).hash;
     return bcos::crypto::HashType{
         bcos::bytesConstRef((const bcos::byte*)hashBytes.data(), hashBytes.size())};
 }
@@ -147,7 +154,7 @@ void bcostars::protocol::BlockImpl::setBlockType(bcos::protocol::BlockType _bloc
 void bcostars::protocol::BlockImpl::setTransaction(
     uint64_t _index, bcos::protocol::Transaction::Ptr _transaction)
 {
-    m_inner.transactions[_index] =
+    m_inner.transactions.at(_index) =
         std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(_transaction)->inner();
 }
 void bcostars::protocol::BlockImpl::appendTransaction(bcos::protocol::Transaction::Ptr _transaction)

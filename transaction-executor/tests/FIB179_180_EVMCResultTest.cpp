@@ -19,10 +19,11 @@
 
 #include "../bcos-transaction-executor/EVMCResult.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include <evmc/evmc.h>
 #include <boost/test/unit_test.hpp>
 #include <utility>
+
+#include "bcos-protocol/TransactionStatus.h"
 using namespace bcos;
 using namespace bcos::executor_v1;
 using namespace bcos::protocol;

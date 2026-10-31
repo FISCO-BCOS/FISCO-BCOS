@@ -6,10 +6,11 @@
 
 #include "EthereumExecutor.h"
 
-#include "bcos-protocol/TransactionStatus.h"
 #include <algorithm>
 #include <cstdint>
 #include <string>
+
+#include "bcos-protocol/TransactionStatus.h"
 
 namespace bcos::executor_v1::eth
 {
@@ -28,7 +29,21 @@ EthBlockInfo buildBlockInfo(
     // field in evmc_tx_context), so for pre-Paris forks we must place the
     // DIFFICULTY value into prev_randao for 0x44 to work.
     if (rev >= EVMC_PARIS)
-        info.prev_randao = config.prevRandao();
+    {
+        // The block header carries the CL-supplied prevRandao (Engine API
+        // payloadAttributes.prevRandao); the ledger config's value is a static
+        // fallback for chains whose headers predate the field (all-zero there).
+        auto const headerRandao = header.prevRandao();
+        if (headerRandao != bcos::h256{})
+        {
+            std::copy_n(
+                headerRandao.data(), sizeof(info.prev_randao.bytes), info.prev_randao.bytes);
+        }
+        else
+        {
+            info.prev_randao = config.prevRandao();
+        }
+    }
     else
         info.prev_randao = evmc::bytes32{static_cast<uint64_t>(info.difficulty)};
     auto const& cb = header.coinbase();
@@ -45,15 +60,16 @@ EthBlockInfo buildBlockInfo(
         info.base_fee = static_cast<uint64_t>(bcos::u256(baseFeeHex));
     }
     // EIP-4844 blob gas parameters (Cancun+). The blob base fee is computed from
-    // the block's excess blob gas using the per-revision blob schedule (EIP-7840),
-    // matching evmone's statetest/blockchaintest loaders:
+    // the block's excess blob gas using the block's blob schedule (EIP-7840):
+    // the verifier stamps the timestamp-resolved schedule into the ledger config
+    // (BPO1/BPO2-aware); chains without one fall back to the revision defaults:
     //   blob_base_fee = compute_blob_gas_price(blob_params, excess_blob_gas)
     info.excess_blob_gas = config.excessBlobGas();
     info.blob_gas_used = config.blobGasUsed();
     if (rev >= EVMC_CANCUN)
     {
         const auto excess = config.excessBlobGas().value_or(0);
-        info.blob_base_fee = evm::compute_blob_gas_price(blobParamsForRevision(rev), excess);
+        info.blob_base_fee = evm::compute_blob_gas_price(blobParamsForBlock(config, rev), excess);
     }
     else
     {

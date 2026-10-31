@@ -19,7 +19,6 @@
  */
 #pragma once
 #include "bcos-framework/ledger/GenesisConfig.h"
-#include "bcos-framework/ledger/IL2ConfigLoader.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
@@ -28,14 +27,16 @@
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/compute/detail/lru_cache.hpp>
+#include <atomic>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
 
-#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
+#include "bcos-framework/ledger/Ledger.h"  // LEDGER_LOG
 
 namespace bcos::ledger
 {
@@ -132,8 +133,6 @@ public:
 
     bool buildGenesisBlock(GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig);
 
-    void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
-        std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
     void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
 
     task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
@@ -142,43 +141,57 @@ public:
     task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override;
 
     // Single-flag read (round-2 Finding E): one SYS_CONFIG row instead of fetchAllFeatures'
-    // ~61-key scan; used by the historical state-read path for feature_l2_ethereum_compat.
+    // ~60-key scan; used by the historical state-read path for feature_mpt_state_root.
     task::Task<bool> fetchFeature(
         bcos::ledger::Features::Flag flag, protocol::BlockNumber blockNumber) override;
 
-    storage::StorageInterface::Ptr getStateStorage() override;
+    // Single-row read of the executor_version SYS_CONFIG entry at @p blockNumber (absent row =
+    // 0, a pre-Ethereum-lane chain). The lane it decides (legacy vs Ethereum account-table
+    // naming) is genesis-fixed: governance writes crossing ETHEREUM_EXECUTOR_VERSION are
+    // refused by SystemConfigPrecompiled, so any block number resolves it correctly.
+    task::Task<int64_t> fetchExecutorVersionAt(protocol::BlockNumber blockNumber) override;
 
-    // L2 mode: inject the per-block SystemConfig loader. AIR/MAX wire this only
-    // when running in L2 chain mode; a null loader makes loadL2Config a no-op so
-    // PBFT/non-L2 paths short-circuit without an EVM staticcall.
-    void setL2ConfigLoader(ledger::IL2ConfigLoader::Ptr loader) { m_l2Loader = std::move(loader); }
-    task::Task<void> loadL2Config(protocol::BlockNumber blockNumber, ledger::LedgerConfig& cfg);
+    storage::StorageInterface::Ptr getStateStorage() override;
 
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Table>& table, const std::string_view& tableName);
 
+    // The storage2 read path cannot distinguish a missing table from missing rows; the
+    // legacy async contract reports a missing table as OpenTableFailed, so the legacy
+    // SYS_* readers share this open-table gate. @p callback receives nullptr when the
+    // table exists and is valid, the OpenTableFailed error otherwise.
+    void asyncCheckStateTableValid(
+        std::string_view tableName, std::function<void(Error::Ptr)> callback);
+
     Error::Ptr checkEntryValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Entry>& entry, const std::string_view& key);
 
-    void asyncGetBlockHeader(bcos::protocol::Block::Ptr block,
-        bcos::protocol::BlockNumber blockNumber, std::function<void(Error::Ptr&&)> callback);
+    // Coroutine bodies behind the asyncPrewriteBlock / asyncGetBatchTxsByHashList callback
+    // shells; the shells bridge them with task::wait and fold exceptions back into the
+    // historical callback error contract.
+    task::Task<std::string> prewriteBlockImpl(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block,
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces);
 
-    void asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
-        std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback);
+    // Single asyncGetRows batch bridged through task::OneShot — NOT storage2::readSome, which
+    // degenerates to a serial per-key loop on the legacy storage interface.
+    task::Task<std::vector<protocol::Transaction::Ptr>> batchGetTransactions(
+        std::shared_ptr<std::vector<std::string>> hashes);
+
+    task::Task<MerkleProofPtr> getTxProof(const crypto::HashType& txHash);
+
+    task::Task<std::pair<bcos::protocol::TransactionsPtr,
+        std::shared_ptr<std::map<std::string, MerkleProofPtr>>>>
+    getBatchTxsWithProofs(crypto::HashListPtr txHashList, bool withProof);
 
     void asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> hashes,
         std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)>
             callback);
 
-    void getTxProof(const crypto::HashType& _txHash,
-        std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
-
     void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
-
-    void asyncGetSystemTableEntry(const std::string_view& table, const std::string_view& key,
-        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback);
 
     void createFileSystemTables(uint32_t blockVersion);
 
@@ -197,10 +210,6 @@ private:
 
     task::Task<std::optional<ledger::StorageState>> getStorageState(
         std::string_view _address, protocol::BlockNumber _blockNumber) override;
-
-    std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
-    needStoreUnsavedTxs(
-        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
 
     bcos::consensus::ConsensusNodeList selectWorkingSealer(
         const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum);
@@ -221,7 +230,5 @@ private:
     CacheType m_txProofMerkleCache;
     CacheType m_receiptProofMerkleCache;
     size_t m_keyPageSize = 0;
-    // null unless running in L2 chain mode; see setL2ConfigLoader/loadL2Config.
-    ledger::IL2ConfigLoader::Ptr m_l2Loader;
 };
 }  // namespace bcos::ledger

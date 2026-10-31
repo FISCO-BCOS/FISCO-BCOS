@@ -20,7 +20,7 @@
  * @date 2026-07-14
  *
  * Root cause (from code): every inbound P2P message delivery is
- *   Session::doRead -> Session::onMessage -> asioInterface()->post(...)  (Session.cpp: onMessage)
+ *   Session readLoop -> Session::onMessage -> asioInterface()->post(...)  (Session.cpp: onMessage)
  * and, before the fix, every session teardown notification went to that SAME reactor. So message
  * delivery and teardown shared ONE pool. A bulk-disconnect of a large established session pool
  * floods that reactor with teardown work (each drop drives onDisconnect -> onRemoveNodeIDs ->
@@ -44,13 +44,13 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <chrono>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -78,9 +78,6 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(2, "FIB186Reactor"), "0.0.0.0", 0)
     {}
     ~FakeASIO_Reactor() noexcept override = default;
-    void asyncReadSome(
-        const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler) override
-    {}
 };
 
 // Host subclass with the network marked up, so Session::drop() takes the "hand the teardown
@@ -88,9 +85,8 @@ public:
 class FakeHost_Reactor : public bcos::gateway::Host
 {
 public:
-    FakeHost_Reactor(bcos::crypto::Hash::Ptr hash, std::shared_ptr<ASIOInterface> asioInterface,
-        MessageFactory::Ptr messageFactory)
-      : Host(std::move(hash), std::move(asioInterface), nullptr, std::move(messageFactory))
+    FakeHost_Reactor(bcos::crypto::Hash::Ptr hash, std::shared_ptr<ASIOInterface> asioInterface)
+      : Host(std::move(hash), std::move(asioInterface), nullptr)
     {
         m_run = true;
     }
@@ -143,9 +139,8 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     // process-global TBB control, so "the flood would swamp the delivery reactor if it landed
     // there" is deterministic and independent of the host core count.
     auto hashImpl = std::make_shared<Keccak256>();
-    auto messageFactory = std::make_shared<P2PMessageFactory>();
     auto fakeAsio = std::make_shared<FakeASIO_Reactor>();
-    auto fakeHost = std::make_shared<FakeHost_Reactor>(hashImpl, fakeAsio, messageFactory);
+    auto fakeHost = std::make_shared<FakeHost_Reactor>(hashImpl, fakeAsio);
 
     auto probe = std::make_shared<ReactorProbe>();
 
@@ -160,8 +155,7 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     {
         auto socket = std::make_shared<FakeSocket_Reactor>();
         auto session = std::make_shared<Session>(socket, *fakeHost, 1024, true);
-        session->setMessageFactory(messageFactory);
-        session->setMessageHandler([probe](NetworkException, SessionFace::Ptr, Message::Ptr) {
+        session->setMessageHandler([probe](NetworkException, SessionFace::Ptr, Message) {
             probe->teardownRunning.fetch_add(1);
             while (!probe->release.load())
             {  // hold the reactor worker, as a batch of real teardowns would

@@ -26,10 +26,11 @@
 #include <bcos-utilities/Timer.h>
 #include <servant/Application.h>
 
-#include <utility>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
+#include <utility>
 
-#define AMOP_CLIENT_LOG(level) BCOS_LOG(level) << LOG_BADGE("AMOPClient")
+#define AMOP_CLIENT_LOG(level) BCOS_MODULE_LOG(RPC, level) << LOG_BADGE("AMOPClient")
 
 namespace bcos::rpc
 {
@@ -55,30 +56,32 @@ public:
     virtual ~AMOPClient() = default;
     /**
      * @brief receive amop request message from the gateway
-     *
+     * @return {error, responseData}: error is nullptr on success
      */
-    virtual void asyncNotifyAMOPMessage(int16_t _type, std::string const& _topic,
-        bytesConstRef _data, std::function<void(Error::Ptr&&, bytesPointer)> _callback)
+    virtual task::Task<std::tuple<Error::Ptr, bytesPointer>> notifyAMOPMessage(
+        int16_t _type, std::string const& _topic, bytesConstRef _data)
     {
         try
         {
             switch (_type)
             {
             case AMOPNotifyMessageType::Unicast:
-                asyncNotifyAMOPMessage(_topic, _data, _callback);
-                break;
+                co_return co_await notifyAMOPMessage(_topic, _data);
             case AMOPNotifyMessageType::Broadcast:
-                asyncNotifyAMOPBroadcastMessage(_topic, _data, _callback);
-                break;
+                co_return co_await notifyAMOPBroadcastMessage(_topic, _data);
             default:
-                BCOS_LOG(WARNING) << LOG_DESC("asyncNotifyAMOPMessage: unknown message type")
-                                  << LOG_KV("type", _type);
+                AMOP_CLIENT_LOG(WARNING)
+                    << LOG_DESC("notifyAMOPMessage: unknown message type") << LOG_KV("type", _type);
+                co_return std::make_tuple(
+                    BCOS_ERROR_PTR(-1, "unknown AMOP notify message type"), bytesPointer());
             }
         }
         catch (std::exception const& e)
         {
-            BCOS_LOG(WARNING) << LOG_DESC("asyncNotifyAMOPMessage exception")
-                              << LOG_KV("message", boost::diagnostic_information(e));
+            AMOP_CLIENT_LOG(WARNING) << LOG_DESC("notifyAMOPMessage exception")
+                                     << LOG_KV("message", boost::diagnostic_information(e));
+            co_return std::make_tuple(
+                BCOS_ERROR_PTR(-1, boost::diagnostic_information(e)), bytesPointer());
         }
     }
 
@@ -127,10 +130,10 @@ protected:
 
     std::shared_ptr<boostssl::ws::WsSession> randomChooseSession(std::string const& _topic);
 
-    virtual void asyncNotifyAMOPMessage(std::string const& _topic, bytesConstRef _data,
-        std::function<void(Error::Ptr&&, bytesPointer)> _callback);
-    virtual void asyncNotifyAMOPBroadcastMessage(std::string const& _topic, bytesConstRef _data,
-        std::function<void(Error::Ptr&&, bytesPointer)> _callback);
+    virtual task::Task<std::tuple<Error::Ptr, bytesPointer>> notifyAMOPMessage(
+        std::string const& _topic, bytesConstRef _data);
+    virtual task::Task<std::tuple<Error::Ptr, bytesPointer>> notifyAMOPBroadcastMessage(
+        std::string const& _topic, bytesConstRef _data);
 
     std::map<std::string, std::shared_ptr<boostssl::ws::WsSession>> querySessionsByTopic(
         std::string const& _topic) const
@@ -155,13 +158,11 @@ protected:
 
     virtual void initMsgHandler();
 
-    void sendMessageToClient(std::string const& _topic,
-        std::shared_ptr<boostssl::ws::WsSession> _selectSession,
-        const boostssl::ws::WsMessage& _msg,
-        std::function<void(bcos::Error::Ptr&&, bytesPointer)> _callback);
+    task::Task<std::tuple<Error::Ptr, bytesPointer>> sendMessageToClient(std::string const& _topic,
+        std::shared_ptr<boostssl::ws::WsSession> _selectSession, boostssl::ws::WsMessage _msg);
 
     bool trySendAMOPRequestToLocalNode(std::shared_ptr<boostssl::ws::WsSession> _session,
-        std::string const& _topic, const boostssl::ws::WsMessage& _msg);
+        std::string const& _topic, boostssl::ws::WsMessage _msg);
 
     void broadcastAMOPMessage(std::string const& _topic, const boostssl::ws::WsMessage& _msg);
 

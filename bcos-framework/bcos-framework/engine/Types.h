@@ -19,11 +19,11 @@
 
 #pragma once
 
+#include "Errors.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
 #include <optional>
@@ -48,15 +48,8 @@ enum class ApiVersion : std::uint8_t
 
 using PayloadID = std::string;
 
-/// Engine API error conditions shared by the service implementation and the RPC
-/// endpoint layer, which maps them to Engine API error codes: UnknownPayload ->
-/// -38001, the two version mismatches -> -38005 Unsupported fork.
-/// UnsupportedFork lives in Errors.h (same namespace); a request whose attribute
-/// shape cannot express the chain fork is thrown by EngineService buildPayload and
-/// mapped to -38005 by the endpoint.
-DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
-DERIVE_BCOS_EXCEPTION(UnknownPayload);
-DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+// Exceptions live in Errors.h (included above) so RPC can map them without
+// linking bcos-engine. #5517's comment on -38005 / UnsupportedFork still applies.
 
 struct WithdrawalV1
 {
@@ -64,6 +57,10 @@ struct WithdrawalV1
     u256 validatorIndex = 0;
     u256 amount = 0;
     Address address;
+
+    // Element-wise equality so payloads (std::vector<WithdrawalV1>) can be compared:
+    // the withdrawals LIST is the field withdrawalsRoot commits to (finding F21).
+    bool operator==(const WithdrawalV1&) const = default;
 };
 
 struct BlobsBundleV1
@@ -71,6 +68,27 @@ struct BlobsBundleV1
     std::vector<bytes> commitments;
     std::vector<bytes> proofs;
     std::vector<bytes> blobs;
+};
+
+/// EIP-4844 per-transaction sidecar (the network-wrapper payload of a type-3 transaction):
+/// the blob bodies with their KZG commitments and proofs, kept alongside the stripped
+/// transaction while it sits in the blob pool. A block's BlobsBundleV1 is the concatenation
+/// of its blob transactions' sidecars in block order.
+struct BlobTxSidecar
+{
+    std::vector<bytes> blobs;
+    std::vector<bytes> commitments;
+    std::vector<bytes> proofs;
+};
+
+/// One blob with its commitment and proof — the engine_getBlobsV1 answer unit. The wire
+/// object (BlobAndProofV1) carries only blob and proof; the commitment rides along because
+/// the versioned hash a CL asks by derives from it.
+struct BlobItem
+{
+    bytes commitment;
+    bytes proof;
+    bytes blob;
 };
 
 struct ForkchoiceState
@@ -142,9 +160,9 @@ struct ExecutionPayload
     u256 gasUsed = 0;
     u256 baseFeePerGas = 0;
     h256 blockHash;
-    /// Transaction envelopes: each `EngineTransaction::raw` carries the EIP-2718
-    /// encoded bytes (including the OP 0x7E deposit envelope). This is the single
-    /// authoritative carrier for both generic and OP engine paths.
+    /// Generic-path transaction carrier: each `EngineTransaction::raw` is the EIP-2718
+    /// envelope. The OP build path consumes only those `raw` envelopes (with
+    /// `decoded == nullptr` where no FISCO decode exists), never the decoded fields.
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
@@ -160,14 +178,20 @@ struct ExecutionPayload
     std::optional<u256> blobGasUsed;
     std::optional<u256> excessBlobGas;
 
-    // Required by ExecutionPayloadV4.
+    // Not carried by the ExecutionPayloadV4 wire dialect (no CL sends them, no builder
+    // fills them — see EngineServiceCommon's validator); reserved for a future built
+    // shape that actually populates them. Do not require their presence in validation.
     std::optional<bytes> blockAccessList = std::nullopt;
     std::optional<std::uint64_t> slotNumber = std::nullopt;
 
-    // Required by ExecutionPayloadV4/V5 (OP Stack, Isthmus onwards): storage root of
-    // the L2ToL1MessagePasser predeploy. May carry a placeholder until real-value
-    // header wiring lands.
-    std::optional<h256> withdrawalsRoot;
+    /// NOTE: this struct is ~500B (Bloom + vectors) — pass it by const-ref/move at
+    /// every engine_api call site (parts 2-4).
+    /// OP Isthmus+ extends the payload with an explicit withdrawals-root field (=
+    /// MessagePasser storage root) that cannot be derived from the (always-empty)
+    /// `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains.
+    /// The transaction carrier is `transactions[i].raw` above; there is no separate
+    /// OP mirror list (a second carrier for one consensus-critical root would drift).
+    std::optional<h256> withdrawalsRoot = std::nullopt;
 };
 
 struct NewPayloadRequest

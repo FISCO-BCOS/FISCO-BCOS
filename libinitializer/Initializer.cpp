@@ -29,6 +29,8 @@
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
 #include "EthereumBlockHashLookup.h"
+#include "EthereumSyncInitializer.h"
+#include "ExternalPayloadVerifier.h"
 #include "GlobalStateStorageInitializer.h"
 #include "LedgerInitializer.h"
 #include "MemPoolInitializer.h"
@@ -37,18 +39,23 @@
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/protocol/BlobSchedule.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/MPTPruner.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-single-consensus/SingleNodeConsensus.h"
 #include "bcos-storage/MPTNodeReadStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
+#include "engine/bcos-engine/ClSyncCoordination.h"
+#include "engine/bcos-engine/OpLedgerConfigRepublish.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
+#include "opstack-executor/OpAdmissionRollupCost.h"
 #include <TxPool.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hasher/AnyHasher.h>
@@ -57,13 +64,11 @@
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/ledger/OpForkScheduleMetadata.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
-#include <boost/algorithm/string.hpp>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/rpc/RPCInterface.h>
-#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
@@ -78,17 +83,27 @@
 #include <bcos-transaction-executor/precompiled/PrecompiledManager.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+#include <bcos-txpool/txpool/utilities/SystemTransaction.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
+#include <opstack-executor/OpScheduler.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
-#include <txpool/validator/TxValidator.h>
 #include <util/tc_clientsocket.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 #include <cstddef>
+#include <iostream>
+#include <limits>
 #include <memory>
 #include <string>
 #include <toml++/toml.hpp>
 #include <vector>
+
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-protocol/TransactionSubmitResultImpl.h>
+#include <bcos-utilities/Common.h>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -131,8 +146,8 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     m_nodeConfig = std::make_shared<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     m_nodeConfig->loadGenesisConfig(_genesisFile);
     m_nodeConfig->loadConfig(_configFilePath);
-    // Cross-file EL-mode invariants (config.ini ethereum.mode=el must be backed by the
-    // genesis EL declaration) — checkable only after BOTH files are loaded.
+    // Cross-file invariants (config.ini settings whose legality depends on the genesis
+    // lane) — checkable only after BOTH files are loaded.
     m_nodeConfig->validateELModeInvariants();
 
     // init the protocol
@@ -167,6 +182,7 @@ RocksDBOption getRocksDBOption(
     option.optimizeLevelStyleCompaction = optimizeLevelStyleCompaction;
     option.enableBlobFiles = nodeConfig->enableRocksDBBlob();
     option.enableDBStatistics = nodeConfig->enableStatistics();
+    option.maxOpenFiles = nodeConfig->maxOpenFiles();
     return option;
 }
 
@@ -177,22 +193,35 @@ std::shared_ptr<bcos::engine::AnyEngineService> Initializer::engineService()
 
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
-    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
+    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion,
+    [[maybe_unused]] const std::string& _logPath)
 {
-    // Engine-driven block production (single-node consensus or [op_engine_rpc]) is AIR-only.
-    // Both modes skip txpool/pbft init and wire the in-process mempool into NodeService via
-    // AirNodeInitializer::setMemPool; on a MAX/tars node the flag would start the
-    // block-producing driver while sendRawTransaction still falls through to an
+    // Every driver other than PBFT is AIR-only. They skip txpool/pbft init and either wire
+    // the in-process mempool into NodeService (AirNodeInitializer::setMemPool) or run a
+    // devp2p sync client that only AirNodeInitializer builds; on a Pro/tars node the driver
+    // would be half-assembled while sendRawTransaction still falls through to an
     // uninitialized txpool. Reject the combination at startup rather than leaving that
     // state reachable by a config flag.
-    if (m_nodeConfig->engineDrivenBlockProduction() &&
+    auto const blockDriver = m_nodeConfig->blockDriver();
+    if (blockDriver != bcos::tool::BlockDriver::PBFT &&
         _nodeArchType != bcos::protocol::NodeArchitectureType::AIR)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "only the PBFT block driver is supported on Pro/tars "
+                                  "deployments; the Engine API, EL sync, [debug] follow_devp2p "
+                                  "and [debug] enable drivers need an AIR node"));
+    }
+
+    // The account-table migration rewrites the state RocksDB directly; on TiKV the chain
+    // state does not live there, so the flag would migrate the wrong store.
+    if (m_nodeConfig->migrateAccountTablesToBinary() &&
+        !boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
-                "enable_single_node_consensus / op_engine_rpc.enable are only supported on "
-                "AIR nodes (in-process mempool/scheduler); not supported on MAX/tars "
-                "deployments"));
+                "[storage] migrate_account_tables_to_binary requires RocksDB storage (the "
+                "state DB it rewrites); storage.type=" +
+                m_nodeConfig->storageType() + " keeps its chain state elsewhere"));
     }
 
     // TBB global thread control
@@ -231,6 +260,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_globalStateStorageInitializer =
         GlobalStateStorageInitializer::build(m_nodeConfig->storagePath(), rocksDBOption);
 
+    // Node-local account-table encoding, handled inside LedgerInitializer::build (lane check
+    // → layout-flag read → optional one-shot migration → mode publication, all before the
+    // genesis write). The open DB handle is passed down: RocksDB's single-instance lock
+    // forbids opening the state DB twice, and the ledger's decryption-aware config reads are
+    // what determine the executor lane.
+    AccountTableBoot accountTableBoot{.stateDB = m_globalStateStorageInitializer->rocksDB(),
+        .migrateToBinary = m_nodeConfig->migrateAccountTablesToBinary()};
+
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // Share CheckpointRocksDBStorage's RocksDB with the legacy storage layer.
@@ -252,31 +289,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->dataEncryption());
         }
     }
-#ifdef WITH_TIKV
-    else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
-    {
-        m_storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-        {  // TODO: in max node, scheduler will use storage to commit but the ledger only use
-           // storage to read, the storage which ledger use should not trigger the switch when the
-           // scheduler is committing block
-            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            consensusStorage = m_storage;
-            airExecutorStorage = m_storage;
-        }
-        else
-        {  // in AIR/PRO node, scheduler and executor in one process so need different storage
-            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            airExecutorStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        }
-    }
-#endif
     else
     {
         throw std::runtime_error("storage type not support");
@@ -284,13 +296,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // build ledger
     auto ledger = LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage,
-        m_nodeConfig, m_blockStorage, m_ioServicePool);
+        m_nodeConfig, m_blockStorage, m_ioServicePool, std::move(accountTableBoot));
     ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
-    // Note: since tikv-storage store txs with transaction, batch writing is more efficient than
-    // writing one by one
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
         executionMessageFactory =
@@ -304,11 +314,63 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
+    // One holder per process, written by whoever commits a block and read by transaction
+    // admission. Created here because it outlives both and neither should own the other.
+    //
+    // Published once now, from the ledger as it stands at boot, rather than left empty until the
+    // first commit: an empty holder has no chain id and admission fails closed on that, so a
+    // restarted node would refuse every EIP-155 transaction until a block committed -- which on
+    // a quiet chain is never, since nothing gets admitted to fill one. A malformed persisted
+    // value (web3_chain_id, evmc_revision) throws here and refuses to start, the same fail-stop
+    // the per-block refetch applies.
+    m_ledgerConfigState = std::make_shared<bcos::ledger::LedgerConfigState>(
+        task::syncWait(ledger::getLedgerConfig(*m_ledger)));
+
+    // Read executor_version from the ledger ahead of the txpool/mempool wiring below (the
+    // mempool's chain kind keys on it) and before wiring schedulers or Engine API.
+    auto const onChainVersion =
+        readOnChainExecutorVersion(*m_ledger, m_nodeConfig->executorVersion());
+    if (onChainVersion.present)
+    {
+        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << onChainVersion.version;
+    }
+    m_executorVersion = onChainVersion.version;
+
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
         m_frontServiceInitializer->front(), ledger, *m_ioServicePool->getIOService(),
-        m_ioServicePool);
-    m_memPoolInitializer = MemPoolInitializer::build();
+        m_ioServicePool, m_ledgerConfigState);
+    // executor_version==2 (the pure-Ethereum executor): the mempool runs the L1 fee market —
+    // blob transactions admitted, fee-ordered sealing, fee-bump replacement. A v2 genesis
+    // (either v2 driver: Engine or [debug] enable) additionally sizes the pool (capacity,
+    // lifetime) and resolves the per-transaction blob limit dynamically: the EIP-7840 schedule
+    // evaluated at the chain head's timestamp — LedgerConfigState is republished with every
+    // committed block (MultiVersionScheduler's commitBlock wrapper, the engine services' commit
+    // lanes, and the devp2p sync loop in EthereumSyncInitializer) and carries the head header's
+    // millisecond timestamp. Every other version keeps the L2 pool defaults (no fee market,
+    // blobs refused).
+    bcos::txpool::MemPoolConfig memPoolConfig;
+    if (m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        memPoolConfig.chainKind = bcos::txpool::ChainKind::L1;
+        if (m_nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+        {
+            auto const forkSchedule = EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig);
+            memPoolConfig.capacity = m_nodeConfig->ethereumMempoolCapacity();
+            memPoolConfig.txLifetimeMs =
+                m_nodeConfig->ethereumMempoolTxLifetimeMinutes() * 60 * 1000;
+            memPoolConfig.blobForks =
+                bcos::protocol::BlobForkTimes{.cancunTime = forkSchedule.cancunTime,
+                    .pragueTime = forkSchedule.pragueTime,
+                    .bpo1Time = forkSchedule.bpo1Time,
+                    .bpo2Time = forkSchedule.bpo2Time};
+            memPoolConfig.headTimestampSeconds = [state = m_ledgerConfigState] {
+                return static_cast<uint64_t>((std::max)(state->get()->timestamp(), int64_t{0})) /
+                       1000;
+            };
+        }
+    }
+    m_memPoolInitializer = MemPoolInitializer::build(memPoolConfig);
 
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
 
@@ -351,60 +413,69 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         *m_protocolInitializer->blockFactory()->receiptFactory(),
         std::move(ethereumBlockHashLookup));
 
-    // Resolve the effective executor version BEFORE gating Engine API / wiring the
-    // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
-    // at runtime (executor_version is runtime-settable via SystemConfigPrecompiled, and
-    // MultiVersionScheduler::setVersion saturates any version >= 2 onto the v2
-    // EthereumExecutor), so the gate below must read the ledger rather than the node
-    // config — a node whose genesis said v1 but whose ledger says v2 would otherwise build
-    // the Engine API on the v1 executor, the state-root divergence the gate exists to
-    // prevent. The residual risk of a runtime switch to v2 without genesis config is handled
-    // by the boot refusal below (no on-chain evmc_revision row), not by a per-block
-    // validator. Genesis is already built (LedgerInitializer), so m_ledger is readable at
-    // this point.
-    auto executorVersion = m_nodeConfig->executorVersion();
-    if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
-            *m_ledger, magic_enum::enum_name(ledger::SystemConfig::executor_version))))
+    // A v2 genesis records no evmc_revision row: the EVM revision of a block is a function of
+    // its timestamp over [fork_timestamps]. The block verifier stamps it per block itself; the
+    // eth_call / eth_estimateGas dry run and the mempool's admission read it from here.
+    ledger::EvmcRevisionSchedule evmcRevisionSchedule;
+    if (m_nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
     {
-        executorVersion = boost::lexical_cast<int>(std::get<0>(*versionConfig));
-        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << executorVersion;
+        evmcRevisionSchedule = [schedule =
+                                       EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig)](
+                                   int64_t timestampSeconds, u256 const& difficulty) {
+            return scheduler_v1::evmcRevisionForTimestamp(schedule, timestampSeconds, difficulty);
+        };
     }
-    m_executorVersion = executorVersion;
 
-    // Engine API (OP-Stack engine endpoints) is wired to the v1 TransactionExecutorImpl.
-    // It must not be built for executor_version >= 2: a v2 chain's state transitions run
-    // through the pure-Ethereum EthereumExecutor, and an Engine API driven through the v1
-    // executor would produce blocks with v1 semantics that diverge from the v2 main chain
-    // (a state-root fork). v2 chains therefore have no Engine API; engine RPC endpoints
-    // respond "engine service not available" (see EngineEndpoint.cpp).
+    // v1 engine on executor_version < 2; Eth on 2; Op on exactly 3.
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
+    // OP mode is the newest declared lane and everything above it (a value above the wired
+    // slot count saturates onto the newest wired slot, see MultiVersionScheduler::setVersion).
+    const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
+    // storage.mpt_prune_window on the OP lane is refused unless [debug] follow_devp2p by
+    // NodeConfig::validateELModeInvariants (initConfig), ahead of the MPT pruner's boot-time
+    // init below. L1 EL mode is supported: the devp2p sync commit path
+    // (EthereumBlockVerifier::verifyAndCommit) feeds the same CommitObserver hooks as the
+    // PBFT and Engine API paths (wired through EthereumSyncInitializer).
 
-    // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
-    // endpoint would silently serve the v1 EngineService built below, and an external
-    // op-node — which trusts the EL and never cross-checks state roots — would drive a
-    // chain with v1 (non-Ethereum) semantics. Fail fast instead. The only exception is the
-    // explicit test-only escape hatch unsafe_allow_v1_executor, which the former v1 Engine
-    // API integration harness (tools/engine_integration_test.sh) set. The harness now runs
-    // executor_version=2 + evm_revision=cancun like production, and payload building in
-    // any case requires an on-chain EVM revision (buildPayload fails closed without one),
-    // so the escape hatch can no longer build payloads; production configs must never set
-    // it.
-    if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
+    // MPT pruning (storage.mpt_prune_window; pathdb spec §4.8): ONE pruner instance shared by
+    // every baseline scheduler variant built below — MultiVersionScheduler activates exactly
+    // one at a time, and the pruner's state (reference counts and the delete queue) is fully
+    // in-memory, so sharing carries no cross-version conflict. Every pruner read hits
+    // latestBackend() DIRECTLY: no cache layer may sit between the pruner and the physical
+    // rows (MPTPruner.h contract). -1 (the default) disables pruning entirely: the schedulers
+    // keep their built-in NoopCommitObserver.
+    if (m_nodeConfig->mptPruneWindow() > 0)
     {
-        if (!m_nodeConfig->opEngineAllowV1Executor())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "op_engine_rpc requires executor_version >= " +
-                    std::to_string(scheduler_v1::ETHEREUM_EXECUTOR_VERSION) +
-                    " (the pure-Ethereum executor): on executor_version < 2 the endpoint "
-                    "would serve v1 semantics that diverge from an OP Stack chain. For the "
-                    "v1 Engine API test harness only, set [op_engine_rpc] "
-                    "unsafe_allow_v1_executor=true"));
-        }
-        INITIALIZER_LOG(WARNING) << LOG_DESC(
-            "op_engine_rpc serving the v1 EngineService (unsafe_allow_v1_executor=true): "
-            "test-harness mode, never drive this endpoint with a production op-node");
+        auto& pruneBackend = m_globalStateStorageInitializer->storage().latestBackend();
+        auto pruner = std::make_shared<
+            ledger::mpt::MPTPruner<std::remove_reference_t<decltype(pruneBackend)>>>(
+            pruneBackend, m_nodeConfig->mptPruneWindow());
+        // Startup rebuild: nothing pruning-related is persisted, so init re-derives the counts
+        // and the delete queue from the window's state roots, then handles pre-existing
+        // unreachable "/mpt/" garbage as storage.mpt_prune_sweep_garbage directs: off (the
+        // default) skips the scan entirely (init only logs a hint); on deletes the garbage in
+        // SWEEP_DELETE_CHUNK batches while scanning (MPTPruner.h Phase 3). Throws
+        // MPTInvariantViolation on a missing reachable node row; fails loudly at boot.
+        auto const currentBlock = task::syncWait(ledger::getCurrentBlockNumber(*ledger));
+        task::syncWait(pruner->init(
+            currentBlock, m_executorVersion,
+            [ledger](BlockNumber number) -> task::Task<std::optional<h256>> {
+                auto block = co_await ledger::getBlockData(*ledger, number, ledger::HEADER);
+                co_return block ? std::optional<h256>{block->blockHeader()->stateRoot()} :
+                                  std::nullopt;
+            },
+            m_nodeConfig->mptPruneSweepGarbage(),
+            [](uint64_t done, uint64_t total) {
+                INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning: garbage sweep progress")
+                                      << LOG_KV("deleted", done) << LOG_KV("total", total);
+            }));
+
+        INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning enabled")
+                              << LOG_KV("window", m_nodeConfig->mptPruneWindow())
+                              << LOG_KV("trackedNodes", pruner->trackedCount())
+                              << LOG_KV("scheduledDeletions", pruner->pendingCount())
+                              << LOG_KV("garbageDeleted", pruner->lastSweepDeleted());
+        m_mptCommitObserver = std::move(pruner);
     }
 
     if (baselineSchedulerConfig.parallel)
@@ -421,12 +492,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                transactionExecutor, m_mptCommitObserver,
+                blockDriver == bcos::tool::BlockDriver::PBFT);
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger);
+                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger,
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
         }
 
         // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
@@ -440,27 +513,60 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // ordered against a chunk reading that account's has_storage (an EIP-7610
         // CREATE-collision input) — a consensus divergence. Revisit (record the range read)
         // before v2 is allowed to run on a parallel scheduler.
-        auto ethereumSerialScheduler =
+        m_ethereumSerialScheduler =
             std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
+        m_ethereumExecutor = ethereumExecutor;
         std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
+                m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                ethereumExecutor, m_mptCommitObserver, blockDriver == bcos::tool::BlockDriver::PBFT,
+                evmcRevisionSchedule);
         // Engine-driven modes on the v2 EthereumExecutor: build the Engine API service wired
         // to the ethereum scheduler + EthereumExecutor so blocks are built with
-        // Ethereum-compliant semantics. Two mutually exclusive drivers use it (NodeConfig
-        // rejects both flags at once): the built-in single-node driver
-        // (enable_single_node_consensus) and an external op-node over the authenticated
-        // [op_engine_rpc] endpoint. In either mode the EngineService is the sole block
-        // producer — the legacy txpool/PBFT pipeline is never initialized or started (see
-        // engineDrivenBlockProduction() guards below and in start()).
-        if (!engineApiForV1Only &&
-            (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
+        // Ethereum-compliant semantics. It is built when something drives it: the
+        // DebugSelfProduce driver ([debug] enable) or the Engine driver (EL mode: the
+        // [engine_rpc] listener next to devp2p sync). The legacy txpool/PBFT pipeline is
+        // never initialized or started under either (the blockDriver guards below and in
+        // start()).
+        if (!engineApiForV1Only && !opStackMode &&
+            (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce ||
+                m_nodeConfig->servesEngineApi()))
         {
+            // Both v2 drivers build every block through ONE EthereumBlockVerifier behind the
+            // external payload verifier (the L1 dialect: the EVM revision and the header
+            // rules per block timestamp from [fork_timestamps]). Under EL mode (the Engine
+            // driver) the same instance also serves the external newPayload lane and the
+            // devp2p sync loop (AirNodeInitializer forwards elBlockVerifier() to
+            // EthereumSyncInitializer) — the verifier's m_commitMutex serializes the two
+            // commit lanes. DebugSelfProduce has no devp2p loop, so no ClSyncCoordination.
+            m_elBlockVerifier = std::make_shared<scheduler_v1::EthereumBlockVerifier<
+                scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
+                *m_ethereumSerialScheduler, *ethereumExecutor,
+                *m_protocolInitializer->blockFactory(), m_mptCommitObserver,
+                m_nodeConfig->ethereumReorgWindow());
+            std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
+                externalPayloadVerifier =
+                    std::make_shared<ExternalPayloadVerifierImpl<GlobalStateStorage>>(
+                        m_elBlockVerifier, ledger, m_protocolInitializer->blockFactory(),
+                        EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig),
+                        m_nodeConfig->ethereumChainId(), m_nodeConfig->ethereumMergeBlock());
+            if (blockDriver == bcos::tool::BlockDriver::Engine)
+            {
+                // One coordination instance shared with the devp2p sync loop
+                // (AirNodeInitializer forwards clSyncCoordination() to
+                // EthereumSyncInitializer): the first served forkchoiceUpdated latches
+                // CL-driven mode, and every SYNCING answer records a backfill target.
+                m_clSyncCoordination =
+                    std::make_shared<engine::engine_common::ClSyncCoordination>();
+            }
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger);
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger, bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState,
+                m_mptCommitObserver, std::move(externalPayloadVerifier), m_clSyncCoordination,
+                /*allowBlobTransactions=*/m_executorVersion ==
+                    bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
         }
     }
     else
@@ -470,31 +576,196 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                transactionExecutor, m_mptCommitObserver,
+                blockDriver == bcos::tool::BlockDriver::PBFT);
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger);
+                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger,
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
         }
 
         // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
-        auto ethereumSerialScheduler =
+        m_ethereumSerialScheduler =
             std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
+        m_ethereumExecutor = ethereumExecutor;
         std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
+                m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
+                ethereumExecutor, m_mptCommitObserver, blockDriver == bcos::tool::BlockDriver::PBFT,
+                evmcRevisionSchedule);
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
-        // branch above for why op_engine_rpc.enable also builds the EngineService here.
-        if (!engineApiForV1Only &&
-            (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
+        // branch above.
+        if (!engineApiForV1Only && !opStackMode &&
+            (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce ||
+                m_nodeConfig->servesEngineApi()))
         {
+            // Both v2 drivers build every block through ONE EthereumBlockVerifier behind the
+            // external payload verifier (the L1 dialect: the EVM revision and the header
+            // rules per block timestamp from [fork_timestamps]). Under EL mode (the Engine
+            // driver) the same instance also serves the external newPayload lane and the
+            // devp2p sync loop (AirNodeInitializer forwards elBlockVerifier() to
+            // EthereumSyncInitializer) — the verifier's m_commitMutex serializes the two
+            // commit lanes. DebugSelfProduce has no devp2p loop, so no ClSyncCoordination.
+            m_elBlockVerifier = std::make_shared<scheduler_v1::EthereumBlockVerifier<
+                scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
+                *m_ethereumSerialScheduler, *ethereumExecutor,
+                *m_protocolInitializer->blockFactory(), m_mptCommitObserver,
+                m_nodeConfig->ethereumReorgWindow());
+            std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
+                externalPayloadVerifier =
+                    std::make_shared<ExternalPayloadVerifierImpl<GlobalStateStorage>>(
+                        m_elBlockVerifier, ledger, m_protocolInitializer->blockFactory(),
+                        EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig),
+                        m_nodeConfig->ethereumChainId(), m_nodeConfig->ethereumMergeBlock());
+            if (blockDriver == bcos::tool::BlockDriver::Engine)
+            {
+                // One coordination instance shared with the devp2p sync loop
+                // (AirNodeInitializer forwards clSyncCoordination() to
+                // EthereumSyncInitializer): the first served forkchoiceUpdated latches
+                // CL-driven mode, and every SYNCING answer records a backfill target.
+                m_clSyncCoordination =
+                    std::make_shared<engine::engine_common::ClSyncCoordination>();
+            }
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger);
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger, bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState,
+                m_mptCommitObserver, std::move(externalPayloadVerifier), m_clSyncCoordination,
+                /*allowBlobTransactions=*/m_executorVersion ==
+                    bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
         }
+    }
+
+    if (opStackMode)
+    {
+        // Two OP drivers: op-node over the [engine_rpc] Engine API (Engine), or the devp2p
+        // follow client ([debug] follow_devp2p, wired by AirNodeInitializer through
+        // OpStackSyncInitializer). blockDriver() derives one of them from a genesis
+        // executor.version >= 3; anything else here means the on-chain executor_version
+        // moved to the OP slot under a non-OP genesis, and nothing would produce blocks.
+        if (blockDriver != bcos::tool::BlockDriver::Engine &&
+            blockDriver != bcos::tool::BlockDriver::DebugFollowDevp2p)
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version==3, the OPSTACK slot) requires "
+                                      "the Engine or the [debug] follow_devp2p block driver, "
+                                      "which only a config.genesis executor.version >= 3 "
+                                      "yields"));
+        }
+        // The OP lane's fork schedule comes from [op_fork_timestamps] (genesis config);
+        // NodeConfig refuses an OP chain without it and a non-OP chain with it. Kept as a
+        // local fail-fast so a hand-built config cannot silently run the Isthmus baseline.
+        auto const& opForkSchedule = m_nodeConfig->opForkSchedule();
+        if (!opForkSchedule.has_value())
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version==3, the OPSTACK slot) requires "
+                                      "an [op_fork_timestamps] section in config.genesis"));
+        }
+        // OP mode executes with the chain id admission judges against: the snapshot published
+        // at boot, which already parsed the on-chain web3_chain_id row (TxValidator's
+        // readChainView). The genesis file only seeds that row, so it is the fallback, not the
+        // source -- reading it here would let an edited config.genesis execute (and EIP-155-sign)
+        // with a chain id no other node uses.
+        // Hold the snapshot: get() hands back a temporary shared_ptr, and chainId() returns a
+        // reference into the object it owns.
+        auto const chainConfig = m_ledgerConfigState->get();
+        std::optional<u256> parsedChainId;
+        if (auto const& snapshotChainId = chainConfig->chainId())
+        {
+            parsedChainId = fromBigEndian<u256>(snapshotChainId->bytes);
+        }
+        else
+        {
+            parsedChainId = ledger::parseWeb3ChainId(m_nodeConfig->genesisConfig().m_web3ChainID);
+        }
+        if (!parsedChainId || *parsedChainId == 0 ||
+            *parsedChainId > std::numeric_limits<uint64_t>::max())
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version>=3) requires a non-zero [chain] "
+                                      "chain_id that fits uint64"));
+        }
+        uint64_t const opChainId = static_cast<uint64_t>(*parsedChainId);
+        auto opScheduler =
+            std::make_shared<bcos::evm::engine::OpSchedulerSeam<GlobalStateStorage::ViewType>>(
+                *opForkSchedule, bcos::executor_v1::opstack::OpEthL1BlockInfo{});
+        auto opDelegate =
+            std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
+                m_protocolInitializer->blockFactory()->receiptFactory(),
+                m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, *opForkSchedule,
+                m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
+                // Ledger on OpScheduler; engine keeps ledger=nullptr.
+                m_ledger, m_ioServicePool);
+        // The Engine API service is the block producer only under the Engine driver. Under
+        // [debug] follow_devp2p blocks arrive over devp2p and commit through
+        // OpBlockVerifier (OpStackSyncInitializer), so no EngineService — and no DA-caps /
+        // mempool wiring that exists only to serve it — is built.
+        // The declared-ness diagnostic is hoisted OUT of that split on purpose: the same
+        // preset reaches BOTH lanes — the engine substitutes it into extraData whenever
+        // op-node reports zero params, and the sync validator re-prices pre-Holocene
+        // headers with it (OpStackSyncInitializer::opChainConfig) — so an undeclared OP
+        // chain must hear about it in either mode, not just the engine-driven one.
+        auto const& declaredOpEip1559 = m_nodeConfig->genesisConfig().m_opEip1559;
+        auto const opEip1559 = bcos::engine::effectiveOpEip1559(declaredOpEip1559);
+        if (declaredOpEip1559.has_value())
+        {
+            INITIALIZER_LOG(INFO) << LOG_DESC("OP chain EIP-1559 parameters")
+                                  << LOG_KV("declared", true)
+                                  << LOG_KV("elasticity", opEip1559.elasticity)
+                                  << LOG_KV("denominator", opEip1559.denominator)
+                                  << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+        }
+        else
+        {
+            // Never silent: this preset is what zero-attribute-params substitution (the
+            // engine lane) and pre-Holocene header re-pricing (the el lane) fall back to,
+            // and the preset need not be this chain's pair.
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC(
+                       "OP chain declares no [op_eip1559]: preset-priced fallback "
+                       "will use the OP-mainnet PRESET")
+                << LOG_KV("elasticity", opEip1559.elasticity)
+                << LOG_KV("denominator", opEip1559.denominator)
+                << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+        }
+        if (blockDriver == bcos::tool::BlockDriver::Engine)
+        {
+            m_daCaps = std::make_shared<bcos::engine::DACaps>();
+            m_engineServiceInitializer = EngineServiceInitializer::buildOp(
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
+                m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
+                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false);
+            // NOTE (split): the declaredOpEip1559 wiring into the engine constructor rides
+            // the engine-side PR (the OpEngineService ctor param lands there); this branch
+            // keeps the config-channel reading + boot diagnostics only.
+        }
+
+        m_opScheduler = opDelegate;
+        // Republish the full ledger configuration after every OP commit (see
+        // engine/OpLedgerConfigRepublish.h for why the engine must not publish the
+        // scheduler's own LedgerConfig instead). On failure the previous snapshot stays, which
+        // is strictly better than an empty one.
+        auto republishLedgerConfig =
+            bcos::engine::makeOpLedgerConfigRepublisher(m_ledgerConfigState, m_ledger,
+                [](bcos::protocol::BlockNumber number, bcos::Error::Ptr error) {
+                    INITIALIZER_LOG(ERROR)
+                        << LOG_DESC(
+                               "republish ledger config after OP commit failed; admission keeps "
+                               "the previous snapshot")
+                        << LOG_KV("number", number) << LOG_KV("error", error->errorMessage());
+                });
+        // The scheduler holds one notifier slot; compose so installing the RPC notifier later
+        // does not drop the republish.
+        opDelegate->setBlockNumberNotifier(republishLedgerConfig);
+        m_setOpSchedulerBlockNumberNotifier = bcos::engine::composeOpBlockNumberNotifier(
+            [opDelegate](bcos::engine::BlockNumberNotifier notifier) {
+                opDelegate->setBlockNumberNotifier(std::move(notifier));
+            },
+            republishLedgerConfig);
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
@@ -507,21 +778,41 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
-    m_scheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
+    // The dispatcher republishes the configuration after every commit, for every executor
+    // version; the holder was published once at boot when it was created.
+    auto multiVersionScheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
-                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}));
+                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder(),
+                // Slot 3: OP scheduler; nullptr on non-OP nodes.
+                m_opScheduler}),
+        m_ledgerConfigState);
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
+    // Governance may later write executor_version on-chain; MultiVersionScheduler::setVersion
+    // keeps the node running when the value names an unwired slot (fail-open by design).
+    // Operators must align genesis/boot config with on-chain executor_version — runtime
+    // drift is logged at ERROR when the ledger names a version this node cannot wire.
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
-    m_scheduler->setVersion(m_executorVersion, {});
+    multiVersionScheduler->setVersion(m_executorVersion, {});
+    m_scheduler = std::move(multiVersionScheduler);
 
-    // Parse and log the effective EVMC revision once at startup (v2+). It is fixed at genesis
-    // (NodeConfig requires an explicit evm_revision for executor_version>=2), so a one-time
-    // INFO line is accurate and stays off the per-block / per-RPC getLedgerConfig hot path.
-    // The CI integration test greps this line to pin the effective revision.
-    if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
+    // Parse and log the effective EVMC revision once at startup when the ledger runs
+    // executor_version 2 under a genesis of another lane (a runtime switch to v2): only an
+    // on-chain evmc_revision row could name its revision, and no genesis writes one any more,
+    // so such a node refuses to start unless an older datadir carries the row. A v2 genesis is
+    // exempt: every reader derives the revision from the block timestamp via [fork_timestamps]
+    // (the block verifier's fillExecutionLedgerConfig, and evmcRevisionSchedule above for the
+    // eth_call / eth_estimateGas dry run and admission).
+    //
+    // The OP lane is outside this probe: it has no evmc_revision row either, because
+    // OpScheduler derives the revision per block from [op_fork_timestamps] (via
+    // opstack-executor/OpForkSpec.h). Its absence is the expected shape, not the
+    // runtime-switch hazard this guard targets.
+    if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION &&
+        m_executorVersion < scheduler_v1::OPSTACK_EXECUTOR_VERSION &&
+        m_nodeConfig->executorVersion() != bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         if (auto evmcRev = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::evmc_revision))))
@@ -536,43 +827,110 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
         else
         {
-            // v2 with no evmc_revision row: the effective revision would fall back to a
-            // binary-side default (EVMC_REVISION_DEFAULT), tying consensus to the binary.
-            // A fresh v2 chain always has the row, so reaching here means a runtime switch
-            // to v2 without genesis config. Refuse to start (node-local policy — no block
-            // semantics touched) instead of defaulting.
+            // executor_version 2 under another lane's genesis with no evmc_revision row: the
+            // effective revision would fall back to a binary-side default
+            // (EVMC_REVISION_DEFAULT), tying consensus to the binary. Refuse to start
+            // (node-local policy — no block semantics touched) instead of defaulting.
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(
                     "executor_version >= 2 but no evmc_revision system config is recorded "
                     "on-chain; the effective EVM revision would be a binary-side default. "
-                    "Refusing to start — configure executor.evm_revision at genesis, or run "
-                    "executor_version 0/1"));
+                    "Refusing to start — run an executor.version=2 genesis with "
+                    "[fork_timestamps], or executor_version 0/1"));
+        }
+    }
+
+    // Boot probe parity for the OP lane's fail-closed rows (review finding T):
+    // applyLedgerConfig throws on a malformed op_eip1559_params / op_fork_schedule row,
+    // and without a boot-side parse a corrupt row would only surface as the per-block
+    // "Execute block failed!" loop plus -32603 on every RPC reader. Parse both rows
+    // here on the OP lane so the failure is an explicit startup refusal, mirroring the
+    // evmc_revision probe above. Absent rows stay legal (pre-existing OP chains). The
+    // same probe refuses a node whose OWN declared material diverges from the chain's
+    // recorded copy — see the two comparisons below.
+    if (ledger::isOpLaneVersion(m_executorVersion))
+    {
+        std::optional<std::string> recordedEip1559Row;
+        if (auto row = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_eip1559_params))))
+        {
+            // Throws InvalidOpEip1559Config on a malformed row — the exact parse
+            // applyLedgerConfig performs on every snapshot read.
+            (void)ledger::parseOpEip1559Params(std::get<0>(*row));
+            recordedEip1559Row = std::get<0>(*row);
+        }
+        // The recorded triple is genesis-frozen; the triple THIS node prices with
+        // (effectiveOpEip1559 of the local [op_eip1559], the preset when it declares
+        // nothing) must equal it, or header validation and the zero-param substitution
+        // run on constants the chain never recorded.
+        if (auto const problem =
+                ledger::opEip1559BootProbeProblem(recordedEip1559Row, m_nodeConfig->opEip1559()))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(*problem));
+        }
+
+        std::optional<std::string> recordedScheduleRow;
+        if (auto row = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_fork_schedule))))
+        {
+            // opForkScheduleFromCanonical throws ledger::InvalidOpForkSchedule on a
+            // malformed canonical row — the exact parse applyLedgerConfig performs.
+            (void)ledger::opForkScheduleFromCanonical(std::get<0>(*row));
+            recordedScheduleRow = std::get<0>(*row);
+        }
+        // SYS_OP_CHAIN_METADATA integrity triple: absent is legal (pre-triple chain);
+        // PRESENT-but-partial/corrupt/mis-bound is an explicit startup refusal — the
+        // triple exists precisely so a tampered schedule cannot survive unnoticed.
+        // Scope note (deliberately conditional, not unconditional): the production Ledger
+        // returns a state storage on both branches of getStateStorage(), but the
+        // LedgerInterface DEFAULT returns nullptr — a non-overriding ledger SKIPS this
+        // check rather than refusing, and that skip is logged loudly below rather than
+        // left silent. The binding target resolves inside the helper: the config's
+        // [eth_genesis_header] hash when declared, else the chain's own block-0 header —
+        // a schedule-carrying genesis built by a direct-API caller (no config section)
+        // boots with its tamper evidence intact instead of being refused (review F5).
+        std::optional<std::string> recordedTripleSchedule;
+        std::optional<crypto::HashType> configGenesisHash;
+        if (auto const& genesisHeader = m_nodeConfig->genesisConfig().m_ethGenesisHeader;
+            genesisHeader.has_value())
+        {
+            configGenesisHash = genesisHeader->m_hash;
+        }
+        if (auto stateStorage = m_ledger->getStateStorage())
+        {
+            if (auto metadata = task::syncWait(ledger::readValidatedOpForkScheduleMetadataForBoot(
+                    *stateStorage, *m_protocolInitializer->blockFactory(), configGenesisHash));
+                metadata.has_value())
+            {
+                recordedTripleSchedule = metadata->schedule;
+            }
+        }
+        else
+        {
+            // Fail-visible rather than fail-open: the tamper check below then runs with
+            // no triple side. The production Ledger never lands here (both getStateStorage
+            // branches return a storage); only a non-overriding LedgerInterface does.
+            INITIALIZER_LOG(WARNING) << LOG_DESC(
+                "OP boot probe: ledger exposes no state storage — the "
+                "SYS_OP_CHAIN_METADATA integrity triple cannot be read and its "
+                "tamper check is SKIPPED");
+        }
+        // The schedule this node will actually run is its [op_fork_timestamps] shorthand,
+        // resolved exactly as the genesis writer persisted it. The recorded side is the row
+        // every snapshot reader consumes, else the pre-triple chain's triple, else nothing to
+        // compare against; a node booted with a different schedule than the chain's recorded
+        // one must refuse, or the divergence surfaces only at the next fork activation.
+        auto const localSchedule = ledger::resolvedLocalOpForkScheduleCanonical(
+            m_nodeConfig->genesisConfig().m_opForkSchedule);
+        if (auto const problem = ledger::opForkScheduleBootProbeProblem(
+                recordedScheduleRow, recordedTripleSchedule, localSchedule))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(*problem));
         }
     }
 
     // Set scheduler to TxPoolInitializer after scheduler is created
     m_txpoolInitializer->setScheduler(m_scheduler);
-
-    if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
-    {
-#ifdef WITH_TIKV
-        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr =
-            std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
-        auto switchHandler = [scheduler = schedulerWeakPtr]() {
-            if (scheduler.lock())
-            {
-                scheduler.lock()->triggerSwitch();
-            }
-        };
-        if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
-        {
-            dynamic_pointer_cast<bcos::storage::TiKVStorage>(airExecutorStorage)
-                ->setSwitchHandler(switchHandler);
-        }
-        dynamic_pointer_cast<bcos::storage::TiKVStorage>(schedulerStorage)
-            ->setSwitchHandler(switchHandler);
-#endif
-    }
 
     bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
@@ -672,16 +1030,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         });
     }
     // init the txpool / pbft.
-    // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc])
+    // Engine-driven modes ([debug] enable or the Engine driver)
     // bypass the legacy txpool/pbft/sealer lifecycle: PBFTInitializer is still constructed
     // above so groupInfo / NodeService wiring stays intact, but txpool and pbft (and the
     // sealer and block sync inside pbft) are never initialized or started — block production
     // is driven instead through the EngineService (by the built-in single-node driver or by
-    // an external op-node), and sendRawTransaction routes to the mempool. Skipping both
+    // an external consensus client), and sendRawTransaction routes to the mempool. Skipping both
     // keeps the EngineService the sole block producer; otherwise PBFT and the engine driver
     // would write blocks to the same global storage concurrently. The front service is
     // still wired for gateway bookkeeping, but its dispatchers are inert with no peers.
-    if (!m_nodeConfig->engineDrivenBlockProduction())
+    //
+    // Ethereum L1 EL mode and the OP devp2p follow driver ([debug] follow_devp2p) also take
+    // blocks over devp2p download (EthereumSyncInitializer / OpStackSyncInitializer), so the
+    // txpool's ledger reads at init and the consensus/sync handlers pbft->init() registers
+    // would serve nothing. start() below skips them under the same condition: every driver
+    // but PBFT.
+    if (blockDriver == bcos::tool::BlockDriver::PBFT)
     {
         // init the txpool
         m_txpoolInitializer->init();
@@ -692,28 +1056,77 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else
     {
-        INITIALIZER_LOG(INFO) << LOG_DESC(
-            "EngineDrivenBlockProduction: skip txpool/pbft/sealer init (block production via "
-            "EngineService + mempool; driver = single-node consensus or external op-node)");
+        INITIALIZER_LOG(INFO) << LOG_DESC("skip txpool/pbft/sealer init: block driver is not PBFT")
+                              << LOG_KV("driver", magic_enum::enum_name(blockDriver));
+    }
+
+    // Admission for the mempool path: the DebugSelfProduce driver, or any node serving the
+    // Engine API (under EL mode: mempool admission over RPC while block import stays with
+    // devp2p sync).
+    // Built here and not in the txpool initializer because in these modes there is no txpool:
+    // the RPC entry judges a transaction against this validator and then reserves its
+    // (sender, nonce) with MemPoolImpl::tryAdd.
+    //
+    // No pool nonce checker: those two checks are the BCOS transaction's replay protection,
+    // and these modes carry Web3 transactions only. The Web3 nonce checker IS needed -- the
+    // account nonce comes through its cache -- but nothing here calls updateNonceCache,
+    // which is the txpool's commit-time hook, so that cache is only ever raised by its own
+    // storage misses. The effect is a lower bound that can lag behind the chain: a
+    // transaction reusing an already-executed nonce is admitted here and refused at
+    // execution. That is where it was refused before this validator was wired, when the
+    // path checked no nonce at all.
+    if (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce || m_nodeConfig->servesEngineApi())
+    {
+        auto web3NonceChecker = std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger);
+        // executor_version==2 (the pure-Ethereum executor): admission must match the pool —
+        // blob transactions are let through instead of refused. A v2 genesis additionally
+        // bounds them by the same schedule the mempool enforces; executor_version 2 under
+        // another lane's genesis keeps the Cancun default.
+        bcos::txvalidator::BlobPolicy blobPolicy;
+        if (m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+        {
+            blobPolicy = bcos::txvalidator::BlobPolicy{
+                .allow = true, .maxBlobsPerTransaction = memPoolConfig.maxBlobsPerTransaction};
+        }
+        m_memPoolValidator = std::make_shared<bcos::txvalidator::TxValidator>(
+            m_protocolInitializer->cryptoSuite(), m_ledger, m_ledgerConfigState,
+            /*txPoolNonceChecker=*/nullptr, std::move(web3NonceChecker),
+            &bcos::txpool::isSystemTransaction, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
+            blobPolicy, evmcRevisionSchedule);
+        m_memPoolValidator->setScheduler(m_scheduler);
+        // OP lane: the balance also covers the rollup cost (Check::L1Cost). Only this validator
+        // gets the callable: the txpool's cannot serve an OP chain (the OP gate above refuses
+        // every driver but Engine and DebugFollowDevp2p) and the follow driver builds no
+        // mempool validator. The fork schedule was required when the OP scheduler was built.
+        if (m_executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+        {
+            m_memPoolValidator->setRollupCostFn(
+                bcos::executor_v1::opstack::makeOpAdmissionRollupCost(
+                    m_globalStateStorageInitializer, *m_nodeConfig->opForkSchedule(),
+                    m_protocolInitializer->blockFactory()));
+        }
     }
 
     // init the frontService
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
 
-    // Single-node consensus mode: build the built-in single-node consensus driver that
+    // The DebugSelfProduce driver ([debug] enable): the built-in single-node driver that
     // produces blocks on a timer by driving the EngineService interface like an external CL
     // (forkchoiceUpdated -> getPayload -> newPayload), bypassing txpool/sealer/pbft. The
     // EngineService owns the mempool/scheduler/commit, so the driver only needs it plus the
-    // ledger (to resolve the initial head). It is always built in this mode — for
-    // executor_version < 2 on the v1 scheduler, and for executor_version >= 2 on the
-    // EthereumExecutor scheduler — so this is also the in-process CL path for the Engine API.
-    if (m_nodeConfig->enableSingleNodeConsensus())
+    // ledger (to resolve the initial head). The EngineService is the v1 one on
+    // executor_version 1, and the v2 one (with the L1 payload verifier, as under the Engine
+    // driver) on executor_version 2.
+    //
+    // The OP lane has no such driver: NodeConfig::blockDriver refuses [debug] enable on
+    // executor.version >= 3.
+    if (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce)
     {
-        // prevRandao: explicit 32-byte hex from config ([consensus] prev_randao), else a
+        // prevRandao: explicit 32-byte hex from config ([debug] prev_randao), else a
         // deterministic hash of a fixed seed (for EEST the harness pins it to the fixture's
         // currentRandom so block.prevrandao matches).
-        auto const& prevRandaoCfg = m_nodeConfig->singleNodeConsensusPrevRandao();
+        auto const& prevRandaoCfg = m_nodeConfig->debugPrevRandao();
         auto prevRandao = [&]() -> bcos::crypto::HashType {
             if (!prevRandaoCfg.empty())
             {
@@ -725,16 +1138,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }();
         if (!m_engineServiceInitializer)
         {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "enable_single_node_consensus requires the EngineService to be built"));
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[debug] enable requires the EngineService to be built"));
         }
         m_singleNodeConsensus = std::make_shared<single_consensus::SingleNodeConsensus>(
             *m_engineServiceInitializer->engineService(), m_ledger,
-            m_nodeConfig->singleNodeConsensusBlockInterval(),
-            m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
-            m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp());
+            m_nodeConfig->debugBlockInterval(), m_nodeConfig->debugProduceEmptyBlocks(), prevRandao,
+            m_nodeConfig->debugFeeRecipient(), m_nodeConfig->debugFixedTimestamp(),
+            /*_l1Dialect=*/m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
     }
 
 #ifdef TOOLS
@@ -742,7 +1153,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         INITIALIZER_LOG(INFO) << LOG_BADGE("create archive service");
         m_archiveService = std::make_shared<bcos::archive::ArchiveService>(m_storage, ledger,
-            m_blockStorage, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
+            m_protocolInitializer->blockFactory(), m_blockStorage, m_nodeConfig->archiveListenIP(),
+            m_nodeConfig->archiveListenPort());
     }
 #endif
 
@@ -808,6 +1220,16 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     if (m_setEthereumSchedulerBlockNumberNotifier)
     {
         m_setEthereumSchedulerBlockNumberNotifier(
+            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            });
+    }
+
+    // Notify RPC after a committed OP block.
+    if (m_setOpSchedulerBlockNumberNotifier)
+    {
+        m_setOpSchedulerBlockNumberNotifier(
             [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
                 INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
                 _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
@@ -922,9 +1344,11 @@ void Initializer::initSysContract()
 
 void Initializer::start()
 {
-    // Engine-driven modes (single-node consensus / op_engine_rpc): txpool/pbft (and the
-    // sealer inside pbft) stay dormant — block production goes through the EngineService.
-    if (!m_nodeConfig->engineDrivenBlockProduction())
+    // Every driver but PBFT keeps txpool/pbft (and the sealer inside pbft) dormant: the
+    // Engine and DebugSelfProduce drivers produce through the EngineService; EL mode and
+    // DebugFollowDevp2p also download blocks from bootnodes (EthereumSyncInitializer /
+    // OpStackSyncInitializer), never from FISCO consensus/txpool.
+    if (m_nodeConfig->blockDriver() == bcos::tool::BlockDriver::PBFT)
     {
         if (m_txpoolInitializer)
         {
@@ -976,6 +1400,15 @@ void Initializer::stop()
         if (m_scheduler)
         {
             m_scheduler->stop();
+        }
+        // MPT pruning shutdown: the scheduler's stop() has reset its commit observer to the
+        // no-op under m_commitMutex, so the pruner is quiescent — no in-flight or future
+        // commit will dereference it. Dropping our reference here lets the pruner be
+        // destroyed before the storage backend it reads from (member declaration order
+        // already guarantees that; this makes it explicit rather than relying on it).
+        if (m_mptCommitObserver)
+        {
+            m_mptCommitObserver.reset();
         }
 #ifdef TOOLS
         if (m_archiveService)
@@ -1131,7 +1564,7 @@ bcos::Error::Ptr Initializer::generateSnapshot(const std::string& snapshotPath,
     bool withTxAndReceipts, const tool::NodeConfig::Ptr& nodeConfig)
 {
     if (!boost::iequals(nodeConfig->storageType(), "RocksDB"))
-    {  // TODO: support TiKV
+    {
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
     }
@@ -1404,7 +1837,7 @@ bcos::Error::Ptr Initializer::importSnapshot(
     const std::string& snapshotPath, const tool::NodeConfig::Ptr& nodeConfig)
 {
     if (!boost::iequals(nodeConfig->storageType(), "RocksDB"))
-    {  // TODO: support TiKV
+    {
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
     }
@@ -1647,8 +2080,8 @@ std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer
         m_globalStateStorageInitializer->storage().latestBackend());
 }
 
-std::function<std::shared_ptr<
-    bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
+std::function<
+    std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
 Initializer::stateStorageProvider()
 {
     if (!m_globalStateStorageInitializer)

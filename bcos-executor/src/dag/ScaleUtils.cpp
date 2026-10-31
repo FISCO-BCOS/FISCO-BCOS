@@ -22,9 +22,10 @@
 
 #include "ScaleUtils.h"
 #include "bcos-codec/scale/Common.h"
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::executor;

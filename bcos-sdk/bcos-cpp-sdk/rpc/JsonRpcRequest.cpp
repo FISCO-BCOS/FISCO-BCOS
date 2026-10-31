@@ -18,10 +18,11 @@
  * @date 2021-05-24
  */
 
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-cpp-sdk/rpc/Common.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcRequest.h>
 #include <json/json.h>
+#include <boost/exception/diagnostic_information.hpp>
 
 using namespace bcos;
 using namespace cppsdk;

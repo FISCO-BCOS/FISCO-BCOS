@@ -1,3 +1,23 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
+/// @file MultiLayerStorage.h
+/// @brief Layered storage composition: mutable views over backend and cache layers
+/// with fork/merge semantics.
+
 #pragma once
 #include "CheckpointStorage.h"
 #include "Storage.h"
@@ -9,13 +29,13 @@
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <concepts>
+#include <deque>
 #include <functional>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/map.hpp>
 #include <range/v3/view/zip.hpp>
 #include <type_traits>
 #include <variant>
-#include <deque>
 
 namespace bcos::storage2
 {
@@ -598,6 +618,39 @@ public:
         }
     }
 
+private:
+    /// Shared merge body of mergeBackStorage / mergeToBackends — the only difference
+    /// between the two is whether a queued layer participates in the merge.
+    /// Private on purpose: every other public mutator on this class
+    /// self-locks; this body performs an unlocked storage2::merge into the backends,
+    /// so exposing it would let a caller race mergeBackStorage on m_latestBackend.
+    /// mergeBackStorage/mergeToBackends hold m_mergeMutex around the call.
+    task::Task<void> mergeIntoBackends(auto&... storages)
+    {
+        if constexpr (withCacheStorage)
+        {
+            tbb::parallel_invoke(
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                        ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
+                    task::tbb::syncWait(storage2::merge(m_latestBackend, storages...));
+                },
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                        ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
+                    task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), storages...));
+                });
+        }
+        else
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
+            co_await storage2::merge(m_latestBackend, storages...);
+        }
+        co_return;
+    }
+
+public:
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(auto&... extraStorages)
     {
         std::unique_lock mergeLock(m_mergeMutex);
@@ -610,33 +663,60 @@ public:
         auto& backStorage = *backStoragePtr;
         listLock.unlock();
 
-        if constexpr (withCacheStorage)
-        {
-            tbb::parallel_invoke(
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                        ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-                    task::tbb::syncWait(
-                        storage2::merge(m_latestBackend, backStorage, extraStorages...));
-                },
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                        ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
-                    task::tbb::syncWait(
-                        storage2::merge(m_cacheStorage.get(), backStorage, extraStorages...));
-                });
-        }
-        else
-        {
-            ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-            co_await storage2::merge(m_latestBackend, backStorage, extraStorages...);
-        }
+        co_await mergeIntoBackends(backStorage, extraStorages...);
 
         listLock.lock();
         m_storages.pop_back();
 
         co_return backStoragePtr;
+    }
+
+    /// Merge the given storages into the latest backend (and the cache storage when
+    /// enabled) WITHOUT taking a queued layer — mergeBackStorage's counterpart for a
+    /// committer whose queued layer was already drained by someone else (mergeBackStorage
+    /// throws NotExistsImmutableStorageError on an empty deque; this helper never touches
+    /// the deque).
+    task::Task<void> mergeToBackends(auto&... fromStorage)
+    {
+        std::unique_lock mergeLock(m_mergeMutex);
+        co_await mergeIntoBackends(fromStorage...);
+    }
+
+    /// Cache-layer read (nullopt when this composition has no cache layer — a caller
+    /// cannot distinguish that from "key absent"; the intended consumer, the engine's
+    /// canonicalize undo journal, is a follow-up (OpScheduler.h marks it so) and will
+    /// pair this with writeCacheLayer: mergeToBackends merges into backend AND cache,
+    /// so a failed batch must restore BOTH or the cache keeps half-applied canonical
+    /// state that fork()/forkCommitted() read first).
+    task::Task<std::optional<Value>> readCacheLayer(Key key)
+    {
+        if constexpr (withCacheStorage)
+        {
+            co_return co_await storage2::readOne(m_cacheStorage.get(), std::move(key));
+        }
+        else
+        {
+            co_return std::nullopt;
+        }
+    }
+
+    /// Cache-layer counterpart of readCacheLayer: write @p value, or remove the key when
+    /// absent. No-op without a cache layer.
+    task::Task<void> writeCacheLayer(Key key, std::optional<Value> value)
+    {
+        if constexpr (withCacheStorage)
+        {
+            if (value.has_value())
+            {
+                co_await storage2::writeOne(
+                    m_cacheStorage.get(), std::move(key), std::move(*value));
+            }
+            else
+            {
+                co_await storage2::removeOne(m_cacheStorage.get(), std::move(key));
+            }
+        }
+        co_return;
     }
 
     auto fork(CheckpointName const& blockhash)

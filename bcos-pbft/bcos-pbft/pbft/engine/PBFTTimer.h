@@ -20,6 +20,7 @@
  */
 #pragma once
 #include <bcos-utilities/Timer.h>
+#include <cmath>
 namespace bcos::consensus
 {
 class PBFTTimer : public Timer
@@ -46,6 +47,8 @@ public:
     }
     void resetChangeCycle() { updateChangeCycle(0); }
     uint64_t changeCycle() const { return m_changeCycle; }
+    /// the wait the timer actually runs: timeout() * 1.5^changeCycle
+    uint64_t adjustTimeout() override { return m_adjustedTimeout; }
 
     void reset(int64_t _timeout) override
     {
@@ -70,7 +73,6 @@ protected:
             restart();
         }
     }
-    uint64_t adjustTimeout() override { return m_adjustedTimeout; }
 
 private:
     std::atomic<int64_t> m_adjustedTimeout = 0;

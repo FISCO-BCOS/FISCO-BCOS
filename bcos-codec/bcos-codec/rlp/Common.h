@@ -117,7 +117,12 @@ inline size_t length(T const& n) noexcept
     {
         return 1;
     }
-    size_t word = n.backend().internal_limb_count;
+    // Only iterate the VALID limbs (n.backend().size()), never internal_limb_count:
+    // boost's cpp_int_backend copies only the significant limbs on assignment and leaves
+    // higher limbs untouched, so limbs()[size()..internal_limb_count) may hold STALE garbage
+    // from a previous larger value. Counting those would over-estimate the byte length and
+    // produce an RLP header that disagrees with the actual encoded payload (corrupt trie leaf).
+    size_t word = n.backend().size();
     for (; word > 0; --word)
     {
         if (n.backend().limbs()[word - 1] != 0)

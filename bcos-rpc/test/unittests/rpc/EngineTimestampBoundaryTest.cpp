@@ -21,6 +21,8 @@
 
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <boost/test/unit_test.hpp>
+#include <string>
+#include <string_view>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -140,6 +142,61 @@ BOOST_AUTO_TEST_CASE(int64BoundaryIsExact)
     payload.timestamp = 9'223'372'036'854'775'000ULL;
     auto ep = serializeExecutionPayload(payload, engine::ApiVersion::V1);
     BOOST_CHECK_EQUAL(ep["timestamp"].asString(), "0x20c49ba5e353f7");
+}
+
+void expectOddNibbleReject(auto const& parse, std::string_view field)
+{
+    try
+    {
+        parse();
+        BOOST_FAIL("expected JsonRpcException for odd-nibble hex");
+    }
+    catch (JsonRpcException const& error)
+    {
+        std::string const what = error.what();
+        BOOST_CHECK_NE(what.find(std::string(field)), std::string::npos);
+        BOOST_CHECK_NE(what.find("hex string"), std::string::npos);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(oddNibbleExtraDataIsRejected)
+{
+    auto params = makeNewPayloadParams("0x64");
+    params[0]["extraData"] = "0x123";
+    expectOddNibbleReject([&] { parseNewPayloadRequest(params, engine::ApiVersion::V1); },
+        "executionPayload.extraData");
+}
+
+BOOST_AUTO_TEST_CASE(oddNibbleLogsBloomIsRejected)
+{
+    auto params = makeNewPayloadParams("0x64");
+    params[0]["logsBloom"] = "0x123";
+    expectOddNibbleReject([&] { parseNewPayloadRequest(params, engine::ApiVersion::V1); },
+        "executionPayload.logsBloom");
+}
+
+BOOST_AUTO_TEST_CASE(oddNibbleEip1559ParamsIsRejected)
+{
+    auto params = makeAttributesParams("0x64");
+    params[1]["eip1559Params"] = "0x123";
+    expectOddNibbleReject([&] { parsePayloadAttributes(params, engine::ApiVersion::V3); },
+        "payloadAttributes.eip1559Params");
+}
+
+BOOST_AUTO_TEST_CASE(oddNibbleExecutionRequestsIsRejected)
+{
+    auto params = makeNewPayloadParams("0x64");
+    params[0]["withdrawals"] = Json::Value(Json::arrayValue);
+    params[0]["blobGasUsed"] = "0x0";
+    params[0]["excessBlobGas"] = "0x0";
+    params[0]["withdrawalsRoot"] = h256Hex;
+    params.append(Json::Value(Json::arrayValue));
+    params.append(h256Hex);
+    Json::Value requests(Json::arrayValue);
+    requests.append("0x1");
+    params.append(requests);
+    expectOddNibbleReject(
+        [&] { parseNewPayloadRequest(params, engine::ApiVersion::V4); }, "executionRequests[0]");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

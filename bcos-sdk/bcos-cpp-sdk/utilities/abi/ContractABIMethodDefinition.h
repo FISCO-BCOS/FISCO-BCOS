@@ -22,12 +22,14 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
 #include <bcos-utilities/Common.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/throw_exception.hpp>
 #include <cassert>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
-#include <boost/algorithm/string.hpp>
 
 namespace bcos
 {
@@ -266,6 +268,7 @@ public:
 
     bcos::bytes getMethodID(bcos::crypto::Hash::Ptr _hashImpl) const
     {
+        requireHashImpl(_hashImpl);
         auto methodSig = getMethodSignatureAsString();
         auto hashBytes =
             _hashImpl->hash(bcos::bytesConstRef((bcos::byte*)methodSig.data(), methodSig.size()))
@@ -276,6 +279,7 @@ public:
 
     std::string getMethodIDAsString(bcos::crypto::Hash::Ptr _hashImpl) const
     {
+        requireHashImpl(_hashImpl);
         auto methodSig = getMethodSignatureAsString();
         return _hashImpl->hash(bcos::bytesConstRef((bcos::byte*)methodSig.data(), methodSig.size()))
             .hex()
@@ -284,10 +288,21 @@ public:
 
     std::string getEventTopicAsString(bcos::crypto::Hash::Ptr _hashImpl) const
     {
+        requireHashImpl(_hashImpl);
         auto eventSig = getMethodSignatureAsString();
         return _hashImpl->hash(bcos::bytesConstRef((bcos::byte*)eventSig.data(), eventSig.size()))
             .hex()
             .substr(0, 8);
+    }
+
+private:
+    // issue #5047: every selector/topic computation dereferences the caller's hash impl
+    static void requireHashImpl(const bcos::crypto::Hash::Ptr& _hashImpl)
+    {
+        if (!_hashImpl)
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument("hash implementation must not be null"));
+        }
     }
 };
 

@@ -1,131 +1,68 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h"
+#include <bcos-tool/Exceptions.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::scheduler_v1;
 
+// The MPT state-root predicate no longer involves the account-table
+// encoding: the encoding is a node-local physical layout (nodeAddressTableMode), the MPT
+// delta scan classifies both layouts (Classify.h parseAccountTable), and the deprecated
+// feature_raw_address flag drives nothing — setting it is accepted with a warning. Every
+// lane except the legacy v0 lane is mode-aware (the Eth/OP lanes via
+// account::ethLaneAccountTableName); only v0 keeps the boot-time hex-only enforcement
+// (resolveNodeAddressTableMode).
 BOOST_AUTO_TEST_SUITE(RawAddressMPTGuardSuite)
 
-BOOST_AUTO_TEST_CASE(FlagMatrix_RawAddressWithMPTStateRootThrows)
+// The deprecation half: setting feature_raw_address is accepted with a warning on every
+// entry point (governance setSystemConfig via SystemConfigPrecompiled -> Features::validate,
+// config.genesis via NodeConfig::loadGenesisFeatures) — rejecting would fail transactions
+// and genesis files written before the deprecation, while the flag is an inert no-op.
+BOOST_AUTO_TEST_CASE(DeprecatedRawAddressAcceptedWithWarning)
 {
     ledger::Features features;
-    features.set(ledger::Features::Flag::feature_raw_address);
-    features.set(ledger::Features::Flag::feature_mpt_state_root);
-    features.setActivationBlock(ledger::Features::Flag::feature_mpt_state_root, 100);
-    BOOST_CHECK_THROW(validateMPTFlagMatrix(features), InvalidMPTFlagMatrix);
+    BOOST_CHECK_NO_THROW(features.validate(ledger::Features::Flag::feature_raw_address));
+    BOOST_CHECK_NO_THROW(features.validate("feature_raw_address"));
+
+    // The name still resolves, so existing config.genesis files keep loading.
+    BOOST_CHECK(ledger::Features::contains("feature_raw_address"));
+    BOOST_CHECK(ledger::Features::string2Flag("feature_raw_address") ==
+                ledger::Features::Flag::feature_raw_address);
+
+    // isDeprecated is how the entry points know to warn. Other feature flags, including
+    // feature_l2_ethereum_compat, are not deprecated.
+    BOOST_CHECK(ledger::Features::isDeprecated(ledger::Features::Flag::feature_raw_address));
+    BOOST_CHECK(!ledger::Features::isDeprecated(ledger::Features::Flag::feature_balance));
 }
 
-BOOST_AUTO_TEST_CASE(FlagMatrix_RawAddressWithL2Throws)
-{
-    ledger::Features features;
-    features.set(ledger::Features::Flag::feature_raw_address);
-    features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-    features.setActivationBlock(ledger::Features::Flag::feature_l2_ethereum_compat, 0);
-    // Must throw for the raw_address pairing even though the L2 flag alone (genesis
-    // activation) is a legal matrix.
-    BOOST_CHECK_THROW(validateMPTFlagMatrix(features), InvalidMPTFlagMatrix);
-}
-
-BOOST_AUTO_TEST_CASE(FlagMatrix_RawAddressAlonePasses)
-{
-    ledger::Features features;
-    features.set(ledger::Features::Flag::feature_raw_address);
-    BOOST_CHECK_NO_THROW(validateMPTFlagMatrix(features));
-}
-
-BOOST_AUTO_TEST_CASE(FlagMatrix_MPTFlagsWithoutRawAddressStillPass)
-{
-    // Regression: the raw_address guard must not reject the previously-legal matrices.
-    ledger::Features scenarioA;
-    scenarioA.set(ledger::Features::Flag::feature_mpt_state_root);
-    scenarioA.setActivationBlock(ledger::Features::Flag::feature_mpt_state_root, 500);
-    BOOST_CHECK_NO_THROW(validateMPTFlagMatrix(scenarioA));
-
-    ledger::Features scenarioB;
-    scenarioB.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-    scenarioB.setActivationBlock(ledger::Features::Flag::feature_l2_ethereum_compat, 0);
-    BOOST_CHECK_NO_THROW(validateMPTFlagMatrix(scenarioB));
-}
-
-// rejectRawAddressWithMPT is called from INSIDE the shouldBuildMPT branch, so its own job is
-// just "is raw_address in the way?" — the block-number question is already answered by the
-// call site. These cases pin the two states, and the gate-composition cases below pin that the
-// pair together reproduces the behavior the old throwing shouldBuildMPT had.
-BOOST_AUTO_TEST_CASE(PerBlockGuard_RawAddressThrows)
-{
-    ledger::Features features;
-    features.set(ledger::Features::Flag::feature_raw_address);
-    features.set(ledger::Features::Flag::feature_mpt_state_root);
-    features.setActivationBlock(ledger::Features::Flag::feature_mpt_state_root, 100);
-
-    BOOST_CHECK_THROW(rejectRawAddressWithMPT(features, 101), InvalidMPTFlagMatrix);
-}
-
-BOOST_AUTO_TEST_CASE(PerBlockGuard_WithoutRawAddressPasses)
+// shouldBuildMPT stays a PURE state-root predicate: the account-table encoding never
+// decides whether a block builds an MPT.
+BOOST_AUTO_TEST_CASE(ShouldBuildMPT_ScenarioA)
 {
     ledger::Features features;
     features.set(ledger::Features::Flag::feature_mpt_state_root);
     features.setActivationBlock(ledger::Features::Flag::feature_mpt_state_root, 100);
 
-    BOOST_CHECK_NO_THROW(rejectRawAddressWithMPT(features, 101));
-    BOOST_CHECK(shouldBuildMPT(features, 101));
+    // The activation block N itself stays on XOR (strictly-greater boundary), then MPT.
+    BOOST_CHECK(!shouldBuildMPT(0, features, 99));
+    BOOST_CHECK(!shouldBuildMPT(0, features, 100));
+    BOOST_CHECK(shouldBuildMPT(0, features, 101));
+    BOOST_CHECK(shouldBuildMPT(0, features, 1000));
 }
 
-// Gate composition, scenario A: the guard only runs where the predicate said yes, so at and
-// before the activation block nothing fires (XOR path), and past the boundary it does.
-BOOST_AUTO_TEST_CASE(GateComposition_ScenarioAFiresOnlyPastActivation)
+BOOST_AUTO_TEST_CASE(ShouldBuildMPT_ScenarioB)
 {
+    // Scenario B is the Ethereum lane (executor_version >= 2): it builds from genesis on,
+    // no feature flag involved.
     ledger::Features features;
-    features.set(ledger::Features::Flag::feature_raw_address);
-    features.set(ledger::Features::Flag::feature_mpt_state_root);
-    features.setActivationBlock(ledger::Features::Flag::feature_mpt_state_root, 100);
+    BOOST_CHECK(shouldBuildMPT(ledger::ETHEREUM_EXECUTOR_VERSION, features, 0));
+    BOOST_CHECK(shouldBuildMPT(ledger::ETHEREUM_EXECUTOR_VERSION, features, 1000));
 
-    // Mirrors coExecuteBlock: predicate first, guard only inside the branch.
-    auto executeGate = [&](protocol::BlockNumber blockNumber) {
-        if (shouldBuildMPT(features, blockNumber))
-        {
-            rejectRawAddressWithMPT(features, blockNumber);
-        }
-    };
-
-    BOOST_CHECK_NO_THROW(executeGate(99));
-    BOOST_CHECK_NO_THROW(executeGate(100));
-    BOOST_CHECK_THROW(executeGate(101), InvalidMPTFlagMatrix);
-    BOOST_CHECK_THROW(executeGate(1000), InvalidMPTFlagMatrix);
-
-    // The predicate itself stays PURE — it answers the state-root question and nothing else,
-    // even for the block numbers the gate rejects.
-    BOOST_CHECK(!shouldBuildMPT(features, 100));
-    BOOST_CHECK(shouldBuildMPT(features, 101));
-    BOOST_CHECK(shouldBuildMPT(features, 1000));
-}
-
-// Gate composition, scenario B: the MPT is built from genesis on, so the gate fires at every
-// block; and raw_address WITHOUT an MPT flag never reaches the guard at all.
-BOOST_AUTO_TEST_CASE(GateComposition_ScenarioBFiresEveryBlockRawAddressAloneNever)
-{
-    auto executeGate = [](ledger::Features const& features, protocol::BlockNumber blockNumber) {
-        if (shouldBuildMPT(features, blockNumber))
-        {
-            rejectRawAddressWithMPT(features, blockNumber);
-        }
-    };
-
-    ledger::Features scenarioB;
-    scenarioB.set(ledger::Features::Flag::feature_raw_address);
-    scenarioB.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-    BOOST_CHECK_THROW(executeGate(scenarioB, 0), InvalidMPTFlagMatrix);
-    BOOST_CHECK_THROW(executeGate(scenarioB, 1000), InvalidMPTFlagMatrix);
-    BOOST_CHECK(shouldBuildMPT(scenarioB, 0));
-    BOOST_CHECK(shouldBuildMPT(scenarioB, 1000));
-
-    ledger::Features rawOnly;
-    rawOnly.set(ledger::Features::Flag::feature_raw_address);
-    BOOST_CHECK_NO_THROW(executeGate(rawOnly, 0));
-    BOOST_CHECK_NO_THROW(executeGate(rawOnly, 1000));
-    BOOST_CHECK(!shouldBuildMPT(rawOnly, 0));
-    BOOST_CHECK(!shouldBuildMPT(rawOnly, 1000));
+    // Legacy lane, no MPT flag: nothing builds.
+    ledger::Features none;
+    BOOST_CHECK(!shouldBuildMPT(0, none, 0));
+    BOOST_CHECK(!shouldBuildMPT(0, none, 1000));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
