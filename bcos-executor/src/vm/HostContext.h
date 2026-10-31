@@ -24,8 +24,6 @@
 #include "../Common.h"
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
-#include "Eip2929AccessState.h"
-#include "Eip2929Util.h"
 #include "VMInstance.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <evmc/evmc.h>
@@ -163,27 +161,6 @@ public:
 
     evmc_revision revision() const { return toRevision(m_executive->blockContext().vmSchedule()); }
 
-    evmc_access_status accessAccount(const evmc_address& addr, evmc_revision rev)
-    {
-        if (!eip2929Enabled(rev, m_executive->blockContext().features()))
-        {
-            return EVMC_ACCESS_COLD;
-        }
-        auto& accessState = eip2929AccessState();
-        return accessState.warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
-    }
-
-    evmc_access_status accessStorage(
-        const evmc_address& addr, const evmc_bytes32& key, evmc_revision rev)
-    {
-        if (!eip2929Enabled(rev, m_executive->blockContext().features()))
-        {
-            return EVMC_ACCESS_COLD;
-        }
-        auto& accessState = eip2929AccessState();
-        return accessState.warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
-    }
-
     std::string getContractTableName(const std::string_view& _address);
 
 protected:
@@ -205,18 +182,6 @@ private:
 
     std::list<CallParameters::UniquePtr> m_responseStore;
 
-    /// Per-transaction warm set; cached at construction to avoid BucketMap lookup on every
-    /// accessAccount/accessStorage (same pattern as TE HostContext::m_eip2929Access).
-    std::shared_ptr<Eip2929AccessState> m_eip2929Access;
-
-    Eip2929AccessState& eip2929AccessState()
-    {
-        if (!m_eip2929Access)
-        {
-            m_eip2929Access = m_executive->getEip2929AccessState(m_executive->contextID());
-        }
-        return *m_eip2929Access;
-    }
     struct EVMCAddrHash
     {
         size_t operator()(const evmc_address& a) const noexcept

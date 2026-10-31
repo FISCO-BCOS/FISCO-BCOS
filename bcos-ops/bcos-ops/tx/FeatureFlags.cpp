@@ -26,10 +26,7 @@ namespace bcos::ops
 namespace
 {
 // Features::validate (bcos-framework/bcos-framework/ledger/Features.cpp) rejects a flag whose
-// prerequisite is off; these are the only two it enforces. feature_evm_prague / feature_evm_osaka
-// are documented as "depends on cancun / prague" in Features.h, but nothing validates that:
-// the executor picks the EVM revision from whichever flag is on (bcos-executor/src/vm/
-// VMInstance.cpp), so they are not listed here.
+// prerequisite is off; this table mirrors its dependencies.
 struct Dependency
 {
     std::string_view flag;

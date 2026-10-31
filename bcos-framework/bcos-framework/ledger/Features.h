@@ -44,85 +44,92 @@ public:
     // A retired flag keeps its name while existing genesis files may still carry it.
     enum class Flag
     {
-        bugfix_revert,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
-        bugfix_statestorage_hash,
-        bugfix_evm_create2_delegatecall_staticcall_codecopy,
-        bugfix_event_log_order,
-        bugfix_call_noaddr_return,
-        bugfix_precompiled_codehash,
-        bugfix_dmc_revert,
-        bugfix_keypage_system_entry_hash,
-        bugfix_internal_create_redundant_storage,  // perf internal create code and abi storage
-        bugfix_internal_create_permission_denied,
-        bugfix_sharding_call_in_child_executive,
-        bugfix_empty_abi_reset,  // support empty abi reset of same code
-        bugfix_eip55_addr,
-        bugfix_eoa_as_contract,
-        bugfix_eoa_match_failed,
-        bugfix_evm_exception_gas_used,
-        bugfix_dmc_deploy_gas_used,
-        bugfix_staticcall_noaddr_return,
-        bugfix_support_transfer_receive_fallback,
-        bugfix_set_row_with_dirty_flag,
-        bugfix_rpbft_vrf_blocknumber_input,
-        bugfix_delete_account_code,
-        bugfix_policy1_empty_code_address,
-        bugfix_precompiled_gasused,
-        bugfix_nonce_not_increase_when_revert,
-        bugfix_set_contract_nonce_when_create,
-        bugfix_precompiled_gascalc,
-        bugfix_method_auth_sender,
-        bugfix_precompiled_evm_status,
-        bugfix_delegatecall_transfer,
-        bugfix_nonce_initialize,
-        bugfix_v1_timestamp,
-        bugfix_revert_logs,
-        bugfix_auth_check,         // FIB-77/81/82/83: CREATE2 deploy auth check, auth failure
-                                   // revert status, auth table raw-address path, auth table
-                                   // squatting (merged, all activate at V3_17_0)
-        bugfix_v1_error_handling,  // FIB-76/78/79/80/85~92: v1 executor error-path gas
-                                   // accounting, gas_left clamp on fatal error, executive
-                                   // wrapper status/message marshaling (merged)
-        bugfix_gas_payment_balance_precheck,  // FIB-75
-        bugfix_precompiled_feature_gate,      // FIB-84
-        bugfix_evm_storage_status,            // FIB-94
-        bugfix_statestorage_hash_v3_17,       // FIB-99/105
-        feature_dmc2serial,
-        feature_sharding,
-        feature_rpbft,
-        feature_paillier,
-        feature_balance,
-        feature_balance_precompiled,
-        feature_balance_policy1,
-        feature_paillier_add_raw,
-        feature_evm_eip2929,  // EIP-2929 冷热访问 gas 折扣（Berlin+）；影响全局
-                              // gas，需治理层显式启用
-        feature_evm_cancun,
-        feature_evm_prague,  // EIP-7702、BLS12-381；依赖 feature_evm_cancun
-        feature_evm_osaka,   // EIP-7212 p256verify、EIP-7823/EIP-7883 modexp；依赖
-                             // feature_evm_prague
-        feature_evm_timestamp,
-        feature_evm_address,
-        feature_rpbft_term_weight,
+        bugfix_revert = 0,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
+        bugfix_statestorage_hash = 1,
+        bugfix_evm_create2_delegatecall_staticcall_codecopy = 2,
+        bugfix_event_log_order = 3,
+        bugfix_call_noaddr_return = 4,
+        bugfix_precompiled_codehash = 5,
+        bugfix_dmc_revert = 6,
+        bugfix_keypage_system_entry_hash = 7,
+        bugfix_internal_create_redundant_storage = 8,  // perf internal create code and abi storage
+        bugfix_internal_create_permission_denied = 9,
+        bugfix_sharding_call_in_child_executive = 10,
+        bugfix_empty_abi_reset = 11,  // support empty abi reset of same code
+        bugfix_eip55_addr = 12,
+        bugfix_eoa_as_contract = 13,
+        bugfix_eoa_match_failed = 14,
+        bugfix_evm_exception_gas_used = 15,
+        bugfix_dmc_deploy_gas_used = 16,
+        bugfix_staticcall_noaddr_return = 17,
+        bugfix_support_transfer_receive_fallback = 18,
+        bugfix_set_row_with_dirty_flag = 19,
+        bugfix_rpbft_vrf_blocknumber_input = 20,
+        bugfix_delete_account_code = 21,
+        bugfix_policy1_empty_code_address = 22,
+        bugfix_precompiled_gasused = 23,
+        bugfix_nonce_not_increase_when_revert = 24,
+        bugfix_set_contract_nonce_when_create = 25,
+        bugfix_precompiled_gascalc = 26,
+        bugfix_method_auth_sender = 27,
+        bugfix_precompiled_evm_status = 28,
+        bugfix_delegatecall_transfer = 29,
+        bugfix_nonce_initialize = 30,
+        bugfix_v1_timestamp = 31,
+        bugfix_revert_logs = 32,
+        bugfix_auth_check = 33,         // FIB-77/81/82/83: CREATE2 deploy auth check, auth failure
+                                        // revert status, auth table raw-address path, auth table
+                                        // squatting (merged, all activate at V3_17_0)
+        bugfix_v1_error_handling = 34,  // FIB-76/78/79/80/85~92: v1 executor error-path gas
+                                        // accounting, gas_left clamp on fatal error, executive
+                                        // wrapper status/message marshaling (merged)
+        bugfix_gas_payment_balance_precheck = 35,  // FIB-75
+        bugfix_precompiled_feature_gate = 36,      // FIB-84
+        bugfix_evm_storage_status = 37,            // FIB-94
+        bugfix_statestorage_hash_v3_17 = 38,       // FIB-99/105
+        feature_dmc2serial = 39,
+        feature_sharding = 40,
+        feature_rpbft = 41,
+        feature_paillier = 42,
+        feature_balance = 43,
+        feature_balance_precompiled = 44,
+        feature_balance_policy1 = 45,
+        feature_paillier_add_raw = 46,
+        feature_evm_cancun = 48,
+        feature_evm_timestamp = 51,
+        feature_evm_address = 52,
+        feature_rpbft_term_weight = 53,
         // DEPRECATED: the account-table encoding (hex vs binary /apps/ names) is a
         // node-local physical layout, published by the startup detection as
         // ledger::account::nodeAddressTableMode() (ledger/AccountTableName.h) — this flag no
         // longer drives any behavior. string2Flag still recognizes the name so existing
         // config.genesis files load; setting it, through governance or config.genesis, is
         // accepted with a warning and records an inert no-op row.
-        feature_raw_address,
-        feature_rpbft_vrf_type_secp256k1,
-        feature_balance_policy2,  // 转账白名单 Transfer whitelist
-        feature_mpt_state_root,   // MPT lazy-build: block stateRoot switches to the
-                                  // Ethereum MPT root from this flag's activation
-                                  // block on (spec 2026-04-24 design3 4.3)
-        bugfix_nonce_ordering,    // web3 EOA nonce must be independent of intra-block tx order
-        bugfix_eip161_1052_account_semantics,  // #5371/#5372: v1 executor answers
-                                               // account_exists per EIP-161 (empty == absent)
-                                               // and EXTCODEHASH per EIP-1052: the chain
-                                               // hasher's hash("") (keccak on a non-SM
-                                               // chain) for a code-less live account, 0 for
-                                               // an absent/empty one; was true / 0.
+        feature_raw_address = 54,
+        feature_rpbft_vrf_type_secp256k1 = 55,
+        feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist
+        feature_l2_ethereum_compat = 57,  // OP-Stack L2 mode: Ethereum-compatible
+                                          // genesis/predeploys
+        feature_mpt_state_root = 58,      // MPT lazy-build: block stateRoot switches to the
+                                          // Ethereum MPT root from this flag's activation
+                                          // block on (spec 2026-04-24 design3 4.3)
+        // Takes the next unused number per the rule above, rather than the slot next to
+        // bugfix_statestorage_hash_v3_17 it occupies on release-3.17.0: inserting it there would
+        // renumber every feature_ flag after it and silently move their on-chain bits.
+        bugfix_nonce_ordering = 59,  // web3 EOA nonce must be independent of intra-block tx order
+        feature_op_jovian = 60,      // OP-Stack: Jovian fork semantics (DA footprint in
+                                     // header.BlobGasUsed, operator fee ×100 formula, 17B Jovian
+                                     // extraData). OFF → Isthmus semantics. Replaces the former
+                                     // chain.jovian_time timestamp threshold (FISCO has no
+                                     // timestamp-based fork activation); read at startup from
+                                     // genesis [features], same channel as
+                                     // feature_l2_ethereum_compat.
+        bugfix_eip161_1052_account_semantics = 61,  // #5371/#5372: v1 executor answers
+                                                    // account_exists per EIP-161 (empty == absent)
+                                                    // and EXTCODEHASH per EIP-1052: the chain
+                                                    // hasher's hash("") (keccak on a non-SM
+                                                    // chain) for a code-less live account, 0 for
+                                                    // an absent/empty one; was true / 0.
     };
 
     // magic_enum reflects values in its default range [-128, 127]; a flag past it would drop out

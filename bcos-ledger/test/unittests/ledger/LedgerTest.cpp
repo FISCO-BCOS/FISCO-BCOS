@@ -1865,9 +1865,9 @@ BOOST_AUTO_TEST_CASE(genesisV3AllocWithoutFeatureFlagsSlot)
 }
 
 // [features] in a compatibility_version >= 3.18.0 config.genesis is held to the same dependency
-// rules as governance: an EVM fork flag needs the previous fork. The check runs before any
-// genesis write, so the fixed config initializes on the same storage.
-BOOST_AUTO_TEST_CASE(genesisFeaturesRequireEvmForkDependencies)
+// rules as governance. The check runs before any genesis write, so the fixed config initializes
+// on the same storage.
+BOOST_AUTO_TEST_CASE(genesisFeaturesRequireDependencies)
 {
     task::syncWait([this]() -> task::Task<void> {
         auto refused = [this](std::vector<Features::Flag> flags,
@@ -1894,9 +1894,9 @@ BOOST_AUTO_TEST_CASE(genesisFeaturesRequireEvmForkDependencies)
                     .flag = magic_enum::enum_cast<Features::Flag>(missing).value(), .enable = 1});
             BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
         };
-        co_await refused({Features::Flag::feature_evm_prague}, "feature_evm_cancun");
-        co_await refused({Features::Flag::feature_evm_cancun, Features::Flag::feature_evm_osaka},
-            "feature_evm_prague");
+        co_await refused({Features::Flag::feature_balance_precompiled}, "feature_balance");
+        co_await refused({Features::Flag::feature_balance, Features::Flag::feature_balance_policy1},
+            "feature_balance_precompiled");
     }());
 }
 

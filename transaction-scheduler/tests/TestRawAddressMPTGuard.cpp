@@ -30,10 +30,8 @@ BOOST_AUTO_TEST_CASE(DeprecatedRawAddressAcceptedWithWarning)
     BOOST_CHECK(ledger::Features::string2Flag("feature_raw_address") ==
                 ledger::Features::Flag::feature_raw_address);
 
-    // isDeprecated is how the entry points know to warn. (The old genesis-only L2 flag
-    // feature_l2_ethereum_compat is NOT deprecated but REMOVED — its name no longer
-    // resolves — so isDeprecated does not apply to it; the Ethereum lane is expressed by
-    // executor_version >= 2 now.)
+    // isDeprecated is how the entry points know to warn. Other feature flags, including
+    // feature_l2_ethereum_compat, are not deprecated.
     BOOST_CHECK(ledger::Features::isDeprecated(ledger::Features::Flag::feature_raw_address));
     BOOST_CHECK(!ledger::Features::isDeprecated(ledger::Features::Flag::feature_balance));
 }

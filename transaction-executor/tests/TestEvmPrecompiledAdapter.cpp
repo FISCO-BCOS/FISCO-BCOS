@@ -480,29 +480,6 @@ BOOST_AUTO_TEST_CASE(swappedExecutorsEquivalentThroughManager)
     {
         checkManager(8, "alt_bn128_pairing_product", input);
     }
-
-    // BLS (0x0b-0x11) and p256verify (0x0100) are feature-gated in production,
-    // but getPrecompiled(address) performs no feature filtering, so the test
-    // drives them through the manager exactly like 0x02 — pinning the
-    // production execute/analyze pairing for every adapter-routed entry.
-    std::vector<bytes> blsCorpus = genericCorpus();
-    blsCorpus.push_back(zeroBytes(256));  // g1add shaped (infinity + infinity)
-    blsCorpus.push_back(zeroBytes(512));  // g2add shaped
-    blsCorpus.push_back(zeroBytes(160));  // g1msm shaped (infinity, scalar 0)
-    blsCorpus.push_back(zeroBytes(288));  // g2msm shaped
-    blsCorpus.push_back(zeroBytes(384));  // bls pairing shaped
-    blsCorpus.push_back(concat({zeroBytes(16), BLS12_P, zeroBytes(192)}));  // g1add: x1 == p
-    for (auto const& input : blsCorpus)
-    {
-        checkManager(0x0b, "bls12_g1add", input);
-        checkManager(0x0c, "bls12_g1msm", input);
-        checkManager(0x0d, "bls12_g2add", input);
-        checkManager(0x0e, "bls12_g2msm", input);
-        checkManager(0x0f, "bls12_pairing_check", input);
-        checkManager(0x10, "bls12_map_fp_to_g1", input);
-        checkManager(0x11, "bls12_map_fp2_to_g2", input);
-        checkManager(0x0100, "p256verify", input);
-    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

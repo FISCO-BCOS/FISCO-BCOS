@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(featuresSectionIsIgnored)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // An unknown name and a dependency violation: both are refused on v1, both ignored here.
-    const std::string features = "[features]\nno_such_flag=1\nfeature_evm_prague=1\n";
+    const std::string features = "[features]\nno_such_flag=1\nfeature_balance_precompiled=1\n";
     for (int executorVersion :
         {ledger::ETHEREUM_EXECUTOR_VERSION, ledger::OPSTACK_EXECUTOR_VERSION})
     {

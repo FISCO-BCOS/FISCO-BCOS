@@ -265,7 +265,7 @@ BOOST_AUTO_TEST_CASE(EthLanesReadLaneCompatibilityVersion)
 }
 
 // The genesis [features] dependency check runs on first init only. A v1 chain initialized
-// before the rule existed (here: feature_evm_prague without feature_evm_cancun, simulated by
+// before the rule existed (here: feature_balance_precompiled without feature_balance, simulated by
 // rewriting the pin in B0's extraData) must still restart with its unchanged config.
 BOOST_AUTO_TEST_CASE(V1RestartSkipsGenesisFeatureDependencyCheck)
 {
@@ -274,12 +274,13 @@ BOOST_AUTO_TEST_CASE(V1RestartSkipsGenesisFeatureDependencyCheck)
     auto param = genesisParam();
 
     auto valid = makeV1Genesis();
-    valid.m_features = {FeatureSet{.flag = Features::Flag::feature_evm_cancun, .enable = 1},
-        FeatureSet{.flag = Features::Flag::feature_evm_prague, .enable = 1}};
+    valid.m_features = {FeatureSet{.flag = Features::Flag::feature_balance, .enable = 1},
+        FeatureSet{.flag = Features::Flag::feature_balance_precompiled, .enable = 1}};
     BOOST_REQUIRE(task::syncWait(ledger::buildGenesisBlock(*ledger, valid, param)));
 
     auto legacy = makeV1Genesis();
-    legacy.m_features = {FeatureSet{.flag = Features::Flag::feature_evm_prague, .enable = 1}};
+    legacy.m_features = {
+        FeatureSet{.flag = Features::Flag::feature_balance_precompiled, .enable = 1}};
     auto legacyPin = bcos::tool::generateGenesisData(legacy, param);
     auto block = task::syncWait(ledger::getBlockData(*ledger, 0, HEADER));
     BOOST_REQUIRE(block);

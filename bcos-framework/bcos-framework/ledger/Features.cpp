@@ -85,10 +85,6 @@ std::set<Features::Flag> Features::getFeatureDependencies(Flag flag)
         return {Flag::feature_balance};
     case Flag::feature_balance_policy1:
         return {Flag::feature_balance_precompiled};
-    case Flag::feature_evm_prague:
-        return {Flag::feature_evm_cancun};
-    case Flag::feature_evm_osaka:
-        return {Flag::feature_evm_prague};
     default:
         return {};
     }

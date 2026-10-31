@@ -195,18 +195,17 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_balance_precompiled",
         "feature_balance_policy1",
         "feature_paillier_add_raw",
-        "feature_evm_eip2929",
         "feature_evm_cancun",
-        "feature_evm_prague",
-        "feature_evm_osaka",
         "feature_evm_timestamp",
         "feature_evm_address",
         "feature_rpbft_term_weight",
         "feature_raw_address",
         "feature_rpbft_vrf_type_secp256k1",
         "feature_balance_policy2",
+        "feature_l2_ethereum_compat",
         "feature_mpt_state_root",
         "bugfix_nonce_ordering",
+        "feature_op_jovian",
         "bugfix_eip161_1052_account_semantics",
     };
     // clang-format on
@@ -231,26 +230,26 @@ BOOST_AUTO_TEST_CASE(allFlagNamesRoundTrip)
 // silently enabling nothing.
 BOOST_AUTO_TEST_CASE(retiredNamesAreRejected)
 {
-    for (auto name : {"feature_l2_ethereum_compat", "feature_op_jovian",
-             "reserved_removed_l2_ethereum_compat", "reserved_removed_op_jovian"})
+    for (auto name : {"reserved_removed_l2_ethereum_compat", "reserved_removed_op_jovian"})
     {
         BOOST_CHECK(!Features::contains(name));
         BOOST_CHECK_THROW(Features::string2Flag(name), NoSuchFeatureError);
     }
 }
 
-BOOST_AUTO_TEST_CASE(evmForkFlagsRequireThePreviousFork)
+BOOST_AUTO_TEST_CASE(featureDependenciesRequireEnabledFlag)
 {
     Features features;
-    BOOST_CHECK_THROW(features.validate("feature_evm_prague"), bcos::tool::InvalidSetFeature);
-    BOOST_CHECK_THROW(features.validate("feature_evm_osaka"), bcos::tool::InvalidSetFeature);
+    BOOST_CHECK_THROW(
+        features.validate("feature_balance_precompiled"), bcos::tool::InvalidSetFeature);
+    BOOST_CHECK_THROW(features.validate("feature_balance_policy1"), bcos::tool::InvalidSetFeature);
 
-    features.set(Features::Flag::feature_evm_cancun);
-    BOOST_CHECK_NO_THROW(features.validate("feature_evm_prague"));
-    BOOST_CHECK_THROW(features.validate("feature_evm_osaka"), bcos::tool::InvalidSetFeature);
+    features.set(Features::Flag::feature_balance);
+    BOOST_CHECK_NO_THROW(features.validate("feature_balance_precompiled"));
+    BOOST_CHECK_THROW(features.validate("feature_balance_policy1"), bcos::tool::InvalidSetFeature);
 
-    features.set(Features::Flag::feature_evm_prague);
-    BOOST_CHECK_NO_THROW(features.validate("feature_evm_osaka"));
+    features.set(Features::Flag::feature_balance_precompiled);
+    BOOST_CHECK_NO_THROW(features.validate("feature_balance_policy1"));
 }
 
 BOOST_AUTO_TEST_CASE(flagCountWithinReflectionRange)
