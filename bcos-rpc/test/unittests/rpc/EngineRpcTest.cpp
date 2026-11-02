@@ -785,11 +785,24 @@ BOOST_AUTO_TEST_CASE(newPayloadV2)
     ep["blobGasUsed"] = largeQuantity;
     ep["excessBlobGas"] = largeQuantity;
 
+    // The blob gas pair belongs to ExecutionPayloadV3: geth's NewPayloadV2 answers -32602 for
+    // a non-nil one ("non-nil excessBlobGas pre-cancun"), so does this parser.
+    {
+        Json::Value v2Params(Json::arrayValue);
+        v2Params.append(ep);
+        Json::Value v2Response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV2, v2Params, v2Response), JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+    }
+
+    // The same payload at V3 (blob hashes + beacon root tail): the large quantities parse.
     Json::Value params(Json::arrayValue);
     params.append(ep);
+    params.append(Json::Value(Json::arrayValue));
+    params.append(c_beaconRootHex);
 
     Json::Value response;
-    CALL_ENGINE(newPayloadV2, params, response);
+    CALL_ENGINE(newPayloadV3, params, response);
 
     BOOST_CHECK(response["result"].isMember("status"));
     BOOST_CHECK_EQUAL(response["result"]["status"].asString(), "VALID");
@@ -804,11 +817,11 @@ BOOST_AUTO_TEST_CASE(newPayloadV2)
     BOOST_CHECK_EQUAL(*capturedReq.executionPayload.blobGasUsed, fromBigQuantity(largeQuantity));
     BOOST_REQUIRE(capturedReq.executionPayload.excessBlobGas.has_value());
     BOOST_CHECK_EQUAL(*capturedReq.executionPayload.excessBlobGas, fromBigQuantity(largeQuantity));
-    // V4-only fields stay absent at V2, and the V4 param tail is not required.
+    // V4-only fields stay absent at V3, and the V4 param tail is not required.
     BOOST_CHECK(!capturedReq.executionPayload.withdrawalsRoot.has_value());
     BOOST_CHECK(!capturedReq.executionRequests.has_value());
     BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
-    BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 2);
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 3);
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV3)
@@ -1099,7 +1112,9 @@ BOOST_AUTO_TEST_CASE(newPayloadV4MissingParams)
     threeParams.append(c_beaconRootHex);
     expectInvalidParams(threeParams);
 
-    // Missing withdrawalsRoot inside the payload is likewise InvalidParams at V4.
+    // A payload without withdrawalsRoot is the L1 newPayloadV4 shape (execution-apis
+    // prague.md: ExecutionPayloadV3 + executionRequests), not a shape error: it reaches the
+    // service with the field unset, and the OP lane's INVALID rule judges it there.
     auto epWithoutRoot = makeV4ExecutionPayloadJson();
     epWithoutRoot.removeMember("withdrawalsRoot");
     Json::Value noRootParams(Json::arrayValue);
@@ -1107,7 +1122,13 @@ BOOST_AUTO_TEST_CASE(newPayloadV4MissingParams)
     noRootParams.append(Json::Value(Json::arrayValue));
     noRootParams.append(c_beaconRootHex);
     noRootParams.append(Json::Value(Json::arrayValue));
-    expectInvalidParams(noRootParams);
+    {
+        Json::Value response;
+        CALL_ENGINE(newPayloadV4, noRootParams, response);
+        BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
+        BOOST_CHECK(!mockService.m_state->capturedNewPayloadRequest->executionPayload
+                .withdrawalsRoot.has_value());
+    }
 
     // Null parentBeaconBlockRoot is a shape error too.
     Json::Value nullBeaconParams(Json::arrayValue);
