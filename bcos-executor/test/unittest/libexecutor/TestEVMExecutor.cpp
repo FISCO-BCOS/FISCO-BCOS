@@ -42,10 +42,12 @@
 #include "executive/PromiseTransactionExecutive.h"
 #include "executive/ShardingTransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
+#include "precompiled/common/PrecompiledResult.h"
 #include "vm/EVMHostInterface.h"
 #include "vm/HostContext.h"
 #include "vm/Precompiled.h"  // PrecompiledMap: complete type for make_shared (line ~3657)
 #include <bcos-framework/executor/ExecuteError.h>
+#include <bcos-framework/executor/HostContextFault.h>
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -3984,6 +3986,101 @@ BOOST_AUTO_TEST_CASE(deadLockRevertKeepsInputEvmStatus)
 // Negative control for F3: an ordinary EVM REVERT through the create branch must
 // still surface as EVMC_REVERT via parseEVMCResult — only the hasHostFault
 // compensation write was removed, not legitimate revert mapping.
+
+// morebtcg R6 HIGH: static BCOS-precompiled calls must not collapse HostContextFault
+// into TransactionStatus::Unknown inside callBuiltInPrecompiled. An EVM CALL into a
+// static BCOS precompile whose nested child-EVM path throws HostContextFault must
+// reach EVMHostInterface::call's catch, record the parent fault, and leave no
+// receipt-friendly Unknown status on the call result.
+BOOST_AUTO_TEST_CASE(staticBcosPrecompileHostFaultEscapesReceiptMapping)
+{
+    auto backendStorage = std::make_shared<StateStorage>(nullptr, false);
+    auto stateStorage = std::make_shared<StateStorage>(backendStorage, false);
+    auto ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
+    auto blockContext = std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0,
+        h256(), bcos::utcTime(), static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION),
+        false, backendStorage);
+
+    std::string const precompileAddress = "000000000000000000000000000000000000f123";
+    static constexpr char const* kFaultSentinel = "nested child-EVM host fault sentinel";
+
+    class NestedFaultPrecompiled : public bcos::precompiled::Precompiled
+    {
+    public:
+        using bcos::precompiled::Precompiled::Precompiled;
+        bcos::precompiled::PrecompiledExecResult::Ptr call(std::shared_ptr<TransactionExecutive>,
+            bcos::precompiled::PrecompiledExecResult::Ptr) override
+        {
+            // Stand-in for: BCOS precompile -> nested EVM -> HostContextFault rethrow
+            // (e.g. SystemConfigPrecompiled::registerGovernorToCaller).
+            throw HostContextFault("nested child-EVM host fault sentinel");
+        }
+    };
+
+    auto precompiledMap = std::make_shared<PrecompiledMap>();
+    precompiledMap->insert(precompileAddress, std::make_shared<NestedFaultPrecompiled>(hashImpl));
+    auto executive = std::make_shared<TransactionExecutive>(*blockContext, "aabbccddee", 100, 0);
+    executive->setPrecompiled(precompiledMap);
+    executive->setStaticPrecompiled(
+        std::make_shared<const std::set<std::string>>(std::set<std::string>{precompileAddress}));
+
+    auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    callParameters->receiveAddress = "aabbccddee";
+    callParameters->codeAddress = "aabbccddee";
+    callParameters->senderAddress = "1122334455";
+    callParameters->origin = "1122334455";
+    callParameters->gas = 100000;
+    HostContext host(std::move(callParameters), executive, "/apps/aabbccddee");
+
+    // Unit pin: callBuiltInPrecompiled itself must rethrow, not map to Unknown.
+    {
+        auto req = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+        req->origin = "1122334455";
+        req->senderAddress = "1122334455";
+        req->receiveAddress = precompileAddress;
+        req->codeAddress = precompileAddress;
+        req->gas = 100000;
+        req->data = bytes(4, 0);
+        BOOST_CHECK_EXCEPTION(host.callBuiltInPrecompiled(req, false), HostContextFault,
+            [](HostContextFault const& e) { return std::string(e.what()) == kFaultSentinel; });
+        BOOST_CHECK(!host.hasHostFault());
+    }
+
+    // Rebuild a clean host for the EVM CALL boundary (prior throw left no fault record).
+    callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    callParameters->receiveAddress = "aabbccddee";
+    callParameters->codeAddress = "aabbccddee";
+    callParameters->senderAddress = "1122334455";
+    callParameters->origin = "1122334455";
+    callParameters->gas = 100000;
+    HostContext parent(std::move(callParameters), executive, "/apps/aabbccddee");
+
+    evmc_message message = {.kind = EVMC_CALL,
+        .flags = 0,
+        .depth = 0,
+        .gas = 100000,
+        .state_gas = {},
+        .recipient = {},
+        .sender = {},
+        .input_data = nullptr,
+        .input_size = 0,
+        .value = {},
+        .code_address = unhexAddress(precompileAddress),
+        .code = nullptr,
+        .code_size = 0};
+
+    auto const* fnTable = getHostInterface();
+    BOOST_REQUIRE(fnTable && fnTable->call);
+    BOOST_CHECK(!parent.hasHostFault());
+    auto result = fnTable->call(reinterpret_cast<evmc_host_context*>(&parent), &message);
+    // Parent records the fault; the temporary EVMC_INTERNAL_ERROR must not become a
+    // receipt via Unknown — throwIfHostFault is what go() uses to abort the frame.
+    BOOST_CHECK_EQUAL(result.status_code, EVMC_INTERNAL_ERROR);
+    BOOST_CHECK(parent.hasHostFault());
+    BOOST_CHECK(parent.hostFault().find(kFaultSentinel) != std::string::npos);
+    BOOST_CHECK_THROW(parent.throwIfHostFault(), HostContextFault);
+}
+
 BOOST_AUTO_TEST_CASE(createInitcodeRevertStillReportsEvmcRevert)
 {
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);

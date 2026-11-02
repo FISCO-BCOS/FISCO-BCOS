@@ -471,6 +471,13 @@ evmc_result HostContext::callBuiltInPrecompiled(
         {
             resultCode = (int32_t)TransactionStatus::PrecompiledError;
         }
+        catch (HostContextFault const&)
+        {
+            // Nested EVM / host-fault from a static BCOS precompile must escape
+            // receipt mapping. The enclosing EVMHostInterface::call catch records
+            // it on the parent frame; do not collapse it into Unknown.
+            throw;
+        }
         catch (std::exception& e)
         {
             resultCode = (int32_t)TransactionStatus::Unknown;
