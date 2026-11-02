@@ -66,6 +66,10 @@ struct BuildContext
     /// Forwarded to every mergeNodeDelta / hand tally: false when the configured CommitObserver
     /// does not count references (CommitObserver::needsRefCountDeltas).
     bool trackRefCounts;
+    /// EIP-161 (Spurious Dragon) in force: a touched account whose merged core triple is
+    /// {0, 0, keccak256("")} leaves the trie. False only for blocks before that fork (an L1
+    /// chain's early history, conformance fixtures), where such an account is a real leaf.
+    bool clearEmptyAccounts = true;
 };
 
 /// One core-field row's fate in the block's delta layer.
@@ -324,13 +328,17 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 
     // EIP-158/161 empty-account clearing (issue #5373): a touched account whose post-block core
     // triple is {nonce 0, balance 0, keccak256("")} is removed from the trie, never written.
+    // Before Spurious Dragon (context.clearEmptyAccounts false) the same touch CREATES the
+    // leaf: a zero-value CALL to a fresh address or a precompile leaves {0, 0, keccak256("")}
+    // in the Frontier/Homestead/Tangerine Whistle state (the bloat EIP-161 was written to end).
     // Decided on the MERGED triple because fields the block did not write keep their baseline /
     // flat value, and only the merged triple is the account's real state. Storage is not
     // consulted for emptiness, and the block's slot writes for such an account are DROPPED
     // together with its prior storage trie — the same semantics as reth (revm
     // touch_empty_eip161 sets storage_was_destroyed; HashedPostState maps the account to None).
     // Checked before the storage commit so those dropped slot writes never produce nodes.
-    if (updated.nonce == 0 && updated.balance == 0 && updated.codeHash == emptyCodeHash())
+    if (context.clearEmptyAccounts && updated.nonce == 0 && updated.balance == 0 &&
+        updated.codeHash == emptyCodeHash())
     {
         if (priorStorageRoot != emptyRootHash())
         {
@@ -457,7 +465,7 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
 bcos::task::Task<MPTDeltaLayer> buildAndCollect(Storage& nodeStorage, bcos::h256 parentStateRoot,
     auto& flatView, bool l2Mode, bcos::ledger::account::AddressTableMode accountMode,
-    bool trackRefCounts = false)
+    bool trackRefCounts = false, bool clearEmptyAccounts = true)
 {
     MPTDeltaLayer output;
     MPTReadView<Storage> const parentView(nodeStorage, parentStateRoot);
@@ -467,7 +475,8 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(Storage& nodeStorage, bcos::h256
         .hasher = hasher,
         .l2Mode = l2Mode,
         .accountMode = accountMode,
-        .trackRefCounts = trackRefCounts};
+        .trackRefCounts = trackRefCounts,
+        .clearEmptyAccounts = clearEmptyAccounts};
 
     // The ACCOUNT trie's change-set: accountKeyHash(addr) → the account's new leaf encoding
     // (nullopt = tombstone removal). Slot changes never appear here — each account digests
