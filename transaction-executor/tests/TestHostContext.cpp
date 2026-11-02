@@ -439,7 +439,7 @@ BOOST_AUTO_TEST_CASE(storageFaultInChildFrameReachesParentRecordV2)
         nested.input_size = input.size();
         BOOST_CHECK_THROW(syncWait(parent.externalCall(nested)), bcos::executor::HostContextFault);
         // R3 MEDIUM: externalCall must leave the sticky fault on the PARENT record
-        // (not only rethrow), so a swallowing precompile cannot mint a SUCCESS receipt.
+        // (not only rethrow). Swallow+SUCCESS is pinned separately below.
         BOOST_CHECK(parent.hasHostFault());
 
         // Repair: later tests in this suite call the same contract.
@@ -447,6 +447,44 @@ BOOST_AUTO_TEST_CASE(storageFaultInChildFrameReachesParentRecordV2)
             storage, helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
         co_await account.setNonce(std::string("0"));
     }());
+}
+
+// R4-F1: a SUCCESS-returning prepared precompile must still fail the frame when
+// this frame already carries a sticky host fault (the swallow class that
+// externalCall's parent record + callPreparedPrecompiled's throwIfHostFault close).
+// Inject the sticky the same way nested externalCall would have left it, then
+// drive identity (0x04) which returns EVMC_SUCCESS — without the post-call check
+// the frame would commit that success.
+BOOST_AUTO_TEST_CASE(precompiledSuccessCannotEscapeParentHostFault)
+{
+    using HostContextType =
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>;
+
+    evmc_address identity{};
+    identity.bytes[19] = 0x04;
+    uint8_t const input[] = {0xde, 0xad, 0xbe, 0xef};
+    evmc_message message = {.kind = EVMC_CALL,
+        .flags = 0,
+        .depth = 0,
+        .gas = 1'000'000,
+        .state_gas = {},
+        .recipient = identity,
+        .sender = identity,
+        .input_data = input,
+        .input_size = sizeof(input),
+        .value = {},
+        .code_address = identity,
+        .code = nullptr,
+        .code_size = 0};
+    HostContextType host(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+        identity, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+        bcos::task::syncWait);
+
+    host.recordHostFault("injected sticky fault as if nested externalCall recorded it");
+    BOOST_CHECK(host.hasHostFault());
+    syncWait(host.prepare());
+    BOOST_CHECK_THROW(syncWait(host.execute()), bcos::executor::HostContextFault);
+    BOOST_CHECK(host.hasHostFault());
 }
 
 // [F10 translation regression] Every faulting EVMC callback on this lane — not just
