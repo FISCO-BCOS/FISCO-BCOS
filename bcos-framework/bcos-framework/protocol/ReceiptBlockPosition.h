@@ -36,6 +36,7 @@
 #pragma once
 
 #include "Block.h"
+#include "ReceiptPositionCursor.h"
 #include "TransactionReceipt.h"
 #include <algorithm>
 #include <cstddef>
@@ -44,35 +45,10 @@
 
 namespace bcos::protocol
 {
-/// Where one receipt sits in its block.
-struct ReceiptBlockPosition
-{
-    std::size_t transactionIndex = 0;
-    /// Number of logs in the receipts before this one, so its first log is numbered from here.
-    std::size_t logIndex = 0;
-};
-
-/// The numbering rule itself: the receipt at position i of a block has transactionIndex i and
-/// logIndex equal to the number of logs in receipts 0..i-1.
-///
-/// The single implementation, shared by the read-time derivation below and by ReceiptNormalizer's
-/// write. Those two are the same rule applied at different times, so they must not carry a copy of
-/// the arithmetic each -- a comment saying they agree is not a guarantee.
-struct ReceiptPositionCursor
-{
-    /// Take the next position for a receipt carrying @p logCount log entries, then advance.
-    ReceiptBlockPosition next(std::size_t logCount)
-    {
-        auto const position = ReceiptBlockPosition{m_transactionIndex, m_logIndex};
-        ++m_transactionIndex;
-        m_logIndex += logCount;
-        return position;
-    }
-
-private:
-    std::size_t m_transactionIndex = 0;
-    std::size_t m_logIndex = 0;
-};
+/// ReceiptBlockPosition and the numbering rule (ReceiptPositionCursor) live in
+/// ReceiptPositionCursor.h, which has no Block dependency: the write path needs the rule without
+/// the block, and it must not pull Block.h in to get it. What follows is the read-side derivation,
+/// which does need the block.
 
 /// Derive the block position of every receipt of @p block, in block order, and stamp it onto them.
 ///

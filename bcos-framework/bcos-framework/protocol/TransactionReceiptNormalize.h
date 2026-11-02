@@ -18,7 +18,7 @@
  */
 #pragma once
 
-#include "ReceiptBlockPosition.h"
+#include "ReceiptPositionCursor.h"
 #include "TransactionReceipt.h"
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
