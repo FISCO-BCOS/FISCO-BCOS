@@ -14,6 +14,7 @@ endif()
 
 find_package(Boost REQUIRED COMPONENTS log log_setup filesystem chrono thread serialization iostreams ${BOOST_STACKTRACE_COMPONENT})
 find_package(ZLIB REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 if(NOT ONLY_CPP_SDK)
     find_package(zstd CONFIG REQUIRED)
 endif ()
@@ -40,6 +41,9 @@ if (ONLY_CPP_SDK)
 else ()
     target_link_libraries(bcos-utilities PUBLIC bcos-task Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} ZLIB::ZLIB zstd::libzstd_static ittapi)
 endif ()
+# fmt is used only inside BoostLog.cpp; the target is exported in
+# fiscobcosTargets, so keep it out of the public interface.
+target_link_libraries(bcos-utilities PRIVATE fmt::fmt)
 
 if(TESTS)
     enable_testing()

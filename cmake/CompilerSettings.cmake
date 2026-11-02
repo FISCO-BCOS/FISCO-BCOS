@@ -260,15 +260,29 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     if(COVERAGE)
         set(TESTS ON)
 
+        # gcov reads the .gcno/.gcda pairs the instrumentation emits, not DWARF, so
+        # -g only inflates compile memory and object size. -O0 keeps each line's
+        # counter on its own line; -O2 inlining and block merging misattribute
+        # counters and multiply compile memory on template-heavy TUs. So a coverage
+        # build replaces the active configuration's flags with -O0, whatever
+        # CMAKE_BUILD_TYPE says. It deliberately does not switch the build type to
+        # Debug: vcpkg maps Debug to the debug/ variant of every dependency, which
+        # the *-release triplets the CI uses do not build.
+        string(TOUPPER "${CMAKE_BUILD_TYPE}" _fisco_coverage_config)
+        set(CMAKE_CXX_FLAGS_${_fisco_coverage_config} "-O0")
+        set(CMAKE_C_FLAGS_${_fisco_coverage_config} "-O0")
+        unset(_fisco_coverage_config)
         if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-            set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
-            set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS}")
+            # -fprofile-update=atomic: the tests are multi-threaded, and racing
+            # non-atomic counter updates are what lcov's "negative" counts come from.
+            set(CMAKE_CXX_FLAGS "--coverage -fprofile-update=atomic ${CMAKE_CXX_FLAGS}")
+            set(CMAKE_C_FLAGS "--coverage -fprofile-update=atomic ${CMAKE_C_FLAGS}")
             set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
             set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
         elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
             add_compile_options(-Wno-unused-command-line-argument)
-            set(CMAKE_CXX_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
-            set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
+            set(CMAKE_CXX_FLAGS "-fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
+            set(CMAKE_C_FLAGS "-fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
         endif()
     endif()
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")

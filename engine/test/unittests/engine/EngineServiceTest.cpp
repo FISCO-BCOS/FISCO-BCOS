@@ -37,6 +37,7 @@
 #include <bcos-ledger/Ledger.h>
 #include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-table/src/StateStorage.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
@@ -226,22 +227,13 @@ SvcTestEngineServiceImpl makeEngineServiceImpl(
         memPool, storage, sharedStubExecutor(), sharedStubScheduler(), svcTestBlockFactory());
 }
 
-/// The production ledger with its one state-storage dependency short-circuited:
-/// Ledger::asyncPrewriteBlock self-calls asyncGetTotalTransactionCount, which opens
-/// SYS_CURRENT_STATE and fails the whole prewrite when that table is unknown
-/// (Ledger.cpp:396 -> :1051). Everything asserted below — the
-/// SYS_NUMBER_2_BLOCK_HEADER row — is written by the real header encode path above
-/// that call, so this keeps the commit exercising production code rather than a fake.
+/// The production ledger with an empty in-memory state storage. The storage2 total-count read
+/// treats the missing SYS_CURRENT_STATE table as zero, keeping the real prewrite path usable
+/// without a genesis fixture. Header rows are still written through the normal encode path.
 class SvcCommitLedger : public bcos::ledger::Ledger
 {
 public:
     using bcos::ledger::Ledger::Ledger;
-    void asyncGetTotalTransactionCount(
-        std::function<void(bcos::Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)>
-            callback) override
-    {
-        callback(nullptr, 0, 0, 0);
-    }
 };
 
 /// SvcCommitLedger whose first asyncPrewriteBlock fails with an injected error, then
@@ -1121,8 +1113,9 @@ BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
         c_svcInitialBlockNumber, c_svcInitialBlockNumber);
-    auto flakyLedger =
-        std::make_shared<SvcFlakyLedger>(svcTestBlockFactory(), nullptr, /*blockLimit=*/100);
+    auto flakyLedger = std::make_shared<SvcFlakyLedger>(svcTestBlockFactory(),
+        std::make_shared<bcos::storage::StateStorage>(nullptr, false),
+        /*blockLimit=*/100);
     auto engineService =
         makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, flakyLedger);
 
@@ -1166,8 +1159,9 @@ BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
         c_svcInitialBlockNumber, c_svcInitialBlockNumber);
-    auto gatedLedger =
-        std::make_shared<SvcGatedLedger>(svcTestBlockFactory(), nullptr, /*blockLimit=*/100);
+    auto gatedLedger = std::make_shared<SvcGatedLedger>(svcTestBlockFactory(),
+        std::make_shared<bcos::storage::StateStorage>(nullptr, false),
+        /*blockLimit=*/100);
     auto engineService =
         makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, gatedLedger);
 
@@ -1595,8 +1589,9 @@ BOOST_AUTO_TEST_CASE(committed_header_carries_the_same_jovian_extra_data_as_the_
     payloadAttributes.eip1559Params = bytes(8, 0);
     payloadAttributes.minBaseFee = 0;
 
-    auto ledger =
-        std::make_shared<SvcCommitLedger>(svcTestBlockFactory(), nullptr, /*blockLimit=*/100);
+    auto ledger = std::make_shared<SvcCommitLedger>(svcTestBlockFactory(),
+        std::make_shared<bcos::storage::StateStorage>(nullptr, false),
+        /*blockLimit=*/100);
     auto engineService =
         makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, ledger);
 

@@ -363,7 +363,7 @@ task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
             {
                 if (!txEntry)
                 {
-                    // Fail closed like the base asyncBatchGetTransactions path: a
+                    // Fail closed like the base batchGetTransactions path: a
                     // missing SYS_HASH_2_TX row (lagging or pruned block storage) is a
                     // storage error, not a reason to dereference a disengaged optional.
                     BOOST_THROW_EXCEPTION(

@@ -48,11 +48,11 @@ namespace detail
 // Emit the rescued resume exception to stderr so an initiate failure is distinguishable from an
 // ordinary teardown in the log. libtask cannot use BCOS_LOG without a bcos-task -> bcos-utilities
 // link dependency, so a bare stderr write keeps these silent catches diagnosable without one.
-inline void logResumeException(const char* context) noexcept
+inline void logResumeException(const char* tag, const char* context) noexcept
 {
     try
     {
-        std::fprintf(stderr, "[FireAwaitable] %s: %s\n", context,
+        std::fprintf(stderr, "[%s] %s: %s\n", tag, context,
             boost::current_exception_diagnostic_information().c_str());
     }
     catch (...)
@@ -101,7 +101,8 @@ public:
         }
         catch (...)
         {
-            logResumeException("resume rescued the awaiting coroutine and it threw");
+            logResumeException(
+                "FireAwaitable", "resume rescued the awaiting coroutine and it threw");
         }
     }
 
@@ -128,7 +129,8 @@ public:
         catch (...)
         {
             // an exception escaping the resumed coroutine must not unwind the caller's handler
-            logResumeException("resume completed the awaiting coroutine and it threw");
+            logResumeException(
+                "FireAwaitable", "resume completed the awaiting coroutine and it threw");
         }
     }
 
@@ -173,7 +175,7 @@ struct FireAwaitable
                     // initiate threw after arming: the completion's destructor already resumed
                     // the awaiting coroutine (with the initial error). Swallow the exception but
                     // keep its diagnostic so an initiate failure is distinguishable from teardown.
-                    detail::logResumeException(
+                    detail::logResumeException("FireAwaitable",
                         "initiate threw; awaiting coroutine settled with the failure error");
                 }
                 co_return;

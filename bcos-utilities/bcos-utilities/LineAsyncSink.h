@@ -55,6 +55,7 @@
  */
 #pragma once
 
+#include "LineLayout.h"
 #include "LogStream.h"
 #include <boost/make_shared.hpp>
 #include <boost/smart_ptr/shared_ptr.hpp>
@@ -104,8 +105,8 @@ void commitLine(LogLevel _level, std::string_view _message);
 // Sum of droppedTotal() over every registered sink; read by the
 // admin_getLogLevel RPC so log loss is pollable.
 std::uint64_t droppedLogLines() noexcept;
-// "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|" — shared with the sink so the
-// dropped-lines marker keeps the same line layout as producer-formatted lines.
+// "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|" — the built-in line prefix,
+// rendered on the caller thread.
 void appendLinePrefix(std::string& _out, LogLevel _level);
 
 // Process-wide feeding worker shared by every LineAsyncSink instantiation —
@@ -465,11 +466,12 @@ private:
     {
         try
         {
-            std::string line;
-            appendLinePrefix(line, LogLevel::WARNING);
-            line += "[log] dropped ";
-            line += std::to_string(_dropped);
-            line += " log line(s): slot pool exhausted";
+            std::string marker = "[log] dropped ";
+            marker += std::to_string(_dropped);
+            marker += " log line(s): slot pool exhausted";
+            // formatLogLine follows the installed log.format layout, so the
+            // marker keeps the same line layout as producer-formatted lines.
+            std::string line = formatLogLine(LogLevel::WARNING, marker);
             std::lock_guard<std::timed_mutex> backendLock(m_backendMutex);
             m_backend->consumeLine(LogLevel::WARNING, line);
         }
