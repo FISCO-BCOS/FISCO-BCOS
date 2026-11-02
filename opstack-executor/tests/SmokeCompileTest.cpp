@@ -50,7 +50,7 @@ bcos::executor_v1::eth::validateTransaction<MutableStorage, bcos::executor_v1::o
     bcos::executor_v1::eth::EthereumState<MutableStorage>&,
     bcos::executor_v1::eth::EthBlockInfo const&, bcos::protocol::Transaction const&, evmc_revision,
     int64_t, int64_t, bcos::executor_v1::eth::EthCallParams const&,
-    bcos::executor_v1::opstack::OpPolicy const&);
+    bcos::executor_v1::opstack::OpPolicy const&, std::optional<uint64_t>);
 
 template bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr>
 bcos::executor_v1::eth::runTransaction<MutableStorage, bcos::executor_v1::opstack::OpPolicy>(
