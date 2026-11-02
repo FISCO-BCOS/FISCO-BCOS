@@ -20,6 +20,7 @@
 #include "DebugEndpoint.h"
 
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/engine/RawTransactionDispatch.h>  // receiptLeafTypeByte
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -236,9 +237,13 @@ task::Task<void> DebugEndpoint::getRawReceipts(const Json::Value& request, Json:
     auto const ledger = m_nodeService->ledger();
     auto const blockNumber = co_await resolveRawBlockParameter(request, "debug_getRawReceipts");
 
-    // TRANSACTIONS (not just their hashes) because the receipts-trie leaf is prefixed with the
-    // transaction's EIP-2718 type byte, which only the transaction carries.
-    auto const block = co_await ledger::getBlockData(*ledger, blockNumber, ledger::TRANSACTIONS);
+    // TRANSACTIONS | RECEIPTS: the receipts-trie leaf is prefixed with the transaction's EIP-2718
+    // type byte, which only the transaction carries, and the receipt itself comes from the same
+    // block read. Both flags are required and they are disjoint (LedgerTypeDef.h): RECEIPTS is what
+    // populates receipts(), so asking for TRANSACTIONS alone leaves receiptsSize() at 0 and the
+    // count guard below then rejects every block that has a transaction.
+    auto const block = co_await ledger::getBlockData(
+        *ledger, blockNumber, ledger::TRANSACTIONS | ledger::RECEIPTS);
     if (!block) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
@@ -249,27 +254,31 @@ task::Task<void> DebugEndpoint::getRawReceipts(const Json::Value& request, Json:
     // truncate or misalign the response. Fail closed before the loop rather than inside it.
     if (block->transactionsSize() != block->receiptsSize()) [[unlikely]]
     {
+        WEB3_LOG(WARNING) << LOG_DESC("debug_getRawReceipts: block carries mismatched counts")
+                          << LOG_KV("block", blockNumber)
+                          << LOG_KV("transactions", block->transactionsSize())
+                          << LOG_KV("receipts", block->receiptsSize());
         BOOST_THROW_EXCEPTION(JsonRpcException(
             InternalError, "Block " + std::to_string(blockNumber) + " carries " +
                                std::to_string(block->transactionsSize()) + " transactions but " +
                                std::to_string(block->receiptsSize()) + " receipts"));
     }
-    auto transactions = block->transactions();  // non-const: the view is not const-iterable
-    for (auto anyTx : transactions)             // AnyTransaction::operator-> gives the Transaction
+    // Receipts come from the same read, indexed by the transaction's position, instead of one
+    // getReceipt round trip per transaction (which also could not answer for a receipt row that
+    // exists but is unreadable). The zip is what makes "block order" the only order this can emit.
+    auto receipts = block->receipts();  // non-const: the holder view is not const-iterable
+    std::size_t index = 0;
+    for (auto anyTx : block->transactions())  // AnyTransaction::operator-> gives the Transaction
     {
         auto const& tx = *anyTx.operator->();
-        auto const receipt = co_await ledger::getReceipt(*ledger, tx.hash());
-        if (!receipt) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                InternalError, "Missing receipt for transaction " + tx.hash().hexPrefixed()));
-        }
+        auto const receipt = receipts.at(index);
         // Exactly the value the block's receipts trie holds (encodeReceiptLeaf): the same
         // encoding this node committed to, so a client can reassemble the trie from these
         // bytes and get the header's receiptsRoot back. The type byte comes from the signed
-        // envelope through the same helper the committed root uses, so the two cannot disagree.
-        result.append(toHexStringWithPrefix(bcos::ledger::mpt::encodeReceiptLeaf(
-            *receipt, bcos::ledger::mpt::receiptLeafTypeByte(tx))));
+        // envelope through the engine helper the committed root uses, so the two cannot disagree.
+        result.append(toHexStringWithPrefix(
+            bcos::ledger::mpt::encodeReceiptLeaf(*receipt, bcos::engine::receiptLeafTypeByte(tx))));
+        ++index;
     }
     buildJsonContent(result, response);
     co_return;

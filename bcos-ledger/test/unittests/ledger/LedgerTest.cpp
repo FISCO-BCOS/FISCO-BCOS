@@ -26,6 +26,7 @@
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -2447,7 +2448,7 @@ BOOST_AUTO_TEST_CASE(ethereumLaneReceiptLeavesRebuildTheCommittedRoot)
     for (size_t i = 0; i < receipts.size(); ++i)
     {
         leaves.push_back(ledger::mpt::encodeReceiptLeaf(
-            *receipts[i], ledger::mpt::receiptLeafTypeByte(*transactions[i])));
+            *receipts[i], engine::receiptLeafTypeByte(*transactions[i])));
     }
     std::vector<bcos::bytesConstRef> leafRefs;
     leafRefs.reserve(leaves.size());
@@ -2463,6 +2464,48 @@ BOOST_AUTO_TEST_CASE(ethereumLaneReceiptLeavesRebuildTheCommittedRoot)
     // (see ethereumLaneStoredReceiptsKeepTheirLegacyPosition), so it is still unset here.
     BOOST_CHECK_EQUAL(receipts[1]->transactionIndex(), 0U);
     BOOST_CHECK_EQUAL(receipts[1]->logIndex(), 0U);
+}
+
+// The receipt leaf's EIP-2718 prefix comes from the transaction's signed envelope, not from the
+// tars web3TypedTxKind() mirror. The two agree on everything the tree produces today, which is why
+// a case where they DISAGREE is the only one that pins the rule: with the mirror consulted first
+// (or only), a peer that rewrites that field would steer the prefix, and the committed receiptsRoot
+// would then differ from what a standard client computes for the same block.
+//
+// The envelope bytes here are a bare typed prefix, which is all the classification reads.
+BOOST_AUTO_TEST_CASE(receiptLeafTypeBytePrefersTheEnvelopeOverTheMirror)
+{
+    initFixture();
+
+    auto const makeTx = [&](bcos::bytes envelope, int mirror) {
+        auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+        auto& inner = tx->mutableInner();
+        inner.data.version = 1;
+        inner.type = static_cast<int>(bcos::protocol::TransactionType::Web3Transaction);
+        inner.web3TypedTxKind = mirror;
+        inner.extraTransactionBytes.assign(envelope.begin(), envelope.end());
+        return tx;
+    };
+
+    // Envelope 0x02 (EIP-1559) while the mirror claims legacy: the envelope wins.
+    auto const typed = makeTx(bcos::bytes{0x02, 0xc0}, /*mirror=*/0);
+    BOOST_CHECK_EQUAL(typed->web3TypedTxKind(), 0);
+    BOOST_CHECK_EQUAL(static_cast<int>(engine::receiptLeafTypeByte(*typed)), 0x02);
+
+    // Envelope 0x01 (EIP-2930) with a mirror claiming 0x02: still the envelope.
+    auto const accessList = makeTx(bcos::bytes{0x01, 0xc0}, /*mirror=*/2);
+    BOOST_CHECK_EQUAL(static_cast<int>(engine::receiptLeafTypeByte(*accessList)), 0x01);
+
+    // No envelope bytes at all (FISCO-native, and the synthetic transactions tests build): the
+    // mirror is the fallback, and a non-Web3 transaction maps to 0 rather than throwing.
+    auto const native = makeTx(bcos::bytes{}, /*mirror=*/0);
+    BOOST_CHECK_EQUAL(static_cast<int>(engine::receiptLeafTypeByte(*native)), 0x00);
+    auto const nativeWithMirror = makeTx(bcos::bytes{}, /*mirror=*/2);
+    BOOST_CHECK_EQUAL(static_cast<int>(engine::receiptLeafTypeByte(*nativeWithMirror)), 0x02);
+
+    // A legacy RLP list header (>= 0xc0) is legacy: 0x00, not "unsupported".
+    auto legac = makeTx(bcos::bytes{0xf8, 0x6e}, /*mirror=*/2);
+    BOOST_CHECK_EQUAL(static_cast<int>(engine::receiptLeafTypeByte(*legac)), 0x00);
 }
 
 // findReceiptPosition is what eth_getTransactionReceipt goes through, and it was checking the

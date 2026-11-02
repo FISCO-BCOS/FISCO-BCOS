@@ -1813,26 +1813,34 @@ task::Task<void> EthEndpoint::getTransactionByHash(
         }
         auto blockHash = co_await ledger::getBlockHash(*ledger, receipt->blockNumber());
         // The position is derived from the block, not read from the stored row: history written
-        // before the field meant anything stays 0, and every node must answer the same way.
-        auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
-            ledger::HEADER | ledger::TRANSACTIONS_HASH | ledger::RECEIPTS);
+        // before the field meant anything stays 0, and every node must answer the same way. Only
+        // the index is needed here (combineTxResponse publishes transactionIndex and blockNumber,
+        // never logIndex), so this reads the transaction list and not the receipts: N receipt
+        // decodes and a block-wide bloom recomputation per request would otherwise be paid to
+        // compute a log base nobody reads.
+        auto block = co_await ledger::getBlockData(
+            *ledger, receipt->blockNumber(), ledger::TRANSACTIONS_HASH);
         if (!block) [[unlikely]]
         {
             result = Json::nullValue;
             buildJsonContent(result, response);
             co_return;
         }
-        auto const position = protocol::findReceiptPosition(*block, hash);
-        if (!position.has_value()) [[unlikely]]
+        auto const transactionIndex = protocol::findTransactionIndex(*block, hash);
+        if (!transactionIndex.has_value()) [[unlikely]]
         {
             // The block lists its transactions in the order its receipts were written, so a miss
             // means the stored rows disagree with the block; answer null rather than a position
             // taken from a different transaction.
+            WEB3_LOG(WARNING) << LOG_DESC("eth_getTransactionByHash: receipt is not in its block")
+                              << LOG_KV("hash", hash.hexPrefixed())
+                              << LOG_KV("block", receipt->blockNumber())
+                              << LOG_KV("transactions", block->transactionsMetaDataSize());
             result = Json::nullValue;
             buildJsonContent(result, response);
             co_return;
         }
-        protocol::applyReceiptBlockPosition(*receipt, *position);
+        receipt->setTransactionIndex(*transactionIndex);
         combineTxResponse(result, *txs->at(0), *receipt, blockHash);
     }
     catch (std::exception const& e)
@@ -1860,25 +1868,26 @@ task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
         buildJsonContent(result, response);
         co_return;
     }
-    auto block = co_await ledger::getBlockData(*ledger, number,
-        bcos::ledger::TRANSACTIONS | bcos::ledger::HEADER | bcos::ledger::RECEIPTS);
+    // TRANSACTIONS only: the request already names the index, so the position is that argument --
+    // deriving it here would write the caller's own value back. No RECEIPTS (nothing reads
+    // logIndex on this response) and no HEADER (the block hash comes from the request).
+    auto block = co_await ledger::getBlockData(*ledger, number, bcos::ledger::TRANSACTIONS);
     if (!block || transactionIndex >= block->transactionsSize()) [[unlikely]]
     {
         result = Json::nullValue;
         buildJsonContent(result, response);
         co_return;
     }
-    auto const positions = protocol::stampReceiptBlockPositions(*block);
     auto transactions = block->transactions();
     auto tx = transactions.at(transactionIndex);
     auto receipt = co_await ledger::getReceipt(*ledger, tx->hash());
-    if (!receipt || transactionIndex >= positions.size()) [[unlikely]]
+    if (!receipt) [[unlikely]]
     {
         result = Json::nullValue;
         buildJsonContent(result, response);
         co_return;
     }
-    protocol::applyReceiptBlockPosition(*receipt, positions.at(transactionIndex));
+    receipt->setTransactionIndex(transactionIndex);
     combineTxResponse(result, *tx, *receipt, hash);
     buildJsonContent(result, response);
 }
@@ -1895,8 +1904,12 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
     Json::Value result = Json::objectValue;
     try
     {
-        auto block = co_await ledger::getBlockData(*ledger, blockNumber,
-            bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::HEADER | bcos::ledger::RECEIPTS);
+        // TRANSACTIONS_HASH | HEADER only: the request already names the index, so the position is
+        // that argument (deriving it would write the caller's own value back), and this endpoint is
+        // the one that does need the header -- for canonicalBlockHash. No RECEIPTS: nothing on a
+        // _getTransactionBy_ response reads logIndex.
+        auto block = co_await ledger::getBlockData(
+            *ledger, blockNumber, bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::HEADER);
         if (!block || transactionIndex >= block->transactionsMetaDataSize()) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
@@ -1910,13 +1923,12 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
-        auto const positions = protocol::stampReceiptBlockPositions(*block);
         auto receipt = co_await ledger::getReceipt(*ledger, txHash);
-        if (!receipt || transactionIndex >= positions.size()) [[unlikely]]
+        if (!receipt) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
-        protocol::applyReceiptBlockPosition(*receipt, positions.at(transactionIndex));
+        receipt->setTransactionIndex(transactionIndex);
         auto blockHash = bcos::protocol::canonicalBlockHash(*block->blockHeader());
         combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
     }
@@ -1965,8 +1977,12 @@ task::Task<Json::Value> EthEndpoint::receiptJson(crypto::HashType const& hash)
     // producer-dependent: BaselineScheduler writes real indices, the serial driver and a resync
     // write 0). Deriving from the block gives every node one answer for the same historical
     // block without rewriting a single stored row.
-    auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
-        ledger::HEADER | ledger::TRANSACTIONS_HASH | ledger::RECEIPTS);
+    //
+    // RECEIPTS is what makes this the one endpoint that needs the whole receipt list: logIndex is
+    // the count of logs in every preceding receipt, so its predecessors cannot be skipped. HEADER
+    // is not requested -- the block hash comes from ledger::getBlockHash below.
+    auto block = co_await ledger::getBlockData(
+        *ledger, receipt->blockNumber(), ledger::TRANSACTIONS_HASH | ledger::RECEIPTS);
     if (!block) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
@@ -1978,6 +1994,11 @@ task::Task<Json::Value> EthEndpoint::receiptJson(crypto::HashType const& hash)
         // The block lists its transactions in the same order the receipts were written, so a miss
         // means the stored rows disagree with the block -- fail closed instead of answering with
         // a position from a different transaction.
+        WEB3_LOG(WARNING) << LOG_DESC("eth_getTransactionReceipt: receipt is not in its block")
+                          << LOG_KV("hash", hash.hexPrefixed())
+                          << LOG_KV("block", receipt->blockNumber())
+                          << LOG_KV("receipts", block->receiptsSize())
+                          << LOG_KV("transactions", block->transactionsMetaDataSize());
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
             "Transaction " + hash.hexPrefixed() + " is not in the block its receipt names"));
     }
@@ -2328,13 +2349,14 @@ task::Task<void> EthEndpoint::getBlockReceipts(const Json::Value& request, Json:
     if (number >= 0 && number <= head)
     {
         result = Json::arrayValue;
-        // Two reads for the whole block: the block (hash, ordered transaction hashes, receipts)
-        // and then the transaction bodies in one batch, instead of receiptJson per transaction
-        // (each of which would reload the block). The per-transaction body is fetched by hash
-        // rather than taken from the block's own transaction view, which is the contract every
-        // ledger implementation here satisfies. Positions are derived once, before the zip.
+        // Two reads for the whole block: the block (ordered transaction hashes, receipts) and then
+        // the transaction bodies in one batch, instead of receiptJson per transaction (each of
+        // which would reload the block). The per-transaction body is fetched by hash rather than
+        // taken from the block's own transaction view, which is the contract every ledger
+        // implementation here satisfies. Positions are derived once, before the zip. No HEADER: the
+        // block hash comes from ledger::getBlockHash below.
         auto block = co_await ledger::getBlockData(
-            *ledger, number, ledger::HEADER | ledger::TRANSACTIONS_HASH | ledger::RECEIPTS);
+            *ledger, number, ledger::TRANSACTIONS_HASH | ledger::RECEIPTS);
         if (!block) [[unlikely]]
         {
             buildJsonContent(result, response);
@@ -2348,17 +2370,25 @@ task::Task<void> EthEndpoint::getBlockReceipts(const Json::Value& request, Json:
             hashList->push_back(meta->hash());
         }
         auto const txs = co_await ledger::getTransactions(*ledger, hashList);
+        // Fail closed on a count mismatch, the same shape debug_getRawReceipts uses: a short array
+        // would be a wrong answer delivered as success on an endpoint whose contract is "one
+        // receipt per transaction, in block order", and a client rebuilding the receipts trie from
+        // it would get a different root with no way to tell truncation from corruption.
+        if (!txs || txs->size() < block->receiptsSize()) [[unlikely]]
+        {
+            WEB3_LOG(WARNING) << LOG_DESC("eth_getBlockReceipts: block carries mismatched counts")
+                              << LOG_KV("block", number)
+                              << LOG_KV("receipts", block->receiptsSize())
+                              << LOG_KV("transactions", txs ? txs->size() : 0);
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InternalError, "Block " + std::to_string(number) + " carries " +
+                                   std::to_string(block->receiptsSize()) + " receipts but " +
+                                   std::to_string(txs ? txs->size() : 0) + " transactions"));
+        }
         auto const blockHash = co_await ledger::getBlockHash(*ledger, number);
         std::size_t index = 0;
         for (auto receipt : block->receipts())
         {
-            if (!txs || index >= txs->size() || !txs->at(index)) [[unlikely]]
-            {
-                WEB3_LOG(WARNING) << LOG_DESC("eth_getBlockReceipts: receipt has no transaction")
-                                  << LOG_KV("block", number) << LOG_KV("index", index)
-                                  << LOG_KV("txs", txs ? txs->size() : 0);
-                break;  // a receipt without its transaction: answered as a short array
-            }
             Json::Value item = Json::objectValue;
             combineReceiptResponse(item, *receipt, *txs->at(index), blockHash);
             result.append(std::move(item));

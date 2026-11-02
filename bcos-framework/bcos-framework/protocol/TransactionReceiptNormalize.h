@@ -18,12 +18,12 @@
  */
 #pragma once
 
+#include "ReceiptBlockPosition.h"
 #include "TransactionReceipt.h"
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
-#include <concepts>
 #include <cstddef>
-#include <ranges>
+#include <range/v3/range/concepts.hpp>
 
 namespace bcos::protocol
 {
@@ -42,31 +42,32 @@ namespace bcos::protocol
 ///   differ. Matching the base finishExecute, which also recomputed it unconditionally.
 /// - cumulativeGasUsed is filled when empty; a scheduler-provided value stays (the
 ///   running prefix is a scheduling decision, not a derived field).
-/// The numbering/bloom policy, as a reusable cursor, so the entry points below cannot drift.
 ///
+/// transactionIndex / logIndex are computed by ReceiptPositionCursor, the same cursor the RPC layer
+/// uses to derive them at read time -- one implementation of the numbering rule, two moments it is
+/// applied. The value written here is advisory: a reader must derive rather than trust what a
+/// producer stored, because a serial-driver block and a resync of the same block carry 0.
 /// `apply` takes the element by reference, not the dereferenced receipt: a container of holders
 /// (Block::receipts() yields one holder per receipt by value) must keep that holder alive across
 /// the call, because it is the holder that owns the pointer to the stored receipt.
 struct ReceiptNormalizer
 {
-    u256 cumulativeGasUsed{};
-    size_t logIndex = 0;
-    size_t index = 0;
+    u256 cumulativeGasUsed = 0;
+    ReceiptPositionCursor position;
 
     template <class Receipt>
     void apply(Receipt& receipt)
     {
-        receipt->setTransactionIndex(index);
-        receipt->setLogIndex(logIndex);
+        auto const derived = position.next(receipt->logEntries().size());
+        receipt->setTransactionIndex(derived.transactionIndex);
+        receipt->setLogIndex(derived.logIndex);
         auto const bloom = bcos::getLogsBloom(receipt->logEntries());
         receipt->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-        logIndex += receipt->logEntries().size();
         cumulativeGasUsed += receipt->gasUsed();
         if (receipt->cumulativeGasUsed().empty())
         {
             receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
         }
-        ++index;
     }
 };
 

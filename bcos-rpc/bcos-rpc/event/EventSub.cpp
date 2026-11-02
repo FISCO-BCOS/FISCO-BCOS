@@ -22,6 +22,7 @@
 #include "bcos-boostssl/websocket/WsService.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/protocol/ReceiptBlockPosition.h"
 #include "bcos-rpc/event/EventSubMatcher.h"
 #include "bcos-rpc/event/EventSubRequest.h"
 #include "bcos-rpc/event/EventSubResponse.h"
@@ -510,8 +511,12 @@ void EventSub::processNextBlock(
     }
 
     auto ledger = nodeService->ledger();
+    // TRANSACTIONS_HASH, not TRANSACTIONS: LogMatcher::matches iterates transactionsMetaDataSize()
+    // and reads the per-index transaction hash from the metadata list, so a body-only read left
+    // that loop empty and this channel matched nothing at all. HEADER is what the matcher's
+    // canonicalBlockHash needs. RECEIPTS supplies the receipts the matcher walks.
     ledger->asyncGetBlockDataByNumber(_blockNumber,
-        bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS,
+        bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH,
         [matcher, _task, _blockNumber, _callback, self](
             Error::Ptr _error, protocol::Block::Ptr _block) {
             if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
@@ -527,6 +532,14 @@ void EventSub::processNextBlock(
             }
 
             Json::Value jResp(Json::arrayValue);
+            // Derive the position before matching, exactly as FilterSystem does: the matcher reads
+            // logIndex off the receipts, and a stored value is producer-dependent (the serial
+            // driver and a resync write 0). Without this the channel would publish a different
+            // logIndex than eth_getLogs for the same log.
+            if (_block)
+            {
+                protocol::stampReceiptBlockPositions(*_block);
+            }
             auto count = matcher->matches(_task->params(), _block, jResp);
             if (count)
             {

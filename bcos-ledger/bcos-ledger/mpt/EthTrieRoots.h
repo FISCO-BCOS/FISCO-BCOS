@@ -21,8 +21,6 @@
 #pragma once
 
 #include "HashBuilder.h"
-#include <bcos-framework/engine/RawTransactionDispatch.h>
-#include <bcos-framework/protocol/Transaction.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
 #include <cstdint>
@@ -87,30 +85,10 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 [[nodiscard]] bcos::bytes encodeReceiptLeaf(
     bcos::protocol::TransactionReceipt const& receipt, std::uint8_t txType);
 
-/// The EIP-2718 type byte that a transaction's receipt-trie leaf is prefixed with.
-///
-/// Taken from the signed envelope whenever the envelope is classifiable, never from
-/// `web3TypedTxKind()` alone: that is tars field 12, a mirror a peer can rewrite (see
-/// TransactionImpl), which is why every other type decision in the tree (isDepositTx,
-/// EngineStorageCommit's commitment builder) reads the envelope.
-///
-/// The mirror stays as a fallback for the one case the envelope cannot answer: a transaction with
-/// no envelope bytes at all (FISCO-native, and the synthetic transactions the tests build). Those
-/// already worked through web3TypedTxKind() -- 0 for a non-Web3 transaction -- and throwing here
-/// instead would fail them, which is a behaviour change this change must not make.
-///
-/// This is the single source for both the committed root (calculateEthereumReceiptsRoot) and the
-/// debug_getRawReceipts endpoint, so the bytes that endpoint serves cannot disagree with the bytes
-/// the block's receiptsRoot committed.
-inline std::uint8_t receiptLeafTypeByte(protocol::Transaction const& transaction)
-{
-    if (auto const typeByte = engine::rawTransactionTypeByte(transaction.extraTransactionBytes());
-        typeByte.has_value())
-    {
-        return *typeByte;
-    }
-    return transaction.web3TypedTxKind();
-}
+/// The type byte for a receipt leaf lives in bcos::engine::receiptLeafTypeByte
+/// (bcos-framework/engine/RawTransactionDispatch.h), next to rawTransactionTypeByte: envelope
+/// classification is that module's decision, and the committed root and the debug preimage have to
+/// reach it the same way.
 
 /// Block-level logs bloom: bitwise OR of the per-receipt 256-byte blooms (each computed from its
 /// logs via bcos::getLogsBloom). Returns a zero bloom for an empty input. Forwarding reference:

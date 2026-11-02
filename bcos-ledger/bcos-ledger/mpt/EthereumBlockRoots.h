@@ -26,9 +26,9 @@
 #include "EthTrieRoots.h"
 #include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-framework/engine/RawTransactionDispatch.h>  // receiptLeafTypeByte
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
-#include <bcos-framework/protocol/TransactionReceiptNormalize.h>
 #include <bcos-rlp-protocol/EthReceipt.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Bloom.h>
@@ -72,8 +72,9 @@ inline h256 calculateEthereumReceiptsRoot(
     txTypes.reserve(::ranges::size(transactions));
     for (auto const& transaction : transactions)
     {
-        // Through the shared helper, so this root and debug_getRawReceipts derive the prefix
-        // from the same source (the signed envelope, not the forgeable tars mirror).
+        // Through the engine helper, next to rawTransactionTypeByte: envelope classification is
+        // that module's decision, so this root and debug_getRawReceipts derive the prefix from the
+        // same place (the signed envelope, not the forgeable tars mirror).
         auto const& tx = [&]() -> protocol::Transaction const& {
             if constexpr (requires { transaction.web3TypedTxKind(); })
             {
@@ -84,7 +85,7 @@ inline h256 calculateEthereumReceiptsRoot(
                 return *transaction;
             }
         }();
-        txTypes.push_back(receiptLeafTypeByte(tx));
+        txTypes.push_back(engine::receiptLeafTypeByte(tx));
     }
     if (txTypes.size() != ::ranges::size(receipts))
     {
