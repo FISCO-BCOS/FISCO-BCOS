@@ -438,6 +438,9 @@ BOOST_AUTO_TEST_CASE(storageFaultInChildFrameReachesParentRecordV2)
         nested.input_data = input.data();
         nested.input_size = input.size();
         BOOST_CHECK_THROW(syncWait(parent.externalCall(nested)), bcos::executor::HostContextFault);
+        // R3 MEDIUM: externalCall must leave the sticky fault on the PARENT record
+        // (not only rethrow), so a swallowing precompile cannot mint a SUCCESS receipt.
+        BOOST_CHECK(parent.hasHostFault());
 
         // Repair: later tests in this suite call the same contract.
         bcos::ledger::account::EVMAccount account(

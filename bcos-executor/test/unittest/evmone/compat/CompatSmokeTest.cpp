@@ -10,7 +10,9 @@
 #include "CompatTestFixture.h"
 
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-framework/executor/ExecuteError.h>
 #include <boost/test/unit_test.hpp>
+
 namespace bcos::test
 {
 
@@ -114,7 +116,13 @@ BOOST_AUTO_TEST_CASE(hostCallbacksStopMutatingAfterRecordedFault)
         if (faulted)
         {
             BOOST_CHECK_EQUAL(host.hostFault(), "injected storage fault");
-            BOOST_CHECK_THROW(host.throwIfHostFault(), bcos::Error);
+            // R3 MEDIUM: non-halting path must preserve ExecuteError::DEAD_LOCK
+            // (not BCOS_ERROR(-1)), so TransactionExecutive's DEBUG branch matches.
+            BOOST_CHECK_EXCEPTION(
+                host.throwIfHostFault(), bcos::Error, [](bcos::Error const& error) {
+                    return error.errorCode() == bcos::executor::ExecuteError::DEAD_LOCK &&
+                           error.errorMessage() == "injected storage fault";
+                });
         }
     }
 }

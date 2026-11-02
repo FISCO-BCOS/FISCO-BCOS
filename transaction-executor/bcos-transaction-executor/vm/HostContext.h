@@ -869,21 +869,39 @@ public:
             m_hostInterface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access);
 
         co_await hostcontext.prepare();
-        auto result = co_await hostcontext.execute();
-        auto& logs = hostcontext.logs();
-        if (result.status_code == EVMC_SUCCESS && !logs.empty())
+        // Parent-frame propagation (review R3 MEDIUM): a child host fault must land on
+        // this frame's record so a precompile that swallows the exception cannot leave
+        // a SUCCESS receipt behind. EVMC call() also records on catch; first-wins is fine.
+        try
         {
-            m_logs.reserve(m_logs.size() + ::ranges::size(logs));
-            ::ranges::move(logs, std::back_inserter(m_logs));
-        }
-        if (checkpointGuard)
-        {
-            if (result.status_code == EVMC_SUCCESS)
+            auto result = co_await hostcontext.execute();
+            if (hostcontext.hasHostFault())
             {
-                checkpointGuard->commit();
+                recordHostFault(hostcontext.hostFaultMessage());
             }
+            auto& logs = hostcontext.logs();
+            if (result.status_code == EVMC_SUCCESS && !logs.empty())
+            {
+                m_logs.reserve(m_logs.size() + ::ranges::size(logs));
+                ::ranges::move(logs, std::back_inserter(m_logs));
+            }
+            if (checkpointGuard)
+            {
+                if (result.status_code == EVMC_SUCCESS)
+                {
+                    checkpointGuard->commit();
+                }
+            }
+            co_return result;
         }
-        co_return result;
+        catch (...)
+        {
+            if (hostcontext.hasHostFault())
+            {
+                recordHostFault(hostcontext.hostFaultMessage());
+            }
+            throw;
+        }
     }
 
     std::vector<protocol::LogEntry>& logs() & { return m_logs; }
@@ -1099,10 +1117,18 @@ private:
     {
         try
         {
-            return executor_v1::callPrecompiled(*m_preparedPrecompiled, m_rollbackableStorage.get(),
-                m_blockHeader, message(), m_origin, buildLegacyExternalCaller(),
-                m_precompiledManager.get(), m_contextID, m_seq,
+            auto result = executor_v1::callPrecompiled(*m_preparedPrecompiled,
+                m_rollbackableStorage.get(), m_blockHeader, message(), m_origin,
+                buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
                 m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
+            // Nested legacy externalCall may have recorded a host fault on this frame
+            // even if the precompile swallowed the exception and returned SUCCESS.
+            throwIfHostFault();
+            return result;
+        }
+        catch (executor::HostContextFault const&)
+        {
+            throw;
         }
         catch (bcos::Error const&)
         {

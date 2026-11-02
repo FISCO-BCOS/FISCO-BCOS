@@ -27,6 +27,7 @@
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/executor/ExecuteError.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -190,7 +191,9 @@ void HostContext::throwIfHostFault() const
         BOOST_THROW_EXCEPTION(HostContextFault("EVM host-side fault: " + m_hostFault));
     }
     // Deterministic scheduler cancellation follows the normal revert path.
-    BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, m_hostFault));
+    // Preserve ExecuteError::DEAD_LOCK so TransactionExecutive's DEAD_LOCK DEBUG
+    // branch stays reachable (non-halting faults are only recorded for DEAD_LOCK).
+    BOOST_THROW_EXCEPTION(BCOS_ERROR(ExecuteError::DEAD_LOCK, m_hostFault));
 }
 
 evmc_result HostContext::externalRequest(const evmc_message* _msg)
