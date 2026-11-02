@@ -380,29 +380,31 @@ jobs:
         if: matrix.os != 'windows-2025'
         run: |
           cd ${{ github.workspace }}
+          # execution-spec-tests is archived; mainnet fixture releases are the
+          # `tests@vX.Y.Z` tags of ethereum/execution-specs (one fixtures.tar.gz,
+          # every fork up to the latest mainnet one). The tag is pinned: a bump is
+          # a reviewed change, together with tools/eest/known-failures.txt.
           # --fail: a 404 would otherwise write the error page into the tarball
           # and surface as a confusing tar error; --retry handles release hiccups.
-          curl --fail --retry 3 -L -o fixtures_stable.tar.gz https://github.com/ethereum/execution-spec-tests/releases/download/v5.4.0/fixtures_stable.tar.gz
-          tar -xzf fixtures_stable.tar.gz
-          # The tarball may extract to fixtures_stable/; ensure we have fixtures/
-          if [ -d fixtures_stable ] && [ ! -d fixtures ]; then
-            mv fixtures_stable fixtures
-          fi
+          curl --fail --retry 3 -L -o fixtures.tar.gz https://github.com/ethereum/execution-specs/releases/download/tests%40v20.0.2/fixtures.tar.gz
+          tar -xzf fixtures.tar.gz
+          test -d fixtures/state_tests
       - name: Run EEST fixture tests
         # the eest-runner is a test target; the windows leg builds with TESTS=OFF
         if: matrix.os != 'windows-2025'
         run: |
-          # pipefail so a runner crash (not just a low pass rate) fails the job.
+          # pipefail so a runner crash (not just a failing fixture) fails the job.
           set -o pipefail
           cd build/ethereum-executor/tests
-          ./eest-runner --fixture-dir ../../../fixtures/ --no-log 2>&1 | tee eest_output.txt
-          PASS_RATE=$(sed -nE 's/.*Pass rate:[[:space:]]+([0-9]+)%.*/\1/p' eest_output.txt)
-          echo "EEST pass rate: ${PASS_RATE}%"
-          if [ -z "${PASS_RATE}" ] || [ "${PASS_RATE}" -lt 100 ]; then
-            echo "::error::EEST pass rate ${PASS_RATE:-unknown}% is below 100% threshold"
-            exit 1
-          fi
-          echo "::notice::EEST pass rate ${PASS_RATE}% meets the 100% threshold"
+          # The whole release through the production block pipeline: every fixture
+          # class is in the denominator (the classes the runner does not execute
+          # count as failures, named). The gate is "no failure outside
+          # tools/eest/known-failures.txt": that file lists each open gap with its
+          # reason, and the runner's exit code is 1 on any failure not listed there
+          # and on any listed entry that no longer matches anything (stale entry).
+          ./eest-runner --fixture-dir ../../../fixtures/ --quiet --no-log \
+            --known-failures ../../../tools/eest/known-failures.txt 2>&1 | tee eest_output.txt
+          grep -E '^\s+(Class |Pass rate|Unexpected failures|Known failures)' eest_output.txt
       - name: Upload fisco-bcos binary artifact
         if: matrix.os == 'ubuntu-26.04'
         uses: actions/upload-artifact@v4

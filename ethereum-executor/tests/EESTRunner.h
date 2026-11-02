@@ -121,16 +121,34 @@ struct EESTBlock
     EESTBlockHeader blockHeader;
     std::vector<EESTTransaction> transactions;
     std::vector<EESTWithdrawal> withdrawals;
+    std::string rlp;              // the whole block, RLP, hex — what the pipeline executes
+    std::string expectException;  // non-empty: the block must be refused
 };
 
 /// A complete blockchain test fixture.
+/// One engine_newPayload call of a blockchain_tests_engine fixture: the JSON params exactly as
+/// the CL would send them, the method versions, and the expected refusal (if any).
+struct EESTEnginePayload
+{
+    Json::Value params;  // [executionPayload, versionedHashes?, parentBeaconBlockRoot?, requests?]
+    int newPayloadVersion = 3;
+    int forkchoiceUpdatedVersion = 3;
+    std::string validationError;   // non-empty: newPayload must answer INVALID
+    std::optional<int> errorCode;  // engaged: newPayload must answer this JSON-RPC error
+};
+
 struct EESTBlockchainFixture
 {
     std::string name;
+    std::string network;        // "Cancun", "ShanghaiToCancunAtTime15k", ...
+    std::string genesisRLP;     // the genesis header RLP, hex (blockchain_tests)
+    std::string lastBlockHash;  // expected canonical head after every block
     EESTBlockHeader genesisBlockHeader;
+    Json::Value genesisHeaderJson;  // the full genesisBlockHeader object (engine fixtures)
     std::map<std::string, EESTAccount> pre;
-    std::vector<EESTBlock> blocks;
-    std::map<std::string, EESTAccount> postState;  // expected state after all blocks
+    std::vector<EESTBlock> blocks;                  // blockchain_tests
+    std::vector<EESTEnginePayload> enginePayloads;  // blockchain_tests_engine
+    std::map<std::string, EESTAccount> postState;   // expected state after all blocks
     int64_t chainId = 1;
 };
 

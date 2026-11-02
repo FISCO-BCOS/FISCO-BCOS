@@ -1,0 +1,30 @@
+# EEST fixtures (ethereum/execution-specs tests@v20.0.2) this node does not pass yet.
+#
+# One ECMAScript regex per line, matched by eest-runner --known-failures against the
+# failure label "<fixture name> [<fork>]" (the runner's own FAIL line). CI passes only when
+# every failure matches a line here AND every line matches at least one failure, so a gap
+# that closes must be removed from this file in the same change (the runner reports it as
+# STALE). Keep each entry to one root cause and name it; never widen a pattern to make a
+# red run green.
+
+# --- fixture classes the runner does not execute (counted as failures, by design) --------
+# blockchain_tests_engine_x: pre-alloc-group format (tests@v20.0.2 changed it incompatibly);
+# blockchain_tests_sync: two-client sync scenarios; transaction_tests: decoder-only vectors.
+\[(blockchain_engine_x_test|blockchain_sync_test|transaction_test)\]$
+
+# --- pre-Byzantium receipts ------------------------------------------------------------------
+# Before Byzantium a receipt's first field is the post-transaction state root, not the status
+# byte; computing it needs an MPT root after every transaction, which the block pipeline
+# builds once per block. Receipts root (and so every block) of those forks mismatches.
+blockchain_test.*\[(Frontier|Homestead|TangerineWhistle|SpuriousDragon)\]$
+
+# --- block timestamps above 2^63 / 1000 ------------------------------------------------------
+# Headers store the timestamp as int64 milliseconds; EIP-4788 fixtures drive it to 2^64-1/-2.
+test_beacon_root_contract\.py::.*timestamp_1844674407370955161[45]
+
+# --- BPO3 / BPO4 blob-parameter forks (ticket E10: evmone + fork table) ----------------------
+# Covers eip4844 excess_blob_gas_fork_transition and eip7918 blob_reserve_price at those forks.
+\[(BPO2ToBPO3AtTime15k|BPO3ToBPO4AtTime15k)\]$
+
+# --- EIP-7934 block RLP size limit (Osaka) not enforced yet ---------------------------------
+test_max_block_rlp_size\.py::.*

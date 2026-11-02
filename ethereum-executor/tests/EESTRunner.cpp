@@ -2,10 +2,10 @@
  * @file EESTRunner.cpp
  * @brief Standalone Ethereum Execution Spec Tests (EEST) runner.
  *
- * A dedicated command-line tool for running EEST v5.4.0 JSON state test fixtures
- * against ethereum-executor.  Provides detailed per-file and per-test
- * diagnostic output, configurable verbosity, single-fixture regression mode,
- * and TBB-based parallel execution.
+ * Runs the ethereum/execution-specs fixture release (tests@vX.Y.Z: state_tests,
+ * blockchain_tests, blockchain_tests_engine) through the production L1 block pipeline
+ * (EESTProductionChain.h). Per-file and per-test diagnostics, single-fixture regression
+ * mode, TBB-based parallel execution over files, and a known-failures gate for CI.
  *
  * Usage:
  *   ./eest-runner --fixture-dir /path/to/fixtures           # run all
@@ -15,7 +15,7 @@
  */
 
 #include "EESTRunner.h"
-#include "TestMemoryStorage.h"
+#include "EESTProductionChain.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -25,26 +25,29 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/TBBWait.h"
-#include "ethereum-executor/EthSystemCalls.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include <evmc/evmc.h>
 #include <tbb/concurrent_vector.h>
+#include <tbb/global_control.h>
+#include <tbb/parallel_for.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/log/core.hpp>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <future>
-#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <range/v3/algorithm/equal.hpp>
+#include <regex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "bcos-protocol/TransactionStatus.h"
@@ -473,6 +476,34 @@ EESTBlockchainFixture parseBlockchainFixture(
     // genesisBlockHeader (optional: engine_x format lacks it)
     if (fixtureJson.isMember("genesisBlockHeader") && fixtureJson["genesisBlockHeader"].isObject())
         fixture.genesisBlockHeader = parseBlockHeader(fixtureJson["genesisBlockHeader"]);
+    if (fixtureJson.isMember("genesisBlockHeader"))
+        fixture.genesisHeaderJson = fixtureJson["genesisBlockHeader"];
+    fixture.genesisRLP = readHexField(fixtureJson, "genesisRLP");
+    fixture.lastBlockHash = readHexField(fixtureJson, "lastblockhash");
+    if (fixtureJson.isMember("engineNewPayloads") && fixtureJson["engineNewPayloads"].isArray())
+    {
+        for (auto const& payloadJson : fixtureJson["engineNewPayloads"])
+        {
+            EESTEnginePayload payload;
+            payload.params = payloadJson["params"];
+            if (payloadJson.isMember("newPayloadVersion"))
+                payload.newPayloadVersion = hexToInt64(payloadJson["newPayloadVersion"].asString());
+            if (payloadJson.isMember("forkchoiceUpdatedVersion"))
+                payload.forkchoiceUpdatedVersion =
+                    hexToInt64(payloadJson["forkchoiceUpdatedVersion"].asString());
+            if (payloadJson.isMember("validationError") &&
+                payloadJson["validationError"].isString())
+                payload.validationError = payloadJson["validationError"].asString();
+            if (payloadJson.isMember("errorCode") && !payloadJson["errorCode"].isNull())
+            {
+                auto const& code = payloadJson["errorCode"];
+                payload.errorCode = code.isString() ? std::stoi(code.asString()) : code.asInt();
+            }
+            fixture.enginePayloads.push_back(std::move(payload));
+        }
+    }
+    if (fixtureJson.isMember("network") && fixtureJson["network"].isString())
+        fixture.network = fixtureJson["network"].asString();
 
     // pre state
     if (fixtureJson.isMember("pre") && !fixtureJson["pre"].isNull())
@@ -485,7 +516,11 @@ EESTBlockchainFixture parseBlockchainFixture(
         for (auto const& blockJson : fixtureJson["blocks"])
         {
             EESTBlock block;
-            block.blockHeader = parseBlockHeader(blockJson["blockHeader"]);
+            if (blockJson.isMember("blockHeader") && blockJson["blockHeader"].isObject())
+                block.blockHeader = parseBlockHeader(blockJson["blockHeader"]);
+            block.rlp = readHexField(blockJson, "rlp");
+            if (blockJson.isMember("expectException") && blockJson["expectException"].isString())
+                block.expectException = blockJson["expectException"].asString();
 
             if (blockJson.isMember("transactions") && blockJson["transactions"].isArray())
                 for (auto const& txJson : blockJson["transactions"])
@@ -521,6 +556,8 @@ EESTBlockchainFixture parseBlockchainFixture(
         fixture.chainId = hexToInt64(chainIdHex);
         if (fixture.chainId == 0)
             fixture.chainId = 1;
+        if (fixture.network.empty() && fixtureJson["config"].isMember("network"))
+            fixture.network = fixtureJson["config"]["network"].asString();
     }
 
     return fixture;
@@ -621,8 +658,11 @@ struct ProgramOptions
     std::string fixtureDir;     // directory with .json fixtures
     std::string singleFixture;  // single fixture file path
     bool quiet = false;         // suppress per-file/per-test output
+    bool verbose = false;       // account-level diagnostics on a state-root mismatch
     bool noLog = false;         // suppress BCOS internal trace/debug log
     bool help = false;
+    unsigned jobs = 0;          // fixture files processed concurrently; 0 = hardware threads
+    std::string knownFailures;  // file of regexes over "name [fork]" naming the open gaps
 };
 
 ProgramOptions g_opts;
@@ -634,18 +674,54 @@ std::atomic<int> g_totalTests{0};
 std::atomic<int> g_totalPassed{0};
 std::atomic<int> g_totalFailed{0};
 
+/// Per fixture-class counters. The summary prints one line per class so CI can require
+/// 100% on the classes this runner executes while the classes it does not (counted as
+/// failures, see processFixtureFile) stay visible in the overall rate.
+struct ClassCounters
+{
+    std::atomic<int> total{0};
+    std::atomic<int> passed{0};
+    std::atomic<int> failed{0};
+};
+constexpr std::array<std::string_view, 6> c_fixtureClasses{"state_test", "blockchain_test",
+    "blockchain_engine_test", "blockchain_engine_x_test", "blockchain_sync_test",
+    "transaction_test"};
+std::array<ClassCounters, c_fixtureClasses.size()> g_classCounters;
+
+ClassCounters& countersFor(std::string_view format)
+{
+    auto it = std::find(c_fixtureClasses.begin(), c_fixtureClasses.end(), format);
+    if (it == c_fixtureClasses.end())
+    {
+        BOOST_THROW_EXCEPTION(std::logic_error("unknown fixture class " + std::string(format)));
+    }
+    return g_classCounters[static_cast<std::size_t>(it - c_fixtureClasses.begin())];
+}
+
+void countOutcome(std::string_view format, bool passed, int n = 1)
+{
+    auto& counters = countersFor(format);
+    counters.total += n;
+    g_totalTests += n;
+    if (passed)
+    {
+        counters.passed += n;
+        g_totalPassed += n;
+    }
+    else
+    {
+        counters.failed += n;
+        g_totalFailed += n;
+    }
+}
+
 // Per-error-type counters
-std::atomic<int> g_balanceMismatch{0};
-std::atomic<int> g_storageMismatch{0};
-std::atomic<int> g_nonceMismatch{0};
-std::atomic<int> g_codeMismatch{0};
 std::atomic<int> g_expectedException{0};
 std::atomic<int> g_unexpectedFailure{0};
 
 // Files that were intentionally skipped (engine-format duplicates /
 // transaction_tests) or failed to load/parse — kept so the summary's 100%
 // carries its domain and a loader regression can't silently raise the pass rate.
-std::atomic<int> g_skippedFiles{0};
 std::atomic<int> g_loadFailures{0};
 
 // Failure details for summary
@@ -660,43 +736,11 @@ tbb::concurrent_vector<FailureDetail> g_failureDetails;
 // Mutex for console output (keep lines from interleaving)
 std::mutex g_printMutex;
 
-// =============================================================================
-//  Helper: timestamp for elapsed-time display
-// =============================================================================
-std::string timestamp()
-{
-    auto now = std::chrono::system_clock::now();
-    auto nowTime = std::chrono::system_clock::to_time_t(now);
-    std::ostringstream oss;
-    oss << std::put_time(std::localtime(&nowTime), "%H:%M:%S");
-    return oss.str();
-}
-
 void printLine(std::string const& msg)
 {
     std::lock_guard<std::mutex> lock(g_printMutex);
     std::cout << msg << '\n';
 }
-
-// =============================================================================
-//  BlockHashes that accumulates hashes from fixture blocks
-// =============================================================================
-/// A block-hash store that keeps block_number → hash mappings.
-/// Populated from fixture block headers as blocks are processed.
-struct FixtureBlockHashes
-{
-    std::map<int64_t, evmc::bytes32> hashes;
-
-    evmc::bytes32 get_block_hash(int64_t blockNumber) const noexcept
-    {
-        auto it = hashes.find(blockNumber);
-        if (it != hashes.end())
-        {
-            return it->second;
-        }
-        return {};
-    }
-};
 
 // =============================================================================
 //  Usage
@@ -709,7 +753,13 @@ Options:
   --fixture-dir DIR    Directory containing EEST .json fixture files (recursive)
   --fixture FILE       Run a single fixture file only
   --quiet              Suppress per-file/per-test output; show summary only
+  --verbose            On a state-root mismatch, list the accounts that differ
   --no-log             Suppress BCOS internal trace/debug log output
+  --jobs N             Process N fixture files concurrently (default: hardware threads)
+  --known-failures F   File of ECMAScript regexes (one per line, # comments) matched against
+                       "<fixture name> [<fork>]"; a failure that matches is a known gap. The
+                       exit code is then 1 only for failures outside the file and for file
+                       entries that match nothing (stale), so the file shrinks as gaps close.
   --help               Show this help message
 
 Examples:
@@ -736,9 +786,29 @@ void parseOptions(int argc, char* argv[])
         {
             g_opts.quiet = true;
         }
+        else if (arg == "--verbose" || arg == "-v")
+        {
+            g_opts.verbose = true;
+        }
         else if (arg == "--no-log")
         {
             g_opts.noLog = true;
+        }
+        else if (arg == "--jobs" && i + 1 < argc)
+        {
+            g_opts.jobs = static_cast<unsigned>(std::stoul(argv[++i]));
+        }
+        else if (arg.rfind("--jobs=", 0) == 0)
+        {
+            g_opts.jobs = static_cast<unsigned>(std::stoul(arg.substr(7)));
+        }
+        else if (arg == "--known-failures" && i + 1 < argc)
+        {
+            g_opts.knownFailures = argv[++i];
+        }
+        else if (arg.rfind("--known-failures=", 0) == 0)
+        {
+            g_opts.knownFailures = arg.substr(17);
         }
         else if (arg == "--fixture-dir" && i + 1 < argc)
         {
@@ -760,709 +830,68 @@ void parseOptions(int argc, char* argv[])
 }
 
 // =============================================================================
-//  Core test runner (reused from original but made standalone)
+//  Core test runner
 // =============================================================================
-/// Fork transition info parsed from fork names like "CancunToPragueAtTime15k".
-struct ForkTransition
+namespace
 {
-    evmc_revision fromRev = EVMC_CANCUN;
-    evmc_revision toRev = EVMC_CANCUN;
-    int64_t transitionTimestamp = 0;
-};
+/// The fixtures (top-level keys) in a file: a file whose format this runner does not execute
+/// still counts every fixture as a failure, so nothing leaves the denominator silently.
+int countFixtureEntries(fs::path const& filePath)
+{
+    std::ifstream file(filePath);
+    Json::Value root;
+    Json::CharReaderBuilder builder;
+    std::string errors;
+    if (!file.is_open() || !Json::parseFromStream(builder, file, &root, &errors))
+    {
+        return 1;
+    }
+    int count = 0;
+    for (auto it = root.begin(); it != root.end(); ++it)
+    {
+        auto const key = it.key().asString();
+        if (key.rfind("//", 0) == 0 || key.rfind("_", 0) == 0)
+        {
+            continue;
+        }
+        ++count;
+    }
+    return std::max(count, 1);
+}
 
+h256 toH256(std::string const& hex)
+{
+    auto raw = test::hexToBytes(hex);
+    h256 out{};
+    if (raw.size() <= h256::SIZE)
+    {
+        std::copy(raw.begin(), raw.end(), out.begin() + (h256::SIZE - raw.size()));
+    }
+    else
+    {
+        std::copy_n(raw.end() - h256::SIZE, h256::SIZE, out.begin());
+    }
+    return out;
+}
+
+bcos::Address toEthAddress(std::string const& hex)
+{
+    auto raw = test::hexToBytes(hex);
+    bcos::Address out{};
+    if (raw.size() == bcos::Address::SIZE)
+    {
+        std::copy(raw.begin(), raw.end(), out.begin());
+    }
+    return out;
+}
+}  // namespace
+
+/// Runs EEST fixtures through the production L1 block pipeline (EESTProductionChain.h):
+/// a fresh in-memory chain per fixture, seeded from `pre`, then the fixture's blocks
+/// through scheduler_v1::EthereumBlockVerifier. No execution logic of its own.
 class EESTRunner
 {
 public:
-    std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite;
-    bcostars::protocol::TransactionFactoryImpl transactionFactory;
-    bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
-    // BlockHashes provider injected into the executor's constructor. The
-    // block-test path clears and repopulates it per fixture run.
-    std::shared_ptr<FixtureBlockHashes> m_blockHashes = std::make_shared<FixtureBlockHashes>();
-    eth::EthereumExecutor executor;
-    evmc_revision m_currentRevision = EVMC_CANCUN;
-    ledger::LedgerConfig m_ledgerConfig;
-    std::optional<ForkTransition> m_forkTransition;
-    int64_t m_chainId = 1;  // EIP-155 chain id from the fixture config
-
-    EESTRunner()
-      : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
-            std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
-        transactionFactory(cryptoSuite),
-        receiptFactory(cryptoSuite),
-        executor(receiptFactory,
-            [blockHashes = m_blockHashes](int64_t blockNumber, int64_t /*currentHeight*/)
-                -> evmc::bytes32 { return blockHashes->get_block_hash(blockNumber); })
-    {}
-
-    void configureFork(std::string const& forkName)
-    {
-        auto const rev = test::forkNameToRevision(forkName);
-        m_currentRevision = rev;
-        m_ledgerConfig.setEVMCRevision(rev);
-        m_forkTransition.reset();
-
-        // Detect fork transition names like "CancunToPragueAtTime15k"
-        auto toPos = forkName.find("To");
-        auto atPos = forkName.find("AtTime");
-        if (toPos != std::string::npos && atPos != std::string::npos && toPos < atPos)
-        {
-            auto fromFork = forkName.substr(0, toPos);
-            auto toFork = forkName.substr(toPos + 2, atPos - toPos - 2);
-            auto timeStr = forkName.substr(atPos + 6);  // "AtTime" = 6 chars
-            try
-            {
-                // Handle 'k' suffix meaning ×1000 (e.g., "15k" = 15000)
-                int64_t transitionTime = 0;
-                if (!timeStr.empty() && timeStr.back() == 'k')
-                {
-                    transitionTime = std::stoll(timeStr.substr(0, timeStr.size() - 1)) * 1000;
-                }
-                else
-                {
-                    transitionTime = std::stoll(timeStr);
-                }
-                m_forkTransition = ForkTransition{test::forkNameToRevision(fromFork),
-                    test::forkNameToRevision(toFork), transitionTime};
-            }
-            catch (...)
-            {
-                m_forkTransition.reset();
-            }
-        }
-    }
-
-    /// Get the EVMC revision for a block given its timestamp (handles fork transitions).
-    evmc_revision revisionForBlock(int64_t blockTimestampSec) const
-    {
-        if (!m_forkTransition.has_value())
-        {
-            return m_currentRevision;
-        }
-        return (blockTimestampSec >= m_forkTransition->transitionTimestamp) ?
-                   m_forkTransition->toRev :
-                   m_forkTransition->fromRev;
-    }
-
-    void configureEnvironment(test::EESTEnvironment const& env)
-    {
-        if (!env.baseFee.empty())
-        {
-            auto baseFeeVal = test::hexToU256(env.baseFee);
-            auto hexStr = "0x" + baseFeeVal.str(0, std::ios_base::hex);
-            m_ledgerConfig.setGasPrice({hexStr, 0});
-        }
-        else
-        {
-            m_ledgerConfig.setGasPrice({"0x0", 0});
-        }
-        // Set gas limit from env (fixes GASLIMIT opcode returning the BCOS
-        // default instead of the fixture's currentGasLimit).
-        if (!env.gasLimit.empty())
-        {
-            auto gasLimit = static_cast<uint64_t>(test::hexToU256(env.gasLimit));
-            m_ledgerConfig.setGasLimit({gasLimit, 0});
-        }
-        // EIP-4399: PREVRANDAO (Paris+). State-test fixtures carry it in
-        // "currentRandom" (the block mixHash).
-        if (!env.random.empty())
-        {
-            auto mixHashBytes = test::hexToBytes(env.random);
-            evmc::bytes32 prevRandao{};
-            if (mixHashBytes.size() == sizeof(evmc_bytes32))
-            {
-                std::copy_n(mixHashBytes.begin(), sizeof(evmc_bytes32), prevRandao.bytes);
-            }
-            else if (mixHashBytes.size() < sizeof(evmc_bytes32))
-            {
-                std::copy_n(mixHashBytes.begin(), mixHashBytes.size(),
-                    prevRandao.bytes + sizeof(evmc_bytes32) - mixHashBytes.size());
-            }
-            m_ledgerConfig.setPrevRandao(prevRandao);
-        }
-        else
-        {
-            m_ledgerConfig.setPrevRandao({});
-        }
-        // EIP-4844 blob gas parameters (Cancun+).
-        if (!env.excessBlobGas.empty())
-        {
-            m_ledgerConfig.setExcessBlobGas(
-                static_cast<uint64_t>(test::hexToU256(env.excessBlobGas)));
-        }
-        else
-        {
-            m_ledgerConfig.setExcessBlobGas(std::nullopt);
-        }
-        if (!env.blobGasUsed.empty())
-        {
-            m_ledgerConfig.setBlobGasUsed(static_cast<uint64_t>(test::hexToU256(env.blobGasUsed)));
-        }
-        else
-        {
-            m_ledgerConfig.setBlobGasUsed(std::nullopt);
-        }
-    }
-
-    void setupPreState(MutableStorage& storage, std::map<std::string, test::EESTAccount> const& pre)
-    {
-        for (auto const& [addrHex, acc] : pre)
-        {
-            auto addrBytes = test::hexToBytes(addrHex);
-            if (addrBytes.size() != sizeof(evmc_address))
-            {
-                continue;
-            }
-
-            evmc_address addr;
-            std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
-
-            // ethViewAccount (FromTableName): the v2 executor (EthereumState) views every
-            // address — including BCOS system-range ones like 0x...1000 — as an
-            // ordinary Ethereum account under /apps/. The harness must read and
-            // write the same table or pre-state and execution split-brain.
-            auto evmAccount = bcos::executor_v1::eth::ethViewAccount(storage, addr);
-
-            task::tbb::syncWait([&]() -> task::Task<void> {
-                if (!co_await evmAccount.exists())
-                {
-                    co_await evmAccount.create();
-                }
-            }());
-
-            if (!acc.nonce.empty() && acc.nonce != "0x" && acc.nonce != "0x0")
-            {
-                auto nonceStr = test::hexToU256(acc.nonce).str(0, std::ios_base::dec);
-                task::tbb::syncWait(
-                    [&]() -> task::Task<void> { co_await evmAccount.setNonce(nonceStr); }());
-            }
-
-            if (!acc.balance.empty() && acc.balance != "0x0")
-            {
-                auto bal = test::hexToU256(acc.balance);
-                if (bal > 0)
-                {
-                    task::tbb::syncWait(
-                        [&]() -> task::Task<void> { co_await evmAccount.setBalance(bal); }());
-                }
-            }
-
-            if (!acc.code.empty() && acc.code != "0x")
-            {
-                auto codeBytes = test::hexToBytes(acc.code);
-                if (!codeBytes.empty())
-                {
-                    auto codeHash = cryptoSuite->hashImpl()->hash(
-                        bytesConstRef(codeBytes.data(), codeBytes.size()));
-                    task::tbb::syncWait([&]() -> task::Task<void> {
-                        co_await evmAccount.setCode(std::move(codeBytes), std::string{}, codeHash);
-                    }());
-                }
-            }
-
-            for (auto const& [key, val] : acc.storage)
-            {
-                auto keyBytes = test::hexToBytes(key);
-                auto valBytes = test::hexToBytes(val);
-                if (keyBytes.size() <= 32 && valBytes.size() <= 32)
-                {
-                    evmc_bytes32 storageKey{};
-                    evmc_bytes32 storageValue{};
-                    std::copy(
-                        keyBytes.begin(), keyBytes.end(), storageKey.bytes + 32 - keyBytes.size());
-                    std::copy(valBytes.begin(), valBytes.end(),
-                        storageValue.bytes + 32 - valBytes.size());
-
-                    task::tbb::syncWait([&]() -> task::Task<void> {
-                        co_await evmAccount.setStorage(storageKey, storageValue);
-                    }());
-                }
-            }
-        }
-    }
-
-    bcostars::protocol::BlockHeaderImpl buildBlockHeader(test::EESTEnvironment const& env)
-    {
-        bcostars::protocol::BlockHeaderImpl header;
-        uint32_t blockVer;
-        if (m_currentRevision >= EVMC_CANCUN)
-        {
-            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
-        }
-        else if (m_currentRevision >= EVMC_PARIS)
-        {
-            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
-        }
-        else
-        {
-            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
-        }
-        header.setVersion(blockVer);
-        header.setNumber(test::hexToInt64(env.number));
-
-        auto tsSec = test::hexToTimestamp(env.timestamp);
-        header.setTimestamp(tsSec * 1000);
-        header.setSealer(0);
-
-        if (!env.coinbase.empty())
-        {
-            auto cbBytes = test::hexToBytes(env.coinbase);
-            bcos::Address coinbaseAddr;
-            if (cbBytes.size() >= bcos::Address::SIZE)
-            {
-                std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
-            }
-            header.setCoinbase(coinbaseAddr);
-        }
-
-        // EIP-4399 (Paris+): opcode 0x44 is PREVRANDAO, returning the block
-        // mixHash. State-test fixtures carry it in env.currentRandom. The
-        // executor resolves PREVRANDAO from the block header (blockHeaderToBlockInfo
-        // reads header.prevRandao()), NOT from the ledger config, so the value
-        // MUST be placed on the header here. Without this, Cancun/Prague
-        // fixtures whose contract stores PREVRANDAO (static stRandom /
-        // mergeTest / blockInfo) observe 0x0 — and if that 0 is SSTORE'd into
-        // an already-zero slot, evmone charges only the no-op SSTORE cost (100)
-        // instead of SSTORE_SET (20000), under-charging gas by exactly 19900
-        // and corrupting the coinbase/sender balances too.
-        if (!env.random.empty())
-        {
-            auto mixHashBytes = test::hexToBytes(env.random);
-            if (!mixHashBytes.empty())
-            {
-                // bcos::h256 from raw bytes (right-aligned, big-endian) so a
-                // short currentRandom is left-zero-padded to 32 bytes.
-                header.setPrevRandao(bcos::h256(mixHashBytes));
-            }
-            else
-            {
-                header.setPrevRandao(bcos::h256{});
-            }
-        }
-        else
-        {
-            header.setPrevRandao(bcos::h256{});
-        }
-        header.calculateHash(*cryptoSuite->hashImpl());
-        return header;
-    }
-
-    std::shared_ptr<bcostars::protocol::TransactionImpl> buildTransaction(
-        test::EESTTransaction const& tx, int dataIndex, int gasIndex, int valueIndex)
-    {
-        std::string txData;
-        if (dataIndex >= 0 && static_cast<size_t>(dataIndex) < tx.data.size())
-        {
-            txData = tx.data[dataIndex];
-        }
-
-        std::string gasLimit = "0x0";
-        if (gasIndex >= 0 && static_cast<size_t>(gasIndex) < tx.gasLimit.size())
-        {
-            gasLimit = tx.gasLimit[gasIndex];
-        }
-
-        std::string value = "0x0";
-        if (valueIndex >= 0 && static_cast<size_t>(valueIndex) < tx.value.size())
-        {
-            value = tx.value[valueIndex];
-        }
-
-        auto tarsTx = std::make_shared<bcostars::Transaction>();
-        auto& data = tarsTx->data;
-
-        data.version = 0;
-        data.blockLimit = 0;
-        data.nonce = test::strip0x(tx.nonce);
-        data.gasLimit = test::hexToInt64(gasLimit);
-        data.value = test::strip0x(value);
-
-        if (!tx.to.empty() && tx.to != "0x")
-        {
-            auto toBytes = test::hexToBytes(tx.to);
-            data.to.assign(toBytes.begin(), toBytes.end());
-        }
-
-        auto inputBytes = test::hexToBytes(txData);
-        data.input.assign(inputBytes.begin(), inputBytes.end());
-
-        if (!tx.gasPrice.empty())
-        {
-            data.gasPrice = test::strip0x(tx.gasPrice);
-        }
-        if (!tx.maxFeePerGas.empty())
-        {
-            data.maxFeePerGas = test::strip0x(tx.maxFeePerGas);
-        }
-        if (!tx.maxPriorityFeePerGas.empty())
-        {
-            data.maxPriorityFeePerGas = test::strip0x(tx.maxPriorityFeePerGas);
-        }
-
-        if (!tx.sender.empty())
-        {
-            auto senderBytes = test::hexToBytes(tx.sender);
-            tarsTx->sender.assign(senderBytes.begin(), senderBytes.end());
-        }
-        data.chainID = tx.chainId.empty() ? std::to_string(m_chainId) : test::strip0x(tx.chainId);
-        tarsTx->type = 1;
-        tarsTx->extraTransactionHash.assign(32, 0);
-
-        bool hasAccessList = false;
-        if (dataIndex >= 0 && static_cast<size_t>(dataIndex) < tx.accessLists.size())
-        {
-            auto const& al = tx.accessLists[dataIndex];
-            if (al.has_value())
-            {
-                hasAccessList = true;
-                for (auto const& [addr, keys] : *al)
-                {
-                    bcostars::Web3AccessListEntry entry;
-                    entry.account = test::strip0x(addr);
-                    for (auto const& k : keys)
-                    {
-                        auto keyBytes = test::hexToBytes(k);
-                        entry.storageKeys.emplace_back(keyBytes.begin(), keyBytes.end());
-                    }
-                    data.accessList.push_back(std::move(entry));
-                }
-            }
-        }
-
-        // authorizationList field present = type 4 (set_code), even if empty.
-        // evmone's validate_transaction will reject empty lists for type 4.
-        bool hasAuthList = tx.authorizationList.has_value();
-        if (hasAuthList)
-        {
-            tarsTx->web3TypedTxKind = 4;
-        }
-        else if (!tx.maxFeePerGas.empty() || !tx.maxPriorityFeePerGas.empty())
-        {
-            tarsTx->web3TypedTxKind = 2;
-        }
-        else if (hasAccessList)
-        {
-            tarsTx->web3TypedTxKind = 1;
-        }
-        else
-        {
-            tarsTx->web3TypedTxKind = 0;
-        }
-
-        if (hasAuthList)
-        {
-            // Helper: convert a hex string to a signed 64-bit by taking the low
-            // 64 bits of the unsigned value (preserves bit patterns for values
-            // >= 2^63, e.g. nonce=2**64-1 or 2**64-2 in EIP-7702 tests, which
-            // hexToInt64 would otherwise saturate to INT64_MAX).
-            auto hexToTarsLong = [](std::string const& hex) {
-                return static_cast<int64_t>(static_cast<uint64_t>(test::hexToU256(hex)));
-            };
-            for (auto const& auth : *tx.authorizationList)
-            {
-                bcostars::AuthorizationEntry entry;
-                entry.chainID = hexToTarsLong(test::readHexField(auth, "chainId"));
-                entry.nonce = hexToTarsLong(test::readHexField(auth, "nonce"));
-                entry.v = static_cast<uint8_t>(test::hexToInt64(test::readHexField(auth, "v")));
-                entry.address = test::strip0x(test::readHexField(auth, "address"));
-                entry.signer = test::strip0x(test::readHexField(auth, "signer"));
-                entry.r = test::strip0x(test::readHexField(auth, "r"));
-                entry.s = test::strip0x(test::readHexField(auth, "s"));
-                data.authorizationList.push_back(std::move(entry));
-            }
-        }
-
-        // Detect blob transaction (type 3) by presence of maxFeePerBlobGas
-        // or non-empty blobVersionedHashes.  EEST fixtures that test blob-tx
-        // rejection (zero blobs, pre-fork) set maxFeePerBlobGas but leave
-        // blobVersionedHashes empty.
-        bool isBlobTx = !tx.maxFeePerBlobGas.empty() || !tx.blobVersionedHashes.empty();
-        if (isBlobTx)
-        {
-            tarsTx->web3TypedTxKind = 3;
-            data.maxFeePerBlobGas = test::strip0x(tx.maxFeePerBlobGas);
-            for (auto const& h : tx.blobVersionedHashes)
-            {
-                auto hashBytes = test::hexToBytes(h);
-                data.blobVersionedHashes.emplace_back(hashBytes.begin(), hashBytes.end());
-            }
-        }
-
-        return std::make_shared<bcostars::protocol::TransactionImpl>(
-            [tarsTx = std::move(tarsTx)]() mutable { return tarsTx.get(); });
-    }
-
-    /// Verify post-state. Returns a string with mismatch details (empty = all good).
-    std::string verifyPostState(
-        MutableStorage& storage, std::map<std::string, test::EESTAccount> const& expected)
-    {
-        std::ostringstream errors;
-        int passed = 0, failed = 0;
-        (void)passed;  // not used for return, only local tracking
-
-        for (auto const& [addrHex, expectedAcc] : expected)
-        {
-            auto addrBytes = test::hexToBytes(addrHex);
-            if (addrBytes.size() != sizeof(evmc_address))
-            {
-                continue;
-            }
-
-            evmc_address addr;
-            std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
-
-            // ethViewAccount (FromTableName) to match setupPreState and the executor — see
-            // the comment in setupPreState.
-            auto evmAccount = bcos::executor_v1::eth::ethViewAccount(storage, addr);
-
-            task::tbb::syncWait([&]() -> task::Task<void> {
-                // nonce
-                if (!expectedAcc.nonce.empty() && expectedAcc.nonce != "0x")
-                {
-                    auto storedNonce = co_await evmAccount.nonce();
-                    auto expNonce = test::hexToU256(expectedAcc.nonce);
-                    auto actualNonce = bcos::u256(storedNonce.value_or("0"));
-                    if (expNonce != actualNonce)
-                    {
-                        errors << "    NONCE " << addrHex << ": expected " << expectedAcc.nonce
-                               << " (" << test::hexToU256(expectedAcc.nonce) << "), got "
-                               << actualNonce << "\n";
-                        ++g_nonceMismatch;
-                        ++failed;
-                        co_return;
-                    }
-                }
-
-                // balance
-                if (!expectedAcc.balance.empty())
-                {
-                    auto storedBal = co_await evmAccount.balance();
-                    auto expBal = test::hexToU256(expectedAcc.balance);
-                    if (expBal != storedBal)
-                    {
-                        errors << "    BALANCE " << addrHex << ": expected " << expectedAcc.balance
-                               << " (" << expBal << "), got " << storedBal << "\n";
-                        ++g_balanceMismatch;
-                        ++failed;
-                        co_return;
-                    }
-                }
-
-                // code
-                if (!expectedAcc.code.empty() && expectedAcc.code != "0x")
-                {
-                    auto codeEntry = co_await evmAccount.code();
-                    auto expCode = test::hexToBytes(expectedAcc.code);
-                    bool codeMatch = codeEntry.has_value();
-                    if (codeMatch)
-                    {
-                        auto codeView = codeEntry->get();
-                        codeMatch = bcos::bytes(codeView.begin(), codeView.end()) == expCode;
-                    }
-                    if (!codeMatch)
-                    {
-                        errors << "    CODE " << addrHex << ": expected " << expectedAcc.code
-                               << "\n";
-                        ++g_codeMismatch;
-                        ++failed;
-                        co_return;
-                    }
-                }
-
-                // storage
-                for (auto const& [key, val] : expectedAcc.storage)
-                {
-                    auto keyBytes = test::hexToBytes(key);
-                    evmc_bytes32 storageKey{};
-                    if (keyBytes.size() <= 32)
-                    {
-                        std::copy(keyBytes.begin(), keyBytes.end(),
-                            storageKey.bytes + 32 - keyBytes.size());
-                    }
-                    else
-                    {
-                        // Defensive: never copy more than 32 bytes into the
-                        // 32-byte evmc_bytes32 (would overflow the stack).
-                        std::copy_n(keyBytes.end() - 32, 32, storageKey.bytes);
-                    }
-
-                    auto storedVal = co_await evmAccount.storage(storageKey);
-                    auto expValBytes = test::hexToBytes(val);
-                    evmc_bytes32 expVal{};
-                    if (expValBytes.size() <= 32)
-                    {
-                        std::copy(expValBytes.begin(), expValBytes.end(),
-                            expVal.bytes + 32 - expValBytes.size());
-                    }
-                    else
-                    {
-                        std::copy_n(expValBytes.end() - 32, 32, expVal.bytes);
-                    }
-
-                    if (!::ranges::equal(storedVal.bytes, expVal.bytes))
-                    {
-                        std::string actualHex;
-                        boost::algorithm::hex_lower(
-                            storedVal.bytes, storedVal.bytes + 32, std::back_inserter(actualHex));
-                        errors << "    STORAGE " << addrHex << " key=" << key << ": expected "
-                               << val << ", got 0x" << actualHex << "\n";
-                        ++g_storageMismatch;
-                        ++failed;
-                    }
-                }
-            }());
-
-        }  // end for loop over expected accounts
-
-        return errors.str();
-    }
-
-    /// Run a single fixture test case. Returns true if passed.
-    bool runFixture(::test::EESTFixture const& fixture, std::string const& forkName,
-        ::test::EESTForkPost const& post)
-    {
-        configureFork(forkName);
-        m_chainId = fixture.chainId;
-        m_ledgerConfig.setChainId(evmc::bytes32{static_cast<uint64_t>(m_chainId)});
-        configureEnvironment(fixture.env);
-
-        MutableStorage storage;
-        setupPreState(storage, fixture.pre);
-
-        // Ensure sender exists with correct initial nonce.
-        // EEST fixtures may not include sender in "pre" — evmone creates it
-        // with default nonce=0, then bumps to 1. But expected nonce may be 2
-        // (tx nonce 1 → bumped to 2), so we must set the correct initial nonce.
-        if (!fixture.transaction.sender.empty())
-        {
-            auto senderBytes = test::hexToBytes(fixture.transaction.sender);
-            if (senderBytes.size() == sizeof(evmc_address))
-            {
-                evmc_address senderAddr{};
-                std::copy(senderBytes.begin(), senderBytes.end(), senderAddr.bytes);
-                auto senderAcct = bcos::executor_v1::eth::ethViewAccount(storage, senderAddr);
-                auto txNonce = test::hexToU256(fixture.transaction.nonce);
-                auto nonceStr = txNonce.str(0, std::ios_base::dec);
-                task::tbb::syncWait([&]() -> task::Task<void> {
-                    if (!co_await senderAcct.exists())
-                    {
-                        co_await senderAcct.create();
-                        co_await senderAcct.setNonce(nonceStr);
-                    }
-                }());
-            }
-        }
-
-        auto blockHeader = buildBlockHeader(fixture.env);
-        auto tx =
-            buildTransaction(fixture.transaction, post.dataIndex, post.gasIndex, post.valueIndex);
-
-        protocol::TransactionReceipt::Ptr receipt;
-        std::string evmError;
-        bool executionThrew = false;
-
-        try
-        {
-            receipt = task::tbb::syncWait(
-                executor.executeTransaction(storage, blockHeader, *tx, 0, m_ledgerConfig, false));
-        }
-        catch (std::exception const& e)
-        {
-            evmError = e.what();
-            executionThrew = true;
-        }
-
-        // Determine expected outcome.
-        // EEST v5.4.0 fixtures encode expected-success/failure in the test name
-        // via "successful_True"/"successful_False" parameters. The JSON
-        // "expectException" field is absent for both cases.
-        bool expectsSuccess = post.expectException.empty();
-        if (expectsSuccess && fixture.name.find("successful_False") != std::string::npos)
-        {
-            expectsSuccess = false;
-        }
-        bool gotSuccess =
-            !executionThrew && receipt &&
-            (receipt->status() == 0 ||
-                receipt->status() == static_cast<int32_t>(protocol::TransactionStatus::None));
-
-        // When expectException is empty but the transaction failed, the test
-        // may still be correct if the post-state matches (transaction reverted
-        // cleanly and only gas was deducted).  EEST v5.4.0 fixtures often omit
-        // expectException for expected-failure tests.
-        if (expectsSuccess && !gotSuccess)
-        {
-            auto errStr = verifyPostState(storage, post.state);
-            if (errStr.empty())
-            {
-                return true;  // State matches → test passes (tx reverted correctly)
-            }
-
-            std::ostringstream oss;
-            oss << "FAIL: " << fixture.name << " [" << forkName << "] expected success, got failure"
-                << (executionThrew ? " (exception: " + evmError + ")" : "")
-                << (receipt ? " status=" + std::to_string(receipt->status()) : "");
-            printLine(oss.str());
-            g_failureDetails.push_back({fixture.name, forkName, "unexpected failure"});
-            ++g_unexpectedFailure;
-            return false;
-        }
-
-        if (!expectsSuccess && gotSuccess)
-        {
-            std::ostringstream oss;
-            oss << "FAIL: " << fixture.name << " [" << forkName << "] expected exception '"
-                << post.expectException << "', got success";
-            printLine(oss.str());
-            g_failureDetails.push_back(
-                {fixture.name, forkName, "expected exception '" + post.expectException + "'"});
-            ++g_expectedException;
-            return false;
-        }
-
-        // Both expect and got failure → pass only if the post-state matches.
-        // The expected-failure path must still verify the resulting state so
-        // that a wrong-reason failure (e.g. a pre-check exception instead of
-        // the intended revert) with a divergent state is caught rather than
-        // silently scored as "failed as expected".
-        if (!expectsSuccess && !gotSuccess)
-        {
-            auto errStr = verifyPostState(storage, post.state);
-            if (!errStr.empty())
-            {
-                std::ostringstream oss;
-                oss << "FAIL: " << fixture.name << " [" << forkName
-                    << "] expected failure, got failure but state mismatch\n"
-                    << errStr;
-                printLine(oss.str());
-                g_failureDetails.push_back(
-                    {fixture.name, forkName, "state mismatch (expected failure)"});
-                ++g_unexpectedFailure;
-                return false;
-            }
-            return true;
-        }
-
-        // Success: verify post-state
-        auto errStr = verifyPostState(storage, post.state);
-        if (!errStr.empty())
-        {
-            std::ostringstream oss;
-            oss << "FAIL: " << fixture.name << " [" << forkName << "]\n" << errStr;
-            printLine(oss.str());
-            g_failureDetails.push_back({fixture.name, forkName, "state mismatch"});
-            return false;
-        }
-
-        return true;
-    }
-
-    // ---- Blockchain test support ----
-
-    /// Extract fork name from a blockchain test fixture name.
-    /// EEST blockchain test names look like:
-    ///   tests/shanghai/.../test_xxx[fork_Cancun-blockchain_test-...]
-    /// Returns "Cancun" or empty string if not found.
     static std::string extractForkFromName(std::string const& name)
     {
         // The fork marker is always "[fork_..." in EEST names. Anchoring on the
@@ -1487,437 +916,399 @@ public:
         return name.substr(start, end - start);
     }
 
-    /// Build a BCOS BlockHeader from a blockchain test block header.
-    bcostars::protocol::BlockHeaderImpl buildBlockHeader(test::EESTBlockHeader const& bh)
+    /// state_tests: one transaction (post.txBytes) over a synthetic block built from `env`,
+    /// executed by executeEthereumBlock with no system calls and no PoW reward (t8n's
+    /// state-test mode). Passes when the MPT root of the executed state equals post.hash,
+    /// or, for an expected exception, when the pipeline refuses the block.
+    bool runFixture(test::EESTFixture const& fixture, std::string const& forkName,
+        test::EESTForkPost const& post)
     {
-        bcostars::protocol::BlockHeaderImpl header;
-        uint32_t blockVer;
-        if (m_currentRevision >= EVMC_CANCUN)
+        using namespace bcos::test::pipeline;
+        auto fail = [&](std::string reason) {
+            printLine("FAIL: " + fixture.name + " [" + forkName + "] " + reason);
+            g_failureDetails.push_back({fixture.name, forkName, std::move(reason)});
+            ++g_unexpectedFailure;
+            return false;
+        };
+        FixtureSchedule schedule;
+        try
         {
-            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
+            schedule = scheduleForNetwork(forkName);
         }
-        else if (m_currentRevision >= EVMC_PARIS)
+        catch (std::exception const& e)
         {
-            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
+            return fail(e.what());
         }
-        else
+        if (!schedule.unsupported.empty())
         {
-            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
+            return fail("fork schedule cannot express " + schedule.unsupported.front());
         }
-        header.setVersion(blockVer);
-
-        header.setNumber(test::hexToInt64(bh.number));
-        auto tsSec = test::hexToTimestamp(bh.timestamp);
-        header.setTimestamp(tsSec * 1000);
-        header.setSealer(0);
-        if (!bh.coinbase.empty())
+        if (post.txBytes.empty())
         {
-            auto cbBytes = test::hexToBytes(bh.coinbase);
-            bcos::Address coinbaseAddr;
-            if (cbBytes.size() >= bcos::Address::SIZE)
-            {
-                std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
-            }
-            header.setCoinbase(coinbaseAddr);
+            return fail("post entry carries no txbytes");
         }
 
-        // EIP-4399 (Paris+): PREVRANDAO (opcode 0x44) returns the block mixHash.
-        // The executor resolves it from header.prevRandao() (blockHeaderToBlockInfo),
-        // so the mixHash parsed from the fixture block header MUST be placed on
-        // the BCOS header too — configuring m_ledgerConfig alone is not enough
-        // (same fix as the state-test buildBlockHeader(env)). Without this,
-        // Cancun/Prague blockchain tests (static stRandom / mergeTest / blockInfo)
-        // read PREVRANDAO == 0, and an SSTORE of that 0 into an empty slot is
-        // charged as a no-op (100) instead of SSTORE_SET (20000) → -19900 gas.
-        if (!bh.random.empty())
+        auto const& env = fixture.env;
+        Chain chain;
+        chain.stateTestBlockHashes = true;
+
+        // The parent: the fixture's pre-state is its post-state; the trie builder sets the root.
+        protocol::EthBlockHeaderData parent;
+        parent.number = test::hexToInt64(env.number) - 1;
+        parent.timestamp = test::hexToTimestamp(env.timestamp) - 1;
+        parent.gasLimit = test::hexToU256(env.gasLimit);
+        parent.difficulty = env.difficulty.empty() ? u256(0) : test::hexToU256(env.difficulty);
+        parent.uncleHash = protocol::c_emptyOmmersHash;
+        parent.txsRoot = ledger::mpt::emptyRootHash();
+        parent.receiptsRoot = ledger::mpt::emptyRootHash();
+        if (!env.baseFee.empty())
         {
-            auto mixHashBytes = test::hexToBytes(bh.random);
-            if (!mixHashBytes.empty())
-            {
-                // bcos::h256 from raw bytes (right-aligned, big-endian).
-                header.setPrevRandao(bcos::h256(mixHashBytes));
-            }
-            else
-            {
-                header.setPrevRandao(bcos::h256{});
-            }
+            parent.baseFee = test::hexToU256(env.baseFee);
         }
-        else
+        try
         {
-            header.setPrevRandao(bcos::h256{});
+            chain.seedGenesis(fixture.pre, parent, schedule.forks);
         }
-        header.calculateHash(*cryptoSuite->hashImpl());
-        return header;
+        catch (std::exception const& e)
+        {
+            return fail(std::string("pre-state import failed: ") + e.what());
+        }
+
+        protocol::EthBlockHeaderData header;
+        header.parentInfo = protocol::ParentInfo{
+            .blockNumber = parent.number, .blockHash = protocol::ethHeaderHash(chain.parent())};
+        header.number = test::hexToInt64(env.number);
+        header.timestamp = test::hexToTimestamp(env.timestamp);
+        header.gasLimit = test::hexToU256(env.gasLimit);
+        header.difficulty = parent.difficulty;
+        header.coinbase = toEthAddress(env.coinbase);
+        header.uncleHash = protocol::c_emptyOmmersHash;
+        if (!env.random.empty())
+        {
+            header.prevRandao = toH256(env.random);
+        }
+        if (!env.baseFee.empty())
+        {
+            header.baseFee = test::hexToU256(env.baseFee);
+        }
+        auto const revision = scheduler_v1::evmcRevisionForTimestamp(
+            schedule.forks, header.timestamp, header.difficulty);
+        std::optional<std::vector<bytes>> withdrawals;
+        if (revision >= EVMC_SHANGHAI)
+        {
+            withdrawals.emplace();
+            header.withdrawalsHash = ledger::mpt::emptyRootHash();
+        }
+        auto raw = test::hexToBytes(post.txBytes);
+        if (revision >= EVMC_CANCUN)
+        {
+            header.excessBlobGas =
+                env.excessBlobGas.empty() ? u256(0) : test::hexToU256(env.excessBlobGas);
+            u256 blobGasUsed = 0;
+            try
+            {
+                auto decoded = bcos::rpc::decodeWeb3RawTransaction(
+                    bytesConstRef(raw.data(), raw.size()), chain.hashImpl());
+                if (decoded)
+                {
+                    blobGasUsed =
+                        u256(decoded->blobVersionedHashes().size()) * protocol::BLOB_GAS_PER_BLOB;
+                }
+            }
+            catch (...)
+            {
+                // An undecodable transaction is the pipeline's verdict to give below.
+            }
+            header.blobGasUsed = blobGasUsed;
+        }
+
+        auto outcome = chain.executeOnly(header, chain.parent(), std::vector<bytes>{raw},
+            withdrawals, schedule, static_cast<uint64_t>(fixture.chainId),
+            Verifier::BlockExecutionOptions{.systemCalls = false, .powRewards = false});
+        if (!post.expectException.empty())
+        {
+            if (outcome.error.has_value())
+            {
+                ++g_expectedException;
+                return true;
+            }
+            return fail("expected " + post.expectException + " but the block executed");
+        }
+        if (outcome.error.has_value())
+        {
+            return fail("block execution failed: " + *outcome.error);
+        }
+        auto const expectedRoot = toH256(post.stateRoot);
+        if (outcome.stateRoot != expectedRoot)
+        {
+            auto diff = verifyPostState(*outcome.view, post.state);
+            if (g_opts.verbose)
+            {
+                // Which accounts differ: the fixture's `state` hashed on its own tells whether
+                // it is the complete world state (then EXTRA/MISSING below is authoritative).
+                auto const stateRoot = rootOfAccounts(post.state);
+                diff += "    fixture.state root " + stateRoot.hex() +
+                        (stateRoot == expectedRoot ? " (complete)" : " (partial)") + "\n" +
+                        diffAccounts(*outcome.view, post.state);
+            }
+            return fail("state root mismatch: expected " + expectedRoot.hex() + ", got " +
+                        outcome.stateRoot.hex() + (diff.empty() ? "" : "\n" + diff));
+        }
+        return true;
     }
 
-    /// Configure environment from blockchain test block header.
-    void configureEnvironment(test::EESTBlockHeader const& bh)
+    /// blockchain_tests_engine: the same chain, driven as a CL would — engine_newPayload for
+    /// every payload (expected VALID, INVALID or a JSON-RPC error as the fixture says) and a
+    /// forkchoiceUpdated to each accepted head — through the in-process EthEngineService over
+    /// the production verifier. The head must be lastblockhash and the committed state must
+    /// carry postState.
+    bool runEngineFixture(test::EESTBlockchainFixture const& fixture)
     {
-        if (!bh.baseFee.empty())
+        using namespace bcos::test::pipeline;
+        auto network =
+            fixture.network.empty() ? extractForkFromName(fixture.name) : fixture.network;
+        auto fail = [&](std::string reason) {
+            printLine("FAIL: " + fixture.name + " [" + network + "] " + reason);
+            g_failureDetails.push_back({fixture.name, network, std::move(reason)});
+            ++g_unexpectedFailure;
+            return false;
+        };
+        FixtureSchedule schedule;
+        try
         {
-            auto baseFeeVal = test::hexToU256(bh.baseFee);
-            auto hexStr = "0x" + baseFeeVal.str(0, std::ios_base::hex);
-            m_ledgerConfig.setGasPrice({hexStr, 0});
+            schedule = scheduleForNetwork(network);
         }
-        else
+        catch (std::exception const& e)
         {
-            m_ledgerConfig.setGasPrice({"0x0", 0});
+            return fail(e.what());
         }
-        // Set gas limit from block header (fixes GASLIMIT opcode returning
-        // the hardcoded default instead of the fixture's block gas limit)
-        if (!bh.gasLimit.empty())
+        if (!schedule.unsupported.empty())
         {
-            auto gasLimit = static_cast<uint64_t>(test::hexToU256(bh.gasLimit));
-            m_ledgerConfig.setGasLimit({gasLimit, 0});
+            return fail("fork schedule cannot express " + schedule.unsupported.front());
         }
-        // Set difficulty from block header (fixes DIFFICULTY opcode)
-        if (!bh.difficulty.empty())
+        auto const chainId = static_cast<uint64_t>(fixture.chainId);
+
+        protocol::EthBlockHeaderData genesis;
+        try
         {
-            auto diff = static_cast<int64_t>(test::hexToU256(bh.difficulty));
-            m_ledgerConfig.setDifficulty(diff);
+            genesis = headerFromJson(fixture.genesisHeaderJson);
         }
-        else
+        catch (std::exception const& e)
         {
-            m_ledgerConfig.setDifficulty(0);
+            return fail(std::string("genesisBlockHeader unreadable: ") + e.what());
         }
-        // Set prev_randao from mixHash (EIP-4399: PREVRANDAO opcode on Paris+)
-        if (!bh.random.empty())
+        if (!fixture.genesisBlockHeader.hash.empty() &&
+            protocol::ethHeaderHash(genesis) != toH256(fixture.genesisBlockHeader.hash))
         {
-            auto mixHashBytes = test::hexToBytes(bh.random);
-            evmc::bytes32 prevRandao{};
-            if (mixHashBytes.size() == sizeof(evmc_bytes32))
+            return fail("genesis header re-encodes to " + protocol::ethHeaderHash(genesis).hex() +
+                        ", fixture says " + fixture.genesisBlockHeader.hash);
+        }
+        Chain chain;
+        h256 root;
+        try
+        {
+            root = chain.seedGenesis(fixture.pre, genesis, schedule.forks);
+        }
+        catch (std::exception const& e)
+        {
+            return fail(std::string("pre-state import failed: ") + e.what());
+        }
+        if (root != genesis.stateRoot)
+        {
+            return fail("genesis state root mismatch: trie " + root.hex() + ", header " +
+                        genesis.stateRoot.hex());
+        }
+
+        EngineHarness engine(chain, schedule, chainId);
+        h256 head = protocol::ethHeaderHash(genesis);
+        for (std::size_t i = 0; i < fixture.enginePayloads.size(); ++i)
+        {
+            auto const& payload = fixture.enginePayloads[i];
+            std::optional<engine::PayloadStatus> status;
+            std::string thrown;
+            try
             {
-                std::copy_n(mixHashBytes.begin(), sizeof(evmc_bytes32), prevRandao.bytes);
+                status = engine.newPayload(payload.params, payload.newPayloadVersion);
             }
-            else if (mixHashBytes.size() < sizeof(evmc_bytes32))
+            catch (std::exception const& e)
             {
-                std::copy_n(mixHashBytes.begin(), mixHashBytes.size(),
-                    prevRandao.bytes + sizeof(evmc_bytes32) - mixHashBytes.size());
+                thrown = e.what();
             }
-            m_ledgerConfig.setPrevRandao(prevRandao);
+            auto const index = std::to_string(i);
+            if (payload.errorCode.has_value())
+            {
+                if (!thrown.empty())
+                {
+                    ++g_expectedException;
+                    continue;
+                }
+                return fail("payload " + index + " expected JSON-RPC error " +
+                            std::to_string(*payload.errorCode) + ", got status " +
+                            std::to_string(static_cast<int>(status->status)));
+            }
+            if (!payload.validationError.empty())
+            {
+                if (!thrown.empty())
+                {
+                    return fail("payload " + index + " threw instead of INVALID (" +
+                                payload.validationError + "): " + thrown);
+                }
+                if (status->status != engine::PayloadValidationStatus::Invalid &&
+                    status->status != engine::PayloadValidationStatus::InvalidBlockHash)
+                {
+                    return fail("payload " + index + " expected INVALID (" +
+                                payload.validationError + "), got status " +
+                                std::to_string(static_cast<int>(status->status)));
+                }
+                ++g_expectedException;
+                continue;
+            }
+            if (!thrown.empty())
+            {
+                return fail("payload " + index + " threw: " + thrown);
+            }
+            if (status->status != engine::PayloadValidationStatus::Valid)
+            {
+                return fail("payload " + index + " status " +
+                            std::to_string(static_cast<int>(status->status)) + ": " +
+                            status->validationError.value_or(""));
+            }
+            auto const hash = engine.blockHashOf(payload.params, payload.newPayloadVersion);
+            engine::ForkchoiceUpdatedResult fcu;
+            try
+            {
+                fcu = engine.forkchoice(hash, payload.forkchoiceUpdatedVersion);
+            }
+            catch (std::exception const& e)
+            {
+                return fail("forkchoiceUpdated after payload " + index + " threw: " + e.what());
+            }
+            if (fcu.payloadStatus.status != engine::PayloadValidationStatus::Valid)
+            {
+                return fail("forkchoiceUpdated after payload " + index + " status " +
+                            std::to_string(static_cast<int>(fcu.payloadStatus.status)) + ": " +
+                            fcu.payloadStatus.validationError.value_or(""));
+            }
+            head = hash;
         }
-        else
+
+        if (!fixture.lastBlockHash.empty() && head != toH256(fixture.lastBlockHash))
         {
-            m_ledgerConfig.setPrevRandao({});
+            return fail("head is " + head.hex() + ", fixture expects " + fixture.lastBlockHash);
         }
-        // EIP-4844 blob gas parameters (Cancun+).
-        if (!bh.excessBlobGas.empty())
+        auto view = chain.committedView();
+        if (auto diff = verifyPostState(view, fixture.postState); !diff.empty())
         {
-            m_ledgerConfig.setExcessBlobGas(
-                static_cast<uint64_t>(test::hexToU256(bh.excessBlobGas)));
+            return fail("post-state mismatch\n" + diff);
         }
-        else
-        {
-            m_ledgerConfig.setExcessBlobGas(std::nullopt);
-        }
-        if (!bh.blobGasUsed.empty())
-        {
-            m_ledgerConfig.setBlobGasUsed(static_cast<uint64_t>(test::hexToU256(bh.blobGasUsed)));
-        }
-        else
-        {
-            m_ledgerConfig.setBlobGasUsed(std::nullopt);
-        }
+        return true;
     }
 
-    /// Run a blockchain test fixture: execute blocks sequentially,
-    /// apply block rewards via finalize(), then verify postState.
-    /// Returns true if passed.
+    /// blockchain_tests: genesis from genesisRLP + `pre`, then every block's RLP through
+    /// verifyAndCommit. A block with expectException must be refused (or fail to decode);
+    /// every other block must commit. The chain head must be lastblockhash and the
+    /// committed state must carry postState.
     bool runBlockchainFixture(test::EESTBlockchainFixture const& fixture)
     {
-        auto forkName = extractForkFromName(fixture.name);
-        if (forkName.empty())
-        {
-            forkName = "Cancun";  // default
-        }
-        configureFork(forkName);
-        m_chainId = fixture.chainId;
-        m_ledgerConfig.setChainId(evmc::bytes32{static_cast<uint64_t>(m_chainId)});
-
-        // Set up pre-state once
-        MutableStorage storage;
-        setupPreState(storage, fixture.pre);
-
-        // Ensure sender accounts exist with correct initial nonce.
-        // EEST fixtures may not include sender in "pre".
-        for (auto const& block : fixture.blocks)
-        {
-            for (auto const& tx : block.transactions)
-            {
-                if (tx.sender.empty())
-                {
-                    continue;
-                }
-                auto senderBytes = test::hexToBytes(tx.sender);
-                if (senderBytes.size() != sizeof(evmc_address))
-                {
-                    continue;
-                }
-                evmc_address senderAddr{};
-                std::copy(senderBytes.begin(), senderBytes.end(), senderAddr.bytes);
-                auto senderAcct = bcos::executor_v1::eth::ethViewAccount(storage, senderAddr);
-                auto txNonce = test::hexToU256(tx.nonce);
-                auto nonceStr = txNonce.str(0, std::ios_base::dec);
-                task::tbb::syncWait([&]() -> task::Task<void> {
-                    if (!co_await senderAcct.exists())
-                    {
-                        co_await senderAcct.create();
-                        co_await senderAcct.setNonce(nonceStr);
-                    }
-                }());
-            }
-        }
-
-        // Configure initial environment from genesis header
-        configureEnvironment(fixture.genesisBlockHeader);
-
-        // Set up BlockHashes with genesis hash for HISTORY_STORAGE system call.
-        // The provider was injected into the executor's constructor; start
-        // each fixture run from an empty mapping.
-        auto& blockHashes = *m_blockHashes;
-        blockHashes.hashes.clear();
-        if (!fixture.genesisBlockHeader.hash.empty())
-        {
-            auto genesisHashBytes = test::hexToBytes(fixture.genesisBlockHeader.hash);
-            if (genesisHashBytes.size() == sizeof(evmc_bytes32))
-            {
-                std::copy_n(
-                    genesisHashBytes.begin(), sizeof(evmc_bytes32), blockHashes.hashes[0].bytes);
-            }
-        }
-
-        // Populate fork transition mapping in LedgerConfig for dynamic revision switching.
-        // For transition forks (e.g., CancunToPragueAtTime15k), the revision changes
-        // mid-test based on block timestamp.
-        m_ledgerConfig.clearForkTransitions();
-        if (m_forkTransition.has_value())
-        {
-            for (auto const& block : fixture.blocks)
-            {
-                auto tsSec = test::hexToTimestamp(block.blockHeader.timestamp);
-                auto blockRev = (tsSec >= m_forkTransition->transitionTimestamp) ?
-                                    m_forkTransition->toRev :
-                                    m_forkTransition->fromRev;
-                auto blockNum = test::hexToInt64(block.blockHeader.number);
-                m_ledgerConfig.addForkTransition(blockNum, blockRev);
-            }
-        }
-
-        // Execute each block's transactions sequentially
-        int txIndex = 0;
-        for (auto const& block : fixture.blocks)
-        {
-            // Determine per-block revision (for fork transitions)
-            auto tsSec = test::hexToTimestamp(block.blockHeader.timestamp);
-            auto blockRev = revisionForBlock(tsSec);
-            m_ledgerConfig.setEVMCRevision(blockRev);
-
-            // Per-fork block rewards (wei).
-            constexpr static uint64_t BLOCK_REWARD_5_ETH = 5000000000000000000ULL;
-            constexpr static uint64_t BLOCK_REWARD_3_ETH = 3000000000000000000ULL;
-            constexpr static uint64_t BLOCK_REWARD_2_ETH = 2000000000000000000ULL;
-
-            // Compute per-block reward (changes at fork boundaries)
-            std::optional<uint64_t> blockReward;
-            if (blockRev < EVMC_BYZANTIUM)
-            {
-                blockReward = BLOCK_REWARD_5_ETH;  // 5 ETH
-            }
-            else if (blockRev < EVMC_PETERSBURG)
-            {
-                blockReward = BLOCK_REWARD_3_ETH;  // 3 ETH
-            }
-            else if (blockRev < EVMC_PARIS)
-            {
-                blockReward = BLOCK_REWARD_2_ETH;  // 2 ETH
-            }
-            // else: Paris+ → 0
-
-            configureEnvironment(block.blockHeader);
-            auto blockHdr = buildBlockHeader(block.blockHeader);
-
-            // EIP-4788 & EIP-2935: Execute system contracts at block start
-            if (blockRev >= EVMC_CANCUN)
-            {
-                eth::EthBlockInfo bi{};
-                bi.number = test::hexToInt64(block.blockHeader.number);
-                bi.timestamp = tsSec;
-                bi.gas_limit = test::hexToInt64(block.blockHeader.gasLimit);
-                if (!block.blockHeader.coinbase.empty())
-                {
-                    auto cbBytes = test::hexToBytes(block.blockHeader.coinbase);
-                    if (cbBytes.size() == sizeof(evmc_address))
-                    {
-                        std::copy_n(cbBytes.begin(), sizeof(evmc_address), bi.coinbase.bytes);
-                    }
-                }
-                if (!block.blockHeader.baseFee.empty())
-                {
-                    bi.base_fee = static_cast<uint64_t>(test::hexToU256(block.blockHeader.baseFee));
-                }
-                if (!block.blockHeader.parentBeaconRoot.empty())
-                {
-                    auto pbr = test::hexToBytes(block.blockHeader.parentBeaconRoot);
-                    if (pbr.size() == sizeof(evmc_bytes32))
-                    {
-                        std::copy_n(
-                            pbr.begin(), sizeof(evmc_bytes32), bi.parent_beacon_block_root.bytes);
-                    }
-                }
-                // blob_base_fee is left as nullopt — system contracts don't need it
-
-                // EIP-2935's input is the parent block hash, which upstream's
-                // system_call_block_start read as block_hashes.get_block_hash(number - 1).
-                // A failure is tolerated (upstream asserts success — a release-mode no-op —
-                // and silently continues): the post-state check remains the arbiter.
-                evmc::VM vm{evmc_create_evmone()};
-                auto sysErr = task::tbb::syncWait(eth::systemCallBlockStart(
-                    storage, vm, bi, blockHashes.get_block_hash(bi.number - 1), blockRev));
-                if (sysErr.has_value() && !g_opts.quiet)
-                {
-                    printLine("block-start system call skipped: " + *sysErr);
-                }
-            }
-
-            for (auto const& tx : block.transactions)
-            {
-                auto bcosTx =
-                    buildTransaction(tx, 0 /*dataIndex*/, 0 /*gasIndex*/, 0 /*valueIndex*/);
-
-                protocol::TransactionReceipt::Ptr receipt;
-                std::string evmError;
-                bool executionThrew = false;
-
-                try
-                {
-                    receipt = task::tbb::syncWait(executor.executeTransaction(
-                        storage, blockHdr, *bcosTx, txIndex, m_ledgerConfig, false));
-                }
-                catch (std::exception const& e)
-                {
-                    evmError = e.what();
-                    executionThrew = true;
-                }
-
-                if (executionThrew || !receipt ||
-                    (receipt->status() != 0 &&
-                        receipt->status() !=
-                            static_cast<int32_t>(protocol::TransactionStatus::None)))
-                {
-                    // Transaction failed. If expectException is set, the block
-                    // is expected to be invalid — let post-state check catch it.
-                    // If expectException is empty, we still continue to
-                    // finalizeBlock and let the post-state check at the end
-                    // determine pass/fail (handles EIP-7623 edge cases).
-                    // Only abort immediately for executionThrew (state unchanged).
-                    if (executionThrew)
-                    {
-                        std::ostringstream oss;
-                        oss << "FAIL: " << fixture.name << " [" << forkName << "] tx#" << txIndex
-                            << " execution threw: " << evmError;
-                        printLine(oss.str());
-                        g_failureDetails.push_back({fixture.name, forkName,
-                            "tx#" + std::to_string(txIndex) + " execution threw"});
-                        ++g_unexpectedFailure;
-                        return false;
-                    }
-                }
-                ++txIndex;
-            }
-
-            // Convert withdrawals to the executor's EthWithdrawal format
-            std::vector<eth::EthWithdrawal> evmWithdrawals;
-            for (auto const& w : block.withdrawals)
-            {
-                eth::EthWithdrawal ew;
-                ew.index = static_cast<uint64_t>(test::hexToInt64(w.index));
-                ew.validator_index = static_cast<uint64_t>(test::hexToInt64(w.validatorIndex));
-                auto addrBytes = test::hexToBytes(w.address);
-                if (addrBytes.size() == sizeof(evmc_address))
-                {
-                    std::copy_n(addrBytes.begin(), sizeof(evmc_address), ew.recipient.bytes);
-                }
-                auto amountVal = test::hexToU256(w.amount);
-                ew.amount_in_gwei = static_cast<uint64_t>(amountVal);
-                evmWithdrawals.push_back(ew);
-            }
-
-            // Apply block reward via finalize()
-            task::tbb::syncWait(executor.finalizeBlock(
-                storage, blockHdr, m_ledgerConfig, blockRev, blockReward, evmWithdrawals));
-
-            // Accumulate block hash BEFORE system_call_block_end so the current
-            // block's hash is available for BLOCKHASH lookups within system contracts.
-            if (!block.blockHeader.hash.empty())
-            {
-                auto hashBytes = test::hexToBytes(block.blockHeader.hash);
-                if (hashBytes.size() == sizeof(evmc_bytes32))
-                {
-                    auto blockNum = test::hexToInt64(block.blockHeader.number);
-                    std::copy_n(hashBytes.begin(), sizeof(evmc_bytes32),
-                        blockHashes.hashes[blockNum].bytes);
-                }
-            }
-
-            // EIP-2935 / EIP-7002 / EIP-7251: Execute system contracts at block end.
-            // These store historical block hashes, process withdrawal requests,
-            // and process consolidation requests respectively.
-            if (blockRev >= EVMC_CANCUN)
-            {
-                eth::EthBlockInfo biEnd{};
-                biEnd.number = test::hexToInt64(block.blockHeader.number);
-                biEnd.timestamp = tsSec;
-                biEnd.gas_limit = test::hexToInt64(block.blockHeader.gasLimit);
-                if (!block.blockHeader.coinbase.empty())
-                {
-                    auto cbBytes = test::hexToBytes(block.blockHeader.coinbase);
-                    if (cbBytes.size() == sizeof(evmc_address))
-                    {
-                        std::copy_n(cbBytes.begin(), sizeof(evmc_address), biEnd.coinbase.bytes);
-                    }
-                }
-                if (!block.blockHeader.baseFee.empty())
-                {
-                    biEnd.base_fee =
-                        static_cast<uint64_t>(test::hexToU256(block.blockHeader.baseFee));
-                }
-                if (!block.blockHeader.parentBeaconRoot.empty())
-                {
-                    auto pbr = test::hexToBytes(block.blockHeader.parentBeaconRoot);
-                    if (pbr.size() == sizeof(evmc_bytes32))
-                    {
-                        std::copy_n(pbr.begin(), sizeof(evmc_bytes32),
-                            biEnd.parent_beacon_block_root.bytes);
-                    }
-                }
-
-                // Upstream system_call_block_end returns nullopt (skip, apply nothing) when a
-                // requests contract has no code or the call reverts; systemCallBlockEnd reports
-                // those as an error string instead (its deliberate deviation). The runner keeps
-                // the upstream fixture behaviour: an error here means "no block-end diff".
-                // The state write-back happens inside the call; the returned EIP-7685 requests
-                // are not consumed by the fixture check.
-                evmc::VM vm{evmc_create_evmone()};
-                auto endResult =
-                    task::tbb::syncWait(eth::systemCallBlockEnd(storage, vm, biEnd, blockRev));
-                if (endResult.error.has_value() && !g_opts.quiet)
-                {
-                    printLine("block-end system call skipped: " + *endResult.error);
-                }
-            }
-        }
-
-        // Verify postState
-        auto errStr = verifyPostState(storage, fixture.postState);
-        if (!errStr.empty())
-        {
-            std::ostringstream oss;
-            oss << "FAIL: " << fixture.name << " [" << forkName << "]\n" << errStr;
-            printLine(oss.str());
-            g_failureDetails.push_back({fixture.name, forkName, "state mismatch"});
+        using namespace bcos::test::pipeline;
+        auto network =
+            fixture.network.empty() ? extractForkFromName(fixture.name) : fixture.network;
+        auto fail = [&](std::string reason) {
+            printLine("FAIL: " + fixture.name + " [" + network + "] " + reason);
+            g_failureDetails.push_back({fixture.name, network, std::move(reason)});
+            ++g_unexpectedFailure;
             return false;
+        };
+        FixtureSchedule schedule;
+        try
+        {
+            schedule = scheduleForNetwork(network);
+        }
+        catch (std::exception const& e)
+        {
+            return fail(e.what());
+        }
+        if (!schedule.unsupported.empty())
+        {
+            return fail("fork schedule cannot express " + schedule.unsupported.front());
+        }
+        auto const chainId = static_cast<uint64_t>(fixture.chainId);
+
+        protocol::EthBlock genesis;
+        try
+        {
+            auto rlp = test::hexToBytes(fixture.genesisRLP);
+            genesis.rlpDecode(bytesConstRef(rlp.data(), rlp.size()));
+        }
+        catch (std::exception const& e)
+        {
+            return fail(std::string("genesisRLP undecodable: ") + e.what());
+        }
+        Chain chain;
+        h256 root;
+        try
+        {
+            root = chain.seedGenesis(fixture.pre, genesis.data().header, schedule.forks);
+        }
+        catch (std::exception const& e)
+        {
+            return fail(std::string("pre-state import failed: ") + e.what());
+        }
+        if (root != genesis.data().header.stateRoot)
+        {
+            return fail("genesis state root mismatch: trie " + root.hex() + ", header " +
+                        genesis.data().header.stateRoot.hex());
         }
 
+        for (std::size_t i = 0; i < fixture.blocks.size(); ++i)
+        {
+            auto const& block = fixture.blocks[i];
+            bool const expectInvalid = !block.expectException.empty();
+            protocol::EthBlock decoded;
+            try
+            {
+                auto rlp = test::hexToBytes(block.rlp);
+                decoded.rlpDecode(bytesConstRef(rlp.data(), rlp.size()));
+            }
+            catch (std::exception const& e)
+            {
+                if (expectInvalid)
+                {
+                    ++g_expectedException;
+                    continue;
+                }
+                return fail("block " + std::to_string(i) + " RLP undecodable: " + e.what());
+            }
+            auto outcome = chain.applyBlock(decoded.data(), schedule, chainId);
+            if (expectInvalid)
+            {
+                if (outcome.valid)
+                {
+                    return fail("block " + std::to_string(i) + " accepted, fixture expects " +
+                                block.expectException);
+                }
+                ++g_expectedException;
+                continue;
+            }
+            if (!outcome.valid)
+            {
+                return fail("block " + std::to_string(i) + " refused: " + outcome.error);
+            }
+        }
+
+        if (!fixture.lastBlockHash.empty())
+        {
+            auto const head = protocol::ethHeaderHash(chain.parent());
+            if (head != toH256(fixture.lastBlockHash))
+            {
+                return fail("head is " + head.hex() + ", fixture expects " + fixture.lastBlockHash);
+            }
+        }
+        auto view = chain.committedView();
+        if (auto diff = verifyPostState(view, fixture.postState); !diff.empty())
+        {
+            return fail("post-state mismatch\n" + diff);
+        }
         return true;
     }
 };
@@ -1940,11 +1331,15 @@ inline std::string detectFormatFromPath(fs::path const& filePath)
     // classified as blockchain_tests.
     if (str.find("/blockchain_tests_engine_x/") != std::string::npos)
     {
-        return "unsupported";
+        return "blockchain_engine_x_test";
     }
     if (str.find("/blockchain_tests_engine/") != std::string::npos)
     {
-        return "unsupported";
+        return "blockchain_engine_test";
+    }
+    if (str.find("/blockchain_tests_sync/") != std::string::npos)
+    {
+        return "blockchain_sync_test";
     }
     if (str.find("/blockchain_tests/") != std::string::npos)
     {
@@ -1985,7 +1380,9 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
     auto format = detectFormatFromPath(filePath);
 
     // --- blockchain_test ---
-    if (format == "blockchain_test")
+
+    // --- transaction_test / unsupported (skip) ---
+    if (format == "blockchain_test" || format == "blockchain_engine_test")
     {
         std::vector<test::EESTBlockchainFixture> bcFixtures;
         try
@@ -1994,35 +1391,32 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
         }
         catch (std::exception const& e)
         {
-            // One unreadable/malformed file must not abort the whole run.
             std::cerr << "Warning: failed to load fixture file " << filePath.string() << ": "
                       << e.what() << "\n";
             ++g_loadFailures;
-            ++g_skippedFiles;
+            countOutcome(format, false);
+            ++result.failed;
             return result;
         }
         for (auto const& fixture : bcFixtures)
         {
-            ++g_totalTests;
-            bool passed = runner.runBlockchainFixture(fixture);
-            if (passed)
-            {
-                ++g_totalPassed;
-                ++result.passed;
-            }
-            else
-            {
-                ++g_totalFailed;
-                ++result.failed;
-            }
+            bool passed = format == "blockchain_engine_test" ? runner.runEngineFixture(fixture) :
+                                                               runner.runBlockchainFixture(fixture);
+            countOutcome(format, passed);
+            (passed ? result.passed : result.failed)++;
         }
         return result;
     }
-
-    // --- transaction_test / unsupported (skip) ---
-    if (format == "transaction_test" || format == "unsupported")
+    if (format == "transaction_test" || format == "blockchain_engine_x_test" ||
+        format == "blockchain_sync_test")
     {
-        ++g_skippedFiles;
+        // Not executed by this runner (yet): every fixture in the file counts as a failure,
+        // named, so the summary cannot read 100% while a class is unrun.
+        auto const entries = countFixtureEntries(filePath);
+        countOutcome(format, false, entries);
+        result.failed += entries;
+        g_failureDetails.push_back({filePath.filename().string(), format,
+            "fixture format not executed by this runner (" + std::to_string(entries) + ")"});
         return result;
     }
 
@@ -2037,33 +1431,74 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
         std::cerr << "Warning: failed to load fixture file " << filePath.string() << ": "
                   << e.what() << "\n";
         ++g_loadFailures;
-        ++g_skippedFiles;
+        countOutcome(format, false);
+        ++result.failed;
         return result;
     }
     for (auto const& fixture : fixtures)
     {
         for (auto const& [forkName, posts] : fixture.post)
         {
-            for (size_t i = 0; i < posts.size(); ++i)
+            for (auto const& post : posts)
             {
-                ++g_totalTests;
-                auto const& post = posts[i];
                 bool passed = runner.runFixture(fixture, forkName, post);
-
-                if (passed)
-                {
-                    ++g_totalPassed;
-                    ++result.passed;
-                }
-                else
-                {
-                    ++g_totalFailed;
-                    ++result.failed;
-                }
+                countOutcome(format, passed);
+                (passed ? result.passed : result.failed)++;
             }
         }
     }
     return result;
+}
+
+/// One line of the --known-failures file: a regex over "<fixture name> [<fork>]".
+struct KnownFailure
+{
+    std::string text;
+    std::regex pattern;
+    int hits = 0;
+};
+
+/// Parses the --known-failures file ('#' starts a comment, blank lines skipped). nullopt and a
+/// message on stderr when the file cannot be read or a line is not a valid regex; an empty
+/// path yields an empty list.
+std::optional<std::vector<KnownFailure>> loadKnownFailures(std::string const& path)
+{
+    std::vector<KnownFailure> known;
+    if (path.empty())
+    {
+        return known;
+    }
+    std::ifstream file(path);
+    if (!file.is_open())
+    {
+        std::cerr << "Error: cannot open --known-failures file " << path << '\n';
+        return std::nullopt;
+    }
+    std::string line;
+    while (std::getline(file, line))
+    {
+        auto const hash = line.find('#');
+        if (hash != std::string::npos)
+        {
+            line.erase(hash);
+        }
+        boost::algorithm::trim(line);
+        if (line.empty())
+        {
+            continue;
+        }
+        try
+        {
+            known.push_back(KnownFailure{.text = line, .pattern = std::regex(line)});
+        }
+        catch (std::regex_error const& e)
+        {
+            std::cerr << "Error: bad regex in " << path << ": " << line << " (" << e.what()
+                      << ")\n";
+            return std::nullopt;
+        }
+    }
+    return known;
 }
 
 // =============================================================================
@@ -2142,10 +1577,17 @@ int main(int argc, char* argv[])
         }
         for (auto const& entry : fs::recursive_directory_iterator(fixtureDir))
         {
-            if (entry.is_regular_file() && entry.path().extension().string() == ".json")
+            if (!entry.is_regular_file() || entry.path().extension().string() != ".json")
             {
-                fileList.push_back(entry.path());
+                continue;
             }
+            // blockchain_tests_engine_x/pre_alloc/<hash>.json are shared pre-state groups the
+            // engine_x fixtures reference by preHash, not fixtures: they are not counted.
+            if (entry.path().string().find("/pre_alloc/") != std::string::npos)
+            {
+                continue;
+            }
+            fileList.push_back(entry.path());
         }
         std::cout << "[EEST Runner] Found " << fileList.size()
                   << " fixture files in: " << fixtureDir << '\n';
@@ -2197,31 +1639,44 @@ int main(int argc, char* argv[])
 
     auto startTime = std::chrono::steady_clock::now();
 
-    EESTRunner runner;
-    for (size_t i = 0; i < fileList.size(); ++i)
+    // The known-failures file is read before the sweep: a bad regex fails in seconds, not
+    // after the whole release has run.
+    auto knownFailures = loadKnownFailures(g_opts.knownFailures);
+    if (!knownFailures)
     {
-        auto& p = fileList[i];
-        if (!g_opts.quiet)
-        {
-            fs::path base = fs::absolute(fixtureDir);
-            auto rel = fs::relative(p, base);
-            std::cout << "  " << rel.string() << " ... " << std::flush;
-        }
+        return 2;
+    }
+
+    // One fixture file per task: every fixture builds its own in-memory chain, so files
+    // share nothing but the counters (atomic) and the console (g_printMutex).
+    auto const jobs =
+        g_opts.jobs != 0 ? g_opts.jobs : std::max(1U, std::thread::hardware_concurrency());
+    tbb::global_control concurrency(tbb::global_control::max_allowed_parallelism, jobs);
+    // Fixtures recurse the EVM to its 1024-frame call depth; a TBB worker's default stack is
+    // far smaller than the main thread's and overflows (SIGBUS on macOS). 256 MiB is virtual.
+    tbb::global_control workerStack(tbb::global_control::thread_stack_size, std::size_t{256} << 20);
+    EESTRunner runner;
+    std::atomic<std::size_t> done{0};
+    fs::path const base = fs::absolute(fixtureDir);
+    tbb::parallel_for(std::size_t{0}, fileList.size(), [&](std::size_t i) {
+        auto const& p = fileList[i];
         auto fr = processFixtureFile(runner, p);
         if (!g_opts.quiet)
         {
+            auto rel = fs::relative(p, base);
             int total = fr.passed + fr.failed;
-            if (fr.failed == 0)
-            {
-                std::cout << "OK (" << total << " tests)" << '\n';
-            }
-            else
-            {
-                std::cout << fr.failed << "/" << total << " FAILED" << '\n';
-            }
+            printLine("  " + rel.string() + " ... " +
+                      (fr.failed == 0 ?
+                              "OK (" + std::to_string(total) + " tests)" :
+                              std::to_string(fr.failed) + "/" + std::to_string(total) + " FAILED"));
         }
-        printProgress(i + 1, fileList.size());
-    }
+        auto const finished = ++done;
+        if (jobs == 1 || finished % 50 == 0 || finished == fileList.size())
+        {
+            std::lock_guard<std::mutex> lock(g_printMutex);
+            printProgress(static_cast<int>(finished), static_cast<int>(fileList.size()));
+        }
+    });
 
     // Clear progress line
     if (!g_opts.quiet)
@@ -2246,15 +1701,26 @@ int main(int argc, char* argv[])
                                      "N/A")
               << "\n";
     std::cout << "  Files:         " << totalFiles << "\n";
-    std::cout << "  Skipped files: " << g_skippedFiles.load() << "\n";
     std::cout << "  Load failures: " << g_loadFailures.load() << "\n";
+    std::cout << "  Jobs:          " << jobs << "\n";
     std::cout << "  Elapsed:       " << elapsed << "s\n";
 
+    // One line per class, parseable: "Class <name>: <passed>/<total> passed, rate <n>%".
+    // A class with no fixtures under the given directory is omitted.
+    std::cout << "\n  By class:\n";
+    for (std::size_t i = 0; i < c_fixtureClasses.size(); ++i)
+    {
+        auto const& counters = g_classCounters[i];
+        if (counters.total == 0)
+        {
+            continue;
+        }
+        std::cout << "    Class " << c_fixtureClasses[i] << ": " << counters.passed.load() << "/"
+                  << counters.total.load() << " passed, rate "
+                  << (100 * counters.passed.load() / counters.total.load()) << "%\n";
+    }
+
     std::cout << "\n  Error breakdown:\n";
-    std::cout << "    Balance mismatch:   " << g_balanceMismatch.load() << "\n";
-    std::cout << "    Storage mismatch:   " << g_storageMismatch.load() << "\n";
-    std::cout << "    Nonce mismatch:     " << g_nonceMismatch.load() << "\n";
-    std::cout << "    Code mismatch:      " << g_codeMismatch.load() << "\n";
     std::cout << "    Expected exception: " << g_expectedException.load() << "\n";
     std::cout << "    Unexpected failure: " << g_unexpectedFailure.load() << "\n";
 
@@ -2295,6 +1761,58 @@ int main(int argc, char* argv[])
         std::cout << "    " << fork << ": " << count << "\n";
     }
 
+    // Known-failure triage: each failure is matched against the file's regexes over
+    // "<name> [<fork>]" (the FAIL line's own label). The gate is on the rest.
+    int knownFailureCount = 0;
+    std::vector<std::string> unexpectedFailures;
+    if (!g_opts.knownFailures.empty())
+    {
+        auto& known = *knownFailures;
+        for (auto const& fd : g_failureDetails)
+        {
+            auto const label = fd.testName + " [" + fd.forkName + "]";
+            bool matched = false;
+            for (auto& entry : known)
+            {
+                if (std::regex_search(label, entry.pattern))
+                {
+                    ++entry.hits;
+                    matched = true;
+                    break;
+                }
+            }
+            if (matched)
+            {
+                ++knownFailureCount;
+            }
+            else
+            {
+                unexpectedFailures.push_back(label);
+            }
+        }
+        std::vector<std::string> stale;
+        for (auto const& entry : known)
+        {
+            if (entry.hits == 0)
+            {
+                stale.push_back(entry.text);
+            }
+        }
+        std::cout << "\n  Known failures:      " << knownFailureCount << " (" << known.size()
+                  << " entries in " << g_opts.knownFailures << ")\n";
+        std::cout << "  Unexpected failures: " << unexpectedFailures.size() << "\n";
+        std::cout << "  Stale entries:       " << stale.size() << "\n";
+        for (auto const& label : unexpectedFailures)
+        {
+            std::cout << "    UNEXPECTED " << label << "\n";
+        }
+        for (auto const& text : stale)
+        {
+            std::cout << "    STALE " << text << "\n";
+        }
+        std::cout << "=================================================\n";
+        return (unexpectedFailures.empty() && stale.empty()) ? 0 : 1;
+    }
     std::cout << "=================================================\n";
 
     return g_totalFailed > 0 ? 1 : 0;
