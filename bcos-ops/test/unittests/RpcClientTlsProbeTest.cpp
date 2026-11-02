@@ -65,13 +65,6 @@ private:
     std::thread m_thread;
 };
 
-uint16_t unusedPort()
-{
-    boost::asio::io_context io;
-    boost::asio::ip::tcp::acceptor acceptor(
-        io, boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), 0));
-    return acceptor.local_endpoint().port();
-}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(RpcClientTlsProbeTest)
@@ -122,7 +115,11 @@ BOOST_AUTO_TEST_CASE(hostnameResolves)
 
 BOOST_AUTO_TEST_CASE(closedPortIsConnectError)
 {
-    auto port = unusedPort();
+    boost::asio::io_context io;
+    boost::asio::ip::tcp::socket reserved(io);
+    reserved.open(boost::asio::ip::tcp::v4());
+    reserved.bind(boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 0));
+    const auto port = reserved.local_endpoint().port();
     BOOST_CHECK_EXCEPTION(probeTls("127.0.0.1", port, 2000), OpsError, [](OpsError const& e) {
         return e.exitCode == c_exitUsage &&
                std::string(e.what()).find("connect") != std::string::npos;

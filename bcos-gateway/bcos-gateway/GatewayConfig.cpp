@@ -815,6 +815,7 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
     smCertConfig.enNodeKey =
         checkFileExist<bool>(smEnNodeKeyFile) ? std::make_optional(smEnNodeKeyFile) : std::nullopt;
     smCertConfig.multiCaPath = multiCaPath;
+    smCertConfig.enableLegacyChain = _pt.get<bool>("cert.enable_legacy_sm_cert_chain", false);
 
     m_smCertConfig = smCertConfig;
 
@@ -826,7 +827,8 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
         << LOG_KV(
                "sm_ennode_cert", smCertConfig.enNodeCert ? smCertConfig.enNodeCert.value() : "null")
         << LOG_KV("sm_ennode_key", smCertConfig.enNodeKey ? smCertConfig.enNodeKey.value() : "null")
-        << LOG_KV("multi_ca_path", smCertConfig.multiCaPath);
+        << LOG_KV("multi_ca_path", smCertConfig.multiCaPath)
+        << LOG_KV("enable_legacy_sm_cert_chain", smCertConfig.enableLegacyChain);
 }
 
 inline void mustNoLessThan(const std::string& _configName, int32_t _value, int32_t _min)

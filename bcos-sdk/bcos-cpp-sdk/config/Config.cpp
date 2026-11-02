@@ -236,6 +236,7 @@ void Config::loadSMSslCert(
     cert.nodeKey = smSdkKey;
     cert.enNodeCert = smEnSdkCert;
     cert.enNodeKey = smEnSdkKey;
+    cert.enableLegacyChain = _pt.get<bool>("cert.enable_legacy_sm_cert_chain", false);
 
     auto ctxConfig = std::make_shared<ContextConfig>();
     ctxConfig->setSslType("sm_ssl");

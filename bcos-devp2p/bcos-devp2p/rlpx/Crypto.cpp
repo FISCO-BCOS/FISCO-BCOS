@@ -23,63 +23,33 @@
 #include <bcos-crypto/encrypt/AesCtrCipher.h>
 #include <bcos-crypto/encrypt/HmacSha256.h>
 #include <bcos-crypto/hash/Sha256.h>
+#include <bcos-crypto/hasher/Keccak256.h>
 #include <bcos-crypto/random/CryptoRandom.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Ecdh.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
+#include <array>
 #include <cstring>
+#include <memory>
 #include <stdexcept>
 
 namespace bcos::devp2p::rlpx
 {
 using bcos::crypto::kAesBlockSize;
 
-// ---------------------------------------------------------------------------
-// Sha3Hasher — incremental Keccak-256 via OpenSSL EVP (pad-byte hack).
-// ---------------------------------------------------------------------------
-namespace
-{
-struct Keccak256CtxLayout
-{
-    uint64_t A[5][5];
-    size_t block_size;
-    size_t md_size;
-    size_t num;
-    unsigned char buf[1600 / 8 - 32];
-    unsigned char pad;
-};
-
-struct EvpMdCtxKeccak256
-{
-    const EVP_MD* digest;
-    void* engine;
-    unsigned long flags;
-    Keccak256CtxLayout* md_data;
-};
-
-void initKeccak256(EVP_MD_CTX* _ctx)
-{
-    if (EVP_DigestInit_ex(_ctx, EVP_sha3_256(), nullptr) != 1)
-    {
-        throw std::runtime_error("Sha3Hasher: EVP_DigestInit_ex failed");
-    }
-    // Swap SHA3-256's 0x06 padding for Keccak's 0x01 (same trick as bcos-crypto).
-    auto keccak256 = reinterpret_cast<EvpMdCtxKeccak256*>(_ctx);
-    if (keccak256->md_data == nullptr || keccak256->md_data->pad != 0x06)
-    {
-        throw std::runtime_error("Sha3Hasher: unexpected OpenSSL keccak layout");
-    }
-    keccak256->md_data->pad = 0x01;
-}
-}  // namespace
-
 struct Sha3Hasher::Impl
 {
-    EVP_MD_CTX* ctx{EVP_MD_CTX_new()};
-    Impl() { initKeccak256(ctx); }
-    ~Impl() { EVP_MD_CTX_free(ctx); }
+    Impl() : state(EVP_MD_CTX_new(), &EVP_MD_CTX_free)
+    {
+        if (!state || EVP_DigestInit(state.get(), bcos::crypto::hasher::keccak256MD()) != 1)
+        {
+            throw std::runtime_error("RLPx Keccak-256 initialization failed");
+        }
+    }
+
+    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> state;
 };
 
 Sha3Hasher::Sha3Hasher() : m_impl(new Impl()) {}
@@ -90,30 +60,23 @@ Sha3Hasher::~Sha3Hasher()
 
 void Sha3Hasher::update(bytesConstRef _data)
 {
-    if (EVP_DigestUpdate(m_impl->ctx, _data.data(), _data.size()) != 1)
+    if (EVP_DigestUpdate(m_impl->state.get(), _data.data(), _data.size()) != 1)
     {
-        throw std::runtime_error("Sha3Hasher: EVP_DigestUpdate failed");
+        throw std::runtime_error("RLPx Keccak-256 update failed");
     }
 }
 
 bcos::bytes Sha3Hasher::hash()
 {
-    // Snapshot the digest state via context copy; the original keeps streaming.
-    EVP_MD_CTX* copyCtx = EVP_MD_CTX_new();
-    if (EVP_MD_CTX_copy_ex(copyCtx, m_impl->ctx) != 1)
+    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> snapshot(
+        EVP_MD_CTX_dup(m_impl->state.get()), &EVP_MD_CTX_free);
+    std::array<unsigned char, 32> digest{};
+    if (!snapshot || EVP_DigestFinal(snapshot.get(), digest.data(), nullptr) != 1)
     {
-        EVP_MD_CTX_free(copyCtx);
-        throw std::runtime_error("Sha3Hasher: EVP_MD_CTX_copy_ex failed");
+        throw std::runtime_error("RLPx Keccak-256 finalization failed");
     }
-    bcos::bytes out(32, 0);
-    unsigned int outLen = 0;
-    if (EVP_DigestFinal_ex(copyCtx, out.data(), &outLen) != 1)
-    {
-        EVP_MD_CTX_free(copyCtx);
-        throw std::runtime_error("Sha3Hasher: EVP_DigestFinal_ex failed");
-    }
-    EVP_MD_CTX_free(copyCtx);
-    out.resize(outLen);
+    bcos::bytes out(digest.size());
+    std::memcpy(out.data(), digest.data(), out.size());
     return out;
 }
 

@@ -374,6 +374,7 @@ public:
 
     const std::string& smNodeCert() const;
     void setSmNodeCert(const std::string& _smNodeCert);
+    bool enableLegacySmCertChain() const;
 
     const std::string& smNodeKey() const;
     void setSmNodeKey(const std::string& _smNodeKey);
@@ -718,6 +719,7 @@ private:
     std::string m_smNodeKey;
     std::string m_enSmNodeCert;
     std::string m_enSmNodeKey;
+    bool m_enableLegacySmCertChain = false;
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
