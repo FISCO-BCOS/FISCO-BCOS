@@ -34,7 +34,11 @@ jobs:
       - name: compile
         # -j2 left most of the runner idle: this job is a Release (-O3) build of the whole
         # project, so use every core the runner has.
-        run: make -j"$(sysctl -n hw.ncpu)" && make tar
+        # No `make tar`: that target exists only with WITH_TARS_SERVICES=ON, which this
+        # build does not set, so the step failed before any upload. The release ships the
+        # AIR node, the light node, build_chain.sh and BcosBuilder; the Pro service
+        # packages below upload only when a build produced them.
+        run: make -j"$(sysctl -n hw.ncpu)"
       - name: tar BcosBuilder
         run: mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
       - name: tar fisco-bcos for macOS
@@ -56,6 +60,7 @@ jobs:
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosNodeService binaries to release
+        if: ${{ hashFiles('fisco-bcos-tars-service/BcosNodeService.tgz') != '' }}
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -64,6 +69,7 @@ jobs:
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosRpcService binaries to release
+        if: ${{ hashFiles('fisco-bcos-tars-service/BcosRpcService.tgz') != '' }}
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -72,27 +78,12 @@ jobs:
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosGatewayService binaries to release
+        if: ${{ hashFiles('fisco-bcos-tars-service/BcosGatewayService.tgz') != '' }}
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: fisco-bcos-tars-service/BcosGatewayService.tgz
           asset_name: BcosGatewayService-macOS-arm.tgz
-          tag: ${{ github.ref }}
-          overwrite: true
-      - name: Upload BcosMaxNodeService binaries to release
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
-          asset_name: BcosMaxNodeService-macOS-arm.tgz
-          tag: ${{ github.ref }}
-          overwrite: true
-      - name: Upload BcosExecutorService binaries to release
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosExecutorService.tgz
-          asset_name: BcosExecutorService-macOS-arm.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload build_chain.sh
