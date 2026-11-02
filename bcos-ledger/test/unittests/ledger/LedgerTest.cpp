@@ -2465,5 +2465,133 @@ BOOST_AUTO_TEST_CASE(ethereumLaneReceiptLeavesRebuildTheCommittedRoot)
     BOOST_CHECK_EQUAL(receipts[1]->logIndex(), 0U);
 }
 
+// findReceiptPosition is what eth_getTransactionReceipt goes through, and it was checking the
+// receipts against transactionsSize() -- which counts transaction BODIES. Both callers read the
+// block with TRANSACTIONS_HASH, which fills the metadata list and leaves the bodies empty, so that
+// comparison was n != 0 and EVERY receipt lookup answered nullopt: the endpoint turned a plain
+// eth_getTransactionReceipt into InternalError ("is not in the block its receipt names") for every
+// transaction on the chain. It reached CI as 21 Hardhat timeouts on the executor-v1 lane, because
+// the suite polls for a receipt after each deploy and never got one.
+//
+// The block can be read with either flag, so both shapes are pinned here: the receipt list always
+// pairs one-to-one with whichever transaction list the read populated.
+BOOST_AUTO_TEST_CASE(receiptPositionIsFoundForEveryBlockReadShape)
+{
+    initFixture();
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(4244);
+    header->setTimestamp(1002);
+    header->setGasLimit(30000000);
+    header->setSealer(0);
+    header->setExcessBlobGas(0);
+    header->setBlobGasUsed(0);
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+
+    // Two logs in the first transaction only, so a wrong log base is visible as 0 where 2 belongs.
+    std::vector<std::size_t> const logsPerTx{2, 0, 1};
+    std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    std::vector<protocol::Transaction::Ptr> transactions;
+    for (size_t i = 0; i < logsPerTx.size(); ++i)
+    {
+        transactions.push_back(m_blockFactory->transactionFactory()->createTransaction(i,
+            "0x1000000000000000000000000000000000000000", bcos::bytes{0x60},
+            std::to_string(3000 + i), 1000, "chain0", "group0", 0));
+        std::vector<protocol::LogEntry> logs;
+        for (size_t log = 0; log < logsPerTx[i]; ++log)
+        {
+            logs.emplace_back(bcos::bytes(20, 0x30),
+                bcos::h256s{bcos::h256("0xcafef00dcafef00dcafef00dcafef00dcafef00d"
+                                       "cafef00dcafef00dcafef00d")},
+                bcos::bytes(32, static_cast<bcos::byte>(0xc0 + log)));
+        }
+        receipts.push_back(m_blockFactory->receiptFactory()->createReceipt2(21000, "", logs, 0,
+            bcos::ref(bcos::bytes{}), 1, "1", protocol::TransactionVersion::V1_VERSION, true));
+    }
+
+    std::vector<bcos::bytes> noRawTransactions;
+    task::syncWait(ledger::mpt::computeEthereumRoots(
+        receipts, transactions | ::ranges::views::indirect, noRawTransactions));
+    for (size_t i = 0; i < receipts.size(); ++i)
+    {
+        block->appendTransaction(transactions[i]);
+        block->appendReceipt(receipts[i]);
+    }
+
+    std::promise<bool> prewritePromise;
+    m_ledger->asyncPrewriteBlock(
+        m_storage, nullptr, block,
+        [&](std::string, Error::Ptr&& error) {
+            BOOST_CHECK(!error);
+            prewritePromise.set_value(true);
+        },
+        true, std::nullopt, std::nullopt, true);
+    BOOST_REQUIRE(prewritePromise.get_future().get());
+
+    // Literal expectations, not values read off the block under test.
+    std::vector<std::size_t> const expectedLogIndex{0, 2, 2};
+
+    // TRANSACTIONS_HASH | RECEIPTS is the shape both EthEndpoint callers use. It carries no
+    // transaction bodies, which is exactly why comparing against transactionsSize() rejected it.
+    {
+        std::promise<protocol::Block::Ptr> blockPromise;
+        m_ledger->asyncGetBlockDataByNumber(4244,
+            bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::RECEIPTS,
+            [&](Error::Ptr error, protocol::Block::Ptr result) {
+                BOOST_CHECK(!error);
+                blockPromise.set_value(std::move(result));
+            });
+        auto hashOnly = blockPromise.get_future().get();
+        BOOST_REQUIRE(hashOnly != nullptr);
+        BOOST_REQUIRE_EQUAL(hashOnly->receiptsSize(), logsPerTx.size());
+        // The premise of the regression: the bodies are absent, the metadata is present.
+        BOOST_REQUIRE_EQUAL(hashOnly->transactionsSize(), 0U);
+        BOOST_REQUIRE_EQUAL(hashOnly->transactionsMetaDataSize(), logsPerTx.size());
+
+        for (size_t i = 0; i < logsPerTx.size(); ++i)
+        {
+            auto const hash = transactions[i]->hash();
+            auto const position = protocol::findReceiptPosition(*hashOnly, hash);
+            BOOST_REQUIRE_MESSAGE(position.has_value(),
+                "no derived position for transaction " << i << " on a TRANSACTIONS_HASH read");
+            BOOST_CHECK_EQUAL(position->transactionIndex, i);
+            BOOST_CHECK_EQUAL(position->logIndex, expectedLogIndex[i]);
+        }
+        // A hash the block does not list must still be refused, or a lookup miss would silently
+        // answer with some other transaction's position.
+        BOOST_CHECK(
+            !protocol::findReceiptPosition(*hashOnly, bcos::crypto::HashType(0x1234U)).has_value());
+    }
+
+    // TRANSACTIONS | RECEIPTS fills the bodies and leaves the metadata empty. No endpoint calls
+    // findReceiptPosition with that shape today, but the helper must not depend on which list a
+    // read happened to populate, so the other branch is pinned too. Built in memory: the ledger's
+    // block storage in this fixture does not persist transaction bodies, and this branch is about
+    // the block's own two lists, not about storage.
+    {
+        auto inMemory = m_blockFactory->createBlock();
+        for (size_t i = 0; i < logsPerTx.size(); ++i)
+        {
+            inMemory->appendTransaction(transactions[i]);
+            inMemory->appendReceipt(receipts[i]);
+        }
+        BOOST_REQUIRE_EQUAL(inMemory->transactionsSize(), logsPerTx.size());
+        BOOST_REQUIRE_EQUAL(inMemory->transactionsMetaDataSize(), 0U);
+
+        for (size_t i = 0; i < logsPerTx.size(); ++i)
+        {
+            auto const position = protocol::findReceiptPosition(*inMemory, transactions[i]->hash());
+            BOOST_REQUIRE_MESSAGE(position.has_value(),
+                "no derived position for transaction " << i << " on a TRANSACTIONS read");
+            BOOST_CHECK_EQUAL(position->transactionIndex, i);
+            BOOST_CHECK_EQUAL(position->logIndex, expectedLogIndex[i]);
+        }
+        BOOST_CHECK(
+            !protocol::findReceiptPosition(*inMemory, bcos::crypto::HashType(0x5678U)).has_value());
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

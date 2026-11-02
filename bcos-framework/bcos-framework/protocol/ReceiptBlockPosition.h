@@ -37,6 +37,7 @@
 
 #include "Block.h"
 #include "TransactionReceipt.h"
+#include <algorithm>
 #include <cstddef>
 #include <optional>
 #include <vector>
@@ -90,22 +91,46 @@ inline void applyReceiptBlockPosition(
 /// One implementation for every endpoint that resolves a receipt by hash: the block's transaction
 /// list and its receipts are written in the same order, so the position is the index of the hash
 /// in that list -- and the log base is the count of logs before it.
+///
+/// The block may have been read with either transaction flag, and the two fill different lists:
+/// TRANSACTIONS_HASH fills the metadata list and leaves the bodies empty, TRANSACTIONS fills the
+/// bodies and leaves the metadata empty (LedgerMethods.h::getBlockDataFromStorages appends to one
+/// or the other, never both). Checking transactionsSize() alone therefore rejects every hash-only
+/// read -- the shape both callers in EthEndpoint use -- because it counts bodies. The lookup has
+/// to take whichever list the read populated.
 inline std::optional<ReceiptBlockPosition> findReceiptPosition(
     protocol::Block& block, crypto::HashType const& txHash)
 {
     auto const positions = stampReceiptBlockPositions(block);
-    if (positions.size() != block.transactionsSize())
+    auto const metadataCount = static_cast<std::size_t>(block.transactionsMetaDataSize());
+    auto const bodyCount = static_cast<std::size_t>(block.transactionsSize());
+    // The receipts pair one-to-one with the transactions of whichever list is present. A mismatch
+    // means the stored rows disagree with the block, which is the case this returns nullopt for.
+    if (positions.size() != std::max(metadataCount, bodyCount))
     {
         return std::nullopt;
     }
     std::size_t index = 0;
-    // transactionMetaDatas() is a ranges::any_view: its iterator/sentinel pair differs, so it
-    // cannot be fed to std::find_if, and the const form is not iterable at all -- hence the
-    // non-const Block& parameter.
-    auto metas = block.transactionMetaDatas();
-    for (auto const& meta : metas)
+    if (metadataCount != 0)
     {
-        if (meta->hash() == txHash)
+        // transactionMetaDatas() is a ranges::any_view: its iterator/sentinel pair differs, so it
+        // cannot be fed to std::find_if, and the const form is not iterable at all -- hence the
+        // non-const Block& parameter.
+        auto metas = block.transactionMetaDatas();
+        for (auto const& meta : metas)
+        {
+            if (meta->hash() == txHash)
+            {
+                return positions[index];
+            }
+            ++index;
+        }
+        return std::nullopt;
+    }
+    auto transactions = block.transactions();
+    for (auto const& transaction : transactions)
+    {
+        if (transaction->hash() == txHash)
         {
             return positions[index];
         }
