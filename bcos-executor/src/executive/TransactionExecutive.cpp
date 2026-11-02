@@ -1305,11 +1305,10 @@ CallParameters::UniquePtr TransactionExecutive::go(
         callResults->type = CallParameters::REVERT;
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
-        if (hostContext.hasHostFault())
-        {
-            // The only non-fatal recorded fault is deterministic DEAD_LOCK.
-            callResults->evmStatus = (int32_t)EVMC_REVERT;
-        }
+        // Do not force evmStatus=EVMC_REVERT solely because hasHostFault() is set.
+        // After F2, non-halting faults rethrow as ExecuteError::DEAD_LOCK and are
+        // classified by e.errorCode(); rewriting the frame's input evmStatus here
+        // would mislabel a host-fault/dead-lock revert as an ordinary EVM REVERT.
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput(e.errorMessage(), *callResults);

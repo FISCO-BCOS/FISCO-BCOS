@@ -45,6 +45,7 @@
 #include "vm/EVMHostInterface.h"
 #include "vm/HostContext.h"
 #include "vm/Precompiled.h"  // PrecompiledMap: complete type for make_shared (line ~3657)
+#include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -3929,6 +3930,95 @@ BOOST_AUTO_TEST_CASE(shardingCreatePreservesLocalSequenceAndRouting)
             }
         }
     }
+}
+
+
+// R3/R4 F3: a DEAD_LOCK revert through go()'s bcos::Error arm must keep the
+// frame's input evmStatus (0). The removed compensation write forced EVMC_REVERT
+// whenever hasHostFault() was set, with no feature/block-version gate. Empty
+// create initcode executes STOP so throwIfHostFault() is what enters the catch.
+// Discriminating: pre-fix this returned EVMC_REVERT (==2).
+BOOST_AUTO_TEST_CASE(deadLockRevertKeepsInputEvmStatus)
+{
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+    auto ledgerCache = std::make_shared<LedgerCache>(ledger);
+    bcos::executor::BlockContext blockContext(lruStorage, ledgerCache, hashImpl,
+        /*blockNumber=*/1, h256(1), /*timestamp=*/0,
+        (uint32_t)bcos::protocol::BlockVersion::MAX_VERSION,
+        /*isAuthCheck=*/false, backend);
+    blockContext.setVMFactory(std::make_shared<bcos::executor::VMFactory>());
+
+    std::string const sender = "ff6f30856ad3bae00b1169808488502786a13e3c";
+    struct GoProbe : TransactionExecutive
+    {
+        using TransactionExecutive::go;  // protected; exposed for this seam
+        using TransactionExecutive::TransactionExecutive;
+    };
+    auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    callParameters->create = true;  // empty initcode executes STOP immediately
+    callParameters->senderAddress = sender;
+    callParameters->receiveAddress = sender;
+    callParameters->codeAddress = sender;
+    callParameters->gas = 100000;
+    auto const tableName = std::string("/apps/") + sender;
+    auto executive = std::make_shared<GoProbe>(blockContext, sender, /*contextID=*/1, /*seq=*/1);
+    bcos::executor::HostContext host(std::move(callParameters), executive, std::string(tableName));
+    host.recordHostFault("Dead lock detected, revert transaction", /*halting=*/false);
+
+    // F2 pin: non-halting recorded faults still rethrow as ExecuteError::DEAD_LOCK.
+    BOOST_CHECK_EXCEPTION(host.throwIfHostFault(), bcos::Error, [](bcos::Error const& error) {
+        return error.errorCode() == bcos::executor::ExecuteError::DEAD_LOCK &&
+               error.errorMessage() == "Dead lock detected, revert transaction";
+    });
+
+    auto output = executive->go(host);
+    BOOST_REQUIRE(output);
+    BOOST_CHECK(output->type == CallParameters::REVERT);
+    BOOST_CHECK_EQUAL(
+        output->status, (int32_t)bcos::protocol::TransactionStatus::RevertInstruction);
+    BOOST_CHECK_EQUAL(output->evmStatus, 0);  // must NOT become EVMC_REVERT
+    BOOST_CHECK_NE(output->evmStatus, (int32_t)EVMC_REVERT);
+    BOOST_CHECK(output->message.find("Dead lock detected") != std::string::npos);
+}
+
+// Negative control for F3: an ordinary EVM REVERT through the create branch must
+// still surface as EVMC_REVERT via parseEVMCResult — only the hasHostFault
+// compensation write was removed, not legitimate revert mapping.
+BOOST_AUTO_TEST_CASE(createInitcodeRevertStillReportsEvmcRevert)
+{
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+    auto ledgerCache = std::make_shared<LedgerCache>(ledger);
+    bcos::executor::BlockContext blockContext(lruStorage, ledgerCache, hashImpl,
+        /*blockNumber=*/1, h256(1), /*timestamp=*/0,
+        (uint32_t)bcos::protocol::BlockVersion::MAX_VERSION,
+        /*isAuthCheck=*/false, backend);
+    blockContext.setVMFactory(std::make_shared<bcos::executor::VMFactory>());
+
+    std::string const sender = "ff6f30856ad3bae00b1169808488502786a13e3c";
+    struct GoProbe : TransactionExecutive
+    {
+        using TransactionExecutive::go;
+        using TransactionExecutive::TransactionExecutive;
+    };
+    auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    callParameters->create = true;
+    // PUSH1 0 PUSH1 0 REVERT
+    callParameters->data = bytes{0x60, 0x00, 0x60, 0x00, 0xfd};
+    callParameters->senderAddress = sender;
+    callParameters->receiveAddress = sender;
+    callParameters->codeAddress = sender;
+    callParameters->gas = 100000;
+    auto const tableName = std::string("/apps/") + sender;
+    auto executive = std::make_shared<GoProbe>(blockContext, sender, /*contextID=*/1, /*seq=*/1);
+    bcos::executor::HostContext host(std::move(callParameters), executive, std::string(tableName));
+    BOOST_CHECK(!host.hasHostFault());
+
+    auto output = executive->go(host);
+    BOOST_REQUIRE(output);
+    BOOST_CHECK(output->type == CallParameters::REVERT);
+    BOOST_CHECK_EQUAL(
+        output->status, (int32_t)bcos::protocol::TransactionStatus::RevertInstruction);
+    BOOST_CHECK_EQUAL(output->evmStatus, (int32_t)EVMC_REVERT);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
