@@ -4081,6 +4081,130 @@ BOOST_AUTO_TEST_CASE(staticBcosPrecompileHostFaultEscapesReceiptMapping)
     BOOST_CHECK_THROW(parent.throwIfHostFault(), HostContextFault);
 }
 
+BOOST_AUTO_TEST_CASE(staticBcosPrecompileNestedEvmFaultReturnsErrorWithoutReceipt)
+{
+    std::string const parentAddress(40, 'a');
+    std::string const childAddress(40, 'b');
+    std::string const precompileAddress = "000000000000000000000000000000000000f123";
+    auto seed = [&](std::string const& address, std::string const& hex) {
+        bytes code;
+        boost::algorithm::unhex(hex, std::back_inserter(code));
+        auto hash = hashImpl->hash(ref(code));
+        storage::Entry hashEntry;
+        hashEntry.set(hash.asBytes());
+        backend->setRow("/apps/" + address, ACCOUNT_CODE_HASH, hashEntry);
+        storage::Entry codeEntry;
+        codeEntry.set(code);
+        backend->setRow(ledger::SYS_CODE_BINARY, hash.toRawString(), codeEntry);
+    };
+    seed(parentAddress, "6000600060006000600073" + precompileAddress + "620186a0f15000");
+    seed(childAddress, "60005400");
+
+    class NestedPrecompiled : public bcos::precompiled::Precompiled
+    {
+    public:
+        NestedPrecompiled(std::string childAddress, bcos::crypto::Hash::Ptr hash)
+          : bcos::precompiled::Precompiled(std::move(hash)), m_childAddress(std::move(childAddress))
+        {}
+
+        bcos::precompiled::PrecompiledExecResult::Ptr call(
+            std::shared_ptr<TransactionExecutive> executive,
+            bcos::precompiled::PrecompiledExecResult::Ptr params) override
+        {
+            auto input = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+            input->senderAddress = params->m_codeAddress;
+            input->receiveAddress = m_childAddress;
+            input->codeAddress = input->receiveAddress;
+            input->gas = params->m_gasLeft;
+            executive->externalCall(std::move(input));
+            return params;
+        }
+
+    private:
+        std::string m_childAddress;
+    };
+
+    class SerialExecutor : public TransactionExecutor
+    {
+    public:
+        using TransactionExecutor::TransactionExecutor;
+        void configure(std::shared_ptr<BlockContext> context,
+            std::shared_ptr<PrecompiledMap> precompiled,
+            std::shared_ptr<const std::set<std::string>> staticPrecompiled)
+        {
+            m_blockContext = std::move(context);
+            m_precompiled = std::move(precompiled);
+            m_staticPrecompiled = std::move(staticPrecompiled);
+        }
+    };
+
+    auto precompiledMap = std::make_shared<PrecompiledMap>();
+    precompiledMap->insert(
+        precompileAddress, std::make_shared<NestedPrecompiled>(childAddress, hashImpl));
+    auto staticPrecompiled =
+        std::make_shared<const std::set<std::string>>(std::set<std::string>{precompileAddress});
+
+    for (bool fault : {false, true})
+    {
+        auto lru = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+        auto cache = std::make_shared<LedgerCache>(ledger);
+        auto context = std::make_shared<BlockContext>(lru, cache, hashImpl, 1, h256(1), 0,
+            (uint32_t)BlockVersion::V3_18_0_VERSION, false, backend);
+        context->setVMFactory(std::make_shared<VMFactory>());
+        auto serialExecutor = std::make_shared<SerialExecutor>(ledger, txpool, nullptr, backend,
+            std::make_shared<NativeExecutionMessageFactory>(),
+            std::make_shared<storage::StateStorageFactory>(0), hashImpl, false, nullptr, nullptr,
+            "static-precompile-host-fault-test",
+            std::make_shared<bcos::IOServicePool>(1, "static-precompile-test"));
+        serialExecutor->configure(context, precompiledMap, staticPrecompiled);
+
+        auto input = std::make_unique<NativeExecutionMessage>();
+        input->setType(NativeExecutionMessage::MESSAGE);
+        input->setContextID(100);
+        input->setSeq(fault ? 2 : 1);
+        input->setDepth(0);
+        input->setOrigin(std::string(40, 'c'));
+        input->setFrom(std::string(input->origin()));
+        input->setTo(parentAddress);
+        input->setStaticCall(false);
+        input->setGasAvailable(1'000'000);
+        input->setCreate(false);
+        input->setData(bytes(4, 0));
+
+        if (fault)
+        {
+            backend->armRowFault("/apps/" + childAddress, std::string(32, '\0'));
+        }
+        std::promise<Error::UniquePtr> errorPromise;
+        std::promise<ExecutionMessage::UniquePtr> resultPromise;
+        serialExecutor->executeTransaction(
+            std::move(input), [&](Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                errorPromise.set_value(std::move(error));
+                resultPromise.set_value(std::move(result));
+            });
+        auto callbackError = errorPromise.get_future().get();
+        auto callbackResult = resultPromise.get_future().get();
+        if (fault)
+        {
+            BOOST_REQUIRE(callbackError);
+            BOOST_CHECK(!callbackResult);
+            BOOST_CHECK(boost::diagnostic_information(*callbackError)
+                            .find("Get row from storage failed!") != std::string::npos);
+            BOOST_CHECK_GT(backend->rowFaultHits.load(), 0);
+            backend->disarmRowFault();
+        }
+        else
+        {
+            auto const diagnostic =
+                callbackError ? boost::diagnostic_information(*callbackError) : std::string{};
+            BOOST_CHECK_MESSAGE(!callbackError, diagnostic);
+            BOOST_REQUIRE(callbackResult);
+            BOOST_CHECK_EQUAL(callbackResult->type(), NativeExecutionMessage::FINISHED);
+            BOOST_CHECK_EQUAL(callbackResult->status(), 0);
+        }
+    }
+}
+
 BOOST_AUTO_TEST_CASE(createInitcodeRevertStillReportsEvmcRevert)
 {
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
