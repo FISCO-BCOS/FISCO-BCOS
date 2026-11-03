@@ -881,6 +881,11 @@ private:
                         clientConfig.forkId =
                             computeForkId(static_cast<uint64_t>(resume.anchor.number),
                                 static_cast<uint64_t>(resume.anchor.timestamp));
+                        // EIP-7642 block range (eth/69+ Status): every committed block
+                        // from genesis to the local head is served with body + receipts.
+                        clientConfig.earliestBlock = 0;
+                        clientConfig.latestBlock = static_cast<uint64_t>(resume.anchor.number);
+                        clientConfig.latestBlockHash = clientConfig.headHash;
 
                         bcos::devp2p::rlpx::RlpxClient client(localKey, clientConfig);
                         // DEBUG: in steady state (caught up) the loop re-dials every
@@ -1427,6 +1432,10 @@ private:
                 config.totalDifficulty = {};
                 config.forkId = computeForkId(static_cast<uint64_t>(resume.anchor.number),
                     static_cast<uint64_t>(resume.anchor.timestamp));
+                // EIP-7642 block range, same as the sync loop's Status.
+                config.earliestBlock = 0;
+                config.latestBlock = static_cast<uint64_t>(resume.anchor.number);
+                config.latestBlockHash = config.headHash;
                 return config;
             };
         m_txGossip->start(
