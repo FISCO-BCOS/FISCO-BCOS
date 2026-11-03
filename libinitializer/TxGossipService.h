@@ -480,8 +480,14 @@ private:
                     return countDrop(peer, "blob sidecar commitment/versioned hash mismatch");
                 }
             }
-            if (!crypto::kzg::verifyBlobKzgProofBatch(
-                    sidecar->blobs, sidecar->commitments, sidecar->proofs))
+            // The wrapper version the head's fork calls for (EIP-7594 cell proofs from Osaka
+            // on); the pool would refuse the other anyway, this skips verifying it.
+            if (sidecar->version != m_memPool.requiredBlobSidecarVersion())
+            {
+                return countDrop(peer, "blob sidecar version not admissible at the head's fork");
+            }
+            if (!crypto::kzg::verifyBlobSidecarProofs(
+                    sidecar->version, sidecar->blobs, sidecar->commitments, sidecar->proofs))
             {
                 return countDrop(peer, "blob sidecar KZG proof invalid");
             }
