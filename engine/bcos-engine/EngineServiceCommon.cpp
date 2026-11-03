@@ -18,6 +18,7 @@
  */
 
 #include "EngineServiceCommon.h"
+#include <array>
 
 // Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 // (eth/catalyst/api.go GetPayloadVn / forkchoiceUpdated, miner/payload_building.go).
@@ -264,36 +265,83 @@ PayloadStatus makeStatus(PayloadValidationStatus status, std::optional<h256> lat
     };
 }
 
-void requireNewPayloadWindow(std::uint32_t requestVersion, evmc_revision revision)
+bool l1MethodInWindow(L1Method method, std::uint32_t version, evmc_revision revision)
 {
-    bool inWindow = true;
-    switch (static_cast<ApiVersion>(requestVersion))
+    // One table for the three fork-gated L1 methods (execution-apis per-fork files, "Update
+    // the methods of previous forks" sections; geth's checkFork sets):
+    //   newPayload   V1 none | V2 <Cancun | V3 Cancun | V4 Prague,Osaka | V5 Amsterdam
+    //   getPayload   V1 none | V2 <Cancun | V3 Cancun | V4 Prague | V5 Osaka | V6 Amsterdam
+    //   fcu          V1 <Cancun | V2 <Cancun | V3 Cancun,Prague,Osaka | V4 Amsterdam
+    // The BPO forks map to EVMC_OSAKA and ride the Osaka entries (geth: BPO1/BPO2 in the same
+    // checkFork sets). Amsterdam has no evmc revision in this binary, so its methods are never
+    // in window; a timestamp at or past amsterdam_time never reaches here — revisionAt throws
+    // UnsupportedFork for it, which is the same -38005 the previous forks' methods owe there.
+    auto const v = static_cast<ApiVersion>(version);
+    switch (method)
     {
-    case ApiVersion::V1:
-        break;  // no window: shanghai.md adds none and geth's NewPayloadV1 checks none
-    case ApiVersion::V2:
-        inWindow = revision < EVMC_CANCUN;  // cancun.md "Update the methods of previous forks"
-        break;
-    case ApiVersion::V3:
-        inWindow = revision == EVMC_CANCUN;  // prague.md retires V3 from Prague on
-        break;
-    case ApiVersion::V4:
-        // prague.md; osaka.md adds no newPayloadV4 rule, so Osaka (and the BPO forks, which
-        // map to EVMC_OSAKA) keep V4 — geth's checkFork(Prague, Osaka, BPO1, BPO2). A closed
-        // set so a future revision does not slip through the old method.
-        inWindow = revision == EVMC_PRAGUE || revision == EVMC_OSAKA;
-        break;
-    case ApiVersion::V5:
-        inWindow = false;  // Amsterdam: not implemented
-        break;
+    case L1Method::NewPayload:
+        switch (v)
+        {
+        case ApiVersion::V1:
+            return true;  // shanghai.md adds no -38005 rule and geth's NewPayloadV1 checks none
+        case ApiVersion::V2:
+            return revision < EVMC_CANCUN;
+        case ApiVersion::V3:
+            return revision == EVMC_CANCUN;
+        case ApiVersion::V4:
+            return revision == EVMC_PRAGUE || revision == EVMC_OSAKA;
+        case ApiVersion::V5:
+            return false;
+        }
+        return false;
+    case L1Method::GetPayload:
+        switch (v)
+        {
+        case ApiVersion::V1:
+            return true;
+        case ApiVersion::V2:
+            return revision < EVMC_CANCUN;
+        case ApiVersion::V3:
+            return revision == EVMC_CANCUN;
+        case ApiVersion::V4:
+            return revision == EVMC_PRAGUE;
+        case ApiVersion::V5:
+            return revision == EVMC_OSAKA;
+        }
+        return false;
+    case L1Method::ForkchoiceUpdated:
+        switch (v)
+        {
+        case ApiVersion::V1:
+        case ApiVersion::V2:
+            return revision < EVMC_CANCUN;  // Paris and Shanghai (geth fcuV1/fcuV2)
+        case ApiVersion::V3:
+            // prague.md names Cancun and Prague; osaka.md adds no fcuV4, so V3 is the only
+            // method that can build an Osaka block (geth checkFork Cancun..Osaka, BPO1, BPO2).
+            return revision == EVMC_CANCUN || revision == EVMC_PRAGUE || revision == EVMC_OSAKA;
+        case ApiVersion::V4:
+        case ApiVersion::V5:
+            return false;
+        }
+        return false;
     }
-    if (!inWindow)
+    return false;
+}
+
+void requireL1MethodWindow(L1Method method, std::uint32_t version, evmc_revision revision)
+{
+    if (l1MethodInWindow(method, version, revision))
     {
-        BOOST_THROW_EXCEPTION(
-            UnsupportedFork{} << bcos::errinfo_comment{
-                "newPayloadV" + std::to_string(requestVersion) +
-                ": the payload's timestamp falls in a fork outside this method's window"});
+        return;
     }
+    static constexpr std::array<std::string_view, 3> names{
+        "newPayloadV", "getPayloadV", "forkchoiceUpdatedV"};
+    std::string what{names[static_cast<std::size_t>(method)]};
+    what += std::to_string(version);
+    what += method == L1Method::GetPayload ?
+                ": the payload was built for a fork outside this method's window" :
+                ": the timestamp falls in a fork outside this method's window";
+    BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{std::move(what)});
 }
 
 void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,
@@ -307,42 +355,11 @@ void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& 
     }
     if (l1Revision.has_value())
     {
-        // L1 (execution-apis): each getPayload version serves one fork window and answers
-        // -38005 outside it — V2 up to Shanghai (cancun.md "Update the methods of previous
-        // forks"), V3 Cancun only (prague.md), V4 Prague only (osaka.md), V5 Osaka
-        // (osaka.md; the BPO forks map to EVMC_OSAKA in evmcRevisionForTimestamp, Amsterdam
-        // is getPayloadV6). geth's GetPayloadV2..V5 fork tables are the same sets. The L1
-        // V4/V5 shapes add executionRequests (and at V5 the Osaka blobs bundle) on top of
-        // ExecutionPayloadV3; the OP-dialect withdrawalsRoot checked below is not part of
-        // them. V2's upper bound is unreachable today (an L1 build at Cancun or later
-        // requires FCU V3's parentBeaconBlockRoot, so no shape-2 payload exists there) and
-        // stays for the spec's sake.
-        auto const revision = *l1Revision;
-        bool inWindow = true;
-        switch (static_cast<ApiVersion>(requestVersion))
-        {
-        case ApiVersion::V1:
-            break;
-        case ApiVersion::V2:
-            inWindow = revision < EVMC_CANCUN;
-            break;
-        case ApiVersion::V3:
-            inWindow = revision == EVMC_CANCUN;
-            break;
-        case ApiVersion::V4:
-            inWindow = revision == EVMC_PRAGUE;
-            break;
-        case ApiVersion::V5:
-            inWindow = revision == EVMC_OSAKA;
-            break;
-        }
-        if (!inWindow)
-        {
-            BOOST_THROW_EXCEPTION(
-                UnsupportedFork{} << bcos::errinfo_comment{
-                    "getPayloadV" + std::to_string(requestVersion) +
-                    ": the payload was built for a fork outside this method's window"});
-        }
+        // L1 (execution-apis): the per-method fork window (l1MethodInWindow) on the revision
+        // the payload was built at. The L1 V4/V5 shapes add executionRequests (and at V5 the
+        // Osaka blobs bundle) on top of ExecutionPayloadV3; the OP-dialect withdrawalsRoot
+        // checked below is not part of them.
+        requireL1MethodWindow(L1Method::GetPayload, requestVersion, *l1Revision);
     }
     else if (requestVersion >= static_cast<std::uint32_t>(ApiVersion::V4) &&
              !payload.withdrawalsRoot.has_value())

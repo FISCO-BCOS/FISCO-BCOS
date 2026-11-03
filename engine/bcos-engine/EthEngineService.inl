@@ -76,6 +76,19 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
                 .payloadId = std::nullopt,
             };
         }
+        if (m_externalPayloadVerifier)
+        {
+            // EL mode: the method must match the fork of payloadAttributes.timestamp
+            // (cancun.md retires V2 and prague.md pins V3's window with -38005; V1 has no
+            // spec rule and geth answers -32602 past Shanghai — this lane answers the same
+            // -38005 for it), after the attribute shape rules (geth's fcuV2/V3 switch
+            // order) and before any state is touched. A null-attributes call carries no
+            // timestamp and is never fork-gated.
+            engine_common::requireL1MethodWindow(engine_common::L1Method::ForkchoiceUpdated,
+                version,
+                m_externalPayloadVerifier->revisionAt(
+                    static_cast<int64_t>(payloadAttributes->timestamp / 1000)));
+        }
     }
 
     auto view = m_globalStateStorage.fork();
@@ -515,9 +528,9 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         // pair, so a CL that sends it to newPayloadV2 must get the spec's -38005 rather
         // than an INVALID that blames the block for its blob fields; likewise V3 for a
         // Prague block and V4 for a Cancun one.
-        engine_common::requireNewPayloadWindow(
-            version, m_externalPayloadVerifier->revisionAt(
-                         static_cast<int64_t>(request.executionPayload.timestamp / 1000)));
+        engine_common::requireL1MethodWindow(engine_common::L1Method::NewPayload, version,
+            m_externalPayloadVerifier->revisionAt(
+                static_cast<int64_t>(request.executionPayload.timestamp / 1000)));
     }
     // EL mode validates against the vanilla L1 dialect (validateExecutionPayloadL1);
     // the OP/single-node wiring keeps the OP-flavored gate, lifted for blob envelopes
@@ -624,7 +637,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         // external lane (CL-pushed L1 blocks, executed+committed via the shared
         // EthereumBlockVerifier). The exclusive tracker lock is released before the
         // co_await inside newPayloadExternal. The method's fork window was checked at
-        // entry (requireNewPayloadWindow).
+        // entry (requireL1MethodWindow).
         bool builtHere;
         {
             auto guard = m_tracker.lockExclusive();

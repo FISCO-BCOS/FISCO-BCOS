@@ -795,6 +795,18 @@ struct EL1BPragueFixture : EL1BForkFixture
     EL1BPragueFixture() : EL1BForkFixture(el1bPragueForks(), EVMC_PRAGUE) {}
 };
 
+/// Amsterdam scheduled at the block being built: nothing this binary can execute.
+scheduler_v1::EvmcForkTimestamps el1bAmsterdamAtBlockForks()
+{
+    auto forks = el1bOsakaForks();
+    forks.amsterdamTime = c_blockTimestampMs / 1000;
+    return forks;
+}
+struct EL1BAmsterdamScheduledFixture : EL1BForkFixture
+{
+    EL1BAmsterdamScheduledFixture() : EL1BForkFixture(el1bAmsterdamAtBlockForks(), EVMC_OSAKA) {}
+};
+
 struct EL1BOsakaFixture : EL1BForkFixture
 {
     EL1BOsakaFixture() : EL1BForkFixture(el1bOsakaForks(), EVMC_OSAKA) {}
@@ -2084,6 +2096,57 @@ BOOST_FIXTURE_TEST_CASE(cancunGetPayloadV4IsUnsupportedFork, EL1BFixture)
     BOOST_CHECK(!data->executionRequests.has_value());  // V3 carries no executionRequests
     BOOST_CHECK_THROW(task::syncWait(service.getPayload(*fcu.payloadId, 4)), UnsupportedFork);
     BOOST_CHECK_THROW(task::syncWait(service.getPayload(*fcu.payloadId, 5)), UnsupportedFork);
+}
+
+// EL mode: forkchoiceUpdated's version must match the fork of payloadAttributes.timestamp
+// (cancun.md "Update the methods of previous forks" for V2; geth fcuV1/V2 Paris+Shanghai
+// only): on a Cancun-from-genesis chain V1 and V2 attributes answer -38005 before any state
+// is read, V3 builds, and a null-attributes head update is never fork-gated.
+BOOST_FIXTURE_TEST_CASE(forkchoiceUpdatedMethodWindowFollowsTheAttributesFork, EL1BFixture)
+{
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {});
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+
+    auto attributesV2 = makePayloadAttributesV2(c_blockTimestampMs);
+    BOOST_CHECK_THROW(
+        task::syncWait(service.updateForkchoice(state, &attributesV2, 2)), UnsupportedFork);
+    auto attributesV1 = attributesV2;
+    attributesV1.withdrawals.reset();
+    BOOST_CHECK_THROW(
+        task::syncWait(service.updateForkchoice(state, &attributesV1, 1)), UnsupportedFork);
+
+    auto attributesV3 = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributesV3, 3));
+    BOOST_CHECK(fcu.payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK(fcu.payloadId.has_value());
+
+    auto headOnly = task::syncWait(service.updateForkchoice(state, nullptr, 2));
+    BOOST_CHECK(headOnly.payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK(!headOnly.payloadId.has_value());
+}
+
+// amsterdam_time scheduled at the block being built: the second before is Osaka; at the
+// fork every fork-gated method answers -38005 (osaka.md / amsterdam.md "Update the methods
+// of previous forks") because this binary has no Amsterdam execution — the fork schedule
+// lookup itself refuses the timestamp, before FCU reads state or newPayload checks a shape.
+BOOST_FIXTURE_TEST_CASE(
+    amsterdamTimestampIsUnsupportedForkOnEveryGatedMethod, EL1BAmsterdamScheduledFixture)
+{
+    auto const amsterdamSeconds = static_cast<int64_t>(c_blockTimestampMs / 1000);
+    BOOST_CHECK_EQUAL(externalVerifier->revisionAt(amsterdamSeconds - 1), EVMC_OSAKA);
+    BOOST_CHECK_THROW(externalVerifier->revisionAt(amsterdamSeconds), UnsupportedFork);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    seedGenesis(parent);
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    BOOST_CHECK_THROW(
+        task::syncWait(service.updateForkchoice(state, &attributes, 3)), UnsupportedFork);
+
+    NewPayloadRequest request;
+    request.executionPayload.timestamp = c_blockTimestampMs;
+    BOOST_CHECK_THROW(task::syncWait(service.newPayload(request, 4)), UnsupportedFork);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
