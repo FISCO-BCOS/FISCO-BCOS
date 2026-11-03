@@ -1,0 +1,183 @@
+# M-B3+M6 block-level vector manifest -- written FIRST from the plan's case
+# table (docs/superpowers/plans/2026-07-11-bcos-evm-ref-op-differential-gate-mb3-m6.md,
+# Step 2, rows 1-14 x fork column), BEFORE generation. Any file listed here
+# that cannot be generated is a STOP (matrix-cell drops need user signoff).
+# Enumeration note: rows 1-9,11,14 are I+J (11 cases x 2 = 22), row 10 is
+# Isthmus-only (+1), rows 12-13 are Jovian-only (+2) = 25 vectors. The plan
+# prose says "26"; the table's fork column enumerates 25 -- the table is
+# binding (see generator/README.md "Corpus enumeration").
+#
+# Current total (2026-08-10): 41 entries (34 corpus + 7 Phase-2 线 A
+# ecotone/fjord formula + upgrade boundaries). The 25-vector count above is
+# the original (M-B3+M6) batch and is retained as a historical record, not
+# rewritten; see the "Corpus augmentation" (+6 -> 31), "Defer-sweep"
+# (+2 -> 33), the appended 34th-intake note, and the Task-4 (+7 -> 41) note
+# below for the deltas that bring the manifest to its present 41-entry state.
+isthmus_deposit_only.json
+jovian_deposit_only.json
+isthmus_transfer_basic.json
+jovian_transfer_basic.json
+isthmus_transfer_multi.json
+jovian_transfer_multi.json
+isthmus_deposit_mint.json
+jovian_deposit_mint.json
+isthmus_deposit_failed.json
+jovian_deposit_failed.json
+isthmus_contract_logs.json
+jovian_contract_logs.json
+isthmus_message_passer_write.json
+jovian_message_passer_write.json
+isthmus_tx_reverted.json
+jovian_tx_reverted.json
+isthmus_setcode_7702.json
+jovian_setcode_7702.json
+isthmus_big_block_130tx.json
+isthmus_system_contracts_real.json
+jovian_system_contracts_real.json
+jovian_first_block.json
+jovian_da_mix.json
+isthmus_fee_env_observer.json
+jovian_fee_env_observer.json
+# Corpus augmentation (spec rev.3): 3 cases x both forks = +6 -> 31 vectors.
+# Written FIRST (before generation), same discipline as above.
+isthmus_contract_create.json
+jovian_contract_create.json
+isthmus_access_list.json
+jovian_access_list.json
+isthmus_setcode_7702_skips.json
+jovian_setcode_7702_skips.json
+# Defer-sweep batch (2026-07-12): 1 case x both forks = +2 -> 33 vectors.
+# Written FIRST (before generation), same discipline as above. Feasibility
+# probed against op-geth @ e8800cffe: genesis flushAlloc commits with
+# deleteEmptyObjects=false (core/genesis.go), so an exists-but-empty alloc
+# account IS materialized in the genesis trie; an in-block zero-value CALL
+# then EIP-161 touch-deletes it at block commit.
+isthmus_empty_account_cleanup.json
+jovian_empty_account_cleanup.json
+# 34th vector intake (2026-08-10, user decision): the W5 commit
+# 205ad9573 added this case to cases.go:538 but it was emitted by
+# --write-cases and never manifested. Appended FIRST per manifest
+# discipline (entries written before generation).
+isthmus_system_call_order_observable.json
+# Phase-2 线 A genesis fork 矩阵（Task 4, 2026-08-10）：+7 -> 41 vectors.
+# 公式边界（formula-boundary）：ecotone/fjord 纯 fork 的 transfer/contract_create
+# 基础对（L1 费公式在 ecotone→fjord 切换：Ecotone 动态标量 vs Fjord 分段常量，
+# 均无 operator-fee/DA 段；属性 calldata 均 164B Ecotone 布局）。
+ecotone_transfer_basic.json
+ecotone_contract_create.json
+fjord_transfer_basic.json
+fjord_contract_create.json
+# 升级边界（upgrade-boundary）：FILENAME 前缀 = genesis 基础 fork，而每个向量的
+# _info.hardfork = 块时 TARGET fork（有意为之：replayer 按 _info.hardfork 选配置；
+# 基础 fork 可从 _info.activations 恢复）。属性布局/extraData 由块时 fork 决定。
+ecotone_upgrade_fjord_activation.json
+fjord_upgrade_isthmus_activation.json
+isthmus_upgrade_jovian_activation.json
+# Phase-2 线 B 预编译矩阵（Task 5, 2026-08-11）：+36 -> 77 vectors.
+# 实测枚举：generator 输出 77 case（41 旧 + 36 新），与 plan 的 34 新增/75 总数
+# 不符（plan 算术 13+14+4+5=36 为实，41+34=75 是笔误）——以生成器实测为准。
+# 基础 7（ecrecover/sha256/ripemd160/identity/expmod/blake2f/point_evaluation）、
+# bn256 5（add/mul/pair_norm + granite/jovian overcap + fjord large_success）、
+# BLS12-381 14（g1add/g1msm/g2add/g2msm/pairing/map_g1/map_g2 + 3 isthmus overcap
+# + 3 jovian overcap + fjord noop）、RIP-7212 4（valid/invalid/wronglen + ecotone
+# noop）、wrapper CALL 语义 5（63of64/returndata/value_revert/value_overcap/eip7702）。
+# wrapper case 名已修复单 fork 前缀（原 Task 4 实现为双前缀 ist…_ist…，见
+# cases_precompile_wrapper.go；修复后与 <fork>_<name>.json 不变量一致）。
+ecotone_precompile_p256_noop.json
+fjord_precompile_bls_noop.json
+fjord_precompile_bn256pair_large_success.json
+fjord_precompile_p256_invalid.json
+fjord_precompile_p256_valid.json
+fjord_precompile_p256_wronglen.json
+granite_precompile_bn256pair_overcap.json
+isthmus_precompile_blake2f.json
+isthmus_precompile_bls_g1add.json
+isthmus_precompile_bls_g1msm.json
+isthmus_precompile_bls_g1msm_overcap.json
+isthmus_precompile_bls_g2add.json
+isthmus_precompile_bls_g2msm.json
+isthmus_precompile_bls_g2msm_overcap.json
+isthmus_precompile_bls_map_g1.json
+isthmus_precompile_bls_map_g2.json
+isthmus_precompile_bls_pairing.json
+isthmus_precompile_bls_pairing_overcap.json
+isthmus_precompile_bn256add.json
+isthmus_precompile_bn256mul.json
+isthmus_precompile_bn256pair_norm.json
+isthmus_precompile_ecrecover.json
+isthmus_precompile_expmod.json
+isthmus_precompile_identity.json
+isthmus_precompile_point_evaluation.json
+isthmus_precompile_ripemd160.json
+isthmus_precompile_sha256.json
+isthmus_precompile_wrap_63of64.json
+isthmus_precompile_wrap_eip7702.json
+isthmus_precompile_wrap_returndata.json
+jovian_precompile_bls_g1msm_overcap.json
+jovian_precompile_bls_g2msm_overcap.json
+jovian_precompile_bls_pairing_overcap.json
+jovian_precompile_bn256pair_overcap.json
+jovian_precompile_wrap_value_overcap.json
+jovian_precompile_wrap_value_revert.json
+
+# Phase-3 enhanced corpus (Task 6): corrupt 12 + static 10 + invalid-tx 18 + chain 6 + legacy 2 = 48 vectors (idempotent; §4c item 3/12 excluded — loader 不可表达)
+invalid_isthmus_blob.json
+invalid_isthmus_chain_3_break.json
+invalid_isthmus_chain_3_fork.json
+invalid_isthmus_empty_auth_list.json
+invalid_isthmus_fee_cap_low.json
+invalid_isthmus_insufficient_funds.json
+invalid_isthmus_intrinsic_gas.json
+invalid_isthmus_nonce_high.json
+invalid_isthmus_nonce_low.json
+invalid_isthmus_sender_no_eoa.json
+invalid_isthmus_setcode_create.json
+invalid_isthmus_transfer_basic_blockHash.json
+invalid_isthmus_transfer_basic_extraData.json
+invalid_isthmus_transfer_basic_gasUsed.json
+invalid_isthmus_transfer_basic_parentHash.json
+invalid_isthmus_transfer_basic_receiptsRoot.json
+invalid_isthmus_transfer_basic_stateRoot.json
+invalid_isthmus_transfer_basic_static_1.json
+invalid_isthmus_transfer_basic_static_10.json
+invalid_isthmus_transfer_basic_static_2.json
+invalid_isthmus_transfer_basic_static_4.json
+invalid_isthmus_transfer_basic_static_5.json
+invalid_isthmus_transfer_basic_static_6.json
+invalid_isthmus_transfer_basic_static_7.json
+invalid_isthmus_transfer_basic_static_8.json
+invalid_isthmus_transfer_basic_static_9.json
+invalid_jovian_blob.json
+invalid_jovian_chain_3_break.json
+invalid_jovian_chain_3_fork.json
+invalid_jovian_empty_auth_list.json
+invalid_jovian_fee_cap_low.json
+invalid_jovian_insufficient_funds.json
+invalid_jovian_intrinsic_gas.json
+invalid_jovian_nonce_high.json
+invalid_jovian_nonce_low.json
+invalid_jovian_sender_no_eoa.json
+invalid_jovian_setcode_create.json
+invalid_jovian_transfer_basic_blockHash.json
+invalid_jovian_transfer_basic_extraData.json
+invalid_jovian_transfer_basic_gasUsed.json
+invalid_jovian_transfer_basic_parentHash.json
+invalid_jovian_transfer_basic_receiptsRoot.json
+invalid_jovian_transfer_basic_stateRoot.json
+invalid_jovian_transfer_basic_static_11.json
+isthmus_chain_3.json
+isthmus_legacy_transfer.json
+jovian_chain_3.json
+jovian_legacy_transfer.json
+
+# Phase-3 enhanced corpus (Task 6): corrupt 12 + static 10 + invalid-tx 18 + chain 6 + legacy 2 = 48 vectors (idempotent; §4c item 3/12 excluded — loader 不可表达)
+isthmus_l1block_deposit_slots.json
+isthmus_message_passer_withdraw.json
+jovian_l1block_deposit_slots.json
+jovian_message_passer_withdraw.json
+
+# Dual-path observer vectors (gaslimit/basefee, bothForks)
+isthmus_deposit_basefee_observer.json
+isthmus_gaslimit_observer.json
+jovian_deposit_basefee_observer.json
+jovian_gaslimit_observer.json
