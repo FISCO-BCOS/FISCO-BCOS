@@ -17,9 +17,12 @@
 #include "EESTRunner.h"
 #include "EESTProductionChain.h"
 #include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-framework/engine/Errors.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-rpc/jsonrpc/Common.h"
+#include "bcos-rpc/web3jsonrpc/utils/Common.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
@@ -736,6 +739,19 @@ tbb::concurrent_vector<FailureDetail> g_failureDetails;
 // Mutex for console output (keep lines from interleaving)
 std::mutex g_printMutex;
 
+/// A fixture file the loader could not read or parse. Counted apart from fixture failures
+/// and named in the failure list: the known-failures gate refuses the run on any load
+/// failure, so dropping an unreadable file cannot turn the sweep green.
+void recordLoadFailure(
+    std::filesystem::path const& filePath, std::string_view format, std::string_view what)
+{
+    std::cerr << "Warning: failed to load fixture file " << filePath.string() << ": " << what
+              << "\n";
+    ++g_loadFailures;
+    g_failureDetails.push_back({filePath.filename().string(), std::string(format),
+        std::string("fixture file failed to load: ") + std::string(what)});
+}
+
 void printLine(std::string const& msg)
 {
     std::lock_guard<std::mutex> lock(g_printMutex);
@@ -1025,6 +1041,10 @@ public:
         auto outcome = chain.executeOnly(header, chain.parent(), std::vector<bytes>{raw},
             withdrawals, schedule, static_cast<uint64_t>(fixture.chainId),
             Verifier::BlockExecutionOptions{.systemCalls = false, .powRewards = false});
+        if (outcome.fault.has_value())
+        {
+            return fail("pipeline fault: " + *outcome.fault);
+        }
         if (!post.expectException.empty())
         {
             if (outcome.error.has_value())
@@ -1124,23 +1144,53 @@ public:
         for (std::size_t i = 0; i < fixture.enginePayloads.size(); ++i)
         {
             auto const& payload = fixture.enginePayloads[i];
+            auto const index = std::to_string(i);
             std::optional<engine::PayloadStatus> status;
-            std::string thrown;
+            // The JSON-RPC error engine_newPayload would answer: the parser's own code, or
+            // EngineEndpoint::handleNewPayload's mapping of the service's typed failures.
+            // Any other exception is the endpoint's -32603, which no fixture expects: a fault.
+            std::optional<int32_t> errorCode;
+            std::string errorText;
             try
             {
                 status = engine.newPayload(payload.params, payload.newPayloadVersion);
             }
+            catch (bcos::rpc::JsonRpcException const& e)
+            {
+                errorCode = e.code();
+                errorText = e.msg();
+            }
+            catch (engine::UnsupportedFork const& e)
+            {
+                errorCode = bcos::rpc::EngineError::UnsupportedFork;
+                errorText = e.what();
+            }
+            catch (engine::UnsupportedEngineApiVersion const& e)
+            {
+                errorCode = bcos::rpc::EngineError::UnsupportedFork;
+                errorText = e.what();
+            }
+            catch (engine::InvalidPayloadAttributes const& e)
+            {
+                errorCode = bcos::rpc::EngineError::InvalidPayloadAttributes;
+                errorText = e.what();
+            }
             catch (std::exception const& e)
             {
-                thrown = e.what();
+                return fail("payload " + index + " pipeline fault: " + e.what());
             }
-            auto const index = std::to_string(i);
             if (payload.errorCode.has_value())
             {
-                if (!thrown.empty())
+                if (errorCode.has_value() && *errorCode == *payload.errorCode)
                 {
                     ++g_expectedException;
                     continue;
+                }
+                if (errorCode.has_value())
+                {
+                    return fail("payload " + index + " expected JSON-RPC error " +
+                                std::to_string(*payload.errorCode) + ", got " +
+                                std::to_string(*errorCode) + ": " + errorText);
                 }
                 return fail("payload " + index + " expected JSON-RPC error " +
                             std::to_string(*payload.errorCode) + ", got status " +
@@ -1148,10 +1198,11 @@ public:
             }
             if (!payload.validationError.empty())
             {
-                if (!thrown.empty())
+                if (errorCode.has_value())
                 {
-                    return fail("payload " + index + " threw instead of INVALID (" +
-                                payload.validationError + "): " + thrown);
+                    return fail("payload " + index + " answered JSON-RPC error " +
+                                std::to_string(*errorCode) + " instead of INVALID (" +
+                                payload.validationError + "): " + errorText);
                 }
                 if (status->status != engine::PayloadValidationStatus::Invalid &&
                     status->status != engine::PayloadValidationStatus::InvalidBlockHash)
@@ -1163,9 +1214,10 @@ public:
                 ++g_expectedException;
                 continue;
             }
-            if (!thrown.empty())
+            if (errorCode.has_value())
             {
-                return fail("payload " + index + " threw: " + thrown);
+                return fail("payload " + index + " answered JSON-RPC error " +
+                            std::to_string(*errorCode) + ": " + errorText);
             }
             if (status->status != engine::PayloadValidationStatus::Valid)
             {
@@ -1280,6 +1332,10 @@ public:
                 return fail("block " + std::to_string(i) + " RLP undecodable: " + e.what());
             }
             auto outcome = chain.applyBlock(decoded.data(), schedule, chainId);
+            if (outcome.fault.has_value())
+            {
+                return fail("block " + std::to_string(i) + " pipeline fault: " + *outcome.fault);
+            }
             if (expectInvalid)
             {
                 if (outcome.valid)
@@ -1391,9 +1447,7 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
         }
         catch (std::exception const& e)
         {
-            std::cerr << "Warning: failed to load fixture file " << filePath.string() << ": "
-                      << e.what() << "\n";
-            ++g_loadFailures;
+            recordLoadFailure(filePath, format, e.what());
             countOutcome(format, false);
             ++result.failed;
             return result;
@@ -1428,9 +1482,7 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
     }
     catch (std::exception const& e)
     {
-        std::cerr << "Warning: failed to load fixture file " << filePath.string() << ": "
-                  << e.what() << "\n";
-        ++g_loadFailures;
+        recordLoadFailure(filePath, format, e.what());
         countOutcome(format, false);
         ++result.failed;
         return result;
@@ -1802,6 +1854,7 @@ int main(int argc, char* argv[])
                   << " entries in " << g_opts.knownFailures << ")\n";
         std::cout << "  Unexpected failures: " << unexpectedFailures.size() << "\n";
         std::cout << "  Stale entries:       " << stale.size() << "\n";
+        std::cout << "  Load failures:       " << g_loadFailures.load() << "\n";
         for (auto const& label : unexpectedFailures)
         {
             std::cout << "    UNEXPECTED " << label << "\n";
@@ -1811,7 +1864,8 @@ int main(int argc, char* argv[])
             std::cout << "    STALE " << text << "\n";
         }
         std::cout << "=================================================\n";
-        return (unexpectedFailures.empty() && stale.empty()) ? 0 : 1;
+        // A load failure is never in the allowlist: the file is unreadable, not a known gap.
+        return (unexpectedFailures.empty() && stale.empty() && g_loadFailures == 0) ? 0 : 1;
     }
     std::cout << "=================================================\n";
 

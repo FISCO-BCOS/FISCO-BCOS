@@ -380,16 +380,18 @@ BOOST_AUTO_TEST_CASE(parse_rejects_json_null_blob_fields)
 {
     // Matrix: E6 — wire-null blob fields are -32602, not "absent then Engine INVALID".
     auto blobParams = w6test::makeInvalidParamsJson(invalidSampleWithNullField("blobGasUsed"));
+    // A JSON null is "absent" to the parser; absent at V3+ is the ExecutionPayloadV3 shape
+    // error (geth NewPayloadV3 "nil blobGasUsed post-cancun"), the same text for V3 and V4.
     checkParseRejects(blobParams, bcos::engine::ApiVersion::V4, bcos::rpc::InvalidParams,
-        "executionPayload.blobGasUsed must be a hex string for ExecutionPayloadV4");
+        "executionPayload.blobGasUsed must be a hex string for ExecutionPayloadV3 and later");
     checkParseRejects(blobParams, bcos::engine::ApiVersion::V3, bcos::rpc::InvalidParams,
-        "executionPayload.blobGasUsed must be a hex quantity string of at most 32 bytes");
+        "executionPayload.blobGasUsed must be a hex string for ExecutionPayloadV3 and later");
 
     auto excessParams = w6test::makeInvalidParamsJson(invalidSampleWithNullField("excessBlobGas"));
     checkParseRejects(excessParams, bcos::engine::ApiVersion::V4, bcos::rpc::InvalidParams,
-        "executionPayload.excessBlobGas must be a hex string for ExecutionPayloadV4");
+        "executionPayload.excessBlobGas must be a hex string for ExecutionPayloadV3 and later");
     checkParseRejects(excessParams, bcos::engine::ApiVersion::V3, bcos::rpc::InvalidParams,
-        "executionPayload.excessBlobGas must be a hex quantity string of at most 32 bytes");
+        "executionPayload.excessBlobGas must be a hex string for ExecutionPayloadV3 and later");
 }
 
 BOOST_AUTO_TEST_CASE(op_newpayload_rejects_missing_blob_fields_and_wide_gas_limit)

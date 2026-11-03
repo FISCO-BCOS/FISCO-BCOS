@@ -348,15 +348,21 @@ public:
     }
 };
 
+/// The verifier's verdict on one block. `fault` is not a verdict: the pipeline threw where
+/// the verifier turns every decode, execution and reward failure into a refusal itself, so
+/// the harness or its storage broke. The runner fails the fixture on a fault whatever the
+/// fixture expected, so a fault can never pass as the exception a fixture asks for.
 struct BlockOutcome
 {
     bool valid = false;
     std::string error;
+    std::optional<std::string> fault;
 };
 
 struct ExecutionOutcome
 {
-    std::optional<std::string> error;
+    std::optional<std::string> error;  ///< the verifier's refusal (a verdict)
+    std::optional<std::string> fault;  ///< the pipeline threw (see BlockOutcome::fault)
     crypto::HashType stateRoot;
     std::optional<ViewType> view;  ///< the executed (uncommitted) state, for post-state reads
 };
@@ -475,9 +481,7 @@ public:
         }
         catch (std::exception const& e)
         {
-            // A pipeline fault (not a verdict): surfaced as a refusal with its text so the
-            // fixture fails loudly instead of aborting the run.
-            return BlockOutcome{.valid = false, .error = std::string("exception: ") + e.what()};
+            return BlockOutcome{.valid = false, .fault = std::string(e.what())};
         }
         if (result.valid)
         {
@@ -506,7 +510,7 @@ public:
         }
         catch (std::exception const& e)
         {
-            outcome.error = std::string("exception: ") + e.what();
+            outcome.fault = std::string(e.what());
         }
         return outcome;
     }
@@ -696,8 +700,7 @@ public:
             chain.verifier(), chain.ledger(), chain.blockFactory(), schedule.forks, chainId,
             schedule.mergeBlock)),
         m_service(m_memPool, chain.storage(), m_executor, m_scheduler, chain.blockFactory(),
-            /*ledger=*/nullptr, engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(engine::ApiVersion::V4),
+            /*ledger=*/nullptr, static_cast<std::uint32_t>(engine::ApiVersion::V4),
             /*commitObserver=*/nullptr, /*ledgerConfigState=*/nullptr, m_external,
             std::make_shared<engine::engine_common::ClSyncCoordination>(),
             /*allowBlobTransactions=*/true)
