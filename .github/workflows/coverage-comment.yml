@@ -1,0 +1,100 @@
+name: Coverage comment
+
+# Posts the Codecov coverage comment + project/patch checks on pull requests,
+# including PRs from forks.
+#
+# Why a separate workflow_run job instead of uploading inside the build:
+# GitHub runs a fork PR's own workflow with NO repository secrets and a
+# read-only token, so it can neither upload to Codecov (needs CODECOV_TOKEN)
+# nor comment (needs write). A workflow_run job runs in the BASE-repo context
+# after the build finishes, so it gets the token and write permission even for
+# fork PRs. workflow_run only triggers from the file on the default branch.
+#
+# Security: this job never checks out fork PR code. It consumes only the
+# coverage-data artifact and a digits-validated PR number from the untrusted
+# build, and the sources it checks out are the PR's BASE branch (an existing,
+# trusted branch of this repo) purely so Codecov can map report paths to real
+# files. Nothing from the fork is ever executed, so the workflow_run "pwn
+# request" pitfall is avoided.
+
+on:
+  workflow_run:
+    workflows: ["Github runner"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  upload:
+    name: Upload PR coverage to Codecov
+    runs-on: ubuntu-24.04
+    # Only PR-triggered builds carry a coverage-data artifact with a PR number.
+    if: github.event.workflow_run.event == 'pull_request'
+    steps:
+      - name: Download coverage artifact
+        id: download
+        continue-on-error: true # build may have skipped coverage (e.g. docs-only)
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-data
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Land the artifact OUTSIDE the workspace so the base-branch checkout
+          # below does not clobber it.
+          path: ${{ runner.temp }}/cov
+      - name: Validate PR number and resolve base branch
+        id: pr
+        if: steps.download.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          num="$(cat "${RUNNER_TEMP}/cov/pr-number.txt")"
+          # cov/* originates from the untrusted fork run: accept digits only.
+          if ! printf '%s' "$num" | grep -Eq '^[0-9]+$'; then
+            echo "Refusing non-numeric PR number: '$num'" >&2
+            exit 1
+          fi
+          # base.ref is the PR's target branch. A PR can only target a real branch
+          # of this repo, so it is trusted; still constrain it to a plain ref name.
+          base="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${num}" --jq '.base.ref')"
+          if ! printf '%s' "$base" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            echo "Unexpected base ref: '$base'" >&2
+            exit 1
+          fi
+          echo "number=$num" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+      - name: Check out base-branch sources for path mapping
+        # Codecov builds a "network" (the repo's file list) to map each report
+        # path onto a real file; with no checkout it finds nothing to match and
+        # discards the whole report as "unusable" (0.00%). Check out the PR's BASE
+        # branch -- trusted upstream code, never executed here -- so the network is
+        # complete. NOT the fork head, keeping this a safe workflow_run job.
+        if: steps.pr.outputs.number != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ steps.pr.outputs.base }}
+          persist-credentials: false
+      - name: Upload to Codecov
+        if: steps.pr.outputs.number != ''
+        uses: codecov/codecov-action@v5
+        with:
+          files: ${{ runner.temp }}/cov/coverage.info
+          # We hand Codecov exactly one lcov file; do not let the CLI also sweep
+          # the checked-out tree for stray coverage files. (This does not affect
+          # the network scan, which is what makes path mapping work.)
+          disable_search: true
+          flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # workflow_run runs on the default branch, so point Codecov back at the
+          # PR's head commit and number explicitly. (override_branch is omitted on
+          # purpose: the fork branch name is attacker-controlled and Codecov only
+          # needs the commit + PR number to attach the report.)
+          override_commit: ${{ github.event.workflow_run.head_sha }}
+          override_pr: ${{ steps.pr.outputs.number }}
+          fail_ci_if_error: false
+          verbose: true
