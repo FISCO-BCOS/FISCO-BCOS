@@ -17,6 +17,11 @@ target_link_libraries(bcos-devp2p PUBLIC
     rlp-protocol
     OpenSSL::Crypto
     jsoncpp_static)
+# disc/DnsDiscovery.cpp resolves TXT records with res_nquery (libresolv on macOS and
+# Linux; glibc >= 2.34 also exports it from libc but ships libresolv for linking).
+if(NOT WIN32)
+    target_link_libraries(bcos-devp2p PUBLIC resolv)
+endif()
 
 if(TESTS)
     enable_testing()
