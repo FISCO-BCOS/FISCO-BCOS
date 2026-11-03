@@ -52,4 +52,22 @@ inline bcos::codec::rlp::RlpResult<T> take(bcos::bytesRef& _view)
     }
     return out;
 }
+
+// Copies one complete RLP item (header + payload, string or list) out of `_view` and
+// advances past it. For values that are re-encoded verbatim (ENR key/value pairs,
+// nested records inside discv4 packets).
+inline bcos::codec::rlp::RlpResult<bcos::bytes> takeRawItem(bcos::bytesRef& _view)
+{
+    bcos::bytesRef probe = _view;
+    RLP_TRY(auto header, bcos::codec::rlp::tryDecodeHeader(probe));
+    size_t const headerLength = _view.size() - probe.size();
+    if (header.payloadLength > probe.size())
+    {
+        return std::unexpected(genericError("rlp item payload exceeds the input"));
+    }
+    size_t const total = headerLength + header.payloadLength;
+    bcos::bytes raw(_view.data(), _view.data() + total);
+    _view = _view.getCroppedData(total);
+    return raw;
+}
 }  // namespace bcos::devp2p::detail
