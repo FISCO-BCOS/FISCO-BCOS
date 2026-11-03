@@ -53,12 +53,14 @@ inline constexpr BlobScheduleConfig BPO2_BLOB_SCHEDULE{14, 21, 11684671};
 
 // Timestamp-keyed fork points driving the blob schedule. 0 = active from genesis;
 // UINT64_MAX (the default) = "not scheduled", matching NodeConfig's
-// readOptionalTs semantics for absent tail keys. Osaka is not listed: it keeps
-// the Prague params (EIP-7918's update rule is the consumers' concern).
+// readOptionalTs semantics for absent tail keys. Osaka keeps the Prague params
+// (EIP-7918's update rule is the consumers' concern); it is listed for the blob
+// sidecar version it switches (requiredBlobSidecarVersion).
 struct BlobForkTimes
 {
     uint64_t cancunTime{std::numeric_limits<uint64_t>::max()};
     uint64_t pragueTime{std::numeric_limits<uint64_t>::max()};
+    uint64_t osakaTime{std::numeric_limits<uint64_t>::max()};
     uint64_t bpo1Time{std::numeric_limits<uint64_t>::max()};
     uint64_t bpo2Time{std::numeric_limits<uint64_t>::max()};
 };
@@ -66,6 +68,16 @@ struct BlobForkTimes
 inline constexpr bool blobForkActive(uint64_t forkTime, uint64_t timestamp)
 {
     return forkTime == 0 || timestamp >= forkTime;
+}
+
+// EIP-7594: from Osaka on a blob transaction's sidecar carries cell proofs (network
+// wrapper version 1); before it the EIP-4844 blob proof (version 0). The pool admits
+// exactly the version the chain head's fork calls for (geth 1.16.x validateBlobSidecar,
+// which switched on the head's fork; geth master, past mainnet Osaka, admits version 1
+// only), so a built block's bundle is always what the CL of that fork verifies.
+inline constexpr uint8_t requiredBlobSidecarVersion(BlobForkTimes const& forks, uint64_t timestamp)
+{
+    return blobForkActive(forks.osakaTime, timestamp) ? 1 : 0;
 }
 
 // EIP-7840: the blob schedule in effect for the block at `timestamp` (seconds).

@@ -84,6 +84,17 @@ bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::insertLocked(
                                  << LOG_KV("maxBlobsPerTransaction", maxBlobsPerTransaction());
             return TransactionStatus::Malformed;
         }
+        // EIP-7594: only the sidecar version the head's fork calls for is pooled (cell
+        // proofs from Osaka on); the seal path builds bundles from pooled sidecars as they
+        // are, so a wrong-version sidecar could only produce a bundle no CL verifies.
+        if (sidecar.has_value() && sidecar->version != requiredBlobSidecarVersion())
+        {
+            MEMPOOL_LOG(WARNING) << LOG_DESC("MemPoolImpl: blob sidecar version not admissible")
+                                 << LOG_KV("version", static_cast<int>(sidecar->version))
+                                 << LOG_KV(
+                                        "required", static_cast<int>(requiredBlobSidecarVersion()));
+            return TransactionStatus::Malformed;
+        }
     }
 
     evictExpiredLocked();
@@ -195,8 +206,11 @@ bcos::txpool::MemPoolImpl::blobsByVersionedHashes(
             {
                 if (!out[j].has_value() && versionedHashes[j] == versionedHash)
                 {
-                    out[j] = engine::BlobItem{.commitment = sidecar.commitments[i],
-                        .proof = sidecar.proofs[i],
+                    auto const perBlob = engine::blobProofsPerBlob(sidecar.version);
+                    out[j] = engine::BlobItem{.version = sidecar.version,
+                        .commitment = sidecar.commitments[i],
+                        .proofs = std::vector<bcos::bytes>(sidecar.proofs.begin() + i * perBlob,
+                            sidecar.proofs.begin() + (i + 1) * perBlob),
                         .blob = sidecar.blobs[i]};
                     if (--missing == 0)
                     {

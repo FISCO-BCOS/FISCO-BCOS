@@ -140,6 +140,7 @@ public:
             devp2p::sync::toGasSchedule(protocol::blobScheduleForTimestamp(
                 protocol::BlobForkTimes{.cancunTime = m_forkSchedule.cancunTime,
                     .pragueTime = m_forkSchedule.pragueTime,
+                    .osakaTime = m_forkSchedule.osakaTime,
                     .bpo1Time = m_forkSchedule.bpo1Time,
                     .bpo2Time = m_forkSchedule.bpo2Time},
                 static_cast<uint64_t>(timestampSeconds))),

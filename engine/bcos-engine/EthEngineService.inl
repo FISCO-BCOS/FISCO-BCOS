@@ -29,6 +29,7 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
+#include <bcos-rlp-protocol/BlobSidecarRow.h>
 #include <bcos-rlp-protocol/EthPoSHeaderValidation.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
@@ -318,16 +319,13 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         // EL mode: three blob-transaction exclusions, each leaving the transaction pooled
         // for a later block and skipping the rest of the sender's nonce suffix with it
         // (the executor would reject the nonce gap):
-        //  * Osaka (EIP-7594): getPayloadV5's BlobsBundleV2 carries cell proofs
-        //    (CELLS_PER_EXT_BLOB per blob) and the pool admits v0 sidecars only (one proof
-        //    per blob), so a bundle built from them is not what a CL verifies — blob
-        //    transactions stay pooled until wrapper-v1 sidecar admission lands. Until then
-        //    an Osaka-era node builds no blob transaction at all, and a sender who pooled
-        //    one has its later nonces held back with it (the pool's lifetime eviction is
-        //    the only exit); refusing blob transactions at admission on an Osaka chain is
-        //    the matching follow-up;
         //  * the EIP-4844 sidecar never arrived — the transaction cannot be assembled
         //    into a blobsBundle, so it is unbuildable;
+        //  * the sidecar's wrapper version is not the block fork's (EIP-7594: cell proofs
+        //    from Osaka on, blob proofs before): the bundle a CL of that fork verifies is
+        //    built from the fork's proof kind, and the pool only admits the head fork's
+        //    version, so this is the transition block's leftover — a version-0 sidecar
+        //    pooled before Osaka stays pooled (the pool's lifetime eviction is its exit);
         //  * the block's blob budget is spent — the EIP-7844 schedule's per-block blob
         //    maximum at the block's timestamp. The executor's block-level blob gas
         //    budget (EthereumExecutor::BlockContext) is the backstop, not the filter:
@@ -335,6 +333,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         //    validation-failure receipt instead of staying pooled.
         std::unordered_set<std::string> blobSkippedSenders;
         auto const maxBlobs = m_memPool.maxBlobsPerBlock(payloadAttributes->timestamp / 1000);
+        auto const requiredSidecarVersion =
+            m_memPool.requiredBlobSidecarVersionAt(payloadAttributes->timestamp / 1000);
         std::size_t sealedBlobs = 0;
         std::vector<protocol::Transaction::Ptr> buildableTxs;
         buildableTxs.reserve(sealedTxs.size());
@@ -349,22 +349,25 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
                     static_cast<std::uint8_t>(protocol::TransactionType::Web3Transaction) &&
                 !sealedTx->blobVersionedHashes().empty())
             {
-                if (l1Input->l1Context.revision >= EVMC_OSAKA)
-                {
-                    blobSkippedSenders.insert(std::move(sender));
-                    BCOS_LOG(INFO) << LOG_BADGE("EthEngineService")
-                                   << LOG_DESC(
-                                          "seal: Osaka block; leaving v0-sidecar blob "
-                                          "transaction pooled (no cell proofs)")
-                                   << LOG_KV("hash", sealedTx->hash().hexPrefixed());
-                    continue;
-                }
-                if (!m_memPool.hasBlobSidecar(sealedTx->hash()))
+                auto const sidecarVersion = m_memPool.blobSidecarVersion(sealedTx->hash());
+                if (!sidecarVersion.has_value())
                 {
                     blobSkippedSenders.insert(std::move(sender));
                     BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService")
                                       << LOG_DESC("seal: skipping blob transaction without sidecar")
                                       << LOG_KV("hash", sealedTx->hash().hexPrefixed());
+                    continue;
+                }
+                if (*sidecarVersion != requiredSidecarVersion)
+                {
+                    blobSkippedSenders.insert(std::move(sender));
+                    BCOS_LOG(INFO) << LOG_BADGE("EthEngineService")
+                                   << LOG_DESC(
+                                          "seal: blob sidecar version is not the block fork's; "
+                                          "leaving blob transaction pooled")
+                                   << LOG_KV("hash", sealedTx->hash().hexPrefixed())
+                                   << LOG_KV("sidecarVersion", static_cast<int>(*sidecarVersion))
+                                   << LOG_KV("required", static_cast<int>(requiredSidecarVersion));
                     continue;
                 }
                 if (sealedBlobs + sealedTx->blobVersionedHashes().size() > maxBlobs)
@@ -438,11 +441,10 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         commonEntry->l1Revision = l1Input->l1Context.revision;
     }
     // An L1 payload built by FCU V3 carries the blobs bundle and every getPayload version
-    // from V3 on renders it (V3/V4 BlobsBundleV1; V5's BlobsBundleV2 has the same three
-    // arrays). On an Osaka block the seal-time filter above keeps every v0-sidecar blob
-    // transaction pooled, so the V5 bundle is empty until EIP-7594 wrapper-v1 admission
-    // supplies cell proofs. The OP lane keeps its historical V3-only present-but-empty
-    // bundle.
+    // from V3 on renders it (V3/V4 BlobsBundleV1: one proof per blob; V5 BlobsBundleV2: the
+    // same three arrays over CELLS_PER_EXT_BLOB cell proofs per blob — the seal-time filter
+    // above admits only the block fork's sidecar version into the payload). The OP lane
+    // keeps its historical V3-only present-but-empty bundle.
     auto const answersBundle = m_externalPayloadVerifier ?
                                    (version >= static_cast<std::uint32_t>(ApiVersion::V3)) :
                                    (version == static_cast<std::uint32_t>(ApiVersion::V3));
@@ -947,33 +949,16 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                     std::to_string(cached->executionPayload.blockNumber)},
                 std::move(withdrawalsEntry));
         }
-        // EL mode: persist the block's EIP-4844 blob sidecars (one number-keyed row, the
-        // RLP LIST of per-blob [commitment, proof, blob] items in block order) so
-        // engine_getBlobsV1 can still answer after the pool entries are gone. Only a
-        // built-here block reaches this commit with a bundle; externally received
-        // payloads carry no blob bodies, so their absence reads as "not held".
+        // EL mode: persist the block's blob sidecars (one number-keyed row, the bundle in
+        // the BlobSidecarRow.h layout, which is also what engine_getBlobs reads back) so
+        // engine_getBlobs can still answer after the pool entries are gone. Only a
+        // built-here block reaches this commit with a bundle; externally received payloads
+        // carry no blob bodies, so their absence reads as "not held".
         if (m_externalPayloadVerifier && cached->blobsBundle.has_value() &&
             !cached->blobsBundle->blobs.empty())
         {
-            auto const& bundle = *cached->blobsBundle;
-            bcos::bytes blobsPayload;
-            for (std::size_t i = 0; i < bundle.blobs.size(); ++i)
-            {
-                bcos::bytes item;
-                bcos::codec::rlp::encode(item, bundle.commitments[i]);
-                bcos::codec::rlp::encode(item, bundle.proofs[i]);
-                bcos::codec::rlp::encode(item, bundle.blobs[i]);
-                bcos::codec::rlp::encodeHeader(blobsPayload,
-                    bcos::codec::rlp::Header{.isList = true, .payloadLength = item.size()});
-                blobsPayload.insert(blobsPayload.end(), item.begin(), item.end());
-            }
-            bcos::bytes encodedBlobs;
-            encodedBlobs.reserve(blobsPayload.size() + 8);
-            bcos::codec::rlp::encodeHeader(encodedBlobs,
-                bcos::codec::rlp::Header{.isList = true, .payloadLength = blobsPayload.size()});
-            encodedBlobs.insert(encodedBlobs.end(), blobsPayload.begin(), blobsPayload.end());
             bcos::storage::Entry blobsEntry;
-            blobsEntry.set(std::move(encodedBlobs));
+            blobsEntry.set(bcos::rpc::encodeBlobSidecarRow(*cached->blobsBundle));
             co_await storage2::writeOne(prewriteStorage,
                 executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_BLOBS,
                     std::to_string(cached->executionPayload.blockNumber)},

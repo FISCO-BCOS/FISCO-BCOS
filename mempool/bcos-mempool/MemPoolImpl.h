@@ -402,6 +402,27 @@ public:
     protocol::TransactionStatus tryAdd(protocol::Transaction::Ptr transaction,
         std::optional<engine::BlobTxSidecar> sidecar = std::nullopt);
 
+    /// EIP-7594: the sidecar (network wrapper) version the pool admits — the one the chain
+    /// head's fork calls for (protocol::requiredBlobSidecarVersion at the head timestamp):
+    /// cell proofs from Osaka on, the EIP-4844 blob proof before. Without a head-timestamp
+    /// provider (a statically configured pool) version 0.
+    std::uint8_t requiredBlobSidecarVersion() const
+    {
+        if (m_config.headTimestampSeconds)
+        {
+            return requiredBlobSidecarVersionAt(m_config.headTimestampSeconds());
+        }
+        return engine::BLOB_SIDECAR_VERSION_0;
+    }
+
+    /// The sidecar version a block sealed at @p timestampSeconds carries — the seal filter's
+    /// rule, the same schedule admission judges by (a statically configured pool has no
+    /// Osaka time and answers version 0).
+    std::uint8_t requiredBlobSidecarVersionAt(uint64_t timestampSeconds) const
+    {
+        return protocol::requiredBlobSidecarVersion(m_config.blobForks, timestampSeconds);
+    }
+
     /// The sidecar of a pooled blob transaction, or nullopt when the transaction is not
     /// pooled or carries none.
     std::optional<engine::BlobTxSidecar> blobSidecar(crypto::HashType const& txHash) const
@@ -436,7 +457,19 @@ public:
         return true;
     }
 
-    /// engine_getBlobsV1's pool half: for every requested versioned hash, the pooled blob
+    /// The wrapper version of the sidecar registered for @p txHash, nullopt when none is.
+    std::optional<std::uint8_t> blobSidecarVersion(crypto::HashType const& txHash) const
+    {
+        std::unique_lock lock(m_mutex);
+        auto const it = m_blobSidecars.find(txHash);
+        if (it == m_blobSidecars.end())
+        {
+            return std::nullopt;
+        }
+        return it->second.version;
+    }
+
+    /// engine_getBlobs' pool half: for every requested versioned hash, the pooled blob
     /// item whose commitment hashes to it (sha256(commitment) with the 0x01 version byte).
     /// Versioned hashes are recomputed per call; the pool is small and this is a rare CL
     /// recovery path, so no versioned-hash index is kept.
