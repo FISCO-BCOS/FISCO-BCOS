@@ -50,6 +50,12 @@
 #include "libinitializer/Common.h"
 #include "libinitializer/GlobalStateStorageInitializer.h"
 #include "libinitializer/TxGossipService.h"
+// --- peer serving (E6) ---
+#include "bcos-devp2p/rlpx/Listener.h"
+#include "bcos-devp2p/sync/PeerManager.h"
+#include "bcos-devp2p/sync/PeerServer.h"
+#include "libinitializer/LedgerBlockSource.h"
+// --- end peer serving (E6) ---
 #include <bcos-utilities/ClientIdentity.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string/trim.hpp>
@@ -253,8 +259,12 @@ public:
             return;
         }
         m_localKey = std::move(localKey);
+        // Peer table + inbound listener first: the sync loop below dials through the
+        // same table, and discovery advertises the listener's port in its ENR.
+        // stop() tears both down before the sync thread joins.
+        startPeerServing();
         startDiscovery();
-        // Transaction gossip first: its pumps reference this initializer only through the
+        // Transaction gossip: its pumps reference this initializer only through the
         // peer-config factory, and stop() tears it down before the sync thread joins.
         startTxGossip();
         INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: starting self-sync loop")
@@ -271,6 +281,7 @@ public:
     {
         m_running.store(false);
         stopDiscovery();
+        stopPeerServing();
         if (m_txGossip)
         {
             m_txGossip->stop();
@@ -748,7 +759,7 @@ private:
                     continue;
                 }
                 auto devp2pConfig = devp2pChainConfig();
-                auto bootnodes = syncPeers();
+                auto bootnodes = dialCandidates();
                 if (bootnodes.empty())
                 {
                     // no peers to sync from; poll on the caught-up cadence for a bootnode
@@ -897,6 +908,13 @@ private:
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                             << LOG_KV("startNumber", resume.startNumber);
                         auto established = client.connect();
+                        // One peer table for both directions: a node already connected
+                        // inbound is not dialled twice; the slot frees with the session.
+                        auto peerSlot = admitOutbound(established.peerHello.id);
+                        if (!peerSlot)
+                        {
+                            continue;
+                        }
                         INITIALIZER_LOG(DEBUG)
                             << LOG_DESC("EL sync: handshake OK") << LOG_KV("host", peer.host)
                             << LOG_KV("port", peer.port)
@@ -1446,7 +1464,7 @@ private:
     // devp2p node discovery ([ethereum] discovery): discv4 over UDP seeded from the
     // bootnode list, plus the EIP-1459 DNS list feeding the same table. The sync round
     // dials the configured bootnodes first, then up to max_discovered_peers bonded
-    // discovered nodes (syncPeers()). Started by start() right after the node key is
+    // discovered nodes (dialCandidates()). Started by start() right after the node key is
     // loaded and stopped by stop() before the sync thread joins.
     bcos::devp2p::disc::Discv4Service::Ptr const& discovery() const { return m_discovery; }
 
@@ -1470,8 +1488,8 @@ private:
         }
         bcos::devp2p::disc::Discv4Config config;
         config.udpPort = m_nodeConfig->ethereumDiscoveryPort();
-        // No RLPx listener yet: nothing to advertise as `tcp` (E6 passes listen_port here).
-        config.tcpPort = 0;
+        // Advertise `tcp` only when something listens there.
+        config.tcpPort = m_listener ? m_listener->port() : 0;
         for (auto const& uri : configuredBootnodeUris(*m_nodeConfig))
         {
             config.bootnodes.push_back(
@@ -1521,28 +1539,6 @@ private:
         }
     }
 
-    /// One sync round's peer list: the configured bootnodes first, then bonded
-    /// discovered nodes not already in the list, capped by max_discovered_peers.
-    std::vector<bcos::devp2p::rlpx::PeerConfig> syncPeers() const
-    {
-        auto peers = configuredBootnodes(*m_nodeConfig);
-        if (!m_discovery)
-        {
-            return peers;
-        }
-        for (auto& candidate : m_discovery->candidates(m_nodeConfig->ethereumMaxDiscoveredPeers()))
-        {
-            bool const known = std::any_of(
-                peers.begin(), peers.end(), [&](bcos::devp2p::rlpx::PeerConfig const& peer) {
-                    return peer.peerPublicKey == candidate.peerPublicKey;
-                });
-            if (!known)
-            {
-                peers.push_back(std::move(candidate));
-            }
-        }
-        return peers;
-    }
 
     bcos::devp2p::disc::Discv4Service::Ptr m_discovery;
     bcos::devp2p::disc::DnsDiscovery::Ptr m_dnsDiscovery;
@@ -1552,6 +1548,175 @@ private:
     std::thread m_thread;
     // The RLPx identity key, loaded/persisted by start() before the thread spawns.
     std::optional<bcos::devp2p::rlpx::EccKeyPair> m_localKey;
+
+    // ------------------------------------------------------------------------------
+    // --- peer serving (E6): peer table, inbound listener, ledger-backed serving ---
+    // ------------------------------------------------------------------------------
+public:
+    /// The one peer table shared by the inbound listener and the outbound dial loop;
+    /// discovery hands dialable peers in through PeerManager::addCandidate(PeerConfig)
+    /// (thread-safe). Valid after start(), null before.
+    std::shared_ptr<bcos::devp2p::sync::PeerManager> const& peerManager() const
+    {
+        return m_peerManager;
+    }
+
+private:
+    /// Releases the peer's slot in the table when the outbound session ends (RAII, so
+    /// every exit path of the per-bootnode try block frees it).
+    struct PeerSlot
+    {
+        std::shared_ptr<bcos::devp2p::sync::PeerManager> manager;
+        bcos::devp2p::sync::NodeId id;
+        PeerSlot(std::shared_ptr<bcos::devp2p::sync::PeerManager> _manager,
+            bcos::devp2p::sync::NodeId _id)
+          : manager(std::move(_manager)), id(std::move(_id))
+        {}
+        PeerSlot(PeerSlot const&) = delete;
+        PeerSlot& operator=(PeerSlot const&) = delete;
+        ~PeerSlot()
+        {
+            if (manager)
+            {
+                manager->release(id);
+            }
+        }
+    };
+
+    /// Claim an outbound slot for a freshly connected peer; nullopt (and a DEBUG line)
+    /// when the table refuses it (already connected inbound, full, banned).
+    std::optional<PeerSlot> admitOutbound(bcos::devp2p::sync::NodeId const& _id)
+    {
+        if (auto reason = m_peerManager->tryAdmit(_id, bcos::devp2p::sync::Direction::Outbound))
+        {
+            INITIALIZER_LOG(DEBUG) << LOG_DESC("EL sync: outbound peer not admitted")
+                                   << LOG_KV("reason", static_cast<int>(*reason));
+            return std::nullopt;
+        }
+        return std::optional<PeerSlot>(std::in_place, m_peerManager, _id);
+    }
+
+    /// The dial list for one sync round: the bootnode file (re-read every round so an
+    /// operator can add one at runtime) as the static peers, plus whatever discovery
+    /// pushed through addCandidate, minus banned and connected nodes.
+    std::vector<bcos::devp2p::rlpx::PeerConfig> dialCandidates()
+    {
+        m_peerManager->setStaticPeers(configuredBootnodes(*m_nodeConfig));
+        if (m_discovery)
+        {
+            for (auto& candidate :
+                m_discovery->candidates(m_nodeConfig->ethereumMaxDiscoveredPeers()))
+            {
+                m_peerManager->addCandidate(std::move(candidate));
+            }
+        }
+        return m_peerManager->dialCandidates();
+    }
+
+    /// The Status fields an inbound peer sees: chain identity pinned to the genesis,
+    /// fork-id and EIP-7642 range from the local head of the moment.
+    bcos::devp2p::rlpx::PeerConfig inboundStatus()
+    {
+        auto resume = resumePoint();
+        bcos::devp2p::rlpx::PeerConfig config;
+        config.clientId = bcos::clientIdentity();
+        config.networkId = m_nodeConfig->ethereumChainId();
+        config.genesisHash = bcos::protocol::ethHeaderHash(resume.genesisHeader);
+        config.headHash = bcos::protocol::ethHeaderHash(resume.anchor);
+        config.totalDifficulty = {};
+        config.forkId = computeForkId(static_cast<uint64_t>(resume.anchor.number),
+            static_cast<uint64_t>(resume.anchor.timestamp));
+        auto const range = m_blockSource->range();
+        config.earliestBlock = range.earliest;
+        config.latestBlock = range.latest;
+        config.latestBlockHash = range.latestHash;
+        return config;
+    }
+
+    /// EIP-2124 filter over the same ladder computeForkId announces (merge block as the
+    /// only block fork, the timestamp forks in activation order).
+    bcos::devp2p::eth::ForkFilter makeForkFilter() const
+    {
+        auto const& genesis = m_nodeConfig->genesisConfig().m_ethGenesisHeader.value();
+        std::vector<uint64_t> const blockForks = {m_nodeConfig->ethereumMergeBlock()};
+        std::vector<uint64_t> const timeForks = {m_nodeConfig->ethereumForkShanghaiTime(),
+            m_nodeConfig->ethereumForkCancunTime(), m_nodeConfig->ethereumForkPragueTime(),
+            m_nodeConfig->ethereumForkOsakaTime(), m_nodeConfig->ethereumForkBpo1Time(),
+            m_nodeConfig->ethereumForkBpo2Time()};
+        return bcos::devp2p::eth::ForkFilter(
+            genesis.m_hash, static_cast<uint64_t>(genesis.m_timestamp), blockForks, timeForks);
+    }
+
+    /// Build the peer table and the ledger block source; start the inbound listener when
+    /// [ethereum] serve_peers is on. Called by start() before anything dials. The handlers
+    /// capture `this`: stop() joins the listener's threads before this object is
+    /// destroyed (the destructor calls stop()), so no handler can outlive it.
+    void startPeerServing()
+    {
+        bcos::devp2p::sync::PeerManagerConfig peerConfig;
+        peerConfig.maxPeers = m_nodeConfig->ethereumMaxPeers();
+        peerConfig.maxCandidates = m_nodeConfig->ethereumMaxDiscoveredPeers();
+        m_peerManager = std::make_shared<bcos::devp2p::sync::PeerManager>(peerConfig);
+        m_blockSource = std::make_shared<LedgerBlockSource>(m_ledger, genesisAnchorHeader());
+        if (!m_nodeConfig->ethereumServePeers())
+        {
+            INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: peer serving disabled (serve_peers=false)");
+            return;
+        }
+        m_forkFilter.emplace(makeForkFilter());
+        bcos::devp2p::rlpx::HandshakeOptions options;
+        options.minEthVersion = bcos::devp2p::eth::kMinServingProtocolVersion;
+        options.forkIdReject = [this](bcos::devp2p::eth::ForkId const& remote) {
+            auto resume = resumePoint();
+            return m_forkFilter->reject(remote, static_cast<uint64_t>(resume.anchor.number),
+                static_cast<uint64_t>(resume.anchor.timestamp));
+        };
+        options.admit = [this](bcos::devp2p::rlpx::HelloMessage const& hello) {
+            return m_peerManager->tryAdmit(hello.id, bcos::devp2p::sync::Direction::Inbound);
+        };
+        bcos::devp2p::rlpx::ListenerConfig listenerConfig;
+        listenerConfig.bindAddress = "0.0.0.0";
+        listenerConfig.port = m_nodeConfig->ethereumListenPort();
+        m_listener = std::make_shared<bcos::devp2p::rlpx::Listener>(
+            *m_localKey, listenerConfig, [this]() { return inboundStatus(); },
+            [this](bcos::devp2p::rlpx::EstablishedSession& established) {
+                auto const id = established.peerHello.id;
+                bcos::devp2p::sync::PeerServer server(*m_blockSource);
+                auto const exit = server.serve(established, &m_running);
+                using Exit = bcos::devp2p::sync::PeerServer::ExitReason;
+                if (exit == Exit::ProtocolBreach)
+                {
+                    m_peerManager->penalize(id, bcos::devp2p::sync::Penalty::Malformed);
+                }
+                else if (exit == Exit::PingTimeout)
+                {
+                    m_peerManager->penalize(id, bcos::devp2p::sync::Penalty::Timeout);
+                }
+                m_peerManager->release(id);
+            },
+            std::move(options));
+        m_listener->start();
+        INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: serving peers")
+                              << LOG_KV("listenPort", m_listener->port())
+                              << LOG_KV("maxPeers", peerConfig.maxPeers)
+                              << LOG_KV("enodeKey",
+                                     bcos::toHex(m_localKey->publicKey()).substr(0, 16) + "...");
+    }
+
+    /// Stop the listener (joins its acceptor and session threads). Idempotent.
+    void stopPeerServing()
+    {
+        if (m_listener)
+        {
+            m_listener->stop();
+        }
+    }
+
+    std::shared_ptr<bcos::devp2p::sync::PeerManager> m_peerManager;
+    std::shared_ptr<LedgerBlockSource> m_blockSource;
+    std::optional<bcos::devp2p::eth::ForkFilter> m_forkFilter;
+    std::shared_ptr<bcos::devp2p::rlpx::Listener> m_listener;
+    // --- end peer serving (E6) ---
 };
 
 }  // namespace bcos::initializer
