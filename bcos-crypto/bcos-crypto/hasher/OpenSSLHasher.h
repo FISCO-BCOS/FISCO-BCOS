@@ -81,14 +81,9 @@ public:
 
     void final(bcos::crypto::trivial::Object auto& out)
     {
-        m_init = false;
         bcos::crypto::trivial::resizeTo(out, HASH_SIZE);
         auto view = bcos::crypto::trivial::toView(std::forward<decltype(out)>(out));
-        if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(view.data()), nullptr))
-            [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestFinal error!"});
-        }
+        final(view);
     }
 
     void final(std::span<std::byte> out)
@@ -96,6 +91,11 @@ public:
         if (out.size() < HASH_SIZE) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
+        }
+        if (!m_init)
+        {
+            init();
+            m_init = true;
         }
         m_init = false;
         if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(out.data()), nullptr))

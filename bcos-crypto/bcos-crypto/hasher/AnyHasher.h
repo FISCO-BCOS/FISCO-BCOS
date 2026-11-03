@@ -83,7 +83,8 @@ public:
 static_assert(Hasher<AnyHasher>, "Not a valid Hasher!");
 static_assert(SnapshotHasher<AnyHasher>, "Not a valid SnapshotHasher!");
 static_assert(std::is_copy_assignable_v<AnyHasher>);
-static_assert(!std::is_nothrow_copy_assignable_v<AnyHasher>);
+static_assert(std::is_nothrow_copy_assignable_v<AnyHasher> ==
+              std::is_nothrow_copy_assignable_v<pro::proxy<AnyHasherFacade>>);
 
 // Generic one-shot hash helper: update + final in a single call. Works with any type
 // satisfying the Hasher concept (AnyHasher, OpenSSLHasher<...>, mock test hashers, ...).
