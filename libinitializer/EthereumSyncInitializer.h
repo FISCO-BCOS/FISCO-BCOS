@@ -300,6 +300,7 @@ public:
         // config so the executor picks it up.
         forks.bpo1Time = config.ethereumForkBpo1Time();
         forks.bpo2Time = config.ethereumForkBpo2Time();
+        forks.amsterdamTime = config.ethereumForkAmsterdamTime();
         // EIP-6110 deposit contract (Prague+ requestsHash cross-check); NodeConfig
         // defaults it to the mainnet address when [ethereum] deposit_contract_address
         // is unset.
@@ -433,7 +434,8 @@ private:
             static_cast<uint64_t>(genesis.m_timestamp), _localHeadTime,
             {m_nodeConfig->ethereumForkShanghaiTime(), m_nodeConfig->ethereumForkCancunTime(),
                 m_nodeConfig->ethereumForkPragueTime(), m_nodeConfig->ethereumForkOsakaTime(),
-                m_nodeConfig->ethereumForkBpo1Time(), m_nodeConfig->ethereumForkBpo2Time()});
+                m_nodeConfig->ethereumForkBpo1Time(), m_nodeConfig->ethereumForkBpo2Time(),
+                m_nodeConfig->ethereumForkAmsterdamTime()});
     }
 
     /// The shared raw->Transaction decoder (eth_sendRawTransaction / devp2p / verifier all

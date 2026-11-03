@@ -802,9 +802,12 @@ BOOST_FIXTURE_TEST_CASE(builtPayloadParentUnknownReadsEraFromForkSchedule, Exter
     mockVerifier->l1Context.revision = EVMC_CANCUN;  // a V3 payload is Cancun-era
     auto status = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
-    // Two reads of the schedule per call: the method window and the era reconstruction.
-    BOOST_REQUIRE_EQUAL(mockVerifier->revisionAtCalls.size(), 2U);
-    BOOST_CHECK_EQUAL(mockVerifier->revisionAtCalls[0],
+    // One read for the build's forkchoiceUpdated window (the attributes timestamp), then two
+    // per newPayload call: the method window and the era reconstruction.
+    BOOST_REQUIRE_EQUAL(mockVerifier->revisionAtCalls.size(), 3U);
+    BOOST_CHECK_EQUAL(
+        mockVerifier->revisionAtCalls[0], static_cast<int64_t>(attributes.timestamp / 1000));
+    BOOST_CHECK_EQUAL(mockVerifier->revisionAtCalls[1],
         static_cast<int64_t>(payload->executionPayload.timestamp / 1000));
     BOOST_CHECK_EQUAL(mockVerifier->calls, 0U);
 
@@ -814,7 +817,7 @@ BOOST_FIXTURE_TEST_CASE(builtPayloadParentUnknownReadsEraFromForkSchedule, Exter
     request.executionRequests = std::vector<bytes>{};
     auto mismatched = task::syncWait(service.newPayload(request, 4));
     BOOST_CHECK(mismatched.status == PayloadValidationStatus::InvalidBlockHash);
-    BOOST_CHECK_EQUAL(mockVerifier->revisionAtCalls.size(), 4U);
+    BOOST_CHECK_EQUAL(mockVerifier->revisionAtCalls.size(), 5U);
 }
 
 // E3: the L1 newPayload method must match the payload's fork (execution-apis "Update the

@@ -326,6 +326,7 @@ public:
     uint64_t ethereumForkOsakaTime() const;
     uint64_t ethereumForkBpo1Time() const;
     uint64_t ethereumForkBpo2Time() const;
+    uint64_t ethereumForkAmsterdamTime() const;
     // The merge (TTD) block number ([fork_timestamps].merge_block in config.genesis):
     // blocks below it follow PoW header rules (non-zero difficulty, ommers allowed),
     // from it onward PoS rules. 0 = PoS from genesis. REQUIRED whenever a

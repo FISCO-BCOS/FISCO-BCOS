@@ -1675,7 +1675,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
         // "never activates" value. (merge_block is NOT read through this lambda — see below.)
         return readForkTimestamp(*section, "fork_timestamps", key, /*refuseSentinel=*/false);
     };
-    // Post-Prague forks (osaka, bpo1, bpo2, ...) are optional: absent means "not yet
+    // Post-Prague forks (osaka, bpo1, bpo2, amsterdam) are optional: absent means "not yet
     // active". They MUST be configured once activated on the chain — geth's EIP-2124
     // fork-id checksum chains every activated fork, so a missing entry makes us
     // announce a stale checksum and get rejected by peers. These three are also NOT
@@ -1702,6 +1702,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     readOptionalTs("osaka_time", schedule.m_osakaTime);
     readOptionalTs("bpo1_time", schedule.m_bpo1Time);
     readOptionalTs("bpo2_time", schedule.m_bpo2Time);
+    readOptionalTs("amsterdam_time", schedule.m_amsterdamTime);
     // merge_block is REQUIRED like the rest of the non-tail ladder: the chain's only
     // block-based fork (terminal total difficulty) — blocks below it follow PoW
     // header rules, from it onward PoS rules. 0 = PoS from genesis (pure-PoS
@@ -1726,7 +1727,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // the genesis pin and thereby frozen for the chain's lifetime, so the check
     // must happen here, before storing. UINT64_MAX ("not yet active") is terminal:
     // any scheduled (smaller) time after it is a decrease and is rejected.
-    std::array<std::pair<std::string_view, uint64_t>, 8> const ladder{{
+    std::array<std::pair<std::string_view, uint64_t>, 9> const ladder{{
         {"london_time", schedule.m_londonTime},
         {"paris_time", schedule.m_parisTime},
         {"shanghai_time", schedule.m_shanghaiTime},
@@ -1735,6 +1736,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
         {"osaka_time", schedule.m_osakaTime},
         {"bpo1_time", schedule.m_bpo1Time},
         {"bpo2_time", schedule.m_bpo2Time},
+        {"amsterdam_time", schedule.m_amsterdamTime},
     }};
     for (size_t i = 1; i < ladder.size(); ++i)
     {
@@ -1765,6 +1767,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
                          << LOG_KV("osaka", schedule.m_osakaTime)
                          << LOG_KV("bpo1", schedule.m_bpo1Time)
                          << LOG_KV("bpo2", schedule.m_bpo2Time)
+                         << LOG_KV("amsterdam", schedule.m_amsterdamTime)
                          << LOG_KV("mergeBlock", m_ethereumMergeBlock);
 }
 
@@ -3969,6 +3972,12 @@ uint64_t bcos::tool::NodeConfig::ethereumForkBpo2Time() const
 {
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_bpo2Time :
+               std::numeric_limits<uint64_t>::max();
+}
+uint64_t bcos::tool::NodeConfig::ethereumForkAmsterdamTime() const
+{
+    return m_genesisConfig.m_ethereumForkSchedule ?
+               m_genesisConfig.m_ethereumForkSchedule->m_amsterdamTime :
                std::numeric_limits<uint64_t>::max();
 }
 uint64_t bcos::tool::NodeConfig::ethereumMergeBlock() const
