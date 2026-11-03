@@ -88,6 +88,8 @@ struct RawNode
 {
     rlpx::EccKeyPair key;
     boost::asio::io_context io;
+    RawNode() = default;
+    explicit RawNode(rlpx::EccKeyPair _key) : key(std::move(_key)) {}
     udp::socket socket{io, udp::endpoint(boost::asio::ip::make_address("127.0.0.1"), 0)};
     udp::endpoint lastFrom;
 
@@ -124,6 +126,35 @@ struct RawNode
             io.run();
         }
         return result;
+    }
+
+    // Wait for a packet of `_type`, answering A's revalidation pings on the way.
+    std::optional<DecodedPacket> receiveType(
+        PacketType _type, udp::endpoint const& _peer, std::chrono::milliseconds _timeout)
+    {
+        auto const deadline = std::chrono::steady_clock::now() + _timeout;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            auto packet = receive(std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now()));
+            if (!packet)
+            {
+                return std::nullopt;
+            }
+            if (packet->type == _type)
+            {
+                return packet;
+            }
+            if (packet->type == PacketType::Ping)
+            {
+                PongPacket pong;
+                pong.to = Endpoint{{127, 0, 0, 1}, _peer.port(), 0};
+                pong.pingHash = packet->hash;
+                pong.expiration = expiry();
+                send(_peer, pong);
+            }
+        }
+        return std::nullopt;
     }
 
     static uint64_t expiry()
@@ -271,9 +302,9 @@ BOOST_AUTO_TEST_CASE(unbondedFindNodeIsIgnored)
     // Bonded now: FindNode is answered (our own entry is the closest node A knows) and
     // ENRRequest returns A's signed record.
     raw.send(target, findNode);
-    auto neighbors = raw.receive(std::chrono::milliseconds(1000));
+    auto neighbors =
+        raw.receiveType(PacketType::Neighbors, target, std::chrono::milliseconds(2000));
     BOOST_REQUIRE(neighbors.has_value());
-    BOOST_CHECK(neighbors->type == PacketType::Neighbors);
     auto const& nodes = std::get<NeighborsPacket>(neighbors->packet).nodes;
     BOOST_REQUIRE_EQUAL(nodes.size(), 1u);
     BOOST_CHECK(nodes[0].id == raw.key.publicKey());
@@ -281,9 +312,9 @@ BOOST_AUTO_TEST_CASE(unbondedFindNodeIsIgnored)
     BOOST_CHECK_EQUAL(nodes[0].endpoint.tcp, 30399);
 
     auto requestHash = raw.send(target, EnrRequestPacket{RawNode::expiry()});
-    auto response = raw.receive(std::chrono::milliseconds(1000));
+    auto response =
+        raw.receiveType(PacketType::EnrResponse, target, std::chrono::milliseconds(2000));
     BOOST_REQUIRE(response.has_value());
-    BOOST_REQUIRE(response->type == PacketType::EnrResponse);
     auto const& enrResponse = std::get<EnrResponsePacket>(response->packet);
     BOOST_CHECK(enrResponse.requestHash == requestHash);
     BOOST_CHECK(enrResponse.record.verify());
@@ -300,6 +331,95 @@ BOOST_AUTO_TEST_CASE(unbondedFindNodeIsIgnored)
     FindNodePacket stale{raw.key.publicKey(), 1};
     raw.send(target, stale);
     BOOST_CHECK(!raw.receive(std::chrono::milliseconds(500)).has_value());
+    a->stop();
+}
+
+BOOST_AUTO_TEST_CASE(pingAloneDoesNotTableTheSender)
+{
+    rlpx::EccKeyPair keyA;
+    auto a = Discv4Service::create(loopbackConfig(30321), keyA);
+    a->start();
+    udp::endpoint const target(boost::asio::ip::make_address("127.0.0.1"), a->udpPort());
+    RawNode raw;
+    PingPacket ping;
+    ping.from = Endpoint{{127, 0, 0, 1}, raw.port(), 30399};
+    ping.to = Endpoint{{127, 0, 0, 1}, a->udpPort(), 0};
+    ping.expiration = RawNode::expiry();
+    raw.send(target, ping);
+    // A answers with a pong and (lacking a proof of us) its own ping — which we leave
+    // unanswered: the source address alone must not create a table entry.
+    bool gotPong = false;
+    bool gotPing = false;
+    for (int i = 0; i < 2; ++i)
+    {
+        auto packet = raw.receive(std::chrono::milliseconds(1000));
+        if (!packet)
+        {
+            break;
+        }
+        gotPong |= packet->type == PacketType::Pong;
+        gotPing |= packet->type == PacketType::Ping;
+    }
+    BOOST_CHECK(gotPong);
+    BOOST_CHECK(gotPing);
+    std::this_thread::sleep_for(std::chrono::milliseconds(800));  // past the response timeout
+    auto stats = a->stats();
+    BOOST_CHECK_EQUAL(stats.tableSize, 0u);
+    BOOST_CHECK_EQUAL(stats.nodesDiscovered, 0u);
+    BOOST_CHECK_EQUAL(stats.nodesBonded, 0u);
+    BOOST_CHECK(a->candidates(4).empty());
+    // And a FindNode from that unverified source is still ignored.
+    raw.send(target, FindNodePacket{raw.key.publicKey(), RawNode::expiry()});
+    BOOST_CHECK(!raw.receive(std::chrono::milliseconds(600)).has_value());
+    a->stop();
+}
+
+BOOST_AUTO_TEST_CASE(bondedIdFromOtherSourcePortIsIgnored)
+{
+    rlpx::EccKeyPair keyA;
+    auto a = Discv4Service::create(loopbackConfig(30331), keyA);
+    a->start();
+    udp::endpoint const target(boost::asio::ip::make_address("127.0.0.1"), a->udpPort());
+    RawNode raw;
+    // Bond from raw's socket.
+    PingPacket ping;
+    ping.from = Endpoint{{127, 0, 0, 1}, raw.port(), 30399};
+    ping.to = Endpoint{{127, 0, 0, 1}, a->udpPort(), 0};
+    ping.expiration = RawNode::expiry();
+    raw.send(target, ping);
+    for (int i = 0; i < 2; ++i)
+    {
+        auto packet = raw.receive(std::chrono::milliseconds(1000));
+        if (packet && packet->type == PacketType::Ping)
+        {
+            PongPacket pong;
+            pong.to = Endpoint{{127, 0, 0, 1}, a->udpPort(), 0};
+            pong.pingHash = packet->hash;
+            pong.expiration = RawNode::expiry();
+            raw.send(target, pong);
+        }
+    }
+    BOOST_REQUIRE(waitFor([&]() { return a->stats().nodesBonded >= 1; }, std::chrono::seconds(3)));
+    BOOST_CHECK_EQUAL(a->stats().tableSize, 1u);
+
+    // The same identity from another UDP port: no Neighbors, no ENR (geth checkBond is
+    // keyed by id + ip; ours by id + ip + port).
+    RawNode replay(raw.key);
+    BOOST_REQUIRE_NE(replay.port(), raw.port());
+    replay.send(target, FindNodePacket{raw.key.publicKey(), RawNode::expiry()});
+    BOOST_CHECK(!replay.receive(std::chrono::milliseconds(700)).has_value());
+    replay.send(target, EnrRequestPacket{RawNode::expiry()});
+    BOOST_CHECK(!replay.receive(std::chrono::milliseconds(700)).has_value());
+    // The genuine endpoint is still served (A's revalidation pings are answered on the
+    // way, see receiveType).
+    raw.send(target, FindNodePacket{raw.key.publicKey(), RawNode::expiry()});
+    auto neighbors =
+        raw.receiveType(PacketType::Neighbors, target, std::chrono::milliseconds(2000));
+    BOOST_REQUIRE(neighbors.has_value());
+    // The replayed ping from the other port did not move the stored endpoint either.
+    auto peers = a->candidates(4);
+    BOOST_REQUIRE_EQUAL(peers.size(), 1u);
+    BOOST_CHECK_EQUAL(peers[0].port, 30399);
     a->stop();
 }
 

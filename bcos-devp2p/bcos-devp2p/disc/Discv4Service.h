@@ -26,6 +26,7 @@
 #include "../rlpx/Crypto.h"
 #include "Discv4Wire.h"
 #include "Enr.h"
+#include "IpTracker.h"
 #include "KademliaTable.h"
 #include <bcos-utilities/Common.h>
 #include <boost/asio/io_context.hpp>
@@ -65,7 +66,9 @@ struct Discv4Config
     // The RLPx port advertised in our ENR (`tcp`) and in Ping.from; 0 = not advertised.
     uint16_t tcpPort{0};
     // Fixed public IPv4 for the ENR `ip` key; unset = learn it from the Pong `to`
-    // endpoints our peers report (c_ipVotesRequired distinct reporters).
+    // endpoints our peers report (IpTracker: 10 distinct reporters within 5 minutes; only
+    // addresses in listenIp's scope count, i.e. global ones unless listenIp is itself
+    // loopback/private).
     std::optional<std::array<uint8_t, 4>> externalIp;
     std::vector<SeedNode> bootnodes;
     // EIP-2124 fork id published as the ENR `eth` entry (nullopt = no `eth` key).
@@ -126,9 +129,6 @@ public:
     // Start a lookup for `_target` (nullopt = a random target).
     void lookup(std::optional<bcos::h256> _target = std::nullopt);
 
-    // Distinct Pong reporters that must agree before an unconfigured external IP is
-    // published in the ENR (geth's ipTracker wants 10; small nets never reach that).
-    static constexpr size_t c_ipVotesRequired = 3;
     static constexpr size_t c_lookupConcurrency = 3;      // alpha
     static constexpr uint32_t c_maxFindNodeFailures = 5;  // geth maxFindnodeFailures
     static constexpr std::chrono::seconds c_packetExpiration{20};
@@ -187,9 +187,11 @@ private:
     uint64_t expiration() const;
 
     // Ping `_id` at `_to`; `_done(true, enrSeq)` on a pong from `_to`, `_done(false, 0)`
-    // on timeout. A pong proves `_to` for `_id` (table.updateEndpoint).
+    // on timeout. A pong proves `_to` for `_id` (table.updateEndpoint, inserting the node
+    // when it is not tabled yet); `_announcedTcp` is the TCP port the node itself
+    // announced (Ping.from) and is stored with that proof.
     void sendPing(bcos::h256 const& _id, bcos::bytes const& _publicKey, UdpEndpoint const& _to,
-        std::function<void(bool, uint64_t)> _done);
+        uint16_t _announcedTcp, std::function<void(bool, uint64_t)> _done);
     // FindNode with endpoint proof first when the peer has none of us.
     void findNode(bcos::h256 const& _id, bcos::bytes const& _targetKey,
         std::function<void(std::vector<NeighborNode>)> _done);
@@ -200,7 +202,7 @@ private:
     // Insert/refresh a node; ping it when it has no fresh endpoint proof.
     void addSeen(NodeEntry _entry);
     void onBonded(bcos::h256 const& _id, bcos::bytes const& _publicKey, UdpEndpoint const& _from,
-        PongPacket const& _pong);
+        uint16_t _announcedTcp, PongPacket const& _pong);
     void noteOurEndpoint(bcos::h256 const& _reporter, Endpoint const& _to);
     void rebuildLocalRecord();
     void seedBootnodes();
@@ -242,7 +244,7 @@ private:
     Enr m_localRecord;
     uint64_t m_localSeq{0};
     std::optional<std::array<uint8_t, 4>> m_publishedIp;
-    std::map<std::array<uint8_t, 4>, std::set<bcos::h256>> m_ipVotes;
+    IpTracker m_ipTracker;
     Stats m_stats;
     std::set<bcos::h256> m_everBonded;
     CandidateSink m_sink;

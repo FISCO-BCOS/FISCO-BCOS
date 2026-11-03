@@ -630,54 +630,40 @@ void Discv4Service::handlePing(
     }
     send(_from, pong);
 
-    // Table the sender. A known id seen from a different address is NOT moved: only a
-    // pong from the new address (endpoint proof) may repoint it (updateEndpoint).
+    // A ping is unverified (the source address can be spoofed): it never inserts or
+    // moves a table entry. A node already tabled at exactly this endpoint gets its
+    // lastPingReceived/tcp refreshed; anyone else is pinged at the envelope address and
+    // enters the table only when the pong proves it (onBonded).
     auto const now = Clock::now();
     auto const fromIp = ipBytes(_from.address());
-    bool shouldPing = false;
+    bool shouldPing = true;
     {
         std::lock_guard lock(m_mutex);
         auto* node = m_table.find(_sender);
-        if (node == nullptr)
+        if (node != nullptr)
         {
-            NodeEntry entry;
-            entry.publicKey = _packet.senderPublicKey;
-            entry.id = _sender;
-            entry.ip = fromIp;
-            entry.udp = _from.port();
-            entry.tcp = ping.from.tcp;
-            entry.enrSeq = ping.enrSeq;
-            entry.lastPingReceived = now;
-            if (m_table.add(std::move(entry)) == KademliaTable::AddResult::Added)
+            if (node->ip == fromIp && node->udp == _from.port())
             {
-                ++m_stats.nodesDiscovered;
+                node->lastPingReceived = now;  // from the proven endpoint: it holds our pong
+                node->enrSeq = std::max(node->enrSeq, ping.enrSeq);
+                if (ping.from.tcp != 0)
+                {
+                    node->tcp = ping.from.tcp;
+                }
+                m_table.touch(_sender);
+                // discv4.md: ping back only when we hold no fresh proof of the sender.
+                shouldPing = !node->bonded(now);
             }
-            node = m_table.find(_sender);
-        }
-        else if (node->ip == fromIp && node->udp == _from.port())
-        {
-            node->lastPingReceived = now;  // from the proven endpoint: it holds our pong
-            node->enrSeq = std::max(node->enrSeq, ping.enrSeq);
-            if (ping.from.tcp != 0)
+            if (shouldPing && node->lastPingSent != Clock::time_point{} &&
+                now - node->lastPingSent < c_pingRepeatInterval)
             {
-                node->tcp = ping.from.tcp;
+                shouldPing = false;
             }
-            m_table.touch(_sender);
-        }
-        // discv4.md: "If no communication with the sender has occurred within the last
-        // 12h, a ping should be sent in addition to pong" — ping the envelope address so
-        // the pong proves it.
-        if (node != nullptr &&
-            !(node->bonded(now) && node->ip == fromIp && node->udp == _from.port()) &&
-            (node->lastPingSent == Clock::time_point{} ||
-                now - node->lastPingSent > c_pingRepeatInterval))
-        {
-            shouldPing = true;
         }
     }
     if (shouldPing)
     {
-        sendPing(_sender, _packet.senderPublicKey, _from, [](bool, uint64_t) {});
+        sendPing(_sender, _packet.senderPublicKey, _from, ping.from.tcp, [](bool, uint64_t) {});
     }
 }
 
@@ -685,13 +671,18 @@ void Discv4Service::handleFindNode(
     DecodedPacket const& _packet, UdpEndpoint const& _from, bcos::h256 const& _sender)
 {
     auto const& request = std::get<FindNodePacket>(_packet.packet);
+    auto const now = Clock::now();
     std::vector<NodeEntry> closest;
     {
         std::lock_guard lock(m_mutex);
+        // geth checkBond is keyed by id AND ip: the proof belongs to the endpoint that
+        // answered our ping, so a request from any other source is ignored (no
+        // Neighbors reflection toward a spoofed address).
         auto const* node = m_table.find(_sender);
-        if (node == nullptr || !node->bonded(Clock::now()))
+        if (node == nullptr || !node->bonded(now) || node->ip != ipBytes(_from.address()) ||
+            node->udp != _from.port())
         {
-            DISCV4_LOG(TRACE) << LOG_DESC("findnode from unbonded node ignored")
+            DISCV4_LOG(TRACE) << LOG_DESC("findnode from unbonded endpoint ignored")
                               << LOG_KV("from", _from.address().to_string())
                               << LOG_KV("id", shortId(_sender));
             return;
@@ -704,7 +695,8 @@ void Discv4Service::handleFindNode(
     bool sent = false;
     for (auto const& entry : closest)
     {
-        if (!acceptableRelayAddress(_from.address(), entry.ip))
+        // Only nodes whose endpoint we have verified ourselves are relayed.
+        if (!entry.bonded(now) || !acceptableRelayAddress(_from.address(), entry.ip))
         {
             continue;
         }
@@ -730,9 +722,10 @@ void Discv4Service::handleEnrRequest(
     {
         std::lock_guard lock(m_mutex);
         auto const* node = m_table.find(_sender);
-        if (node == nullptr || !node->bonded(Clock::now()))
+        if (node == nullptr || !node->bonded(Clock::now()) ||
+            node->ip != ipBytes(_from.address()) || node->udp != _from.port())
         {
-            DISCV4_LOG(TRACE) << LOG_DESC("enrrequest from unbonded node ignored")
+            DISCV4_LOG(TRACE) << LOG_DESC("enrrequest from unbonded endpoint ignored")
                               << LOG_KV("id", shortId(_sender));
             return;
         }
@@ -829,7 +822,7 @@ bool Discv4Service::deliverReply(
 // outbound requests
 // ---------------------------------------------------------------------------
 void Discv4Service::sendPing(bcos::h256 const& _id, bcos::bytes const& _publicKey,
-    UdpEndpoint const& _to, std::function<void(bool, uint64_t)> _done)
+    UdpEndpoint const& _to, uint16_t _announcedTcp, std::function<void(bool, uint64_t)> _done)
 {
     PingPacket ping;
     {
@@ -854,15 +847,15 @@ void Discv4Service::sendPing(bcos::h256 const& _id, bcos::bytes const& _publicKe
     pending.type = PacketType::Pong;
     pending.matchHash = std::move(hash);
     pending.expectFrom = _to;
-    pending.onReply = [weak, id = _id, key = _publicKey, from = _to, done = _done](
-                          Packet const& _reply) {
+    pending.onReply = [weak, id = _id, key = _publicKey, from = _to, tcp = _announcedTcp,
+                          done = _done](Packet const& _reply) {
         auto self = weak.lock();
         if (!self)
         {
             return true;
         }
         auto const& pong = std::get<PongPacket>(_reply);
-        self->onBonded(id, key, from, pong);
+        self->onBonded(id, key, from, tcp, pong);
         done(true, pong.enrSeq);
         return true;
     };
@@ -871,7 +864,7 @@ void Discv4Service::sendPing(bcos::h256 const& _id, bcos::bytes const& _publicKe
 }
 
 void Discv4Service::onBonded(bcos::h256 const& _id, bcos::bytes const& _publicKey,
-    UdpEndpoint const& _from, PongPacket const& _pong)
+    UdpEndpoint const& _from, uint16_t _announcedTcp, PongPacket const& _pong)
 {
     auto const now = Clock::now();
     std::optional<rlpx::PeerConfig> newCandidate;
@@ -882,13 +875,14 @@ void Discv4Service::onBonded(bcos::h256 const& _id, bcos::bytes const& _publicKe
         auto* node = m_table.find(_id);
         if (node == nullptr)
         {
-            // Evicted while the ping was in flight (or an inbound-ping bond for a node
-            // the table had no room for): re-table it with the endpoint just proven.
+            // First proof for this node (inbound ping path) or evicted while the ping
+            // was in flight: table it with the endpoint just proven.
             NodeEntry entry;
             entry.publicKey = _publicKey;
             entry.id = _id;
             entry.ip = ipBytes(_from.address());
             entry.udp = _from.port();
+            entry.tcp = _announcedTcp;
             if (m_table.add(std::move(entry)) == KademliaTable::AddResult::Added)
             {
                 ++m_stats.nodesDiscovered;
@@ -901,7 +895,7 @@ void Discv4Service::onBonded(bcos::h256 const& _id, bcos::bytes const& _publicKe
         }
         // The pong came from `_from`: that endpoint is now proven for this id. A changed
         // ip/udp resets the old bond inside updateEndpoint before it is re-stamped here.
-        m_table.updateEndpoint(_id, ipBytes(_from.address()), _from.port(), 0);
+        m_table.updateEndpoint(_id, ipBytes(_from.address()), _from.port(), _announcedTcp);
         bool const wasBonded = node->bonded(now);
         node->lastPongReceived = now;
         node->enrSeq = std::max(node->enrSeq, _pong.enrSeq);
@@ -983,19 +977,25 @@ void Discv4Service::sendEnrRequest(NodeEntry const& _node)
 void Discv4Service::findNode(bcos::h256 const& _id, bcos::bytes const& _targetKey,
     std::function<void(std::vector<NeighborNode>)> _done)
 {
+    // Callbacks are never invoked under m_mutex: _done re-enters lookupStep -> findNode,
+    // which takes the lock again (the mutex is not recursive).
     NodeEntry copy;
     bool needsProof = false;
+    bool found = false;
     {
         std::lock_guard lock(m_mutex);
-        auto const* node = m_table.find(_id);
-        if (node == nullptr)
+        if (auto const* node = m_table.find(_id); node != nullptr)
         {
-            _done({});
-            return;
+            found = true;
+            copy = *node;
+            needsProof =
+                !node->hasProofOfUs(Clock::now()) || node->findNodeFailures > c_maxFindNodeFailures;
         }
-        copy = *node;
-        needsProof =
-            !node->hasProofOfUs(Clock::now()) || node->findNodeFailures > c_maxFindNodeFailures;
+    }
+    if (!found)
+    {
+        _done({});
+        return;
     }
     if (!needsProof)
     {
@@ -1011,7 +1011,7 @@ void Discv4Service::findNode(bcos::h256 const& _id, bcos::bytes const& _targetKe
         return;
     }
     std::weak_ptr<Discv4Service> weak = shared_from_this();
-    sendPing(copy.id, copy.publicKey, *to,
+    sendPing(copy.id, copy.publicKey, *to, 0,
         [weak, id = _id, target = _targetKey, done = std::move(_done)](bool _ok, uint64_t) {
             auto self = weak.lock();
             if (!self || !_ok || !self->m_running.load())
@@ -1030,15 +1030,19 @@ void Discv4Service::findNode(bcos::h256 const& _id, bcos::bytes const& _targetKe
                         return;
                     }
                     NodeEntry copy;
+                    bool found = false;
                     {
                         std::lock_guard lock(self->m_mutex);
-                        auto const* node = self->m_table.find(id);
-                        if (node == nullptr)
+                        if (auto const* node = self->m_table.find(id); node != nullptr)
                         {
-                            done({});
-                            return;
+                            found = true;
+                            copy = *node;
                         }
-                        copy = *node;
+                    }
+                    if (!found)
+                    {
+                        done({});
+                        return;
                     }
                     self->sendFindNode(copy, target, done);
                 });
@@ -1132,7 +1136,7 @@ void Discv4Service::addSeen(NodeEntry _entry)
     {
         if (auto to = endpointOf(copy))
         {
-            sendPing(copy.id, copy.publicKey, *to, [](bool, uint64_t) {});
+            sendPing(copy.id, copy.publicKey, *to, 0, [](bool, uint64_t) {});
         }
     }
 }
@@ -1143,36 +1147,42 @@ void Discv4Service::noteOurEndpoint(bcos::h256 const& _reporter, Endpoint const&
     {
         return;
     }
+    boost::asio::ip::address_v4::bytes_type raw{};
+    std::copy(_to.ip.begin(), _to.ip.end(), raw.begin());
+    boost::asio::ip::address_v4 const stated(raw);
+    if (stated.is_unspecified() || stated.is_multicast() ||
+        stated == boost::asio::ip::address_v4::broadcast())
+    {
+        return;
+    }
+    // Only statements in our listen address's scope count: a global address always; a
+    // loopback / private one only when we are bound to that scope ourselves (an
+    // unspecified bind is treated as global-only).
+    boost::system::error_code ec;
+    auto const bound = boost::asio::ip::make_address_v4(m_config.listenIp, ec);
+    bool const boundLoopback = !ec && bound.is_loopback();
+    bool const boundPrivate = !ec && isPrivateV4(bound);
+    if ((stated.is_loopback() && !boundLoopback) ||
+        (isPrivateV4(stated) && !boundPrivate && !boundLoopback))
+    {
+        return;
+    }
     std::array<uint8_t, 4> ip{};
-    std::copy(_to.ip.begin(), _to.ip.end(), ip.begin());
-    if (ip == std::array<uint8_t, 4>{0, 0, 0, 0})
-    {
-        return;
-    }
+    std::copy(raw.begin(), raw.end(), ip.begin());
     std::lock_guard lock(m_mutex);
-    if (m_ipVotes.size() > 16)
-    {
-        m_ipVotes.clear();  // a flood of distinct statements: start over
-    }
-    auto& voters = m_ipVotes[ip];
-    voters.insert(_reporter);
-    if (voters.size() < c_ipVotesRequired || m_publishedIp == ip)
+    auto const now = Clock::now();
+    m_ipTracker.addStatement(_reporter, ip, now);
+    auto predicted = m_ipTracker.predict(now);
+    if (!predicted || m_publishedIp == predicted)
     {
         return;
     }
-    // Only the best-supported address is published.
-    for (auto const& [other, otherVoters] : m_ipVotes)
-    {
-        if (other != ip && otherVoters.size() > voters.size())
-        {
-            return;
-        }
-    }
-    m_publishedIp = ip;
+    m_publishedIp = predicted;
     ++m_localSeq;
     rebuildLocalRecord();
     DISCV4_LOG(INFO) << LOG_DESC("external endpoint learned from peers, ENR republished")
-                     << LOG_KV("ip", m_localRecord.ipString()) << LOG_KV("seq", m_localSeq);
+                     << LOG_KV("ip", m_localRecord.ipString()) << LOG_KV("seq", m_localSeq)
+                     << LOG_KV("statements", m_ipTracker.size());
 }
 
 // ---------------------------------------------------------------------------
@@ -1357,21 +1367,22 @@ void Discv4Service::onRevalidate()
     if (auto to = target ? endpointOf(*target) : std::nullopt)
     {
         std::weak_ptr<Discv4Service> weak = shared_from_this();
-        sendPing(target->id, target->publicKey, *to, [weak, id = target->id](bool _ok, uint64_t) {
-            if (_ok)
-            {
-                return;  // onBonded already refreshed the entry
-            }
-            if (auto self = weak.lock())
-            {
-                std::lock_guard lock(self->m_mutex);
-                if (self->m_table.remove(id))
+        sendPing(
+            target->id, target->publicKey, *to, 0, [weak, id = target->id](bool _ok, uint64_t) {
+                if (_ok)
                 {
-                    DISCV4_LOG(DEBUG) << LOG_DESC("revalidation failed, node dropped")
-                                      << LOG_KV("id", shortId(id));
+                    return;  // onBonded already refreshed the entry
                 }
-            }
-        });
+                if (auto self = weak.lock())
+                {
+                    std::lock_guard lock(self->m_mutex);
+                    if (self->m_table.remove(id))
+                    {
+                        DISCV4_LOG(DEBUG) << LOG_DESC("revalidation failed, node dropped")
+                                          << LOG_KV("id", shortId(id));
+                    }
+                }
+            });
     }
     scheduleRevalidate();
 }
