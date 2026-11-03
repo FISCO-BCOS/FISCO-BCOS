@@ -236,7 +236,7 @@ public:
     using bcos::ledger::Ledger::Ledger;
 };
 
-/// SvcCommitLedger whose first asyncPrewriteBlock fails with an injected error, then
+/// SvcCommitLedger whose first prewriteBlock fails with an injected error, then
 /// delegates to the real path. Models the transient storage fault behind the
 /// commit-masking scenario: the first newPayload must THROW (never answer VALID for a
 /// block whose rows were not written), and the retry must complete the commit for real.
@@ -244,26 +244,24 @@ class SvcFlakyLedger : public SvcCommitLedger
 {
 public:
     using SvcCommitLedger::SvcCommitLedger;
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+    bcos::task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features,
+        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
         std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
     {
         if (m_failNext.exchange(false))
         {
-            callback("injected", BCOS_ERROR_PTR(bcos::ledger::LedgerError::ErrorArgument,
-                                     "injected prewrite failure"));
-            return;
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(bcos::ledger::LedgerError::ErrorArgument, "injected prewrite failure"));
         }
-        SvcCommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
-            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+        co_return co_await SvcCommitLedger::prewriteBlock(std::move(storage), std::move(_blockTxs),
+            std::move(block), writeTxsAndReceipts, std::move(features),
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_failNext{true};
 };
 
-/// SvcCommitLedger that parks the FIRST asyncPrewriteBlock until the test releases it,
+/// SvcCommitLedger that parks the FIRST prewriteBlock until the test releases it,
 /// then passes everything through. Models the window where the first newPayload's
 /// commit I/O is "in flight" — parked inside the commit section, holding
 /// EngineServiceImpl::m_commitMutex — while a concurrent duplicate arrives.
@@ -271,10 +269,9 @@ class SvcGatedLedger : public SvcCommitLedger
 {
 public:
     using SvcCommitLedger::SvcCommitLedger;
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+    bcos::task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features,
+        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
         std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
     {
         if (!m_firstEntered.exchange(true))
@@ -285,8 +282,8 @@ public:
                 std::this_thread::yield();
             }
         }
-        SvcCommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
-            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+        co_return co_await SvcCommitLedger::prewriteBlock(std::move(storage), std::move(_blockTxs),
+            std::move(block), writeTxsAndReceipts, std::move(features),
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_firstEntered{false};

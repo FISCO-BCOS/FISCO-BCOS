@@ -174,17 +174,15 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
 }
 
-void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+task::Task<std::string> Ledger::prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-    std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-    std::optional<bcos::ledger::Features> features,
+    bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> /*features*/,
     std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
 {
     if (!block)
     {
-        callback("",
-            BCOS_ERROR_PTR(LedgerError::ErrorArgument, "asyncPrewriteBlock failed, empty block"));
-        return;
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(LedgerError::ErrorArgument, "prewriteBlock failed, empty block"));
     }
 
     if (isSysContractDeploy(block->blockHeader()->number()) && block->transactionsSize() > 0)
@@ -193,54 +191,39 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         /// NOTE: write block number for 2pc storage
         Entry numberEntry;
         numberEntry.set("0");
-        storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
-            [callback](Error::Ptr&& error) {
-                if (error)
-                {
-                    LEDGER_LOG(ERROR) << "System contract write ledger storage error "
-                                      << LOG_KV("msg", error->errorMessage())
-                                      << LOG_KV("code", error->errorCode());
-                }
-                callback("", std::forward<decltype(error)>(error));
-            });
-        return;
+        try
+        {
+            co_await storage2::writeOne(*storage,
+                executor_v1::StateKey{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER},
+                std::move(numberEntry));
+        }
+        catch (bcos::Error& error)
+        {
+            LEDGER_LOG(ERROR) << "System contract write ledger storage error "
+                              << LOG_KV("msg", error.errorMessage())
+                              << LOG_KV("code", error.errorCode());
+            throw;
+        }
+        co_return std::string{};
     }
-    // The writes below run inside one detached coroutine: rows 1-6 and the total-count rows fan
-    // out through task::whenAll (replacing the historical TOTAL_CALLBACK atomic-counter
-    // protocol), and the total-count read sits between them as a co_await. Everything is passed
-    // by value: task::wait does not wait, so the coroutine frame must own all it touches.
-    task::wait(
-        [](decltype(*this)& self, bcos::storage::StorageInterface::Ptr storage,
-            bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block,
-            std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-            std::optional<bcos::crypto::HashType> blockHashOverride,
-            bool writeNonces) -> task::Task<void> {
-            std::string primaryKey;
-            try
-            {
-                primaryKey = co_await self.prewriteBlockImpl(std::move(storage),
-                    std::move(blockTxs), std::move(block), writeTxsAndReceipts,
-                    std::move(blockHashOverride), writeNonces);
-            }
-            catch (bcos::Error& e)
-            {
-                LEDGER_LOG(ERROR) << "PrewriteBlock error" << boost::diagnostic_information(e);
-                callback("", BCOS_ERROR_WITH_PREV_PTR(
-                                 LedgerError::CollectAsyncCallbackError, "PrewriteBlock error", e));
-                co_return;
-            }
-            catch (std::exception& e)
-            {
-                LEDGER_LOG(ERROR) << "PrewriteBlock error" << boost::diagnostic_information(e);
-                callback("", BCOS_ERROR_WITH_PREV_PTR(
-                                 LedgerError::CollectAsyncCallbackError, "PrewriteBlock error", e));
-                co_return;
-            }
-            // Invoked outside the try so a throwing consumer callback cannot be caught above
-            // and re-invoked with an error.
-            callback(std::move(primaryKey), nullptr);
-        }(*this, std::move(storage), std::move(_blockTxs), std::move(block), std::move(callback),
-                                  writeTxsAndReceipts, std::move(blockHashOverride), writeNonces));
+
+    try
+    {
+        co_return co_await prewriteBlockImpl(std::move(storage), std::move(_blockTxs),
+            std::move(block), writeTxsAndReceipts, std::move(blockHashOverride), writeNonces);
+    }
+    catch (bcos::Error& e)
+    {
+        LEDGER_LOG(ERROR) << "PrewriteBlock error" << boost::diagnostic_information(e);
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR_WITH_PREV(LedgerError::CollectAsyncCallbackError, "PrewriteBlock error", e));
+    }
+    catch (std::exception& e)
+    {
+        LEDGER_LOG(ERROR) << "PrewriteBlock error" << boost::diagnostic_information(e);
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR_WITH_PREV(LedgerError::CollectAsyncCallbackError, "PrewriteBlock error", e));
+    }
 }
 
 task::Task<std::string> Ledger::prewriteBlockImpl(bcos::storage::StorageInterface::Ptr storage,

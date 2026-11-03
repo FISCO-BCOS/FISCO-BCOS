@@ -71,13 +71,13 @@ public:
         BOOST_REQUIRE(mockExecutor.m_checkTimestamp99);
         BOOST_REQUIRE(mockScheduler.m_receiptsWithLogs);
 
-        // Ledger: asyncPrewriteBlock => invoke callback(success)
-        fakeit::When(Method(mockLedger, asyncPrewriteBlock))
-            .AlwaysDo([](bcos::storage::StorageInterface::Ptr, bcos::protocol::ConstTransactionsPtr,
-                          bcos::protocol::Block::ConstPtr,
-                          std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool,
-                          std::optional<bcos::ledger::Features>,
-                          std::optional<bcos::crypto::HashType>, bool) { callback({}, nullptr); });
+        // Ledger: prewriteBlock => successful coroutine
+        fakeit::When(Method(mockLedger, prewriteBlock))
+            .AlwaysDo(
+                [](bcos::storage::StorageInterface::Ptr, bcos::protocol::ConstTransactionsPtr,
+                    bcos::protocol::Block::ConstPtr, bool, std::optional<bcos::ledger::Features>,
+                    std::optional<bcos::crypto::HashType>,
+                    bool) -> task::Task<std::string> { co_return std::string{}; });
         // Ledger: storeTransactionsAndReceipts => no error
         fakeit::When(Method(mockLedger, storeTransactionsAndReceipts))
             .AlwaysDo([](bcos::protocol::ConstTransactionsPtr,

@@ -936,7 +936,7 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
             0, decoder, stateRootCalc);
         BOOST_REQUIRE(result.valid);
 
-        // FakeLedger::asyncPrewriteBlock is a no-op, so the commit does not advance
+        // FakeLedger::prewriteBlock is a no-op, so the commit does not advance
         // SYS_KEY_CURRENT_NUMBER the way the real Ledger::prewriteBlock
         // (Ledger.cpp:296-300) does — write the row the real commit would have written,
         // so the ledger head IS 1 ("the ledger already holds block 1").

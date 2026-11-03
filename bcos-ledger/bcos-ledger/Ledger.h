@@ -77,11 +77,10 @@ public:
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override;
-    // No default arguments here — see LedgerInterface::asyncPrewriteBlock.
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+    // No default arguments here — see LedgerInterface::prewriteBlock.
+    task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features,
+        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
         std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override;
 
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
@@ -170,9 +169,8 @@ private:
     Error::Ptr checkEntryValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Entry>& entry, const std::string_view& key);
 
-    // Coroutine bodies behind the asyncPrewriteBlock / asyncGetBatchTxsByHashList callback
-    // shells; the shells bridge them with task::wait and fold exceptions back into the
-    // historical callback error contract.
+    // prewriteBlockImpl contains the row writes; prewriteBlock folds failures into the historical
+    // error contract. asyncGetBatchTxsByHashList still bridges its coroutine with a callback shell.
     task::Task<std::string> prewriteBlockImpl(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block,
         bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,

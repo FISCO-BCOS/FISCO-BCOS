@@ -31,20 +31,18 @@ class MockLedger3 : public bcos::ledger::LedgerInterface
 public:
     MockLedger3() : LedgerInterface() {}
     using Ptr = std::shared_ptr<MockLedger3>;
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+    task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features,
+        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
         std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
     {
         auto blockNumber = block->blockHeader()->number();
         if (blockNumber == 1024)
         {
-            callback(
-                "", BCOS_ERROR_PTR(LedgerError::CollectAsyncCallbackError, "PrewriteBlock error"));
-            return;
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(LedgerError::CollectAsyncCallbackError, "PrewriteBlock error"));
         }
-        callback("", nullptr);
+        co_return std::string{};
     }
 
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,

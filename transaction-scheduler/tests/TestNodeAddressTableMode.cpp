@@ -198,37 +198,35 @@ public:
             mockLedger.get(), mockTxPool.get(), *transactionSubmitResultFactory, *hashImpl)
     {
         // The ledger commit path needs the same mocks as TestCommitSingleBatch.
-        fakeit::When(Method(mockLedger, asyncPrewriteBlock))
-            .AlwaysDo(
-                [](storage::StorageInterface::Ptr storage, protocol::ConstTransactionsPtr,
-                    protocol::Block::ConstPtr block,
-                    std::function<void(std::string, Error::Ptr&&)> callback, bool,
-                    std::optional<ledger::Features>, std::optional<bcos::crypto::HashType>, bool) {
-                    auto header = block->blockHeader();
-                    auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
-                    auto hash = header->hash();
-                    auto hashView =
-                        std::string_view(reinterpret_cast<const char*>(hash.data()), hash.SIZE);
+        fakeit::When(Method(mockLedger, prewriteBlock))
+            .AlwaysDo([](storage::StorageInterface::Ptr storage, protocol::ConstTransactionsPtr,
+                          protocol::Block::ConstPtr block, bool, std::optional<ledger::Features>,
+                          std::optional<bcos::crypto::HashType>, bool) -> task::Task<std::string> {
+                auto header = block->blockHeader();
+                auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
+                auto hash = header->hash();
+                auto hashView =
+                    std::string_view(reinterpret_cast<const char*>(hash.data()), hash.SIZE);
 
-                    storage::Entry hashEntry;
-                    hashEntry.set(hash.asBytes());
-                    storage->asyncSetRow(ledger::SYS_NUMBER_2_HASH, blockNumberStr,
-                        std::move(hashEntry), [](Error::UniquePtr) {});
+                storage::Entry hashEntry;
+                hashEntry.set(hash.asBytes());
+                storage->asyncSetRow(ledger::SYS_NUMBER_2_HASH, blockNumberStr,
+                    std::move(hashEntry), [](Error::UniquePtr) {});
 
-                    storage::Entry hash2NumberEntry;
-                    hash2NumberEntry.set(blockNumberStr);
-                    storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER, hashView,
-                        std::move(hash2NumberEntry), [](Error::UniquePtr) {});
+                storage::Entry hash2NumberEntry;
+                hash2NumberEntry.set(blockNumberStr);
+                storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER, hashView,
+                    std::move(hash2NumberEntry), [](Error::UniquePtr) {});
 
-                    bytes headerBuffer;
-                    header->encode(headerBuffer);
-                    storage::Entry number2HeaderEntry;
-                    number2HeaderEntry.set(std::move(headerBuffer));
-                    storage->asyncSetRow(ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr,
-                        std::move(number2HeaderEntry), [](Error::UniquePtr) {});
+                bytes headerBuffer;
+                header->encode(headerBuffer);
+                storage::Entry number2HeaderEntry;
+                number2HeaderEntry.set(std::move(headerBuffer));
+                storage->asyncSetRow(ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr,
+                    std::move(number2HeaderEntry), [](Error::UniquePtr) {});
 
-                    callback({}, nullptr);
-                });
+                co_return std::string{};
+            });
         using HashView =
             ::ranges::any_view<h256, ::ranges::category::mask | ::ranges::category::sized>;
         fakeit::When(Method(mockTxPool, getTransactions)).AlwaysDo([](HashView) {

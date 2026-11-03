@@ -237,10 +237,9 @@ public:
     std::atomic<bool> prewriteStarted{false};
     std::shared_ptr<std::atomic<bool>> prewriteGate = std::make_shared<std::atomic<bool>>(false);
 
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+    task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features,
+        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
         std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
     {
         (void)storage;
@@ -251,19 +250,18 @@ public:
         (void)blockHashOverride;
         (void)writeNonces;
         prewriteStarted.store(true, std::memory_order_release);
-        // prewriteBlockToBuffer suspends until this callback runs; keep it on the
-        // commit thread (spin/yield) so task::syncWait can resume without a
-        // cross-thread handle.resume() deadlock.
+        // Keep the first prewrite on the commit thread (spin/yield) so task::syncWait can resume
+        // without a cross-thread handle.resume() deadlock.
         while (!prewriteGate->load(std::memory_order_acquire))
         {
             std::this_thread::yield();
         }
-        callback("", nullptr);
+        co_return std::string{};
     }
 };
 
 // A ledger stub whose prewrite actually persists the row the fail-closed guard
-// reads (SYS_HASH_2_NUMBER), the way the real Ledger::asyncPrewriteBlock does.
+// reads (SYS_HASH_2_NUMBER), the way the real Ledger::prewriteBlock does.
 // The commit path's own persist — not a hand-written row — must feed the guard.
 class PersistingFakeLedger : public bcos::test::FakeLedger
 {
@@ -272,10 +270,9 @@ public:
 
     std::atomic<unsigned> prewriteCount{0};
 
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+    task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features,
+        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
         std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
     {
         (void)writeTxsAndReceipts;
@@ -285,7 +282,7 @@ public:
         if (block)
         {
             // AnyBlockHeader is returned by value and cannot be null; use it directly,
-            // the way Ledger::asyncPrewriteBlock does.
+            // the way Ledger::prewriteBlock does.
             auto const header = block->blockHeader();
             bcos::storage::Entry hash2NumberEntry;
             hash2NumberEntry.set(std::to_string(header->number()));
@@ -294,7 +291,7 @@ public:
                 [](auto&&) {});
         }
         ++prewriteCount;
-        callback("", nullptr);
+        co_return std::string{};
     }
 };
 

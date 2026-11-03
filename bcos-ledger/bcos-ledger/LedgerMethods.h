@@ -162,7 +162,7 @@ inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
     return out;
 }
 
-/// The metadata row set of a block prewrite (Ledger::asyncPrewriteBlock rows 1-6), in the
+/// The metadata row set of a block prewrite (Ledger::prewriteBlock rows 1-6), in the
 /// historical write order: number→hash, hash→number, number→header, (optional) number→
 /// nonces, current-number, number→tx-metadata. The SYS_KEY_TOTAL_* counter rows are NOT
 /// included — they depend on the totals already stored — and the sys-contract-deploy
@@ -171,7 +171,7 @@ struct PrewriteBlockRows
 {
     std::vector<std::pair<executor_v1::StateKey, storage::Entry>> rows;
     // The tx-metadata block backing the SYS_NUMBER_2_TXS row, kept for callers that key
-    // receipts by transactionHash(i) (Ledger::asyncPrewriteBlock's receipt fan-out).
+    // receipts by transactionHash(i) (Ledger::prewriteBlock's receipt fan-out).
     protocol::Block::Ptr transactionsBlock;
 };
 

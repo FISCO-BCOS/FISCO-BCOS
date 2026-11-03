@@ -378,12 +378,8 @@ public:
             // write other meta data
             Features features;
             features.set(Features::Flag::feature_evm_address);
-            std::promise<bool> prewritePromise;
-            m_ledger->asyncPrewriteBlock(
-                m_storage, nullptr, block,
-                [&](std::string, Error::Ptr&&) { prewritePromise.set_value(true); }, true, features,
-                std::nullopt, true);
-            prewritePromise.get_future().get();
+            task::syncWait(m_ledger->prewriteBlock(
+                m_storage, nullptr, block, true, features, std::nullopt, true));
             // update nonce logic move to executor
             //            for (size_t j = 0; j < txSize; ++j)
             //            {
@@ -430,15 +426,8 @@ public:
 
             // BOOST_CHECK_EQUAL(f3.get(), true);
 
-            std::promise<bool> p3;
-            m_ledger->asyncPrewriteBlock(
-                m_storage, nullptr, m_fakeBlocks->at(i),
-                [&](std::string, Error::Ptr&& error) {
-                    BOOST_CHECK(!error);
-                    p3.set_value(true);
-                },
-                true, std::nullopt, std::nullopt, true);
-            BOOST_CHECK_EQUAL(p3.get_future().get(), true);
+            task::syncWait(m_ledger->prewriteBlock(
+                m_storage, nullptr, m_fakeBlocks->at(i), true, std::nullopt, std::nullopt, true));
         }
     }
 
@@ -1104,15 +1093,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
     bcos::Bloom expectedBloom{};
     bcos::orBloom(expectedBloom, bcos::getLogsBloom(receipt->logEntries()));
 
-    std::promise<bool> prewritePromise;
-    m_ledger->asyncPrewriteBlock(
-        m_storage, nullptr, block,
-        [&](std::string, Error::Ptr&& error) {
-            BOOST_CHECK(!error);
-            prewritePromise.set_value(true);
-        },
-        true, std::nullopt, std::nullopt, true);
-    BOOST_CHECK(prewritePromise.get_future().get());
+    task::syncWait(
+        m_ledger->prewriteBlock(m_storage, nullptr, block, true, std::nullopt, std::nullopt, true));
 
     std::promise<protocol::Block::Ptr> blockPromise;
     m_ledger->asyncGetBlockDataByNumber(
@@ -1481,16 +1463,16 @@ BOOST_AUTO_TEST_CASE(prewriteBlockStopsAfterPreStoreFailure)
     BOOST_REQUIRE(storage != nullptr);
     storage->failSetRowsOn(SYS_HASH_2_TX);
 
-    std::promise<Error::Ptr> prewritePromise;
-    auto prewriteFuture = prewritePromise.get_future();
-    m_ledger->asyncPrewriteBlock(
-        m_storage, m_fakeTransactions[0], m_fakeBlocks->at(0),
-        [&prewritePromise](
-            std::string, Error::Ptr&& error) { prewritePromise.set_value(std::move(error)); },
-        true, std::nullopt, std::nullopt, true);
-    auto error = prewriteFuture.get();
-    BOOST_REQUIRE(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), LedgerError::CollectAsyncCallbackError);
+    try
+    {
+        task::syncWait(m_ledger->prewriteBlock(m_storage, m_fakeTransactions[0],
+            m_fakeBlocks->at(0), true, std::nullopt, std::nullopt, true));
+        BOOST_FAIL("prewriteBlock should propagate the transaction storage failure");
+    }
+    catch (bcos::Error const& error)
+    {
+        BOOST_CHECK_EQUAL(error.errorCode(), LedgerError::CollectAsyncCallbackError);
+    }
 
     std::promise<int64_t> totalPromise;
     m_ledger->asyncGetTotalTransactionCount(
@@ -1621,9 +1603,8 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     initFixture();
     auto transactions = std::make_shared<Transactions>();
     transactions->push_back(tx);
-    m_ledger->asyncPrewriteBlock(
-        m_storage, blockTxs, block, [](std::string, Error::Ptr&& error) { BOOST_CHECK(!error); },
-        true, std::nullopt, std::nullopt, true);
+    task::syncWait(m_ledger->prewriteBlock(
+        m_storage, blockTxs, block, true, std::nullopt, std::nullopt, true));
 
     m_ledger->asyncGetBlockDataByNumber(
         100, TRANSACTIONS, [tx](Error::Ptr error, bcos::protocol::Block::Ptr block) {
