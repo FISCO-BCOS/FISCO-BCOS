@@ -19,12 +19,14 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-crypto/kzg/Kzg4844.h>
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-rlp-protocol/BlobSidecarRow.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
@@ -1782,6 +1784,201 @@ BOOST_AUTO_TEST_CASE(getPayloadBodiesByHashV1)
     // Pre-Shanghai header: withdrawals must be JSON null, not omitted.
     BOOST_CHECK(body.isMember("withdrawals"));
     BOOST_CHECK(body["withdrawals"].isNull());
+}
+
+// ExecutionPayloadBodyV2 (amsterdam.md): the V2 bodies methods answer the V1 body plus a
+// blockAccessList that MUST be null for a pre-Amsterdam block — every block this binary
+// commits. Same params, same ceilings, same null for an unknown hash.
+BOOST_AUTO_TEST_CASE(getPayloadBodiesV2CarryNullBlockAccessList)
+{
+    replaceBlockTransactions(m_ledger->ledgerData()[5], {makeWeb3Tx()});
+    auto const hash5 = m_ledger->ledgerData()[5]->blockHeader()->hash();
+    auto const unknownHash =
+        bcos::h256("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+    Json::Value params(Json::arrayValue);
+    Json::Value hashes(Json::arrayValue);
+    hashes.append("0x" + hash5.hex());
+    hashes.append("0x" + unknownHash.hex());
+    params.append(hashes);
+    Json::Value response;
+    CALL_ENGINE_SYNC(getPayloadBodiesByHashV2, params, response);
+    auto const& result = response["result"];
+    BOOST_REQUIRE(result.isArray());
+    BOOST_REQUIRE_EQUAL(result.size(), 2);
+    BOOST_REQUIRE(result[0u].isObject());
+    BOOST_CHECK_EQUAL(
+        result[0u]["transactions"][0u].asString(), toHexStringWithPrefix(expectedWireForWeb3Tx()));
+    BOOST_CHECK(result[0u]["withdrawals"].isNull());
+    BOOST_REQUIRE(result[0u].isMember("blockAccessList"));
+    BOOST_CHECK(result[0u]["blockAccessList"].isNull());
+    BOOST_CHECK(result[1u].isNull());
+
+    Json::Value rangeParams(Json::arrayValue);
+    rangeParams.append("0x5");
+    rangeParams.append("0x1");
+    Json::Value rangeResponse;
+    CALL_ENGINE_SYNC(getPayloadBodiesByRangeV2, rangeParams, rangeResponse);
+    BOOST_REQUIRE_EQUAL(rangeResponse["result"].size(), 1);
+    BOOST_REQUIRE(rangeResponse["result"][0u].isMember("blockAccessList"));
+    BOOST_CHECK(rangeResponse["result"][0u]["blockAccessList"].isNull());
+    // The V1 body never carries the field.
+    Json::Value v1Response;
+    CALL_ENGINE_SYNC(getPayloadBodiesByRangeV1, rangeParams, v1Response);
+    BOOST_CHECK(!v1Response["result"][0u].isMember("blockAccessList"));
+}
+
+// The Amsterdam methods are routable, not advertised, and answer the spec's out-of-window
+// -38005 (null for getBlobsV4) without reaching the service: this binary has no Amsterdam
+// execution, so no timestamp it serves is in their window.
+BOOST_AUTO_TEST_CASE(amsterdamMethodsAnswerUnsupportedForkWithoutTheService)
+{
+    Json::Value params(Json::arrayValue);
+    params.append("0x00000000deadbeef");
+    Json::Value response;
+    CALL_ENGINE(getPayloadV6, params, response);
+    BOOST_REQUIRE(response.isMember("error"));
+    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
+    BOOST_CHECK(!mockService.m_state->capturedGetPayloadVersion.has_value());
+
+    Json::Value newPayloadParams(Json::arrayValue);
+    newPayloadParams.append(Json::Value(Json::objectValue));
+    Json::Value newPayloadResponse;
+    CALL_ENGINE(newPayloadV5, newPayloadParams, newPayloadResponse);
+    BOOST_REQUIRE(newPayloadResponse.isMember("error"));
+    BOOST_CHECK_EQUAL(newPayloadResponse["error"]["code"].asInt(), EngineError::UnsupportedFork);
+    BOOST_CHECK(!mockService.m_state->capturedNewPayloadVersion.has_value());
+
+    Json::Value blobsParams(Json::arrayValue);
+    blobsParams.append(Json::Value(Json::arrayValue));
+    blobsParams.append("0x00000000000000000000000000000000");
+    Json::Value blobsResponse;
+    CALL_ENGINE(getBlobsV4, blobsParams, blobsResponse);
+    BOOST_REQUIRE(blobsResponse.isMember("result"));
+    BOOST_CHECK(blobsResponse["result"].isNull());
+}
+
+namespace
+{
+/// Write the SYS_NUMBER_2_BLOBS sidecar row through the codec the self-built newPayload
+/// commit writes with (BlobSidecarRow.h): one blob per item, its proofs the blob's slice
+/// of the bundle (one EIP-4844 proof, or the 128 EIP-7594 cell proofs).
+void writeBlobsRow(FakeLedger* ledger, protocol::BlockNumber number,
+    std::vector<std::tuple<bcos::bytes, bcos::bytes, std::vector<bcos::bytes>>> const& items)
+{
+    engine::BlobsBundleV1 bundle;
+    for (auto const& [commitment, blob, proofs] : items)
+    {
+        bundle.commitments.push_back(commitment);
+        bundle.blobs.push_back(blob);
+        bundle.proofs.insert(bundle.proofs.end(), proofs.begin(), proofs.end());
+    }
+    storage::Entry entry;
+    entry.set(rpc::encodeBlobSidecarRow(bundle));
+    task::syncWait(storage2::writeOne(*ledger->getStateStorage(),
+        executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)},
+        std::move(entry)));
+}
+}  // namespace
+
+// The getBlobs family switches on the Osaka fork at the committed head's timestamp:
+// before it V1 serves the EIP-4844 blob proof and V2/V3 answer null ("unable to serve blob
+// pool data" — osaka.md gives them no -38005); from it V1 is -38005 (osaka.md "Update the
+// methods of previous forks"), V3 answers the 128 cell proofs per blob with null per
+// missing position, V2 answers null unless every blob is held with cell proofs. The fake
+// ledger's head is at timestamp 0, so osaka_time = 0 is "active" and the default
+// (unscheduled) is not.
+BOOST_AUTO_TEST_CASE(getBlobsFamilyFollowsTheOsakaHead)
+{
+    auto const head = task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
+    bcos::bytes const commitmentV0(crypto::kzg::CommitmentSize, bcos::byte{0xa1});
+    bcos::bytes const blobV0(crypto::kzg::BlobSize, bcos::byte{0x01});
+    bcos::bytes const proofV0(crypto::kzg::ProofSize, bcos::byte{0xb1});
+    bcos::bytes const commitmentV1(crypto::kzg::CommitmentSize, bcos::byte{0xa2});
+    bcos::bytes const blobV1(crypto::kzg::BlobSize, bcos::byte{0x02});
+    std::vector<bcos::bytes> cellProofs(
+        engine::CELL_PROOFS_PER_BLOB, bcos::bytes(crypto::kzg::ProofSize, bcos::byte{0xb2}));
+    cellProofs[7][0] = bcos::byte{0x77};
+    auto const hashV0 = crypto::kzg::versionedHashFromCommitment(bcos::ref(commitmentV0));
+    auto const hashV1 = crypto::kzg::versionedHashFromCommitment(bcos::ref(commitmentV1));
+    bcos::h256 const unknown("0x0199999999999999999999999999999999999999999999999999999999999999");
+    writeBlobsRow(m_ledger.get(), head, {{commitmentV0, blobV0, {proofV0}}});
+    writeBlobsRow(m_ledger.get(), head - 1, {{commitmentV1, blobV1, cellProofs}});
+
+    auto const hashesParam = [](std::initializer_list<bcos::h256> hashes) {
+        Json::Value params(Json::arrayValue);
+        Json::Value list(Json::arrayValue);
+        for (auto const& hash : hashes)
+        {
+            list.append(hash.hexPrefixed());
+        }
+        params.append(list);
+        return params;
+    };
+
+    // Pre-Osaka head (osaka_time unscheduled).
+    {
+        Json::Value response;
+        CALL_ENGINE_SYNC(getBlobsV1, hashesParam({hashV0, unknown, hashV1}), response);
+        auto const& result = response["result"];
+        BOOST_REQUIRE_EQUAL(result.size(), 3);
+        BOOST_CHECK_EQUAL(result[0u]["blob"].asString(), toHexStringWithPrefix(blobV0));
+        BOOST_CHECK_EQUAL(result[0u]["proof"].asString(), toHexStringWithPrefix(proofV0));
+        BOOST_CHECK(result[1u].isNull());
+        BOOST_CHECK(result[2u].isNull());  // a cell-proof item has no blob proof to answer
+        Json::Value v2Response;
+        CALL_ENGINE_SYNC(getBlobsV2, hashesParam({hashV1}), v2Response);
+        BOOST_REQUIRE(v2Response.isMember("result"));
+        BOOST_CHECK(v2Response["result"].isNull());
+        Json::Value v3Response;
+        CALL_ENGINE_SYNC(getBlobsV3, hashesParam({hashV1}), v3Response);
+        BOOST_CHECK(v3Response["result"].isNull());
+    }
+
+    // Osaka head.
+    nodeService->setBlobForkTimes(bcos::protocol::BlobForkTimes{.osakaTime = 0});
+    {
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getBlobsV1, hashesParam({hashV0}), response),
+            JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+
+        Json::Value v3Response;
+        CALL_ENGINE_SYNC(getBlobsV3, hashesParam({hashV1, unknown, hashV0}), v3Response);
+        auto const& v3 = v3Response["result"];
+        BOOST_REQUIRE(v3.isArray());
+        BOOST_REQUIRE_EQUAL(v3.size(), 3);
+        BOOST_CHECK_EQUAL(v3[0u]["blob"].asString(), toHexStringWithPrefix(blobV1));
+        BOOST_REQUIRE_EQUAL(v3[0u]["proofs"].size(), engine::CELL_PROOFS_PER_BLOB);
+        BOOST_CHECK_EQUAL(v3[0u]["proofs"][7u].asString(), toHexStringWithPrefix(cellProofs[7]));
+        BOOST_CHECK(v3[1u].isNull());
+        BOOST_CHECK(v3[2u].isNull());  // held with a blob proof only: "older version"
+
+        Json::Value v2Full;
+        CALL_ENGINE_SYNC(getBlobsV2, hashesParam({hashV1}), v2Full);
+        BOOST_REQUIRE(v2Full["result"].isArray());
+        BOOST_REQUIRE_EQUAL(v2Full["result"].size(), 1);
+        BOOST_CHECK_EQUAL(v2Full["result"][0u]["proofs"].size(), engine::CELL_PROOFS_PER_BLOB);
+        Json::Value v2Partial;
+        CALL_ENGINE_SYNC(getBlobsV2, hashesParam({hashV1, unknown}), v2Partial);
+        BOOST_CHECK(v2Partial["result"].isNull());
+        Json::Value v2Older;
+        CALL_ENGINE_SYNC(getBlobsV2, hashesParam({hashV1, hashV0}), v2Older);
+        BOOST_CHECK(v2Older["result"].isNull());
+
+        // The request ceiling is the spec's 128 -> -38004 above it, for every version.
+        Json::Value tooMany(Json::arrayValue);
+        Json::Value list(Json::arrayValue);
+        for (int i = 0; i < 129; ++i)
+        {
+            list.append(unknown.hexPrefixed());
+        }
+        tooMany.append(list);
+        Json::Value tooManyResponse;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getBlobsV2, tooMany, tooManyResponse),
+            JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == EngineError::TooLargeRequest; });
+    }
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadBodiesByHashV1RejectsBadParams)
