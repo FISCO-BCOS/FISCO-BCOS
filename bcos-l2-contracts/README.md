@@ -28,11 +28,13 @@ addressing convention (2-byte suffix identifies the contract) one prefix up.
 
 `SystemConfig` is a generic key→value store: `setValueByKey(key, value,
 enableNumber)` / `getValueByKey(key)`, each entry packed as `(uint192 value,
-uint64 enableNumber)` in a single slot. Runtime writes are whitelisted —
-currently only `block_tx_count_limit`; `chain_id` and `gas_limit` are frozen
-permanently, `compatibility_version` and `feature_flags` are frozen until a
-governed change path that keeps the OP oracle in sync exists (D4 authority
-boundary; tracked in the integration plan). The L2 upper layers read a key's slot
+uint64 enableNumber)` in a single slot. Runtime writes are whitelisted and the
+whitelist is currently empty (`setValueByKey` reverts for every key): `chain_id`
+and `gas_limit` are frozen permanently, `compatibility_version` and
+`feature_flags` are frozen until a governed change path that keeps the OP oracle
+in sync exists (D4 authority boundary; tracked in the integration plan), and the
+block transaction-count cap, once the only writable key, left when blocks started
+sealing against the gas limit (#5747). The L2 upper layers read a key's slot
 directly (no EVM) via `keccak256(utf8(key) ‖ be32(baseSlot))`, where `baseSlot`
 is the slot of `_config` (101, after the OZ upgradeable base; pinned by PR-7's
 storage-layout gate). `getValueByKey` is the EVM-callable path for external
