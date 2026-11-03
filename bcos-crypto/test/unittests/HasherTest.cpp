@@ -149,6 +149,16 @@ BOOST_AUTO_TEST_CASE(digestPreservesState)
     BOOST_CHECK_EQUAL(emptyDigest, expectedEmptyDigest);
 }
 
+BOOST_AUTO_TEST_CASE(spanOutputSizeValidation)
+{
+    openssl::OpenSSL_Keccak256_Hasher hasher;
+    std::array<std::byte, 31> output{};
+    BOOST_CHECK_THROW(
+        hasher.digest(std::span<std::byte>{output}), boost::wrapexcept<std::invalid_argument>);
+    BOOST_CHECK_THROW(
+        hasher.final(std::span<std::byte>{output}), boost::wrapexcept<std::invalid_argument>);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
 

@@ -35,13 +35,13 @@ private:
 
 public:
     AnyHasher() = default;
-    template <Hasher H>
+    template <SnapshotHasher H>
     AnyHasher(H hasher) : m_anyHasher(pro::make_proxy_shared<AnyHasherFacade, H>(std::move(hasher)))
     {}
     AnyHasher(AnyHasher&&) = default;
     AnyHasher& operator=(AnyHasher&&) noexcept = default;
     AnyHasher(const AnyHasher&) = default;
-    AnyHasher& operator=(const AnyHasher&) noexcept = default;
+    AnyHasher& operator=(const AnyHasher&) = default;
     ~AnyHasher() noexcept = default;
 
     void update(auto const& input)
@@ -52,28 +52,18 @@ public:
 
     void update(std::span<std::byte const> input);
 
-    void final(auto& output)
+    void final(bcos::crypto::trivial::Object auto& output)
     {
-        if constexpr (requires { output.resize(size_t{}); })
-        {
-            output.resize(hashSize());
-        }
-
-        m_anyHasher->final(
-            std::span<std::byte>((std::byte*)::ranges::data(output), ::ranges::size(output)));
+        bcos::crypto::trivial::resizeTo(output, hashSize());
+        m_anyHasher->final(bcos::crypto::trivial::toView(output));
     }
 
     void final(std::span<std::byte> output);
 
-    void digest(auto& output)
+    void digest(bcos::crypto::trivial::Object auto& output)
     {
-        if constexpr (requires { output.resize(size_t{}); })
-        {
-            output.resize(hashSize());
-        }
-
-        m_anyHasher->digest(
-            std::span<std::byte>((std::byte*)::ranges::data(output), ::ranges::size(output)));
+        bcos::crypto::trivial::resizeTo(output, hashSize());
+        m_anyHasher->digest(bcos::crypto::trivial::toView(output));
     }
 
     void digest(std::span<std::byte> output);
@@ -91,6 +81,9 @@ public:
 };
 
 static_assert(Hasher<AnyHasher>, "Not a valid Hasher!");
+static_assert(SnapshotHasher<AnyHasher>, "Not a valid SnapshotHasher!");
+static_assert(std::is_copy_assignable_v<AnyHasher>);
+static_assert(!std::is_nothrow_copy_assignable_v<AnyHasher>);
 
 // Generic one-shot hash helper: update + final in a single call. Works with any type
 // satisfying the Hasher concept (AnyHasher, OpenSSLHasher<...>, mock test hashers, ...).

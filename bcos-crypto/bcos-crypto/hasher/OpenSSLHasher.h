@@ -93,6 +93,10 @@ public:
 
     void final(std::span<std::byte> out)
     {
+        if (out.size() < HASH_SIZE) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
+        }
         m_init = false;
         if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(out.data()), nullptr))
             [[unlikely]]
@@ -110,6 +114,10 @@ public:
 
     void digest(std::span<std::byte> out)
     {
+        if (out.size() < HASH_SIZE) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
+        }
         if (!m_init)
         {
             init();

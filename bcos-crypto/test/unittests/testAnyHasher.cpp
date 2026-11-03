@@ -1,6 +1,8 @@
 #include "bcos-crypto/hasher/AnyHasher.h"
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include <boost/test/unit_test.hpp>
+#include <array>
+#include <cstdint>
 
 using namespace bcos::crypto::hasher;
 
@@ -30,19 +32,21 @@ BOOST_AUTO_TEST_CASE(testHash)
 BOOST_AUTO_TEST_CASE(testClone)
 {
     AnyHasher hasher(openssl::OpenSSL_SHA3_256_Hasher{});
-    auto clone = hasher.clone();
-
     std::string input = "str123456789012345678901234567890";
     hasher.update(input);
-    clone.update(input);
+    auto clone = hasher.clone();
 
-    std::string result1;
-    std::string result2;
-    hasher.final(result1);
-    clone.final(result2);
+    std::string parentDigest;
+    hasher.digest(parentDigest);
+    std::string cloneDigest;
+    clone.digest(cloneDigest);
+    BOOST_CHECK_NE(parentDigest, cloneDigest);
 
-    BOOST_CHECK_EQUAL(result1, result2);
-    BOOST_CHECK_EQUAL(clone.hashSize(), result2.size());
+    AnyHasher empty(openssl::OpenSSL_SHA3_256_Hasher{});
+    std::string emptyDigest;
+    empty.digest(emptyDigest);
+    BOOST_CHECK_EQUAL(cloneDigest, emptyDigest);
+    BOOST_CHECK_EQUAL(clone.hashSize(), cloneDigest.size());
 }
 
 BOOST_AUTO_TEST_CASE(testDigest)
@@ -68,6 +72,22 @@ BOOST_AUTO_TEST_CASE(testDigest)
     std::string expectedDigest;
     reference.final(expectedDigest);
     BOOST_CHECK_EQUAL(continuedDigest, expectedDigest);
+}
+
+BOOST_AUTO_TEST_CASE(testOutputValidation)
+{
+    AnyHasher hasher(openssl::OpenSSL_Keccak256_Hasher{});
+    std::array<std::byte, 31> shortOutput{};
+    BOOST_CHECK_THROW(
+        hasher.digest(std::span<std::byte>{shortOutput}), boost::wrapexcept<std::invalid_argument>);
+    BOOST_CHECK_THROW(
+        hasher.final(std::span<std::byte>{shortOutput}), boost::wrapexcept<std::invalid_argument>);
+    BOOST_CHECK_THROW(hasher.digest(shortOutput), boost::wrapexcept<std::runtime_error>);
+    BOOST_CHECK_THROW(hasher.final(shortOutput), boost::wrapexcept<std::runtime_error>);
+
+    std::array<std::uint32_t, 8> wideOutput{};
+    BOOST_CHECK_THROW(hasher.digest(wideOutput), boost::wrapexcept<std::runtime_error>);
+    BOOST_CHECK_THROW(hasher.final(wideOutput), boost::wrapexcept<std::runtime_error>);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
