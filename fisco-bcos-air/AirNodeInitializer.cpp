@@ -145,6 +145,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
             bcos::initializer::EthereumSyncInitializer::evmcForkSchedule(*nodeConfig);
         nodeService->setBlobForkTimes(bcos::protocol::BlobForkTimes{.cancunTime = forks.cancunTime,
             .pragueTime = forks.pragueTime,
+            .osakaTime = forks.osakaTime,
             .bpo1Time = forks.bpo1Time,
             .bpo2Time = forks.bpo2Time});
         // Log what the RPC will answer from. [fork_timestamps] is node-local *input*, but it is

@@ -23,6 +23,9 @@ DERIVE_BCOS_EXCEPTION(KzgSetupFailure);
 inline constexpr std::size_t BlobSize = BYTES_PER_BLOB;              // 131072
 inline constexpr std::size_t CommitmentSize = BYTES_PER_COMMITMENT;  // 48
 inline constexpr std::size_t ProofSize = BYTES_PER_PROOF;            // 48
+// EIP-7594: the extended blob is split into CELLS_PER_EXT_BLOB cells, each with its own
+// KZG proof; a version-1 sidecar carries all of them per blob.
+inline constexpr std::size_t CellsPerExtBlob = CELLS_PER_EXT_BLOB;  // 128
 // EIP-4844: VERSIONED_HASH_VERSION_KZG prefixes sha256(commitment).
 inline constexpr bcos::byte VERSIONED_HASH_VERSION_KZG{0x01};
 
@@ -139,5 +142,88 @@ inline bool verifyBlobKzgProofBatch(std::span<const bcos::bytes> blobs,
     return ::verify_blob_kzg_proof_batch(&ok, kzgBlobs.data(), kzgCommitments.data(),
                kzgProofs.data(), blobs.size(), kzgSettings()) == C_KZG_OK &&
            ok;
+}
+
+/// EIP-7594 compute_cells_and_kzg_proofs, proofs half: the CellsPerExtBlob cell proofs of
+/// @p blob, in cell order. @p proofsOut is replaced.
+inline bool computeCellKzgProofs(bcos::bytesConstRef blob, std::vector<bcos::bytes>& proofsOut)
+{
+    if (blob.size() != BlobSize)
+    {
+        return false;
+    }
+    Blob kzgBlob;
+    std::memcpy(kzgBlob.bytes, blob.data(), BlobSize);
+    std::vector<KZGProof> proofs(CellsPerExtBlob);
+    if (::compute_cells_and_kzg_proofs(nullptr, proofs.data(), &kzgBlob, kzgSettings()) != C_KZG_OK)
+    {
+        return false;
+    }
+    proofsOut.clear();
+    proofsOut.reserve(CellsPerExtBlob);
+    for (auto const& proof : proofs)
+    {
+        proofsOut.emplace_back(proof.bytes, proof.bytes + ProofSize);
+    }
+    return true;
+}
+
+/// EIP-7594 verify_cell_kzg_proof_batch over whole blobs: @p cellProofs holds
+/// CellsPerExtBlob proofs per blob, blob-major (the wrapper-version-1 / BlobsBundleV2
+/// layout). The cells are recomputed from the blobs here (compute_cells); the commitment of
+/// blob i is paired with each of its cells (osaka.md: commitments repeated
+/// CELLS_PER_EXT_BLOB times, cell_indices = range(CELLS_PER_EXT_BLOB) per blob). An empty
+/// batch verifies vacuously.
+inline bool verifyCellKzgProofBatch(std::span<const bcos::bytes> blobs,
+    std::span<const bcos::bytes> commitments, std::span<const bcos::bytes> cellProofs)
+{
+    if (blobs.size() != commitments.size() || cellProofs.size() != blobs.size() * CellsPerExtBlob)
+    {
+        return false;
+    }
+    auto const cellCount = cellProofs.size();
+    std::vector<Cell> cells(cellCount);
+    std::vector<Bytes48> kzgCommitments(cellCount);
+    std::vector<Bytes48> kzgProofs(cellCount);
+    std::vector<uint64_t> cellIndices(cellCount);
+    for (std::size_t i = 0; i < blobs.size(); ++i)
+    {
+        if (blobs[i].size() != BlobSize || commitments[i].size() != CommitmentSize)
+        {
+            return false;
+        }
+        Blob kzgBlob;
+        std::memcpy(kzgBlob.bytes, blobs[i].data(), BlobSize);
+        if (::compute_cells_and_kzg_proofs(
+                cells.data() + i * CellsPerExtBlob, nullptr, &kzgBlob, kzgSettings()) != C_KZG_OK)
+        {
+            return false;
+        }
+        for (std::size_t j = 0; j < CellsPerExtBlob; ++j)
+        {
+            auto const k = i * CellsPerExtBlob + j;
+            if (cellProofs[k].size() != ProofSize)
+            {
+                return false;
+            }
+            std::memcpy(kzgCommitments[k].bytes, commitments[i].data(), CommitmentSize);
+            std::memcpy(kzgProofs[k].bytes, cellProofs[k].data(), ProofSize);
+            cellIndices[k] = j;
+        }
+    }
+    bool ok = false;
+    return ::verify_cell_kzg_proof_batch(&ok, kzgCommitments.data(), cellIndices.data(),
+               cells.data(), kzgProofs.data(), cellCount, kzgSettings()) == C_KZG_OK &&
+           ok;
+}
+
+/// Whether @p sidecar-shaped lists verify under their wrapper version: version 0 batch
+/// blob proofs, version 1 cell proofs. The one entry point the two admission gates (RPC,
+/// devp2p gossip) call, so neither can verify a sidecar under the wrong rule.
+inline bool verifyBlobSidecarProofs(std::uint8_t sidecarVersion, std::span<const bcos::bytes> blobs,
+    std::span<const bcos::bytes> commitments, std::span<const bcos::bytes> proofs)
+{
+    return sidecarVersion == 1 ? verifyCellKzgProofBatch(blobs, commitments, proofs) :
+                                 verifyBlobKzgProofBatch(blobs, commitments, proofs);
 }
 }  // namespace bcos::crypto::kzg

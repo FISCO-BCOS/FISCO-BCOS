@@ -195,6 +195,45 @@ BOOST_AUTO_TEST_CASE(blobWrapperIngressAdmittedWithSidecar)
     BOOST_CHECK(!memPool.get(std::vector<crypto::HashType>{thirdHash}).front());
 }
 
+// EIP-7594 on gossip: a wrapper whose sidecar version is not the one the pool's head fork
+// calls for is dropped before any KZG work (this fixture's pool is statically pre-Osaka, so
+// version 1 — cell proofs — is the one refused); the version-0 form of the same transaction
+// goes in.
+BOOST_AUTO_TEST_CASE(blobWrapperVersionMustMatchTheHeadFork)
+{
+    crypto::Secp256k1Crypto secp;
+    auto key = secp.generateKeyPair();
+    auto sidecar = gossipMakeSidecar(0x2d);
+    auto const versionedHash =
+        crypto::kzg::versionedHashFromCommitment(bcos::ref(sidecar.commitments.front()));
+    auto cellSidecar = sidecar;
+    cellSidecar.version = engine::BLOB_SIDECAR_VERSION_1;
+    cellSidecar.proofs.clear();
+    BOOST_REQUIRE(crypto::kzg::computeCellKzgProofs(
+        bcos::ref(cellSidecar.blobs.front()), cellSidecar.proofs));
+
+    auto web3Tx =
+        gossipMakeBlobTx(0, Address("4444444444444444444444444444444444444444"), versionedHash);
+    auto stripped = gossipSign(web3Tx, *key);
+    auto const txHash = web3Tx.txHash();
+    rpc::Web3Transaction signedTx;
+    bcos::bytesRef strippedRef = bcos::ref(stripped);
+    BOOST_REQUIRE(signedTx.tryDecode(strippedRef).has_value());
+
+    BOOST_REQUIRE_EQUAL(memPool.requiredBlobSidecarVersion(), engine::BLOB_SIDECAR_VERSION_0);
+    GossipTestPeer peer;
+    gossipDeliver(service, *peer.state, eth::frameId(eth::msg::Transactions),
+        eth::encodeTransactions(eth::TransactionsMessage{
+            .transactions = {rpc::encodeBlobTxNetworkWrapper(signedTx, cellSidecar)}}));
+    BOOST_CHECK(!memPool.get(std::vector<crypto::HashType>{txHash}).front());
+
+    gossipDeliver(service, *peer.state, eth::frameId(eth::msg::Transactions),
+        eth::encodeTransactions(eth::TransactionsMessage{
+            .transactions = {rpc::encodeBlobTxNetworkWrapper(signedTx, sidecar)}}));
+    BOOST_CHECK(memPool.get(std::vector<crypto::HashType>{txHash}).front());
+    BOOST_CHECK(memPool.blobSidecarVersion(txHash) == std::optional<std::uint8_t>{0});
+}
+
 BOOST_AUTO_TEST_CASE(newPooledTransactionHashesTriggersSingleRequest)
 {
     GossipTestPeer peer;
