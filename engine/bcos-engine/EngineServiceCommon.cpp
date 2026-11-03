@@ -289,6 +289,27 @@ void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& 
     }
 }
 
+int64_t poolGasBudget(int64_t blockGasLimit, std::span<const bcos::bytes> forcedEnvelopes,
+    crypto::Hash const& hashImpl, bool allowDeposit)
+{
+    auto remaining = std::max<int64_t>(blockGasLimit, 0);
+    for (auto const& envelope : forcedEnvelopes)
+    {
+        auto tarsTx = op::opEnvelopeToTars(envelope, hashImpl.hash(envelope), allowDeposit);
+        if (!tarsTx.has_value() || tarsTx->isSystemTransaction)
+        {
+            continue;
+        }
+        auto const forcedGas = static_cast<int64_t>(tarsTx->data.gasLimit);
+        if (forcedGas < 0 || forcedGas > remaining)
+        {
+            return 0;
+        }
+        remaining -= forcedGas;
+    }
+    return remaining;
+}
+
 }  // namespace bcos::engine::engine_common
 
 namespace bcos::engine::detail

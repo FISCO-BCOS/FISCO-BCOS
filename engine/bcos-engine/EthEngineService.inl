@@ -273,18 +273,30 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     if (!payloadAttributes->noTxPool.value_or(false))
     {
         m_memPool.remove(view);
-        // The seal fills the block against the gas limit its header will carry: the
-        // derived L1 limit, or on the v1 lane the tx_gas_limit row buildPayload stamps.
+        // The seal fills what the forced envelopes leave of the gas limit the header will
+        // carry (buildPayload prepends them to the sealed list): the derived L1 limit, or
+        // on the v1 lane the tx_gas_limit row buildPayload stamps. allowDeposit=false as
+        // in buildPayload: a 0x7e envelope is invalid on this lane.
+        int64_t blockGasLimit = 0;
         if (l1Input.has_value())
         {
-            m_memPool.seal(l1Input->gasLimit.template convert_to<int64_t>(), view,
-                std::back_inserter(sealedTxs), l1Input->l1Context.baseFee);
+            blockGasLimit = l1Input->gasLimit.template convert_to<int64_t>();
         }
         else
         {
-            m_memPool.seal(co_await engine_common::legacyBlockGasLimit(
-                               view, *headBlockNumber, *m_blockFactory),
-                view, std::back_inserter(sealedTxs));
+            blockGasLimit = co_await engine_common::legacyBlockGasLimit(
+                view, *headBlockNumber, *m_blockFactory);
+        }
+        auto const poolBudget = engine_common::poolGasBudget(blockGasLimit, decodedForcedTxs,
+            *m_blockFactory->cryptoSuite()->hashImpl(), /*allowDeposit=*/false);
+        if (l1Input.has_value())
+        {
+            m_memPool.seal(
+                poolBudget, view, std::back_inserter(sealedTxs), l1Input->l1Context.baseFee);
+        }
+        else
+        {
+            m_memPool.seal(poolBudget, view, std::back_inserter(sealedTxs));
         }
     }
 

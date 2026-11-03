@@ -327,8 +327,16 @@ public:
         if (!payloadAttributes->noTxPool.value_or(false))
         {
             m_memPool.get().remove(view);
-            m_memPool.get().seal(co_await engine_common::legacyBlockGasLimit(
-                                     view, *headBlockNumber, *m_blockFactory),
+            // The pool fills what the forced envelopes leave of the tx_gas_limit row the
+            // header will carry (buildPayload prepends them). This lane carries forced
+            // entries raw-only and never executes them; their gas is debited anyway so the
+            // two v1 services build the same shape. allowDeposit=true: this lane admits
+            // 0x7e envelopes in payloadAttributes.transactions.
+            auto const blockGasLimit = co_await engine_common::legacyBlockGasLimit(
+                view, *headBlockNumber, *m_blockFactory);
+            m_memPool.get().seal(
+                engine_common::poolGasBudget(blockGasLimit, decodedForcedTxs,
+                    *m_blockFactory->cryptoSuite()->hashImpl(), /*allowDeposit=*/true),
                 view, std::back_inserter(sealedTxs));
         }
 
