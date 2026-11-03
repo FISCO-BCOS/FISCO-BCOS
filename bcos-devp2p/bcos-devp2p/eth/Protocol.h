@@ -14,9 +14,10 @@
  *  limitations under the License.
  *
  * @file Protocol.h
- * @brief eth/68 wire protocol: message codes and the messages needed for block
- *        sync (Status, GetBlockHeaders/BlockHeaders, GetBlockBodies/BlockBodies,
- *        NewBlockHashes). Ported from silkworm sentry/eth + sync/packets.
+ * @brief eth/68..70 wire protocol: message codes and the messages needed for block
+ *        sync and serving (Status, GetBlockHeaders/BlockHeaders, GetBlockBodies/
+ *        BlockBodies, GetReceipts/Receipts, BlockRangeUpdate, NewBlockHashes).
+ *        Ported from silkworm sentry/eth + sync/packets.
  * @date 2026/8/18
  */
 #pragma once
@@ -25,6 +26,7 @@
 #include "../rlpx/Messages.h"
 #include "ForkId.h"
 #include <bcos-codec/rlp/Result.h>
+#include <bcos-rlp-protocol/EthReceipt.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <optional>
 #include <string>
@@ -48,14 +50,23 @@ constexpr uint8_t GetPooledTransactions = 0x09;
 constexpr uint8_t PooledTransactions = 0x0a;
 constexpr uint8_t GetReceipts = 0x0f;
 constexpr uint8_t Receipts = 0x10;
+constexpr uint8_t BlockRangeUpdate = 0x11;  // eth/69+ (EIP-7642)
 }  // namespace msg
 
-constexpr uint8_t kProtocolVersion = 69;  // highest eth version we support
+// Supported eth versions. 70 (EIP-7975 partial receipt lists) and 69 (EIP-7642 block
+// range + bloom-less receipts) are advertised everywhere; 68 stays negotiable for
+// OUTBOUND dials only (kMinProtocolVersion): the [debug] follow_devp2p lane dials an
+// op-geth whose version is not pinned anywhere in this repo, and an op-geth older than
+// the geth v1.17.1 baseline that dropped eth/68 would otherwise lose its only peer.
+// The inbound listener advertises from kMinServingProtocolVersion (ADR 0003: new peers
+// speak 69/70; geth >= v1.17.1 refuses 68).
+constexpr uint8_t kProtocolVersion = 70;  // highest eth version we support
 constexpr uint8_t kMinProtocolVersion = 68;
+constexpr uint8_t kMinServingProtocolVersion = 69;
 // devp2p base-protocol message codes occupy 0..15; capability messages start at 16.
 constexpr uint16_t kBaseProtocolLength = 16;
 
-// On-wire frame id for an eth message (same offset for eth/68 and eth/69).
+// On-wire frame id for an eth message (same offset for eth/68, 69 and 70).
 inline uint16_t frameId(uint8_t _messageId)
 {
     return static_cast<uint16_t>(kBaseProtocolLength) + _messageId;
@@ -230,11 +241,82 @@ bcos::bytes encodePooledTransactions(PooledTransactionsMessage const& _msg);
 bcos::codec::rlp::RlpResult<PooledTransactionsMessage> decodePooledTransactions(
     bytesConstRef _data);
 
-// Capability entries advertised in the Hello message: eth/69 and eth/68. The
-// handshake negotiates the highest common version; eth/69 peers use the EIP-7642
-// Status format while eth/68 peers keep the legacy TD/head Status.
-inline std::vector<bcos::devp2p::rlpx::Capability> ethCapabilities()
+// ---------------------------------------------------------------------------
+// GetReceipts / Receipts (0x0f / 0x10). Three wire generations:
+//
+//   eth/68: GetReceipts [requestId, [hash, ...]]
+//           Receipts    [requestId, [[receipt, ...], ...]]
+//           receipt = the receipts-trie encoding (EthReceipt.h): a legacy receipt is a
+//           bare RLP list, a typed one an RLP STRING of 0xNN || rlp([status, cumGas,
+//           bloom, logs]) — the same string-wrapping rule as typed transactions.
+//   eth/69: same message shapes (EIP-7642), but every receipt is the 4-item list
+//           [txType, status-or-postState, cumulativeGas, logs] — no bloom, no type prefix.
+//   eth/70: GetReceipts [requestId, firstBlockReceiptIndex, [hash, ...]]
+//           Receipts    [requestId, lastBlockIncomplete, [[receipt, ...], ...]]
+//           (EIP-7975 partial lists), receipts encoded as in eth/69.
+//
+// `receipts` carries each receipt as the OPAQUE wire element of the negotiated version
+// (mirrors BlockHeadersMessage); encodeReceiptElement/decodeReceiptElement convert
+// to/from EthReceiptData per version.
+// ---------------------------------------------------------------------------
+struct GetReceiptsMessage
 {
-    return {{std::string("eth"), kProtocolVersion}, {std::string("eth"), kMinProtocolVersion}};
+    uint64_t requestId{0};
+    uint64_t firstBlockReceiptIndex{0};  // eth/70 only; must be 0 on 68/69
+    std::vector<bcos::h256> hashes;
+};
+
+bcos::bytes encodeGetReceipts(GetReceiptsMessage const& _msg, uint8_t _version);
+bcos::codec::rlp::RlpResult<GetReceiptsMessage> decodeGetReceipts(
+    bytesConstRef _data, uint8_t _version);
+
+struct ReceiptsMessage
+{
+    uint64_t requestId{0};
+    bool lastBlockIncomplete{false};                 // eth/70 only; must be false on 68/69
+    std::vector<std::vector<bcos::bytes>> receipts;  // per block: opaque receipt elements
+};
+
+bcos::bytes encodeReceipts(ReceiptsMessage const& _msg, uint8_t _version);
+bcos::codec::rlp::RlpResult<ReceiptsMessage> decodeReceipts(bytesConstRef _data, uint8_t _version);
+
+// One receipt as the wire element of `_version` (see the table above). The eth/68 form
+// is EthReceipt::rlpEncode plus the typed-string wrapping; eth/69+ is the bloom-less
+// 4-item list. Throws codec::rlp::RlpEncodeException on an invalid type byte (>= 0x80).
+bcos::bytes encodeReceiptElement(bcos::protocol::EthReceiptData const& _receipt, uint8_t _version);
+// Inverse of encodeReceiptElement over ONE complete element. On eth/69+ the bloom is
+// not on the wire and is left zero; postState is set when the second item is 32 bytes.
+bcos::codec::rlp::RlpResult<bcos::protocol::EthReceiptData> decodeReceiptElement(
+    bytesConstRef _element, uint8_t _version);
+
+// BlockRangeUpdate (0x11, eth/69+): [earliest, latest, latestHash]. Announces the range of
+// blocks whose bodies and receipts the sender serves (headers are always served from
+// genesis). Spec: a peer sending earliest > latest must be disconnected.
+struct BlockRangeUpdateMessage
+{
+    uint64_t earliestBlock{0};
+    uint64_t latestBlock{0};
+    bcos::h256 latestBlockHash;
+
+    bool valid() const { return earliestBlock <= latestBlock; }
+};
+
+bcos::bytes encodeBlockRangeUpdate(BlockRangeUpdateMessage const& _msg);
+bcos::codec::rlp::RlpResult<BlockRangeUpdateMessage> decodeBlockRangeUpdate(bytesConstRef _data);
+
+// Capability entries advertised in the Hello message, highest version first: every eth
+// version in [_minVersion, kProtocolVersion]. The handshake negotiates the highest common
+// version; eth/69+ peers use the EIP-7642 Status format while eth/68 peers keep the
+// legacy TD/head Status. Outbound dials pass the default (68 kept, see above); the
+// inbound listener passes kMinServingProtocolVersion.
+inline std::vector<bcos::devp2p::rlpx::Capability> ethCapabilities(
+    uint8_t _minVersion = kMinProtocolVersion)
+{
+    std::vector<bcos::devp2p::rlpx::Capability> caps;
+    for (int version = kProtocolVersion; version >= static_cast<int>(_minVersion); --version)
+    {
+        caps.push_back({std::string("eth"), static_cast<uint8_t>(version)});
+    }
+    return caps;
 }
 }  // namespace bcos::devp2p::eth

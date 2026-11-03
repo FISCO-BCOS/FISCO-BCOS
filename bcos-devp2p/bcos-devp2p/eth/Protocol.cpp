@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file Protocol.cpp
- * @brief eth/68 message RLP codecs.
+ * @brief eth/68..70 message RLP codecs.
  * @date 2026/8/18
  */
 #include "Protocol.h"
@@ -25,6 +25,9 @@
 #include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-rlp-protocol/EthLog.h>
+#include <bcos-rlp-protocol/EthReceipt.h>
+#include <exception>
 #include <stdexcept>
 
 namespace bcos::devp2p::eth
@@ -607,6 +610,233 @@ RlpResult<PooledTransactionsMessage> decodePooledTransactions(bytesConstRef _dat
         }
         RLP_TRY(auto tx, takeTx(txs));
         msg.transactions.push_back(std::move(tx));
+    }
+    return msg;
+}
+
+// ---------------------------------------------------------------------------
+// GetReceipts / Receipts
+// ---------------------------------------------------------------------------
+bcos::bytes encodeGetReceipts(GetReceiptsMessage const& _msg, uint8_t _version)
+{
+    std::vector<bcos::bytes> hashes;
+    hashes.reserve(_msg.hashes.size());
+    for (auto const& hash : _msg.hashes)
+    {
+        hashes.push_back(rlpItem(hash));
+    }
+    if (_version >= 70)
+    {
+        // EIP-7975: [requestId, firstBlockReceiptIndex, [hash, ...]]
+        return rlpList(
+            {rlpItem(_msg.requestId), rlpItem(_msg.firstBlockReceiptIndex), rlpList(hashes)});
+    }
+    return rlpList({rlpItem(_msg.requestId), rlpList(hashes)});
+}
+
+RlpResult<GetReceiptsMessage> decodeGetReceipts(bytesConstRef _data, uint8_t _version)
+{
+    GetReceiptsMessage msg;
+    bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
+    RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
+    RLP_TRY(msg.requestId, take<uint64_t>(items));
+    if (_version >= 70)
+    {
+        RLP_TRY(msg.firstBlockReceiptIndex, take<uint64_t>(items));
+    }
+    RLP_TRY(auto hashes, takeListPayload(items, "eth: expected an RLP list"));
+    while (!hashes.empty())
+    {
+        RLP_TRY(auto hash, take<h256>(hashes));
+        msg.hashes.push_back(hash);
+    }
+    return msg;
+}
+
+bcos::bytes encodeReceipts(ReceiptsMessage const& _msg, uint8_t _version)
+{
+    std::vector<bcos::bytes> blocks;
+    blocks.reserve(_msg.receipts.size());
+    for (auto const& block : _msg.receipts)
+    {
+        // Each element is already the complete wire form for `_version` (see
+        // encodeReceiptElement) — spliced as-is, exactly like BlockHeaders entries.
+        blocks.push_back(rlpList(block));
+    }
+    if (_version >= 70)
+    {
+        // EIP-7975: [requestId, lastBlockIncomplete, [[receipt, ...], ...]]
+        return rlpList(
+            {rlpItem(_msg.requestId), rlpBool(_msg.lastBlockIncomplete), rlpList(blocks)});
+    }
+    return rlpList({rlpItem(_msg.requestId), rlpList(blocks)});
+}
+
+RlpResult<ReceiptsMessage> decodeReceipts(bytesConstRef _data, uint8_t _version)
+{
+    ReceiptsMessage msg;
+    bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
+    RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
+    RLP_TRY(msg.requestId, take<uint64_t>(items));
+    if (_version >= 70)
+    {
+        RLP_TRY(auto incomplete, take<uint64_t>(items));
+        if (incomplete > 1)
+        {
+            return std::unexpected(genericError("eth: Receipts lastBlockIncomplete is not a bool"));
+        }
+        msg.lastBlockIncomplete = (incomplete == 1);
+    }
+    RLP_TRY(auto blocks, takeListPayload(items, "eth: expected an RLP list"));
+    while (!blocks.empty())
+    {
+        RLP_TRY(auto receipts, takeListPayload(blocks, "eth: expected an RLP list"));
+        std::vector<bcos::bytes> block;
+        while (!receipts.empty())
+        {
+            if (_version >= 69)
+            {
+                // eth/69+: every receipt is a bare 4-item list.
+                RLP_TRY(auto receipt, takeRlpItem(receipts));
+                block.push_back(std::move(receipt));
+            }
+            else
+            {
+                // eth/68: legacy receipts are lists, typed ones string-wrapped
+                // 0xNN || rlp(...) — the same element rules as transactions.
+                RLP_TRY(auto receipt, takeTx(receipts));
+                block.push_back(std::move(receipt));
+            }
+        }
+        msg.receipts.push_back(std::move(block));
+    }
+    return msg;
+}
+
+bcos::bytes encodeReceiptElement(bcos::protocol::EthReceiptData const& _receipt, uint8_t _version)
+{
+    if (_version >= 69)
+    {
+        // EIP-7642: [txType, status-or-postState, cumulativeGas, logs] — bloom dropped,
+        // the type is an ordinary list item instead of an EIP-2718 prefix.
+        bcos::bytes out;
+        auto const type = static_cast<uint64_t>(_receipt.type);
+        if (_receipt.type == 0 && _receipt.postState.has_value())
+        {
+            bcos::codec::rlp::encode(
+                out, type, *_receipt.postState, _receipt.cumulativeGasUsed, _receipt.logs);
+        }
+        else
+        {
+            bcos::codec::rlp::encode(out, type, static_cast<uint64_t>(_receipt.status),
+                _receipt.cumulativeGasUsed, _receipt.logs);
+        }
+        return out;
+    }
+    // eth/68: the receipts-trie encoding; a typed receipt (0xNN || rlp(...)) travels as
+    // an RLP string on the wire, a legacy receipt as the bare list.
+    bcos::bytes trieForm;
+    bcos::protocol::EthReceipt(_receipt).rlpEncode(trieForm);
+    if (!trieForm.empty() && trieForm[0] < 0xc0)
+    {
+        return rlpItem(bytesConstRef(trieForm.data(), trieForm.size()));
+    }
+    return trieForm;
+}
+
+RlpResult<bcos::protocol::EthReceiptData> decodeReceiptElement(
+    bytesConstRef _element, uint8_t _version)
+{
+    bcos::protocol::EthReceiptData receipt;
+    bcos::bytesRef view(const_cast<bcos::byte*>(_element.data()), _element.size());
+    if (_version < 69)
+    {
+        // Unwrap a string-wrapped typed receipt first (a bare list is a legacy receipt;
+        // a bare 0xNN prefix is accepted too, like takeTx).
+        RLP_TRY(auto trieForm, takeTx(view));
+        if (!view.empty())
+        {
+            return std::unexpected(genericError("eth: trailing bytes after receipt"));
+        }
+        try
+        {
+            bcos::protocol::EthReceipt decoded;
+            decoded.rlpDecode(bytesConstRef(trieForm.data(), trieForm.size()));
+            return decoded.data();
+        }
+        catch (std::exception const& e)
+        {
+            return std::unexpected(
+                genericError(std::string("eth: malformed receipt: ") + e.what()));
+        }
+    }
+    RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
+    if (!view.empty())
+    {
+        return std::unexpected(genericError("eth: trailing bytes after receipt"));
+    }
+    RLP_TRY(auto type, take<uint64_t>(items));
+    if (type >= 0x80)
+    {
+        return std::unexpected(genericError("eth: invalid receipt tx type"));
+    }
+    receipt.type = static_cast<uint8_t>(type);
+    RLP_TRY(auto statusOrRoot, take<bcos::bytes>(items));
+    if (statusOrRoot.size() == 32)
+    {
+        receipt.postState = h256(bytesConstRef(statusOrRoot.data(), statusOrRoot.size()));
+    }
+    else if (statusOrRoot.empty())
+    {
+        receipt.status = 0;
+    }
+    else if (statusOrRoot.size() == 1 && statusOrRoot[0] == 1)
+    {
+        receipt.status = 1;
+    }
+    else
+    {
+        return std::unexpected(genericError("eth: invalid receipt status"));
+    }
+    RLP_TRY(receipt.cumulativeGasUsed, take<bcos::u256>(items));
+    // Logs: the rlp-protocol list codec is the single decoder for [address, topics, data]
+    // items; it throws on malformed input, mapped to an RlpError here.
+    try
+    {
+        bcos::codec::rlp::decode(items, receipt.logs);
+    }
+    catch (std::exception const& e)
+    {
+        return std::unexpected(
+            genericError(std::string("eth: malformed receipt logs: ") + e.what()));
+    }
+    if (!items.empty())
+    {
+        return std::unexpected(genericError("eth: unexpected trailing receipt items"));
+    }
+    return receipt;
+}
+
+// ---------------------------------------------------------------------------
+// BlockRangeUpdate (eth/69+)
+// ---------------------------------------------------------------------------
+bcos::bytes encodeBlockRangeUpdate(BlockRangeUpdateMessage const& _msg)
+{
+    return rlpList(
+        {rlpItem(_msg.earliestBlock), rlpItem(_msg.latestBlock), rlpItem(_msg.latestBlockHash)});
+}
+
+RlpResult<BlockRangeUpdateMessage> decodeBlockRangeUpdate(bytesConstRef _data)
+{
+    BlockRangeUpdateMessage msg;
+    bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
+    RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
+    RLP_TRY(msg.earliestBlock, take<uint64_t>(items));
+    RLP_TRY(msg.latestBlock, take<uint64_t>(items));
+    RLP_TRY(msg.latestBlockHash, take<h256>(items));
+    if (!items.empty())
+    {
+        return std::unexpected(genericError("eth: unexpected trailing BlockRangeUpdate items"));
     }
     return msg;
 }

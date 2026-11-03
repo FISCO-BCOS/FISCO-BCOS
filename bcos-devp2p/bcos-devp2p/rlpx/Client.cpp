@@ -97,11 +97,13 @@ EstablishedSession exchangeHandshake(
     auto peerHello =
         unwrapOrThrow(decodeHello(bytesConstRef(helloMsg.data.data(), helloMsg.data.size())),
             "exchangeHandshake: failed to decode the Hello message: ");
-    // Negotiate the highest eth version the peer supports from {68, 69}.
+    // Negotiate the highest eth version both sides advertise (68..70 outbound, 69..70
+    // on the inbound listener — see eth::ethCapabilities).
     uint8_t negotiatedEth = 0;
     for (auto const& cap : peerHello.capabilities)
     {
-        if (cap.name == "eth" && (cap.version == 68 || cap.version == 69))
+        if (cap.name == "eth" && cap.version >= eth::kMinProtocolVersion &&
+            cap.version <= eth::kProtocolVersion)
         {
             negotiatedEth = std::max(negotiatedEth, cap.version);
         }
