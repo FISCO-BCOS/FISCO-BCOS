@@ -110,6 +110,9 @@ struct StubMemPool
     template <class View, class OutputIt>
     void seal(int64_t, View&, OutputIt)
     {}
+    template <class View, class OutputIt>
+    void seal(int64_t, View&, OutputIt, bcos::u256 const&)
+    {}
 };
 
 struct StubExecutor

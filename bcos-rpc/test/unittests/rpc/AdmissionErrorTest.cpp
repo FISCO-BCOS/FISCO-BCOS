@@ -81,6 +81,7 @@ BOOST_AUTO_TEST_CASE(refusedByRuleIsServerErrorInGethWords)
              Row{TS::CreateSetCodeTx, "EIP-7702 transaction cannot be used to create contract"},
              Row{TS::EmptyAuthorizationList, "EIP-7702 transaction with empty auth list"},
              Row{TS::SenderTxLimitExceeded, "account limit exceeded"},
+             Row{TS::ReplacementUnderpriced, "replacement transaction underpriced"},
          })
     {
         auto const e = admissionError(status);
