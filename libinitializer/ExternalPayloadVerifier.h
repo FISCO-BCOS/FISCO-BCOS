@@ -156,6 +156,17 @@ public:
 
     evmc_revision revisionAt(int64_t timestampSeconds) const override
     {
+        if (scheduler_v1::isUnsupportedForkAt(m_forkSchedule, timestampSeconds))
+        {
+            // amsterdam_time reached: the Osaka revision the ladder would answer is not the
+            // block's rules. Every fork-gated method owes -38005 from here (osaka.md /
+            // amsterdam.md "Update the methods of previous forks"), and this binary
+            // implements no Amsterdam method, so nothing can be built or admitted.
+            BOOST_THROW_EXCEPTION(engine::UnsupportedFork{} << bcos::errinfo_comment{
+                                      "timestamp " + std::to_string(timestampSeconds) +
+                                      " is in the Amsterdam fork, which this node does not "
+                                      "implement (EIP-7928 block access lists)"});
+        }
         return scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0));
     }
 

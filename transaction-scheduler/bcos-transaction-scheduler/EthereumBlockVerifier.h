@@ -108,6 +108,10 @@ struct EvmcForkTimestamps
     // fillExecutionLedgerConfig below.
     uint64_t bpo1Time{kForkDisabled};
     uint64_t bpo2Time{kForkDisabled};
+    // Amsterdam (EIP-7928 block access lists): no revision in this binary's evmc, so no
+    // ladder entry below — the Engine lane refuses to build or admit anything at or past
+    // it (ExternalPayloadVerifierImpl::revisionAt), and the fork id announces it.
+    uint64_t amsterdamTime{kForkDisabled};
     // EIP-6110 deposit contract for the Prague+ requestsHash cross-check
     // (EthereumRequests.h). Defaults to the Ethereum mainnet address; other chains
     // override it through [ethereum] deposit_contract_address (config.ini).
@@ -133,6 +137,14 @@ inline constexpr size_t kChainIdBytes = 8;
 /// difficulty 0 is the per-block signal that the TTD has been passed. (A pure
 /// PoS chain, parisTime == 0, is already covered by the forkTime == 0 rule;
 /// its blocks are all difficulty 0 too, so the check is harmless there.)
+/// Whether @p timestamp falls in a fork this binary has no execution rules for
+/// (amsterdam_time reached). evmcRevisionForTimestamp does not consult it — the Osaka
+/// revision would be wrong there — so the fork-gated callers check this first.
+inline bool isUnsupportedForkAt(EvmcForkTimestamps const& schedule, int64_t timestamp)
+{
+    return bcos::protocol::isForkActive(schedule.amsterdamTime, timestamp);
+}
+
 inline evmc_revision evmcRevisionForTimestamp(
     EvmcForkTimestamps const& schedule, int64_t timestamp, u256 const& difficulty)
 {
