@@ -62,6 +62,9 @@ struct EngineRpcConfig
     int32_t clockSkewSecs = 60;
     bool enableMinerApi = false;
     bool enableDebugApi = false;
+    // OP lane only: how many blocks newPayload may sit above the finalized (backend) tip before
+    // it answers SYNCING. Range [16, 100000].
+    std::int64_t unfinalizedWindow = 1024;
 };
 
 class NodeConfig
@@ -274,6 +277,8 @@ public:
     // enable_debug_api); neither reaches the other port.
     bool engineApiDebugApi() const;
     bool enableDebugApi() const;
+    // OP unfinalized window ([engine_rpc] unfinalized_window, see EngineRpcConfig).
+    std::int64_t opUnfinalizedWindow() const;
 
     // The DebugSelfProduce driver's block parameters, from the hidden [debug] section:
     // block_interval (ms, default 1000), produce_empty_blocks (default true), fee_recipient

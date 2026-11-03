@@ -59,6 +59,19 @@ public:
     {
         ++m_adoptCount;
     }
+    std::optional<UnfinalizedBlock> unfinalizedBlock(bcos::crypto::HashType const&) const override
+    {
+        ++m_windowLookupCount;
+        return UnfinalizedBlock{.number = 42, .hash = {}, .parentHash = {}, .header = nullptr};
+    }
+    void finalizeUpTo(
+        bcos::crypto::HashType const&, std::function<void(Error::Ptr)> callback) override
+    {
+        ++m_finalizeCount;
+        callback(nullptr);
+    }
+    mutable int m_windowLookupCount = 0;
+    int m_finalizeCount = 0;
     void stop() override { ++m_stopCount; }
     void reset(std::function<void(Error::Ptr)>) override {}
     void getCode(std::string_view, std::function<void(Error::Ptr, bcos::bytes)>) override {}
@@ -210,6 +223,20 @@ BOOST_AUTO_TEST_CASE(callAtBlockAndAdoptProbeReachSelectedScheduler)
     BOOST_CHECK_EQUAL(slots[3]->m_adoptCount, 1);
     BOOST_CHECK_EQUAL(slots[2]->m_callAtBlockCount, 0);
     BOOST_CHECK_EQUAL(slots[2]->m_adoptCount, 0);
+
+    // Unfinalized-window pair: without the forwarders the defaults answer nullopt / no-op
+    // and the OP engine would never see OpScheduler's window through this wrapper.
+    auto entry = scheduler->unfinalizedBlock(bcos::crypto::HashType{});
+    BOOST_REQUIRE(entry.has_value());
+    BOOST_CHECK_EQUAL(entry->number, 42);
+    bool finalized = false;
+    scheduler->finalizeUpTo(
+        bcos::crypto::HashType{}, [&](bcos::Error::Ptr e) { finalized = e == nullptr; });
+    BOOST_CHECK(finalized);
+    BOOST_CHECK_EQUAL(slots[3]->m_windowLookupCount, 1);
+    BOOST_CHECK_EQUAL(slots[3]->m_finalizeCount, 1);
+    BOOST_CHECK_EQUAL(slots[2]->m_windowLookupCount, 0);
+    BOOST_CHECK_EQUAL(slots[2]->m_finalizeCount, 0);
 }
 
 // The shutdown sweep reaches every WIRED slot and tolerates the unwired one. Initializer
