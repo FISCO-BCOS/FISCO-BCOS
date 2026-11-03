@@ -114,6 +114,41 @@ BOOST_AUTO_TEST_CASE(dynamicRange)
     auto b = bcos::crypto::trivial::DynamicRange<std::vector<char>>;
 }
 
+BOOST_AUTO_TEST_CASE(digestPreservesState)
+{
+    openssl::OpenSSL_Keccak256_Hasher hasher;
+    std::string abc = "abc";
+    hasher.update(abc);
+
+    std::array<std::byte, 32> firstDigest;
+    hasher.digest(firstDigest);
+    std::array<std::byte, 32> repeatedDigest;
+    hasher.digest(repeatedDigest);
+    BOOST_CHECK_EQUAL(firstDigest, repeatedDigest);
+
+    std::string def = "def";
+    hasher.update(def);
+    bcos::bytes continuedDigest;
+    hasher.digest(continuedDigest);
+
+    openssl::OpenSSL_Keccak256_Hasher reference;
+    std::string abcdef = "abcdef";
+    reference.update(abcdef);
+    bcos::bytes expectedDigest;
+    reference.final(expectedDigest);
+    BOOST_CHECK_EQUAL(continuedDigest, expectedDigest);
+
+    openssl::OpenSSL_Keccak256_Hasher empty;
+    bcos::bytes emptyDigest;
+    empty.digest(emptyDigest);
+
+    openssl::OpenSSL_Keccak256_Hasher emptyReference;
+    emptyReference.update(std::span<std::byte const>{});
+    bcos::bytes expectedEmptyDigest;
+    emptyReference.final(expectedEmptyDigest);
+    BOOST_CHECK_EQUAL(emptyDigest, expectedEmptyDigest);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
 

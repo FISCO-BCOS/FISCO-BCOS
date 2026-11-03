@@ -101,6 +101,32 @@ public:
         }
     }
 
+    void digest(bcos::crypto::trivial::Object auto& out)
+    {
+        bcos::crypto::trivial::resizeTo(out, HASH_SIZE);
+        auto view = bcos::crypto::trivial::toView(std::forward<decltype(out)>(out));
+        digest(view);
+    }
+
+    void digest(std::span<std::byte> out)
+    {
+        if (!m_init)
+        {
+            init();
+            m_init = true;
+        }
+        std::unique_ptr<::EVP_MD_CTX, Deleter> snapshot(EVP_MD_CTX_dup(m_mdCtx.get()));
+        if (!snapshot) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_MD_CTX_dup error!"});
+        }
+        if (!EVP_DigestFinal(snapshot.get(), reinterpret_cast<unsigned char*>(out.data()), nullptr))
+            [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestFinal error!"});
+        }
+    }
+
     const EVP_MD* chooseMD() const
     {
         if constexpr (hasherType == HasherType::SM3)
