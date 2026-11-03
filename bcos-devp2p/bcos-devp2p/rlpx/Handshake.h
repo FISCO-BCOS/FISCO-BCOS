@@ -83,6 +83,10 @@ private:
 // auth/ack messages (needed to seed the framing MACs).
 struct AuthKeys
 {
+    // The peer's STATIC public key: the recipient's for the initiator, the initiator's
+    // (recovered from the auth message) for the recipient — the authenticated identity
+    // the Hello `id` must repeat.
+    PublicKey peerPublicKey;
     PublicKey peerEphemeralPublicKey;
     PrivateKey ephemeralPrivateKey;
     bcos::bytes initiatorNonce;

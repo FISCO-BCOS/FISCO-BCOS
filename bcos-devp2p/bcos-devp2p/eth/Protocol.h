@@ -28,6 +28,7 @@
 #include <bcos-codec/rlp/Result.h>
 #include <bcos-rlp-protocol/EthReceipt.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <vector>
@@ -310,10 +311,11 @@ bcos::codec::rlp::RlpResult<BlockRangeUpdateMessage> decodeBlockRangeUpdate(byte
 // legacy TD/head Status. Outbound dials pass the default (68 kept, see above); the
 // inbound listener passes kMinServingProtocolVersion.
 inline std::vector<bcos::devp2p::rlpx::Capability> ethCapabilities(
-    uint8_t _minVersion = kMinProtocolVersion)
+    uint8_t _minVersion = kMinProtocolVersion, uint8_t _maxVersion = kProtocolVersion)
 {
     std::vector<bcos::devp2p::rlpx::Capability> caps;
-    for (int version = kProtocolVersion; version >= static_cast<int>(_minVersion); --version)
+    for (int version = std::min<int>(_maxVersion, kProtocolVersion);
+        version >= static_cast<int>(_minVersion); --version)
     {
         caps.push_back({std::string("eth"), static_cast<uint8_t>(version)});
     }
