@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "bcos-devp2p/disc/Enr.h"
 #include "bcos-devp2p/rlpx/Client.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
@@ -33,11 +34,21 @@
 namespace bcos::devp2p::sync
 {
 
-/// Parse a geth-style enode URI into a PeerConfig.
+/// A bootstrap node as written in bootnodes.json: the RLPx (tcp) and discovery (udp)
+/// ports plus the 64-byte public key.
+struct BootnodeUri
+{
+    std::string host;
+    uint16_t tcpPort{30303};
+    uint16_t udpPort{30303};
+    bcos::bytes publicKey;
+};
+
+/// Parse a geth-style enode URI.
 /// Format: enode://<64-byte-hex-pubkey>@<ip>:<tcp-port>[?discport=<udp-port>]
-/// The discovery port suffix is accepted and ignored (we only connect via TCP).
+/// Without ?discport the discovery port equals the TCP port (geth enode semantics).
 /// Throws std::invalid_argument on malformed input.
-inline bcos::devp2p::rlpx::PeerConfig parseEnode(std::string const& enode)
+inline BootnodeUri parseEnodeUri(std::string const& enode)
 {
     constexpr std::string_view prefix = "enode://";
     if (enode.rfind(prefix, 0) != 0)
@@ -88,17 +99,96 @@ inline bcos::devp2p::rlpx::PeerConfig parseEnode(std::string const& enode)
             "parseEnode: invalid port '" + std::string(portStr) + "' in: " + enode));
     }
 
+    uint16_t discPort = port;
+    if (q != std::string_view::npos)
+    {
+        constexpr std::string_view discKey = "discport=";
+        auto query = endpoint.substr(q + 1);
+        auto at = query.find(discKey);
+        if (at != std::string_view::npos)
+        {
+            auto value = query.substr(at + discKey.size());
+            value = value.substr(0, value.find('&'));
+            try
+            {
+                auto parsed = std::stoul(std::string(value));
+                if (parsed == 0 || parsed > 65535)
+                {
+                    BOOST_THROW_EXCEPTION(std::out_of_range("discport"));
+                }
+                discPort = static_cast<uint16_t>(parsed);
+            }
+            catch (std::exception const&)
+            {
+                BOOST_THROW_EXCEPTION(std::invalid_argument(
+                    "parseEnode: invalid discport '" + std::string(value) + "' in: " + enode));
+            }
+        }
+    }
+    BootnodeUri uri;
+    uri.host = std::string(host);
+    uri.tcpPort = port;
+    uri.udpPort = discPort;
+    uri.publicKey = std::move(pubBytes);
+    return uri;
+}
+
+/// Parse one bootnodes.json entry: an enode:// URI or an `enr:` record (geth's
+/// params/bootnodes.go ships Sepolia's EF bootnodes as ENRs). An ENR must verify under
+/// the v4 scheme and carry an IPv4 `ip`; `udp` defaults to 30303 and `tcp` to `udp`.
+/// Throws std::invalid_argument on malformed input.
+inline BootnodeUri parseBootnode(std::string const& text)
+{
+    if (text.rfind("enr:", 0) != 0)
+    {
+        return parseEnodeUri(text);
+    }
+    auto record = bcos::devp2p::disc::Enr::fromText(text);
+    if (!record)
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            "parseBootnode: invalid ENR (" + record.error().message + "): " + text));
+    }
+    if (!record->verify())
+    {
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("parseBootnode: ENR signature does not verify: " + text));
+    }
+    auto ip = record->ip();
+    auto key = record->publicKey();
+    if (!ip || !key)
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            "parseBootnode: ENR without an IPv4 `ip` entry cannot be dialed: " + text));
+    }
+    BootnodeUri uri;
+    uri.host = record->ipString();
+    uri.udpPort = record->udp().value_or(30303);
+    uri.tcpPort = record->tcp().value_or(uri.udpPort);
+    uri.publicKey = std::move(*key);
+    return uri;
+}
+
+inline bcos::devp2p::rlpx::PeerConfig toPeerConfig(BootnodeUri const& uri)
+{
     bcos::devp2p::rlpx::PeerConfig config;
-    config.host = std::string(host);
-    config.port = port;
-    config.peerPublicKey = std::move(pubBytes);
+    config.host = uri.host;
+    config.port = uri.tcpPort;
+    config.peerPublicKey = uri.publicKey;
     return config;
 }
 
-/// Load a bootnodes.json file: either a JSON array of enode strings, or an object
-/// {"bootnodes": [ ... ]}. Returns the parsed PeerConfig list (empty file/section
-/// yields an empty list; a missing file throws).
-inline std::vector<bcos::devp2p::rlpx::PeerConfig> loadBootnodes(std::string const& path)
+/// Parse a geth-style enode URI into a PeerConfig (the RLPx dial target; the discovery
+/// port is dropped here — see parseEnodeUri for it).
+inline bcos::devp2p::rlpx::PeerConfig parseEnode(std::string const& enode)
+{
+    return toPeerConfig(parseEnodeUri(enode));
+}
+
+/// Load a bootnodes.json file: either a JSON array of enode:// / enr: strings, or an
+/// object {"bootnodes": [ ... ]}. Returns the parsed entries with both ports (empty
+/// file/section yields an empty list; a missing file throws).
+inline std::vector<BootnodeUri> loadBootnodeUris(std::string const& path)
 {
     std::ifstream in(path);
     if (!in)
@@ -129,7 +219,7 @@ inline std::vector<bcos::devp2p::rlpx::PeerConfig> loadBootnodes(std::string con
             "loadBootnodes: expected a JSON array of enode strings, or {\"bootnodes\": [...]}: " +
             path));
     }
-    std::vector<bcos::devp2p::rlpx::PeerConfig> nodes;
+    std::vector<BootnodeUri> nodes;
     nodes.reserve(arr.size());
     for (auto const& entry : arr)
     {
@@ -138,9 +228,20 @@ inline std::vector<bcos::devp2p::rlpx::PeerConfig> loadBootnodes(std::string con
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("loadBootnodes: non-string entry in " + path));
         }
-        nodes.push_back(parseEnode(entry.asString()));
+        nodes.push_back(parseBootnode(entry.asString()));
     }
     return nodes;
+}
+
+/// The RLPx dial list of a bootnodes.json file (see loadBootnodeUris).
+inline std::vector<bcos::devp2p::rlpx::PeerConfig> loadBootnodes(std::string const& path)
+{
+    std::vector<bcos::devp2p::rlpx::PeerConfig> peers;
+    for (auto const& uri : loadBootnodeUris(path))
+    {
+        peers.push_back(toPeerConfig(uri));
+    }
+    return peers;
 }
 
 }  // namespace bcos::devp2p::sync
