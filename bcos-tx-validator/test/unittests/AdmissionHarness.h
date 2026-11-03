@@ -129,10 +129,10 @@ inline std::shared_ptr<bcostars::protocol::TransactionImpl> admitTx(TxSpec const
     crypto::Keccak256 hasher;
     auto const signHash = web3.hashForSign();
     auto signature = signer().sign(senderKey(), signHash, true);
-    BOOST_REQUIRE_EQUAL(signature->size(), 65U);
-    web3.signatureR.assign(signature->begin(), signature->begin() + 32);
-    web3.signatureS.assign(signature->begin() + 32, signature->begin() + 64);
-    web3.signatureV = static_cast<uint64_t>((*signature)[64]);
+    BOOST_REQUIRE_EQUAL(signature.size(), 65U);
+    web3.signatureR.assign(signature.begin(), signature.begin() + 32);
+    web3.signatureS.assign(signature.begin() + 32, signature.begin() + 64);
+    web3.signatureV = static_cast<uint64_t>(signature[64]);
     if (spec.highS)
     {
         auto const s = fromBigEndian<u256>(web3.signatureS);

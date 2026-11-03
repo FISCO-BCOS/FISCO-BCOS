@@ -354,11 +354,11 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(
     auto owned = keyPair == nullptr ? secp.generateKeyPair() : nullptr;
     auto const& kp = keyPair != nullptr ? *keyPair : *owned;
     auto const sig = secp.sign(kp, w3.hashForSign(), false);
-    BOOST_REQUIRE(sig);
-    BOOST_REQUIRE_EQUAL(sig->size(), 65);
-    w3.signatureR.assign(sig->begin(), sig->begin() + 32);
-    w3.signatureS.assign(sig->begin() + 32, sig->begin() + 64);
-    w3.signatureV = (*sig)[64];
+    BOOST_REQUIRE(!sig.empty());
+    BOOST_REQUIRE_EQUAL(sig.size(), 65);
+    w3.signatureR.assign(sig.begin(), sig.begin() + 32);
+    w3.signatureS.assign(sig.begin() + 32, sig.begin() + 64);
+    w3.signatureV = sig[64];
 
     auto const raw = w3.encode();
     auto const signPayload = w3.encodeForSign();

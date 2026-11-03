@@ -178,7 +178,7 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
                               << LOG_KV("keyEncryptionType",
                                      std::string(magic_enum::enum_name((m_keyEncryptionType))));
         auto privateKey = m_keyFactory->createKey(privateKeyData);
-        m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
+        m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(*privateKey);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from privateKeyPath")
                               << LOG_KV("privateKeyPath", _privateKeyPath);
     }

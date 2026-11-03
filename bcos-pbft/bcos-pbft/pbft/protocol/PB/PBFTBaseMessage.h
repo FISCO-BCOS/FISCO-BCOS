@@ -108,7 +108,8 @@ public:
     bool verifySignature(
         bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bcos::crypto::PublicPtr _pubKey) override
     {
-        return _cryptoSuite->signatureImpl()->verify(_pubKey, signatureDataHash(), signatureData());
+        return _cryptoSuite->signatureImpl()->verify(
+            *_pubKey, signatureDataHash(), signatureData());
     }
 
     int64_t index() const override { return m_baseMessage->index(); }

@@ -78,9 +78,8 @@ public:
         {
             auto sealerIndex = signature.index;
             auto signatureData = signature.signature;
-            if (!signatureImpl.verify(
-                    std::shared_ptr<const bytes>(&((sealers)[sealerIndex]), [](const bytes*) {}),
-                    hash(), bytesConstRef(signatureData.data(), signatureData.size())))
+            if (!signatureImpl.verify(ref((sealers)[sealerIndex]), hash(),
+                    bytesConstRef(signatureData.data(), signatureData.size())))
             {
                 throwTrace(InvalidSignatureList() << errinfo_comment(
                                "Invalid signatureList for verify failed, signatureData:" +

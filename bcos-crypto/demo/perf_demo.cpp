@@ -203,7 +203,7 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, crypto::Hash& _hashImpl,
 
     auto keyPair = _signatureImpl->generateKeyPair();
     // sign
-    std::shared_ptr<bytes> signedData;
+    bytes signedData;
     auto startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
@@ -216,7 +216,7 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, crypto::Hash& _hashImpl,
     startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
-        if (!_signatureImpl->verify(keyPair->publicKey(), _msgHash, ref(*signedData)))
+        if (!_signatureImpl->verify(*keyPair->publicKey(), _msgHash, ref(signedData)))
         {
             std::cout << "verify failed" << std::endl;
             return;
@@ -224,15 +224,15 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, crypto::Hash& _hashImpl,
     }
     std::cout << "TPS of " << _signatureName << " verify:" << getTPS(utcTime(), startT, _count)
               << std::endl;
-    auto pub = _signatureImpl->recover(_msgHash, ref(*signedData));
-    auto address = calculateAddress(_hashImpl, pub).asBytes();
+    auto pub = _signatureImpl->recover(_msgHash, ref(signedData));
+    auto address = right160(_hashImpl.hash(pub.data())).asBytes();
     // recover
     signedData = _signatureImpl->sign(*keyPair, _msgHash, true);
     startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
-        auto pub = _signatureImpl->recover(_msgHash, ref(*signedData));
-        auto recoverAddress = calculateAddress(_hashImpl, pub).asBytes();
+        auto pub = _signatureImpl->recover(_msgHash, ref(signedData));
+        auto recoverAddress = right160(_hashImpl.hash(pub.data())).asBytes();
         if (recoverAddress != address)
         {
             return;
@@ -246,7 +246,7 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, crypto::Hash& _hashImpl,
     startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
-        auto ret = _signatureImpl->recoverAddress(_hashImpl, _msgHash, ref(*signedData));
+        auto ret = _signatureImpl->recoverAddress(_hashImpl, _msgHash, ref(signedData));
         if (ret.second != address)
         {
             return;
@@ -268,7 +268,7 @@ void derivePublicKeyPerf(SignatureCrypto::Ptr _signatureImpl, std::string const&
     KeyPairInterface::Ptr keyPair;
     for (size_t i = 0; i < _count; i++)
     {
-        keyPair = _signatureImpl->createKeyPair(_keyPair.secretKey());
+        keyPair = _signatureImpl->createKeyPair(*_keyPair.secretKey());
         assert(keyPair->secretKey()->data() == _keyPair.secretKey()->data());
         assert(keyPair->publicKey()->data() == _keyPair.publicKey()->data());
     }

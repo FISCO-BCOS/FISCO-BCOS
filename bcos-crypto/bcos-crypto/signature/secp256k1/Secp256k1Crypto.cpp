@@ -56,12 +56,11 @@ inline void checkSigLen(bytesConstRef _signatureData)
     }
 }
 
-std::shared_ptr<bytes> bcos::crypto::secp256k1Sign(
-    const KeyPairInterface& _keyPair, const HashType& _hash)
+bytes bcos::crypto::secp256k1Sign(const KeyPairInterface& _keyPair, const HashType& _hash)
 {
-    std::shared_ptr<bytes> signatureData = std::make_shared<bytes>(SECP256K1_SIGNATURE_LEN, 0);
+    bytes signatureData(SECP256K1_SIGNATURE_LEN, 0);
     // secp256k1_ecdsa_recoverable_signature rawSig;
-    auto* rawSig = (secp256k1_ecdsa_recoverable_signature*)(signatureData->data());
+    auto* rawSig = (secp256k1_ecdsa_recoverable_signature*)(signatureData.data());
     if (secp256k1_ecdsa_sign_recoverable(secp256k1Context(), rawSig, _hash.data(),
             (const unsigned char*)_keyPair.secretKey()->constData(), nullptr, nullptr) == 0)
     {
@@ -69,14 +68,14 @@ std::shared_ptr<bytes> bcos::crypto::secp256k1Sign(
                                   "secp256k1Sign exception, raw data: " + _hash.hex()));
     }
     int recid = 0;
-    secp256k1_ecdsa_recoverable_signature_serialize_compact(secp256k1Context(),
-        reinterpret_cast<unsigned char*>(signatureData->data()), &recid, rawSig);
-    signatureData->back() = (uint8_t)recid;
+    secp256k1_ecdsa_recoverable_signature_serialize_compact(
+        secp256k1Context(), reinterpret_cast<unsigned char*>(signatureData.data()), &recid, rawSig);
+    signatureData.back() = (uint8_t)recid;
     return signatureData;
 }
 
 bool bcos::crypto::secp256k1Verify(
-    const PublicPtr& _pubKey, const HashType& _hash, bytesConstRef _signatureData)
+    const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData)
 {
     checkSigLen(_signatureData);
     if ((uint8_t)_signatureData[SECP256K1_SIGNATURE_V] > 3)
@@ -102,7 +101,7 @@ bool bcos::crypto::secp256k1Verify(
     size_t serializedPubKeySize = SECP256K1_UNCOMPRESS_PUBLICKEY_LEN;
     secp256k1_ec_pubkey_serialize(secp256k1Context(), data.data(), &serializedPubKeySize,
         &recoverPubKey, SECP256K1_EC_UNCOMPRESSED);
-    return memcmp(data.data() + 1, _pubKey->constData(), SECP256K1_PUBLICKEY_LEN) == 0;
+    return memcmp(data.data() + 1, _pubKey.constData(), SECP256K1_PUBLICKEY_LEN) == 0;
 }
 
 KeyPairInterface::UniquePtr bcos::crypto::secp256k1GenerateKeyPair()
@@ -153,7 +152,7 @@ void secp256k1RecoverPrimitive(const HashType& _hash, char* _pubKey, bytesConstR
     memcpy(_pubKey, data.data() + 1, SECP256K1_PUBLICKEY_LEN);
 }
 
-PublicPtr bcos::crypto::secp256k1Recover(const HashType& _hash, bytesConstRef _signatureData)
+KeyImpl bcos::crypto::secp256k1Recover(const HashType& _hash, bytesConstRef _signatureData)
 {
     checkSigLen(_signatureData);
     if ((uint8_t)_signatureData[SECP256K1_SIGNATURE_V] > 3)
@@ -163,12 +162,12 @@ PublicPtr bcos::crypto::secp256k1Recover(const HashType& _hash, bytesConstRef _s
                 "secp256k1 recover illegal argument: recid >= 0 && recid <= 3, recid: " +
                 std::to_string((int)_signatureData[SECP256K1_SIGNATURE_V])));
     }
-    auto pubKey = std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN);
-    secp256k1RecoverPrimitive(_hash, pubKey->mutableData(), _signatureData);
+    KeyImpl pubKey(SECP256K1_PUBLIC_LEN);
+    secp256k1RecoverPrimitive(_hash, pubKey.mutableData(), _signatureData);
     return pubKey;
 }
 
-std::pair<bool, bytes> bcos::crypto::secp256k1Recover(Hash::Ptr _hashImpl, bytesConstRef _input)
+std::pair<bool, bytes> bcos::crypto::secp256k1Recover(Hash& _hashImpl, bytesConstRef _input)
 {
     struct
     {
@@ -187,7 +186,7 @@ std::pair<bool, bytes> bcos::crypto::secp256k1Recover(Hash::Ptr _hashImpl, bytes
             auto encodedBytes = signatureData->encode();
             auto publicKey = secp256k1Recover(
                 in.hash, bytesConstRef(encodedBytes->data(), encodedBytes->size()));
-            auto address = calculateAddress(_hashImpl, publicKey);
+            auto address = right160(_hashImpl.hash(publicKey.data()));
             return {true, address.asBytes()};
         }
         catch (const std::exception& e)
@@ -222,14 +221,14 @@ std::pair<bool, bytes> Secp256k1Crypto::recoverAddress(
     return {true, calculateAddress(_hashImpl, data.data() + 1, SECP256K1_PUBLICKEY_LEN)};
 }
 
-bool Secp256k1Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
-    bytesConstRef _signatureData) const
+bool Secp256k1Crypto::verify(
+    bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    return secp256k1Verify(
-        std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN, _pubKeyBytes), _hash, _signatureData);
+    KeyImpl pubKey(SECP256K1_PUBLIC_LEN, _pubKeyBytes);
+    return secp256k1Verify(pubKey, _hash, _signatureData);
 }
 
-KeyPairInterface::UniquePtr Secp256k1Crypto::createKeyPair(SecretPtr _secretKey) const
+KeyPairInterface::UniquePtr Secp256k1Crypto::createKeyPair(const Secret& _secretKey) const
 {
-    return std::make_unique<Secp256k1KeyPair>(_secretKey);
+    return std::make_unique<Secp256k1KeyPair>(std::make_shared<KeyImpl>(_secretKey.data()));
 }

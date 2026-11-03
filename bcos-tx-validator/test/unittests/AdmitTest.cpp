@@ -807,7 +807,7 @@ BOOST_AUTO_TEST_CASE(forgedBcosDataHashDoesNotBindTheVictimAsSender)
         [inner = std::move(victimInner)]() mutable { return &inner; });
     victim->calculateHash(*hashImpl);
     auto signature = signatureImpl->sign(senderKey(), victim->hash(), true);
-    victim->setSignatureData(*signature);
+    victim->setSignatureData(signature);
     auto const stolenHash = victim->hash();
 
     // The attacker's body, carrying the victim's hash and signature.
@@ -817,7 +817,7 @@ BOOST_AUTO_TEST_CASE(forgedBcosDataHashDoesNotBindTheVictimAsSender)
     forgedInner.data.groupID = "group0";
     forgedInner.data.chainID = "chain0";
     forgedInner.dataHash.assign(stolenHash.begin(), stolenHash.end());
-    forgedInner.signature.assign(signature->begin(), signature->end());
+    forgedInner.signature.assign(signature.begin(), signature.end());
     auto forged = std::make_shared<bcostars::protocol::TransactionImpl>(
         [inner = std::move(forgedInner)]() mutable { return &inner; });
 
@@ -825,7 +825,7 @@ BOOST_AUTO_TEST_CASE(forgedBcosDataHashDoesNotBindTheVictimAsSender)
 
     // What the victim's key actually signed.
     auto const [ok, victimAddress] =
-        signatureImpl->recoverAddress(*hashImpl, stolenHash, ref(*signature));
+        signatureImpl->recoverAddress(*hashImpl, stolenHash, ref(signature));
     BOOST_REQUIRE(ok);
 
     // The forged body must NOT be attributed to the victim. Admission may still accept it as

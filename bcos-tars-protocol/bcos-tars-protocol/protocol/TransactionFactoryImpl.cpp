@@ -215,7 +215,7 @@ bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::cre
 
     auto tarsTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
     auto& inner = tarsTx->mutableInner();
-    inner.signature.assign(sign->begin(), sign->end());
+    inner.signature.assign(sign.begin(), sign.end());
     tx->setTainted(true);
 
     return tx;

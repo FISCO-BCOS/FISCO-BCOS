@@ -199,12 +199,12 @@ BOOST_AUTO_TEST_CASE(testConstructTx)
     auto keyPair = std::make_unique<Secp256k1KeyPair>(key);
 
     auto signature = signatureImpl.sign(*keyPair, newHash, false);
-    auto [_, addr] = signatureImpl.recoverAddress(*hashImpl, newHash, ref(*signature));
+    auto [_, addr] = signatureImpl.recoverAddress(*hashImpl, newHash, ref(signature));
     auto newAddr = toHex(addr);
     BOOST_CHECK_EQUAL(newAddr, Address("C96aAa54E2d44c299564da76e1cD3184A2386B8D").hex());
-    testTx.signatureR = {signature->begin(), signature->begin() + 32};
-    testTx.signatureS = {signature->begin() + 32, signature->begin() + 64};
-    testTx.signatureV = signature->back();
+    testTx.signatureR = {signature.begin(), signature.begin() + 32};
+    testTx.signatureS = {signature.begin() + 32, signature.begin() + 64};
+    testTx.signatureV = signature.back();
     bcos::bytes toData;
     bcos::codec::rlp::encode(toData, testTx);
     auto const newTx = toHexStringWithPrefix(toData);
@@ -449,9 +449,9 @@ BOOST_AUTO_TEST_CASE(highSsignatureRejectedAtDecode)
     auto signatureImpl = bcos::crypto::Secp256k1Crypto();
     auto keyPair = std::make_unique<Secp256k1KeyPair>(key);
     auto signature = signatureImpl.sign(*keyPair, newHash, false);
-    tx.signatureR = {signature->begin(), signature->begin() + 32};
-    tx.signatureS = {signature->begin() + 32, signature->begin() + 64};
-    tx.signatureV = signature->back();
+    tx.signatureR = {signature.begin(), signature.begin() + 32};
+    tx.signatureS = {signature.begin() + 32, signature.begin() + 64};
+    tx.signatureV = signature.back();
 
     // Guard: libsecp256k1 signs canonical low-s — confirm before flipping, so a future
     // libsecp256k1 behavior change fails loudly instead of silently weakening the test.

@@ -35,26 +35,26 @@ SM2Crypto::SM2Crypto()
     m_keyPairFactory = std::make_shared<SM2KeyPairFactory>();
 }
 
-bool SM2Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
-    bytesConstRef _signatureData) const
+bool SM2Crypto::verify(
+    bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    return verify(
-        std::make_shared<KeyImpl>(SM2_PUBLIC_KEY_LEN, _pubKeyBytes), _hash, _signatureData);
+    KeyImpl pubKey(SM2_PUBLIC_KEY_LEN, _pubKeyBytes);
+    return verify(pubKey, _hash, _signatureData);
 }
 
-KeyPairInterface::UniquePtr SM2Crypto::createKeyPair(SecretPtr _secretKey) const
+KeyPairInterface::UniquePtr SM2Crypto::createKeyPair(const Secret& _secretKey) const
 {
-    return m_keyPairFactory->createKeyPair(_secretKey);
+    return m_keyPairFactory->createKeyPair(std::make_shared<KeyImpl>(_secretKey.data()));
 }
 
-std::shared_ptr<bytes> SM2Crypto::sign(
+bytes SM2Crypto::sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const
 {
-    std::shared_ptr<bytes> signatureData = std::make_shared<bytes>(SM2_SIGNATURE_LEN, 0);
+    bytes signatureData(SM2_SIGNATURE_LEN, 0);
     CInputBuffer rawPrivateKey{_keyPair.secretKey()->constData(), _keyPair.secretKey()->size()};
     CInputBuffer rawPublicKey{_keyPair.publicKey()->constData(), _keyPair.publicKey()->size()};
     CInputBuffer rawMsgHash{(const char*)_hash.data(), HashType::SIZE};
-    COutputBuffer sm2SignatureResult{(char*)signatureData->data(), SM2_SIGNATURE_LEN};
+    COutputBuffer sm2SignatureResult{(char*)signatureData.data(), SM2_SIGNATURE_LEN};
     auto retCode = m_signer(&rawPrivateKey, &rawPublicKey, &rawMsgHash, &sm2SignatureResult);
     if (retCode != WEDPR_SUCCESS)
     {
@@ -64,15 +64,16 @@ std::shared_ptr<bytes> SM2Crypto::sign(
     // append the public key
     if (_signatureWithPub)
     {
-        signatureData->insert(signatureData->end(), _keyPair.publicKey()->mutableData(),
+        signatureData.insert(signatureData.end(), _keyPair.publicKey()->mutableData(),
             _keyPair.publicKey()->mutableData() + _keyPair.publicKey()->size());
     }
     return signatureData;
 }
 
-bool SM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
+bool SM2Crypto::verify(
+    const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
+    CInputBuffer publicKey{_pubKey.constData(), _pubKey.size()};
     CInputBuffer messageHash{(const char*)_hash.data(), HashType::SIZE};
 
     // reject short signatures while the length is still known: the fixed-length view below
@@ -91,10 +92,10 @@ bool SM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _
     return false;
 }
 
-PublicPtr SM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
+KeyImpl SM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
 {
     auto signatureStruct = std::make_shared<SignatureDataWithPub>(_signData);
-    auto sm2Pub = std::make_shared<KeyImpl>(SM2_PUBLIC_KEY_LEN, ref(signatureStruct->pub()));
+    KeyImpl sm2Pub(SM2_PUBLIC_KEY_LEN, ref(signatureStruct->pub()));
     if (verify(sm2Pub, _hash, _signData))
     {
         return sm2Pub;
@@ -104,7 +105,7 @@ PublicPtr SM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) con
                               _hash.hex() + ", signature:" + toHex(_signData)));
 }
 
-std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input) const
+std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash& _hashImpl, bytesConstRef _input) const
 {
     struct
     {
@@ -119,10 +120,10 @@ std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConst
     try
     {
         auto encodedData = signatureData->encode();
-        auto sm2Pub = std::make_shared<KeyImpl>(SM2_PUBLIC_KEY_LEN, ref(signatureData->pub()));
+        KeyImpl sm2Pub(SM2_PUBLIC_KEY_LEN, ref(signatureData->pub()));
         if (verify(sm2Pub, in.hash, bytesConstRef(encodedData->data(), encodedData->size())))
         {
-            auto address = calculateAddress(_hashImpl, sm2Pub);
+            auto address = right160(_hashImpl.hash(sm2Pub.data()));
             return {true, address.asBytes()};
         }
     }

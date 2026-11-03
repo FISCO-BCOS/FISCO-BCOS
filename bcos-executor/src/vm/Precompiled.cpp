@@ -882,7 +882,7 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     crypto::HashType mHash;
     memcpy(mHash.data(), _in.data(), crypto::HashType::SIZE);
 
-    PublicPtr pk;
+    crypto::KeyImpl pk(PUBLIC_KEY_LENGTH);
     try
     {
         pk = crypto::secp256k1Recover(mHash, bytesConstRef(rawRSV, RSV_LENGTH));
@@ -897,15 +897,10 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("secp256k1_recover_public_key")
                     << LOG_KV("hash", toHexStringWithPrefix(mHash))
                     << LOG_KV("rsv", toHex(bytesConstRef(rawRSV, RSV_LENGTH)));
-    if (pk == nullptr)
-    {
-        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover publicKey failed");
-        return {true, {}};
-    }
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("secp256k1_recover_public_key success");
     // keccak256 and set first 12 byte to zero
     auto pubkeyHash = keccak256Hash(
-        bytesConstRef(reinterpret_cast<const byte*>(pk->constData()), PUBLIC_KEY_LENGTH));
+        bytesConstRef(reinterpret_cast<const byte*>(pk.constData()), PUBLIC_KEY_LENGTH));
     ret.second = pubkeyHash.asBytes();
     memset(ret.second.data(), 0, 12);
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover success");

@@ -22,7 +22,7 @@ namespace bcos::test
 {
 BOOST_AUTO_TEST_SUITE(SignatureRoundtripTest)
 
-// Full ed25519 path: sign -> verify via the shared_ptr<bytes const> overload
+// Full ed25519 path: sign -> verify via the bytes overload
 // -> createKeyPair reproduces the key -> ed25519Recover(hashImpl, input)
 // success path yields the signer's address. The recover input buffer is
 // hash || pub || r || s; sign(withPub=true) returns r||s||pub, so r||s is the
@@ -35,34 +35,33 @@ BOOST_AUTO_TEST_CASE(ed25519SignVerifyRecoverRoundtrip)
     auto hash = keccak256Hash(bytesConstRef(std::string("ed25519-roundtrip")));
 
     auto sig = crypto.sign(*keyPair, hash, true);
-    BOOST_REQUIRE_EQUAL(sig->size(), 96U);
+    BOOST_REQUIRE_EQUAL(sig.size(), 96U);
 
-    // verify(shared_ptr<bytes const>, ...) overload
-    auto pubBytes = std::make_shared<bytes>(keyPair->publicKey()->data());
-    BOOST_CHECK(crypto.verify(pubBytes, hash, ref(*sig)));
+    // verify(bytesConstRef, ...) overload
+    auto pubBytes = keyPair->publicKey()->data();
+    BOOST_CHECK(crypto.verify(ref(pubBytes), hash, ref(sig)));
 
     // createKeyPair(secret) reproduces the same public key
-    auto reproduced = crypto.createKeyPair(keyPair->secretKey());
+    auto reproduced = crypto.createKeyPair(*keyPair->secretKey());
     BOOST_CHECK(reproduced->publicKey()->data() == keyPair->publicKey()->data());
 
     // recover success path
     const auto& pub = keyPair->publicKey()->data();
     bcos::bytes input(hash.begin(), hash.end());
     input.insert(input.end(), pub.begin(), pub.end());
-    input.insert(input.end(), sig->begin(), sig->begin() + 64);  // r||s
+    input.insert(input.end(), sig.begin(), sig.begin() + 64);  // r||s
     BOOST_REQUIRE_EQUAL(input.size(), 128U);
 
-    auto [ok, addr] = ed25519Recover(hashImpl, ref(input));
+    auto [ok, addr] = ed25519Recover(*hashImpl, ref(input));
     BOOST_CHECK(ok);
     BOOST_CHECK_EQUAL(addr.size(), 20U);
     // Deterministic: the same input recovers the same 20-byte address.
-    auto [ok2, addr2] = ed25519Recover(hashImpl, ref(input));
+    auto [ok2, addr2] = ed25519Recover(*hashImpl, ref(input));
     BOOST_CHECK(ok2);
     BOOST_CHECK(addr == addr2);
 }
 
-// SM2 sign -> verify via the shared_ptr<bytes const> overload -> createKeyPair
-// reproduces the key.
+// SM2 sign -> verify via the bytesConstRef overload -> createKeyPair reproduces the key.
 BOOST_AUTO_TEST_CASE(sm2SignVerifyAndCreateKeyPair)
 {
     SM2Crypto crypto;
@@ -70,12 +69,12 @@ BOOST_AUTO_TEST_CASE(sm2SignVerifyAndCreateKeyPair)
     auto hash = keccak256Hash(bytesConstRef(std::string("sm2-roundtrip")));
 
     auto sig = crypto.sign(*keyPair, hash, true);
-    BOOST_REQUIRE_EQUAL(sig->size(), 128U);
+    BOOST_REQUIRE_EQUAL(sig.size(), 128U);
 
-    auto pubBytes = std::make_shared<bytes>(keyPair->publicKey()->data());
-    BOOST_CHECK(crypto.verify(pubBytes, hash, ref(*sig)));
+    auto pubBytes = keyPair->publicKey()->data();
+    BOOST_CHECK(crypto.verify(ref(pubBytes), hash, ref(sig)));
 
-    auto reproduced = crypto.createKeyPair(keyPair->secretKey());
+    auto reproduced = crypto.createKeyPair(*keyPair->secretKey());
     BOOST_CHECK(reproduced->publicKey()->data() == keyPair->publicKey()->data());
 }
 

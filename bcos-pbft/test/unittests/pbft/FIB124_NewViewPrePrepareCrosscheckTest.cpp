@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE(testRejectNewViewWithTamperedPrePrepareHash)
         auto vcPayloadHash = cryptoSuite->hashImpl()->hash(*vcPayload);
         auto vcSig = cryptoSuite->signatureImpl()->sign(*signerKP, vcPayloadHash, false);
         vc->setSignatureDataHash(vcPayloadHash);
-        vc->setSignatureData(*vcSig);
+        vc->setSignatureData(vcSig);
         viewChangeList.push_back(vc);
     }
 
@@ -172,7 +172,7 @@ BOOST_AUTO_TEST_CASE(testRejectNewViewWithTamperedPrePrepareHash)
     auto nvHash = cryptoSuite->hashImpl()->hash(*nvPayload);
     auto nvSig = cryptoSuite->signatureImpl()->sign(*leaderKP, nvHash, false);
     newViewMsg->setSignatureDataHash(nvHash);
-    newViewMsg->setSignatureData(*nvSig);
+    newViewMsg->setSignatureData(nvSig);
 
     // The FIB-124 cross-check must reject this NewView (tamperedHash != realHash).
     // We test against `newViewMsg` directly (not re-encoded) to avoid decode issues.

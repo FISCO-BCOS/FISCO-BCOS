@@ -213,7 +213,7 @@ inline PBFTProposalInterface::Ptr fakeSingleProposal(CryptoSuite::Ptr _cryptoSui
     {
         auto signatureData = _cryptoSuite->signatureImpl()->sign(*_nodeKeypairInfo.second, _hash);
         nodeList.push_back(_nodeKeypairInfo.first);
-        signatureList.push_back(*signatureData);
+        signatureList.push_back(signatureData);
     }
     return faker->fakePBFTProposal(_index, _hash, _data, nodeList, signatureList);
 }

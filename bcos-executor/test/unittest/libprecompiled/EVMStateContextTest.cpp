@@ -206,13 +206,13 @@ BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
         auto secCreated = keyFactory->createKey(fixedSec1.asBytes());
         auto keyPair = std::make_shared<Secp256k1KeyPair>(sec1);
         auto sign = secp256k1Sign(*keyPair, hash);
-        auto signWithV = std::make_shared<SignatureDataWithV>(ref(*sign));
+        auto signWithV = std::make_shared<SignatureDataWithV>(ref(sign));
 
         auto hash32 = toString32(hash);
         string32 r = toString32(signWithV->r());
         string32 s = toString32(signWithV->s());
         uint8_t v = signWithV->v() + 27;
-        auto p = secp256k1Recover(hash, ref(*sign));
+        auto p = secp256k1Recover(hash, ref(sign));
         bytes encodedData =
             codec->encodeWithSig("ecRecoverTest(bytes32,uint8,bytes32,bytes32)", hash32, v, r, s);
         auto result = callTest(number++, ref(encodedData));

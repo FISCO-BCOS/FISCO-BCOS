@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
+#include <bcos-crypto/signature/key/KeyImpl.h>
 #include <memory>
 #include <mutex>
 namespace bcos::crypto
@@ -35,26 +36,22 @@ public:
     virtual ~SignatureCrypto() = default;
 
     // sign returns a signature of a given hash
-    virtual std::shared_ptr<bytes> sign(const KeyPairInterface& _keyPair, const HashType& _hash,
+    virtual bytes sign(const KeyPairInterface& _keyPair, const HashType& _hash,
         bool _signatureWithPub = false) const = 0;
 
     // verify checks whether a signature is calculated from a given hash
     virtual bool verify(
-        PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const = 0;
-    virtual bool verify(std::shared_ptr<const bytes> _pubKeyBytes, const HashType& _hash,
-        bytesConstRef _signatureData) const = 0;
+        const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const = 0;
+    virtual bool verify(
+        bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const = 0;
 
     // recover recovers the public key from the given signature
-    virtual PublicPtr recover(const HashType& _hash, bytesConstRef _signatureData) const = 0;
+    virtual KeyImpl recover(const HashType& _hash, bytesConstRef _signatureData) const = 0;
     virtual std::pair<bool, bytes> recoverAddress(
         crypto::Hash& _hashImpl, const HashType& _hash, bytesConstRef _signatureData) const
     {
         auto pubKey = recover(_hash, _signatureData);
-        if (!pubKey)
-        {
-            return std::make_pair(false, bytes());
-        }
-        auto address = calculateAddress(_hashImpl, pubKey);
+        auto address = right160(_hashImpl.hash(pubKey.data()));
         return {true, address.asBytes()};
     }
 
@@ -62,8 +59,7 @@ public:
     virtual std::unique_ptr<KeyPairInterface> generateKeyPair() const = 0;
 
     // recoverAddress recovers address from a signature(for precompiled)
-    virtual std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) const = 0;
-    virtual std::unique_ptr<KeyPairInterface> createKeyPair(
-        std::shared_ptr<KeyInterface> _secretKey) const = 0;
+    virtual std::pair<bool, bytes> recoverAddress(Hash& _hashImpl, bytesConstRef _in) const = 0;
+    virtual std::unique_ptr<KeyPairInterface> createKeyPair(const Secret& _secretKey) const = 0;
 };
 }  // namespace bcos::crypto

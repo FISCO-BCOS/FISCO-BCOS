@@ -27,14 +27,14 @@ BOOST_AUTO_TEST_CASE(recoverFromInputRejectsBad)
 
     // v outside the accepted 27..28 range: rejected before any recovery.
     bcos::bytes input(128, 0);
-    auto [okZero, addrZero] = secp256k1Recover(hashImpl, bcos::ref(input));
+    auto [okZero, addrZero] = secp256k1Recover(*hashImpl, bcos::ref(input));
     BOOST_CHECK(!okZero);
     BOOST_CHECK(addrZero.empty());
 
     // v == 27 but zero r/s: recovery fails internally and is caught.
     bcos::bytes withV(128, 0);
     withV[63] = 27;  // low byte of the big-endian h256 v field
-    auto [okBadSig, addrBadSig] = secp256k1Recover(hashImpl, bcos::ref(withV));
+    auto [okBadSig, addrBadSig] = secp256k1Recover(*hashImpl, bcos::ref(withV));
     BOOST_CHECK(!okBadSig);
 }
 
