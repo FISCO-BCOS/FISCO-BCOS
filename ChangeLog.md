@@ -50,8 +50,9 @@
 
 **升级描述**
 
-* v1 链（build_chain.sh 建的 AIR 链默认）：直接替换二进制，不需要改配置；genesis 字节不变（`NodeConfigV1GenesisPinGoldenTest` 钉住 3.0.0/3.1.0/3.6.0/3.17.0/3.18.0 × pbft/rpbft 的黄金值）
-* v0 链（genesis 无 `[executor] version`，含 BcosBuilder 建的 Pro 链）：同样直接替换二进制，但必须使用含 v0 lane IOServicePool 修复的构建
+* v1 EVM 链（build_chain.sh 建的 AIR 链默认）：直接替换二进制，不需要改配置；genesis 字节不变（`NodeConfigV1GenesisPinGoldenTest` 钉住 3.0.0/3.1.0/3.6.0/3.17.0/3.18.0 × pbft/rpbft 的黄金值）
+* v0 EVM 链（genesis 无 `[executor] version`，含 BcosBuilder 建的 Pro 链）：同样直接替换二进制，但必须使用含 v0 lane IOServicePool 修复的构建
+* **WASM 链（genesis `[executor] is_wasm=true`）不能按上述方式升级**：3.18.0 已移除 WASM 执行器，`NodeConfig::loadExecutorConfig()` 读到 `executor.is_wasm=true` 即拒绝启动（`executor.is_wasm=true is not supported: WASM support was removed in FISCO-BCOS 3.18`），没有把 WASM 链迁到 EVM 的路径；这类链请留在 3.17.x
 * 上表中的死键不改也能启动，只多几行 WARNING；`enable_single_node_consensus` 的单节点开发链若要继续自出块，须改写为 `[debug] enable=true`
 
 ---
