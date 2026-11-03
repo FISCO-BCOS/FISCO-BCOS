@@ -1485,6 +1485,14 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; cap on discovered candidates handed to the dialer per sync round. Range [1, 1000].
         max_discovered_peers=8
         ; --- end discovery (E5) ---
+        ; --- peer serving (E6) ---
+        ; accept inbound devp2p peers and serve them headers/bodies/receipts
+        serve_peers=true
+        ; TCP port of the RLPx listener. Range [1, 65535].
+        listen_port=30303
+        ; connected peer ceiling, inbound + outbound. Range [1, 1000].
+        max_peers=50
+        ; --- end peer serving (E6) ---
     */
     // NOTE: this loader deliberately stays PURE parsing of the config.ini
     // [ethereum] section — it must NOT read m_genesisConfig members: tools
@@ -1508,6 +1516,25 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                 "ethereum.max_batch_size must be in [1, 1024], got " + std::to_string(maxBatch)));
     }
     m_ethereumMaxBatchSize = maxBatch;
+
+    // --- peer serving (E6) ---
+    m_ethereumServePeers = _pt.get<bool>("ethereum.serve_peers", true);
+    auto const listenPort = checkAndGetValue(_pt, "ethereum.listen_port", "30303");
+    if (listenPort <= 0 || listenPort > 65535)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.listen_port must be in [1, 65535], got " + std::to_string(listenPort)));
+    }
+    m_ethereumListenPort = static_cast<uint16_t>(listenPort);
+    auto const maxPeers = checkAndGetValue(_pt, "ethereum.max_peers", "50");
+    if (maxPeers <= 0 || maxPeers > 1000)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.max_peers must be in [1, 1000], got " + std::to_string(maxPeers)));
+    }
+    m_ethereumMaxPeers = static_cast<size_t>(maxPeers);
 
     // [debug] follow_devp2p: the OP chain's block cadence (rollup.json block_time). Bounded
     // like every neighbouring knob: the header validator only WARNs on a deviation
@@ -1677,6 +1704,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
+                         << LOG_KV("servePeers", m_ethereumServePeers)
+                         << LOG_KV("listenPort", m_ethereumListenPort)
+                         << LOG_KV("maxPeers", m_ethereumMaxPeers)
                          << LOG_KV("reorgWindow", m_ethereumReorgWindow)
                          << LOG_KV("mempoolCapacity", m_ethereumMempoolCapacity)
                          << LOG_KV("mempoolTxLifetimeMinutes", m_ethereumMempoolTxLifetimeMinutes)
@@ -3979,6 +4009,20 @@ size_t bcos::tool::NodeConfig::ethereumMaxDiscoveredPeers() const
     return m_ethereumMaxDiscoveredPeers;
 }
 // --- end discovery (E5) ---
+// --- peer serving (E6) ---
+bool bcos::tool::NodeConfig::ethereumServePeers() const
+{
+    return m_ethereumServePeers;
+}
+uint16_t bcos::tool::NodeConfig::ethereumListenPort() const
+{
+    return m_ethereumListenPort;
+}
+size_t bcos::tool::NodeConfig::ethereumMaxPeers() const
+{
+    return m_ethereumMaxPeers;
+}
+// --- end peer serving (E6) ---
 uint64_t bcos::tool::NodeConfig::ethereumChainId() const
 {
     // Copied from config.genesis's [chain] chain_id on executor.version >= 2

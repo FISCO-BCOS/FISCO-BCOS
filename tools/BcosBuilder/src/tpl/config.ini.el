@@ -84,6 +84,15 @@
     ; at most this many discovered peers are dialed per sync round, after the bootnodes
     max_discovered_peers=8
     ; --- end discovery (E5) ---
+    ; --- peer serving (E6) ---
+    ; accept inbound devp2p peers and serve them headers/bodies/receipts (eth/69, eth/70)
+    serve_peers=true
+    ; TCP port of the RLPx listener (the enode port other clients dial)
+    listen_port=30303
+    ; connected peer ceiling, inbound and outbound together (about one third stays
+    ; reserved for our own dials)
+    max_peers=50
+    ; --- end peer serving (E6) ---
 
 [engine_rpc]
     ; Authenticated Engine API listener (JSON-RPC over HTTP + JWT) for a consensus

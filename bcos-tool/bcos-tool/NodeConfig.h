@@ -312,6 +312,13 @@ public:
     // on first start (conf/node.rlpx.key) so the RLPx identity survives restarts
     const std::string& ethereumNodeKeyFile() const;
     uint32_t ethereumMaxBatchSize() const;
+    // --- peer serving (E6) ---
+    // [ethereum] serve_peers (default true): run the inbound RLPx listener and serve
+    // headers/bodies/receipts (eth/69, eth/70) to peers; listen_port (default 30303) is
+    // the listener's TCP port; max_peers (default 50) caps inbound + outbound sessions.
+    bool ethereumServePeers() const;
+    uint16_t ethereumListenPort() const;
+    size_t ethereumMaxPeers() const;
     // the Ethereum-lane chain id ([chain] chain_id in config.genesis, executor.version >= 2);
     // 0 = unset (never a mainnet fallback)
     uint64_t ethereumChainId() const;
@@ -696,6 +703,10 @@ private:
     bool m_ethereumTxGossip = true;
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
+    // --- peer serving (E6) ---
+    bool m_ethereumServePeers = true;
+    uint16_t m_ethereumListenPort = 30303;
+    size_t m_ethereumMaxPeers = 50;
     uint64_t m_ethereumMergeBlock = 0;
     std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
     // [ethereum] reorg_window: EL shallow-reorg depth bound (see ethereumReorgWindow()).
