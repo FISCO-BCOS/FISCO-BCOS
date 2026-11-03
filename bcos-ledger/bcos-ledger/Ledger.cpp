@@ -176,8 +176,8 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 
 task::Task<std::string> Ledger::prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-    bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> /*features*/,
-    std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
+    bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+    bool writeNonces)
 {
     if (!block)
     {
@@ -197,11 +197,11 @@ task::Task<std::string> Ledger::prewriteBlock(bcos::storage::StorageInterface::P
                 executor_v1::StateKey{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER},
                 std::move(numberEntry));
         }
-        catch (bcos::Error& error)
+        catch (std::exception const& error)
         {
             LEDGER_LOG(ERROR) << "System contract write ledger storage error "
-                              << LOG_KV("msg", error.errorMessage())
-                              << LOG_KV("code", error.errorCode());
+                              << LOG_KV("key", SYS_KEY_CURRENT_NUMBER)
+                              << boost::diagnostic_information(error);
             throw;
         }
         co_return std::string{};

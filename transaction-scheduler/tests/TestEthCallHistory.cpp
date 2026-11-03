@@ -180,8 +180,7 @@ public:
 
         fakeit::When(Method(mockLedger, prewriteBlock))
             .AlwaysDo([](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
-                          protocol::Block::ConstPtr, bool, std::optional<ledger::Features>,
-                          std::optional<bcos::crypto::HashType>,
+                          protocol::Block::ConstPtr, bool, std::optional<bcos::crypto::HashType>,
                           bool) -> task::Task<std::string> { co_return std::string{}; });
         using HashView =
             ::ranges::any_view<h256, ::ranges::category::mask | ::ranges::category::sized>;

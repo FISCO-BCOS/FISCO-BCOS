@@ -129,8 +129,7 @@ public:
 
         fakeit::When(Method(mockLedger, prewriteBlock))
             .AlwaysDo([](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
-                          protocol::Block::ConstPtr, bool, std::optional<ledger::Features>,
-                          std::optional<bcos::crypto::HashType>,
+                          protocol::Block::ConstPtr, bool, std::optional<bcos::crypto::HashType>,
                           bool) -> task::Task<std::string> { co_return std::string{}; });
 
         using HashView =
@@ -178,7 +177,7 @@ public:
     void writeBlock(const std::shared_ptr<bcostars::protocol::BlockImpl>& block)
     {
         auto blockHeader = block->blockHeader();
-        task::syncWait(ledger::prewriteBlock(mockLedger.get(),
+        task::syncWait(ledger::prewriteBlockRows(mockLedger.get(),
             std::make_shared<protocol::ConstTransactions>(), block, false, backendStorage));
         bcos::bytes headerBuffer;
         blockHeader->encode(headerBuffer);

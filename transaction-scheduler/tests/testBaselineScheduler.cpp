@@ -75,8 +75,7 @@ public:
         fakeit::When(Method(mockLedger, prewriteBlock))
             .AlwaysDo(
                 [](bcos::storage::StorageInterface::Ptr, bcos::protocol::ConstTransactionsPtr,
-                    bcos::protocol::Block::ConstPtr, bool, std::optional<bcos::ledger::Features>,
-                    std::optional<bcos::crypto::HashType>,
+                    bcos::protocol::Block::ConstPtr, bool, std::optional<bcos::crypto::HashType>,
                     bool) -> task::Task<std::string> { co_return std::string{}; });
         // Ledger: storeTransactionsAndReceipts => no error
         fakeit::When(Method(mockLedger, storeTransactionsAndReceipts))
@@ -105,7 +104,7 @@ public:
     void writeBlock(std::shared_ptr<bcostars::protocol::BlockImpl> block)
     {
         auto blockHeader = block->blockHeader();
-        task::syncWait(ledger::prewriteBlock(mockLedger.get(),
+        task::syncWait(ledger::prewriteBlockRows(mockLedger.get(),
             std::make_shared<bcos::protocol::ConstTransactions>(), block, false, backendStorage));
         bytes headerBuffer;
         blockHeader->encode(headerBuffer);
@@ -362,7 +361,7 @@ BOOST_AUTO_TEST_CASE(call)
     blockHeader->setVersion(200);
     blockHeader->setTimestamp(10088);
     blockHeader->calculateHash(*hashImpl);
-    task::syncWait(ledger::prewriteBlock(mockLedger.get(),
+    task::syncWait(ledger::prewriteBlockRows(mockLedger.get(),
         std::make_shared<bcos::protocol::ConstTransactions>(), block, false, backendStorage));
     bytes headerBuffer;
     blockHeader->encode(headerBuffer);

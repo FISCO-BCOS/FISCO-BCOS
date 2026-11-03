@@ -40,7 +40,7 @@ inline constexpr struct PrewriteBlock
         co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block),
             withTransactionsAndReceipts, storage, blockHashOverride, writeNonces);
     }
-} prewriteBlock{};
+} prewriteBlockRows{};
 
 // FIB-104: Routes the entire block (header, hash mappings, nonces, current number,
 // tx metadata, transactions, receipts) into the caller-provided storage buffer so

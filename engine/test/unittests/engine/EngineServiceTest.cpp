@@ -246,8 +246,8 @@ public:
     using SvcCommitLedger::SvcCommitLedger;
     bcos::task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces) override
     {
         if (m_failNext.exchange(false))
         {
@@ -255,8 +255,7 @@ public:
                 BCOS_ERROR(bcos::ledger::LedgerError::ErrorArgument, "injected prewrite failure"));
         }
         co_return co_await SvcCommitLedger::prewriteBlock(std::move(storage), std::move(_blockTxs),
-            std::move(block), writeTxsAndReceipts, std::move(features),
-            std::move(blockHashOverride), writeNonces);
+            std::move(block), writeTxsAndReceipts, std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_failNext{true};
 };
@@ -271,8 +270,8 @@ public:
     using SvcCommitLedger::SvcCommitLedger;
     bcos::task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces) override
     {
         if (!m_firstEntered.exchange(true))
         {
@@ -283,8 +282,7 @@ public:
             }
         }
         co_return co_await SvcCommitLedger::prewriteBlock(std::move(storage), std::move(_blockTxs),
-            std::move(block), writeTxsAndReceipts, std::move(features),
-            std::move(blockHashOverride), writeNonces);
+            std::move(block), writeTxsAndReceipts, std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_firstEntered{false};
     std::atomic_bool m_release{false};

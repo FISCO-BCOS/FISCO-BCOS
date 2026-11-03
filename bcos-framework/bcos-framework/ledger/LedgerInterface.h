@@ -48,7 +48,8 @@ public:
     /**
      * @brief prewrite a block in scheduler module
      * @param block the block to commit
-     * @return the primary key of the hash-to-number row
+     * @return the primary key of the hash-to-number row; empty for the system-contract-deploy
+     * block, where only SYS_KEY_CURRENT_NUMBER is written
      */
     // Default arguments live ONLY on this interface declaration. Virtual default arguments
     // resolve by the STATIC type at the call site and the compiler does not check that an
@@ -58,7 +59,6 @@ public:
     virtual task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         bool writeTxsAndReceipts = true,
-        std::optional<bcos::ledger::Features> features = std::nullopt,
         std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
         bool writeNonces = true) = 0;
 

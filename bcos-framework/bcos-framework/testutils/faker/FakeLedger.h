@@ -286,13 +286,12 @@ public:
 
     task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces) override
     {
         (void)storage;
         (void)block;
         (void)writeTxsAndReceipts;
-        (void)features;
         (void)blockHashOverride;
         (void)writeNonces;
         co_return std::string{};

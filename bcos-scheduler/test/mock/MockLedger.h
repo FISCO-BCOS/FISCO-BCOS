@@ -13,8 +13,7 @@ class MockLedger : public bcos::ledger::LedgerInterface
 public:
     task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features>,
-        std::optional<bcos::crypto::HashType>, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType>, bool writeNonces) override
     {
         (void)writeTxsAndReceipts;
         (void)writeNonces;

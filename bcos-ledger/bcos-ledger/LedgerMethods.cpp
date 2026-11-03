@@ -13,7 +13,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
     std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
 {
     co_await ledger.prewriteBlock(std::move(storage), std::move(transactions), std::move(block),
-        withTransactionsAndReceipts, std::nullopt, std::move(blockHashOverride), writeNonces);
+        withTransactionsAndReceipts, std::move(blockHashOverride), writeNonces);
 }
 
 bcos::ledger::PrewriteBlockRows bcos::ledger::buildPrewriteBlockRows(

@@ -73,7 +73,7 @@ task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,
     std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
     bool writeNonces = true);
 
-task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInterface& ledger,
+task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockRows> /*unused*/, LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
     bool withTransactionsAndReceipts, auto& storage,
     std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt, bool writeNonces = true)
@@ -200,11 +200,11 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     }
 
     // Phase 1: header / hash mappings / nonce / current-number / tx-meta via the
-    // existing prewriteBlock path. withTransactionsAndReceipts=false intentionally
+    // existing prewriteBlockRows path. withTransactionsAndReceipts=false intentionally
     // skips the tx/receipt writes that would otherwise go to m_blockStorage; we
     // route them through the same `storage` below to keep the commit atomic.
-    co_await prewriteBlock(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false, storage,
-        blockHashOverride, writeNonces);
+    co_await prewriteBlockRows(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false,
+        storage, blockHashOverride, writeNonces);
 
     auto txSize = std::max(block->transactionsSize(), block->transactionsMetaDataSize());
     if (txSize == 0)

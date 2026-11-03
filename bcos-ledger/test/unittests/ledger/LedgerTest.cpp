@@ -113,6 +113,18 @@ public:
       : storage::StateStorageInterface(prev), StateStorage(prev, false)
     {}
     void failSetRowsOn(std::string_view tableName) { m_failSetRowsTable.assign(tableName); }
+    void failAsyncSetRowOn(std::string_view tableName) { m_failAsyncSetRowTable.assign(tableName); }
+    void asyncSetRow(std::string_view tableName, std::string_view key, Entry entry,
+        std::function<void(Error::UniquePtr)> callback) override
+    {
+        if (tableName == m_failAsyncSetRowTable)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                LedgerError::GetStorageError, "injected asyncSetRow failure"));
+            return;
+        }
+        StateStorage::asyncSetRow(tableName, key, std::move(entry), std::move(callback));
+    }
     bcos::Error::Ptr setRows(std::string_view tableName,
         ::ranges::any_view<std::string_view,
             ::ranges::category::random_access | ::ranges::category::sized>
@@ -196,6 +208,7 @@ public:
 
 private:
     std::string m_failSetRowsTable;
+    std::string m_failAsyncSetRowTable;
 };
 
 class LedgerFixture : public TestPromptFixture
@@ -376,10 +389,8 @@ public:
             auto& block = m_fakeBlocks->at(i);
 
             // write other meta data
-            Features features;
-            features.set(Features::Flag::feature_evm_address);
-            task::syncWait(m_ledger->prewriteBlock(
-                m_storage, nullptr, block, true, features, std::nullopt, true));
+            task::syncWait(
+                m_ledger->prewriteBlock(m_storage, nullptr, block, true, std::nullopt, true));
             // update nonce logic move to executor
             //            for (size_t j = 0; j < txSize; ++j)
             //            {
@@ -427,7 +438,7 @@ public:
             // BOOST_CHECK_EQUAL(f3.get(), true);
 
             task::syncWait(m_ledger->prewriteBlock(
-                m_storage, nullptr, m_fakeBlocks->at(i), true, std::nullopt, std::nullopt, true));
+                m_storage, nullptr, m_fakeBlocks->at(i), true, std::nullopt, true));
         }
     }
 
@@ -1093,8 +1104,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
     bcos::Bloom expectedBloom{};
     bcos::orBloom(expectedBloom, bcos::getLogsBloom(receipt->logEntries()));
 
-    task::syncWait(
-        m_ledger->prewriteBlock(m_storage, nullptr, block, true, std::nullopt, std::nullopt, true));
+    task::syncWait(m_ledger->prewriteBlock(m_storage, nullptr, block, true, std::nullopt, true));
 
     std::promise<protocol::Block::Ptr> blockPromise;
     m_ledger->asyncGetBlockDataByNumber(
@@ -1465,8 +1475,8 @@ BOOST_AUTO_TEST_CASE(prewriteBlockStopsAfterPreStoreFailure)
 
     try
     {
-        task::syncWait(m_ledger->prewriteBlock(m_storage, m_fakeTransactions[0],
-            m_fakeBlocks->at(0), true, std::nullopt, std::nullopt, true));
+        task::syncWait(m_ledger->prewriteBlock(
+            m_storage, m_fakeTransactions[0], m_fakeBlocks->at(0), true, std::nullopt, true));
         BOOST_FAIL("prewriteBlock should propagate the transaction storage failure");
     }
     catch (bcos::Error const& error)
@@ -1481,6 +1491,55 @@ BOOST_AUTO_TEST_CASE(prewriteBlockStopsAfterPreStoreFailure)
             totalPromise.set_value(total);
         });
     BOOST_CHECK_EQUAL(totalPromise.get_future().get(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(prewriteSysContractDeployBlock)
+{
+    initFixture();
+    initBlocks(1);
+    auto block = m_fakeBlocks->at(0);
+    block->blockHeader()->setNumber(0);
+
+    auto primaryKey = task::syncWait(
+        m_ledger->prewriteBlock(m_storage, m_fakeTransactions[0], block, true, std::nullopt, true));
+    BOOST_CHECK(primaryKey.empty());
+
+    auto currentNumber = task::syncWait(storage2::readOne(
+        *m_storage, executor_v1::StateKey{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}));
+    BOOST_REQUIRE(currentNumber.has_value());
+    BOOST_CHECK_EQUAL(currentNumber->get(), "0");
+}
+
+BOOST_AUTO_TEST_CASE(prewriteSysContractDeployPropagatesStorageFailure)
+{
+    initFixture();
+    initBlocks(1);
+    auto storage = std::dynamic_pointer_cast<MockStorage>(m_storage);
+    BOOST_REQUIRE(storage != nullptr);
+    Entry currentNumberEntry;
+    currentNumberEntry.set("7");
+    task::syncWait(storage2::writeOne(*m_storage,
+        executor_v1::StateKey{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER},
+        std::move(currentNumberEntry)));
+    storage->failAsyncSetRowOn(SYS_CURRENT_STATE);
+    auto block = m_fakeBlocks->at(0);
+    block->blockHeader()->setNumber(0);
+
+    try
+    {
+        task::syncWait(m_ledger->prewriteBlock(
+            m_storage, m_fakeTransactions[0], block, true, std::nullopt, true));
+        BOOST_FAIL("prewriteBlock should propagate the system-contract storage failure");
+    }
+    catch (bcos::Error const& error)
+    {
+        BOOST_CHECK_EQUAL(error.errorCode(), LedgerError::GetStorageError);
+    }
+
+    auto currentNumber = task::syncWait(storage2::readOne(
+        *m_storage, executor_v1::StateKey{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}));
+    BOOST_REQUIRE(currentNumber.has_value());
+    BOOST_CHECK_EQUAL(currentNumber->get(), "7");
 }
 
 BOOST_AUTO_TEST_CASE(preStoreReceipt)
@@ -1603,8 +1662,7 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     initFixture();
     auto transactions = std::make_shared<Transactions>();
     transactions->push_back(tx);
-    task::syncWait(m_ledger->prewriteBlock(
-        m_storage, blockTxs, block, true, std::nullopt, std::nullopt, true));
+    task::syncWait(m_ledger->prewriteBlock(m_storage, blockTxs, block, true, std::nullopt, true));
 
     m_ledger->asyncGetBlockDataByNumber(
         100, TRANSACTIONS, [tx](Error::Ptr error, bcos::protocol::Block::Ptr block) {
@@ -1673,7 +1731,7 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         auto hashImpl = std::make_shared<Keccak256>();
         blockHeader->calculateHash(*hashImpl);
         auto randomHash = blockHeader->hash();
-        co_await ledger::prewriteBlock(*m_ledger,
+        co_await ledger::prewriteBlockRows(*m_ledger,
             std::make_shared<bcos::protocol::ConstTransactions>(), block, false, m_storage);
         bytes headerBuffer;
         blockHeader->encode(headerBuffer);
@@ -1738,7 +1796,7 @@ BOOST_AUTO_TEST_CASE(getLedgerConfigMalformedWeb3ChainIdFailStop)
         blockHeader->setTimestamp(110);
         auto hashImpl = std::make_shared<Keccak256>();
         blockHeader->calculateHash(*hashImpl);
-        co_await ledger::prewriteBlock(*m_ledger,
+        co_await ledger::prewriteBlockRows(*m_ledger,
             std::make_shared<bcos::protocol::ConstTransactions>(), block, false, m_storage);
         bytes headerBuffer;
         blockHeader->encode(headerBuffer);

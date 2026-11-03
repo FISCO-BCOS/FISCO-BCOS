@@ -200,7 +200,7 @@ public:
         // The ledger commit path needs the same mocks as TestCommitSingleBatch.
         fakeit::When(Method(mockLedger, prewriteBlock))
             .AlwaysDo([](storage::StorageInterface::Ptr storage, protocol::ConstTransactionsPtr,
-                          protocol::Block::ConstPtr block, bool, std::optional<ledger::Features>,
+                          protocol::Block::ConstPtr block, bool,
                           std::optional<bcos::crypto::HashType>, bool) -> task::Task<std::string> {
                 auto header = block->blockHeader();
                 auto blockNumberStr = boost::lexical_cast<std::string>(header->number());

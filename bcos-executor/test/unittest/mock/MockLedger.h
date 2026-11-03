@@ -28,10 +28,10 @@ public:
 
     task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr, bool,
-        std::optional<bcos::ledger::Features>, std::optional<bcos::crypto::HashType>, bool) override
+        std::optional<bcos::crypto::HashType>, bool) override
     {
         BOOST_CHECK(false);  // Need implementations
-        co_return std::string{};
+        return []() -> task::Task<std::string> { co_return std::string{}; }();
     };
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
         bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override

@@ -239,14 +239,13 @@ public:
 
     task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block,
-        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces) override
     {
         (void)storage;
         (void)blockTxs;
         (void)block;
         (void)writeTxsAndReceipts;
-        (void)features;
         (void)blockHashOverride;
         (void)writeNonces;
         prewriteStarted.store(true, std::memory_order_release);
@@ -272,11 +271,10 @@ public:
 
     task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces) override
     {
         (void)writeTxsAndReceipts;
-        (void)features;
         (void)blockHashOverride;
         (void)writeNonces;
         if (block)

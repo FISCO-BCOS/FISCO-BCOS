@@ -513,11 +513,10 @@ public:
 
     task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces) override
     {
         (void)writeTxsAndReceipts;
-        (void)features;
         (void)blockHashOverride;
         (void)writeNonces;
         if (block)
@@ -547,8 +546,8 @@ public:
 
     task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr txs, bcos::protocol::Block::ConstPtr block,
-        bool writeTxsAndReceipts, std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces) override
     {
         int remaining = prewriteFailRemaining->load(std::memory_order_acquire);
         while (remaining > 0 && !prewriteFailRemaining->compare_exchange_weak(
@@ -561,8 +560,7 @@ public:
                 BCOS_ERROR(bcos::ledger::LedgerError::ErrorArgument, "injected prewrite failure"));
         }
         co_return co_await El1bPersistingLedger::prewriteBlock(std::move(storage), std::move(txs),
-            std::move(block), writeTxsAndReceipts, std::move(features),
-            std::move(blockHashOverride), writeNonces);
+            std::move(block), writeTxsAndReceipts, std::move(blockHashOverride), writeNonces);
     }
 };
 

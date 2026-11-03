@@ -97,8 +97,8 @@ public:
         // Ledger: prewriteBlock => successful coroutine, or the configured exception
         fakeit::When(Method(mockLedger, prewriteBlock))
             .AlwaysDo([this](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
-                          protocol::Block::ConstPtr, bool, std::optional<ledger::Features>,
-                          std::optional<bcos::crypto::HashType>, bool) -> task::Task<std::string> {
+                          protocol::Block::ConstPtr, bool, std::optional<bcos::crypto::HashType>,
+                          bool) -> task::Task<std::string> {
                 if (prewriteBlockFails)
                 {
                     BOOST_THROW_EXCEPTION(
@@ -126,7 +126,7 @@ public:
     void writeBlock(std::shared_ptr<bcostars::protocol::BlockImpl> block)
     {
         auto bh = block->blockHeader();
-        task::syncWait(ledger::prewriteBlock(mockLedger.get(),
+        task::syncWait(ledger::prewriteBlockRows(mockLedger.get(),
             std::make_shared<protocol::ConstTransactions>(), block, false, backendStorage));
         bytes headerBuffer;
         bh->encode(headerBuffer);
