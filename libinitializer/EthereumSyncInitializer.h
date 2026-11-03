@@ -23,6 +23,8 @@
  */
 #pragma once
 
+#include "bcos-devp2p/disc/Discv4Service.h"
+#include "bcos-devp2p/disc/DnsDiscovery.h"
 #include "bcos-devp2p/eth/ForkId.h"
 #include "bcos-devp2p/rlpx/Client.h"
 #include "bcos-devp2p/sync/BlockExchange.h"
@@ -215,8 +217,12 @@ public:
         // bootnodes, and the Engine API alone drives the chain.
         if (configuredBootnodes(nodeConfig).empty())
         {
-            INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: no bootnodes, devp2p has no peers")
-                                  << LOG_KV("bootnodesFile", nodeConfig.ethereumBootnodesFile());
+            INITIALIZER_LOG(INFO)
+                << LOG_DESC(nodeConfig.ethereumDiscoveryEnabled() ?
+                                "EL sync: no bootnodes, devp2p peers come from discovery only" :
+                                "EL sync: no bootnodes and discovery disabled, devp2p has no peers")
+                << LOG_KV("bootnodesFile", nodeConfig.ethereumBootnodesFile())
+                << LOG_KV("dnsDiscoveryUrl", nodeConfig.ethereumDnsDiscoveryUrl());
         }
     }
 
@@ -247,6 +253,7 @@ public:
             return;
         }
         m_localKey = std::move(localKey);
+        startDiscovery();
         // Transaction gossip first: its pumps reference this initializer only through the
         // peer-config factory, and stop() tears it down before the sync thread joins.
         startTxGossip();
@@ -263,6 +270,7 @@ public:
     void stop()
     {
         m_running.store(false);
+        stopDiscovery();
         if (m_txGossip)
         {
             m_txGossip->stop();
@@ -740,7 +748,7 @@ private:
                     continue;
                 }
                 auto devp2pConfig = devp2pChainConfig();
-                auto bootnodes = configuredBootnodes(*m_nodeConfig);
+                auto bootnodes = syncPeers();
                 if (bootnodes.empty())
                 {
                     // no peers to sync from; poll on the caught-up cadence for a bootnode
@@ -1424,6 +1432,112 @@ private:
         m_txGossip->start(
             *m_localKey, configuredBootnodes(*m_nodeConfig), std::move(configFactory));
     }
+
+    // --- discovery (E5) -------------------------------------------------------------
+    // devp2p node discovery ([ethereum] discovery): discv4 over UDP seeded from the
+    // bootnode list, plus the EIP-1459 DNS list feeding the same table. The sync round
+    // dials the configured bootnodes first, then up to max_discovered_peers bonded
+    // discovered nodes (syncPeers()). Started by start() right after the node key is
+    // loaded and stopped by stop() before the sync thread joins.
+    bcos::devp2p::disc::Discv4Service::Ptr const& discovery() const { return m_discovery; }
+
+    /// The bootnode list with both ports (an absent file is an empty list).
+    static std::vector<bcos::devp2p::sync::BootnodeUri> configuredBootnodeUris(
+        bcos::tool::NodeConfig const& nodeConfig)
+    {
+        auto const& path = nodeConfig.ethereumBootnodesFile();
+        if (!std::filesystem::exists(path))
+        {
+            return {};
+        }
+        return bcos::devp2p::sync::loadBootnodeUris(path);
+    }
+
+    void startDiscovery()
+    {
+        if (!m_nodeConfig->ethereumDiscoveryEnabled() || !m_nodeConfig->ethereumELModeEnabled())
+        {
+            return;
+        }
+        bcos::devp2p::disc::Discv4Config config;
+        config.udpPort = m_nodeConfig->ethereumDiscoveryPort();
+        // No RLPx listener yet: nothing to advertise as `tcp` (E6 passes listen_port here).
+        config.tcpPort = 0;
+        for (auto const& uri : configuredBootnodeUris(*m_nodeConfig))
+        {
+            config.bootnodes.push_back(
+                bcos::devp2p::disc::SeedNode{uri.host, uri.udpPort, uri.tcpPort, uri.publicKey});
+        }
+        try
+        {
+            auto resume = resumePoint();
+            config.forkId = computeForkId(static_cast<uint64_t>(resume.anchor.number),
+                static_cast<uint64_t>(resume.anchor.timestamp));
+        }
+        catch (std::exception const& e)
+        {
+            INITIALIZER_LOG(WARNING) << LOG_DESC("EL sync: discovery ENR without eth entry")
+                                     << LOG_KV("error", e.what());
+        }
+        m_discovery = bcos::devp2p::disc::Discv4Service::create(std::move(config), *m_localKey);
+        m_discovery->start();  // throws on a UDP bind failure: a bad port fails startup
+        auto const& url = m_nodeConfig->ethereumDnsDiscoveryUrl();
+        if (!url.empty())
+        {
+            auto discovery = m_discovery;
+            m_dnsDiscovery =
+                std::make_shared<bcos::devp2p::disc::DnsDiscovery>(std::vector<std::string>{url},
+                    std::make_shared<bcos::devp2p::disc::ResolvDnsResolver>(),
+                    [discovery](
+                        bcos::devp2p::disc::Enr const& record) { discovery->addRecord(record); });
+            m_dnsDiscovery->start();
+        }
+        INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: node discovery started")
+                              << LOG_KV("udpPort", m_discovery->udpPort())
+                              << LOG_KV("bootnodes", config.bootnodes.size())
+                              << LOG_KV("dnsDiscoveryUrl", url)
+                              << LOG_KV("maxDiscoveredPeers",
+                                     m_nodeConfig->ethereumMaxDiscoveredPeers());
+    }
+
+    void stopDiscovery()
+    {
+        if (m_dnsDiscovery)
+        {
+            m_dnsDiscovery->stop();
+        }
+        if (m_discovery)
+        {
+            m_discovery->stop();
+        }
+    }
+
+    /// One sync round's peer list: the configured bootnodes first, then bonded
+    /// discovered nodes not already in the list, capped by max_discovered_peers.
+    std::vector<bcos::devp2p::rlpx::PeerConfig> syncPeers() const
+    {
+        auto peers = configuredBootnodes(*m_nodeConfig);
+        if (!m_discovery)
+        {
+            return peers;
+        }
+        for (auto& candidate : m_discovery->candidates(m_nodeConfig->ethereumMaxDiscoveredPeers()))
+        {
+            bool const known = std::any_of(
+                peers.begin(), peers.end(), [&](bcos::devp2p::rlpx::PeerConfig const& peer) {
+                    return peer.peerPublicKey == candidate.peerPublicKey;
+                });
+            if (!known)
+            {
+                peers.push_back(std::move(candidate));
+            }
+        }
+        return peers;
+    }
+
+    bcos::devp2p::disc::Discv4Service::Ptr m_discovery;
+    bcos::devp2p::disc::DnsDiscovery::Ptr m_dnsDiscovery;
+    // --- end discovery (E5) ---------------------------------------------------------
 
     std::atomic_bool m_running{false};
     std::thread m_thread;
