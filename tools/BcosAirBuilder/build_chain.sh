@@ -2410,8 +2410,10 @@ generate_auth_account_with_openssl()
   "${OPENSSL_CMD}" genpkey -paramfile "${param_file}" -out "${key_file}" 2>/dev/null
   local pub_hex
   pub_hex=$("${OPENSSL_CMD}" ec -in "${key_file}" -text -noout 2>/dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}')
+  # The address is the digest of the 64 raw public-key BYTES (what `fisco-bcos account new` and the
+  # node compute), not of their 128-character hex spelling: decode before hashing.
   local digest_hex
-  digest_hex=$(printf '%s' "${pub_hex}" | "${OPENSSL_CMD}" dgst "-${digest}" | awk '{print $2}')
+  digest_hex=$(printf '%s' "${pub_hex}" | xxd -r -p | "${OPENSSL_CMD}" dgst "-${digest}" | awk '{print $2}')
   auth_admin_account="0x${digest_hex: -40}"
   if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
       LOG_FATAL "Failed to generate a valid admin account with OpenSSL"
