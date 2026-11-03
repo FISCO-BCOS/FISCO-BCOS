@@ -20,10 +20,12 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
@@ -406,6 +408,19 @@ GetPayloadResult assembleGetPayloadData(const EntryT& entry, std::uint32_t versi
     });
 }
 
+/// Block gas budget for the FISCO-executor (v1) build lanes: buildPayload stamps
+/// `std::get<0>(ledgerConfig.gasLimit())` of the parent's LedgerConfig (the tx_gas_limit
+/// row) as the block gasLimit, so the seal reads it through the same getLedgerConfig call
+/// and fills the block up to exactly the limit the header will carry.
+template <class View>
+task::Task<int64_t> legacyBlockGasLimit(View& view, bcos::protocol::BlockNumber parentNumber,
+    bcos::protocol::BlockFactory& blockFactory)
+{
+    ledger::LedgerConfig ledgerConfig;
+    co_await ledger::getLedgerConfig(view, ledgerConfig, parentNumber, blockFactory);
+    co_return static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
+}
+
 namespace op
 {
 /// Decode one EIP-2718 (typed/legacy) Web3 raw envelope into its Tars transaction form,
@@ -422,6 +437,21 @@ namespace op
 std::optional<bcostars::Transaction> opEnvelopeToTars(
     bcos::bytes const& env, bcos::crypto::HashType const& txHash, bool allowDeposit);
 }  // namespace op
+
+/// The pool's share of the block gas limit once the forced (payloadAttributes.transactions)
+/// envelopes have taken theirs. Every build lane prepends the forced envelopes to the
+/// sealed list, so the pool may only fill what they leave of the limit the header will
+/// carry: op-geth debits deposits from the same gasPool before the pool is touched
+/// ("gas used by deposits may not be used by other txs"), and an L1 block whose forced +
+/// pooled gas exceeds its gasLimit is rejected by every other node. An undecodable
+/// envelope takes nothing here (the build path answers it INVALID); an OP system deposit
+/// is unmetered on every fork (op-geth leaves it out of the gasPool pre-Regolith and
+/// rejects it from Regolith on). Floored at 0; a gasLimit outside int64 exhausts the
+/// budget rather than overflowing the sum — whether the build then rejects that
+/// envelope is the build path's business.
+/// @param allowDeposit  the lane's 0x7e policy, exactly as for op::opEnvelopeToTars.
+int64_t poolGasBudget(int64_t blockGasLimit, std::span<const bcos::bytes> forcedEnvelopes,
+    crypto::Hash const& hashImpl, bool allowDeposit);
 }  // namespace engine_common
 
 namespace detail

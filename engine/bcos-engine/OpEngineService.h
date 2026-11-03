@@ -129,14 +129,12 @@ public:
 
     OpEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
-        int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
         std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_scheduler(scheduler),
         m_blockFactory(std::move(blockFactory)),
-        m_blockTxCountLimit(blockTxCountLimit),
         m_delegate(std::move(delegate)),
         m_daCaps(std::move(daCaps)),
         m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes)
@@ -290,7 +288,6 @@ private:
     GlobalStateStorageType& m_globalStateStorage;
     SchedulerType& m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    int64_t m_blockTxCountLimit;
     /// Block-commit delegate. CONTRACT: executeBlock/commitBlock must invoke the
     /// completion callback synchronously, before the call returns — this service
     /// reads the captured error immediately after the call and answers VALID on a

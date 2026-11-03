@@ -503,7 +503,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
                 parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
+                m_ledgerConfigState, m_mptCommitObserver);
         }
 
         // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
@@ -564,13 +564,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_clSyncCoordination =
                     std::make_shared<engine::engine_common::ClSyncCoordination>();
             }
-            m_engineServiceInitializer = EngineServiceInitializer::build(
-                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
-                ledger, bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState,
-                m_mptCommitObserver, std::move(externalPayloadVerifier), m_clSyncCoordination,
-                /*allowBlobTransactions=*/m_executorVersion ==
-                    bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
+            m_engineServiceInitializer =
+                EngineServiceInitializer::build(m_globalStateStorageInitializer,
+                    m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
+                    ethereumExecutor, m_memPoolInitializer->memPool(), ledger, m_ledgerConfigState,
+                    m_mptCommitObserver, std::move(externalPayloadVerifier), m_clSyncCoordination,
+                    /*allowBlobTransactions=*/m_executorVersion ==
+                        bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
         }
     }
     else
@@ -587,7 +587,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
                 serialScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
+                m_ledgerConfigState, m_mptCommitObserver);
         }
 
         // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
@@ -633,13 +633,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_clSyncCoordination =
                     std::make_shared<engine::engine_common::ClSyncCoordination>();
             }
-            m_engineServiceInitializer = EngineServiceInitializer::build(
-                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
-                ledger, bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState,
-                m_mptCommitObserver, std::move(externalPayloadVerifier), m_clSyncCoordination,
-                /*allowBlobTransactions=*/m_executorVersion ==
-                    bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
+            m_engineServiceInitializer =
+                EngineServiceInitializer::build(m_globalStateStorageInitializer,
+                    m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
+                    ethereumExecutor, m_memPoolInitializer->memPool(), ledger, m_ledgerConfigState,
+                    m_mptCommitObserver, std::move(externalPayloadVerifier), m_clSyncCoordination,
+                    /*allowBlobTransactions=*/m_executorVersion ==
+                        bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
         }
     }
 
@@ -741,8 +741,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_daCaps = std::make_shared<bcos::engine::DACaps>();
             m_engineServiceInitializer = EngineServiceInitializer::buildOp(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
-                m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
-                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false);
+                m_memPoolInitializer->memPool(), opDelegate, m_daCaps,
+                /*allowSynthesizedL1Attributes=*/false);
             // NOTE (split): the declaredOpEip1559 wiring into the engine constructor rides
             // the engine-side PR (the OpEngineService ctor param lands there); this branch
             // keeps the config-channel reading + boot diagnostics only.
