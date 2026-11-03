@@ -69,22 +69,12 @@ KademliaTable::AddResult KademliaTable::add(NodeEntry _entry)
     }
     if (auto* existing = find(_entry.id); existing != nullptr)
     {
-        if (!_entry.ip.empty())
-        {
-            existing->ip = _entry.ip;
-            existing->udp = _entry.udp;
-        }
-        if (_entry.tcp != 0)
-        {
-            existing->tcp = _entry.tcp;
-        }
+        // Self-attested data only: the node signed its own record / announced its seq.
         existing->enrSeq = std::max(existing->enrSeq, _entry.enrSeq);
         if (_entry.record && (!existing->record || existing->record->seq() <= _entry.record->seq()))
         {
             existing->record = std::move(_entry.record);
         }
-        existing->lastPongReceived = std::max(existing->lastPongReceived, _entry.lastPongReceived);
-        existing->lastPingReceived = std::max(existing->lastPingReceived, _entry.lastPingReceived);
         return AddResult::Updated;
     }
     if (_entry.addedAt == NodeEntry::Clock::time_point{})
@@ -104,6 +94,28 @@ KademliaTable::AddResult KademliaTable::add(NodeEntry _entry)
     }
     bucket.replacements.push_back(std::move(_entry));
     return AddResult::Replacement;
+}
+
+bool KademliaTable::updateEndpoint(
+    bcos::h256 const& _id, bcos::bytes const& _ip, uint16_t _udp, uint16_t _tcp)
+{
+    auto* node = find(_id);
+    if (node == nullptr)
+    {
+        return false;
+    }
+    if (node->ip != _ip || node->udp != _udp)
+    {
+        node->ip = _ip;
+        node->udp = _udp;
+        node->lastPongReceived = {};
+        node->lastPingReceived = {};
+    }
+    if (_tcp != 0)
+    {
+        node->tcp = _tcp;
+    }
+    return true;
 }
 
 NodeEntry* KademliaTable::find(bcos::h256 const& _id)

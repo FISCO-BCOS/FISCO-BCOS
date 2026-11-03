@@ -120,11 +120,11 @@ BOOST_AUTO_TEST_CASE(bucketFillAndReplacementCache)
     BOOST_CHECK(table.find(ids[16]) == nullptr);  // evicted from the cache (size 10)
     BOOST_CHECK(table.find(ids[17]) != nullptr);  // still cached
     BOOST_CHECK(table.find(ids[26]) != nullptr);
-    // Re-adding a present node updates in place.
+    // Re-adding a present node merges enrSeq only; the endpoint stays.
     auto refreshed = entryWithId(ids[0], 4000);
     refreshed.enrSeq = 9;
     BOOST_CHECK(table.add(refreshed) == KademliaTable::AddResult::Updated);
-    BOOST_CHECK_EQUAL(table.find(ids[0])->udp, 4000);
+    BOOST_CHECK_EQUAL(table.find(ids[0])->udp, 1);
     BOOST_CHECK_EQUAL(table.find(ids[0])->enrSeq, 9u);
     BOOST_CHECK_EQUAL(table.size(), 16u);
 
@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(bondBookkeeping)
     entry.lastPingReceived = now - std::chrono::minutes(1);
     BOOST_CHECK(entry.hasProofOfUs(now));
 
-    // add() keeps the later timestamps and the newer record.
+    // add() never imports timestamps into an existing entry.
     h256 self;
     self[0] = 1;
     KademliaTable table(self);
@@ -201,11 +201,57 @@ BOOST_AUTO_TEST_CASE(bondBookkeeping)
     first.lastPongReceived = now - std::chrono::hours(1);
     table.add(first);
     auto second = entryWithId(id);
-    second.lastPongReceived = now - std::chrono::hours(2);  // older: ignored
+    second.lastPongReceived = now;
     second.lastPingReceived = now;
     table.add(second);
     BOOST_CHECK(table.find(id)->lastPongReceived == first.lastPongReceived);
-    BOOST_CHECK(table.find(id)->lastPingReceived == now);
+    BOOST_CHECK(table.find(id)->lastPingReceived == Clock::time_point{});
+}
+
+BOOST_AUTO_TEST_CASE(relayedEntryCannotRepointBondedNode)
+{
+    using Clock = NodeEntry::Clock;
+    auto const now = Clock::now();
+    h256 self;
+    self[0] = 1;
+    KademliaTable table(self);
+    h256 id;
+    id[31] = 9;
+    auto bonded = entryWithId(id, 30303);  // 10.0.0.1:30303
+    bonded.lastPongReceived = now;
+    bonded.lastPingReceived = now;
+    BOOST_CHECK(table.add(bonded) == KademliaTable::AddResult::Added);
+
+    // A Neighbors response claims the same id lives at 10.9.9.9:4444 (attacker endpoint).
+    auto relayed = entryWithId(id, 4444);
+    relayed.ip = {10, 9, 9, 9};
+    relayed.tcp = 4444;
+    BOOST_CHECK(table.add(relayed) == KademliaTable::AddResult::Updated);
+    auto const* stored = table.find(id);
+    BOOST_REQUIRE(stored != nullptr);
+    BOOST_CHECK(stored->ip == (bcos::bytes{10, 0, 0, 1}));
+    BOOST_CHECK_EQUAL(stored->udp, 30303);
+    BOOST_CHECK_EQUAL(stored->tcp, 30303);
+    BOOST_CHECK(stored->bonded(now));
+    BOOST_CHECK(stored->hasProofOfUs(now));
+
+    // A pong from the new endpoint proves it: the endpoint moves and the bond is cleared
+    // (the service stamps the new pong afterwards).
+    BOOST_CHECK(table.updateEndpoint(id, {10, 9, 9, 9}, 4444, 0));
+    stored = table.find(id);
+    BOOST_CHECK(stored->ip == (bcos::bytes{10, 9, 9, 9}));
+    BOOST_CHECK_EQUAL(stored->udp, 4444);
+    BOOST_CHECK_EQUAL(stored->tcp, 30303);  // tcp 0 keeps the known port
+    BOOST_CHECK(!stored->bonded(now));
+    BOOST_CHECK(!stored->hasProofOfUs(now));
+    // Same endpoint again: nothing resets, tcp may be refreshed.
+    table.find(id)->lastPongReceived = now;
+    BOOST_CHECK(table.updateEndpoint(id, {10, 9, 9, 9}, 4444, 5555));
+    BOOST_CHECK(table.find(id)->bonded(now));
+    BOOST_CHECK_EQUAL(table.find(id)->tcp, 5555);
+    h256 unknown;
+    unknown[31] = 10;
+    BOOST_CHECK(!table.updateEndpoint(unknown, {1, 2, 3, 4}, 1, 1));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
