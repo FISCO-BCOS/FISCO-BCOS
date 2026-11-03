@@ -351,8 +351,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // evaluated at the chain head's timestamp — LedgerConfigState is republished with every
     // committed block (MultiVersionScheduler's commitBlock wrapper, the engine services' commit
     // lanes, and the devp2p sync loop in EthereumSyncInitializer) and carries the head header's
-    // millisecond timestamp. Every other version keeps the L2 pool defaults (no fee market,
-    // blobs refused).
+    // millisecond timestamp. The OP lane (executor_version >= 3) runs the same fee market
+    // without blob transactions and sizes the pool from the same keys; the FISCO lanes keep
+    // the default pool (no fee market, blobs refused, first come first served).
     bcos::txpool::MemPoolConfig memPoolConfig;
     if (m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
     {
@@ -374,6 +375,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                        1000;
             };
         }
+    }
+    else if (bcos::ledger::isOpLaneVersion(m_executorVersion))
+    {
+        memPoolConfig.chainKind = bcos::txpool::ChainKind::Op;
+        memPoolConfig.capacity = m_nodeConfig->ethereumMempoolCapacity();
+        memPoolConfig.txLifetimeMs = m_nodeConfig->ethereumMempoolTxLifetimeMinutes() * 60 * 1000;
+        memPoolConfig.maxTxsPerSender = m_nodeConfig->ethereumMempoolMaxTxsPerSender();
     }
     m_memPoolInitializer = MemPoolInitializer::build(memPoolConfig);
 

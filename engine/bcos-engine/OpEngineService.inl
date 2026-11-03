@@ -292,13 +292,16 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         // The pool fills what the forced transactions leave of the attributes' gasLimit
         // (the header field); see engine_common::poolGasBudget for the op-geth gasPool
         // rule and the system-deposit exemption. Undecodable forced envelopes take
-        // nothing here; the candidate execution below rejects them.
+        // nothing here; the candidate execution below rejects them. Candidates come out
+        // ordered by effective tip against this block's base fee, each sender's walk cut at
+        // its first fee cap below that base fee (op-geth's Pending filter and price heap),
+        // not by arrival.
         auto const blockGasLimit = static_cast<int64_t>(payloadAttributes.gasLimit.value());
         sealView.newMutable();
         m_memPool.remove(sealView);
         m_memPool.seal(engine_common::poolGasBudget(blockGasLimit, forcedEnvelopes,
                            *m_blockFactory->cryptoSuite()->hashImpl(), /*allowDeposit=*/true),
-            sealView, std::back_inserter(sealedTxs));
+            sealView, std::back_inserter(sealedTxs), baseFee);
     }
 
     std::vector<std::pair<crypto::HashType, bytes>> sealedEnvelopes;

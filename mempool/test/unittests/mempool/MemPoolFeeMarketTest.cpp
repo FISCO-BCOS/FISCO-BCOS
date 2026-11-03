@@ -210,10 +210,12 @@ static protocol::Transaction::Ptr makeBlobTx(
 
 BOOST_AUTO_TEST_SUITE(MemPoolFeeMarketTest)
 
-BOOST_AUTO_TEST_CASE(l2_default_config_unchanged)
+BOOST_AUTO_TEST_CASE(fisco_default_config_unchanged)
 {
     MemPoolImpl pool;
-    BOOST_CHECK(pool.config().chainKind == ChainKind::L2);
+    BOOST_CHECK(pool.config().chainKind == ChainKind::Fisco);
+    BOOST_CHECK(!hasFeeMarket(pool.config().chainKind));
+    BOOST_CHECK(!admitsBlobs(pool.config().chainKind));
     BOOST_CHECK_EQUAL(pool.config().capacity, 0);
     BOOST_CHECK_EQUAL(pool.config().txLifetimeMs, 0);
 }
@@ -306,13 +308,16 @@ BOOST_AUTO_TEST_CASE(seal_orders_by_effective_tip_across_senders)
     BOOST_CHECK_EQUAL(std::string(out[2]->nonce()), "1");
 }
 
-BOOST_AUTO_TEST_CASE(seal_fee_cap_below_base_fee_sorts_last_but_is_kept)
+BOOST_AUTO_TEST_CASE(seal_fee_cap_below_base_fee_stops_the_sender_and_stays_pooled)
 {
     MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1}};
     std::string senderA("DDDDDDDDDDDDDDDDDDDD", 20);
     std::string senderC("EEEEEEEEEEEEEEEEEEEE", 20);
     u256 const baseFee = 50;
-    pool.add(std::vector{makeFeeTx(senderC, 0, 5, 40), makeFeeTx(senderA, 0, 10, 100)});
+    // A0 pays; A1's cap (40) is below the base fee and cuts A's walk there; C0's cap equals
+    // the base fee exactly: includable with tip 0 (geth's filter is a strict <).
+    auto const a1 = makeFeeTx(senderA, 1, 10, 40);
+    pool.add(std::vector{makeFeeTx(senderA, 0, 10, 100), a1, makeFeeTx(senderC, 0, 5, 50)});
 
     FeeMarketStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
@@ -320,7 +325,10 @@ BOOST_AUTO_TEST_CASE(seal_fee_cap_below_base_fee_sorts_last_but_is_kept)
 
     BOOST_REQUIRE_EQUAL(out.size(), 2);
     BOOST_CHECK_EQUAL(std::string(out[0]->sender()), senderA);
+    BOOST_CHECK_EQUAL(std::string(out[0]->nonce()), "0");
     BOOST_CHECK_EQUAL(std::string(out[1]->sender()), senderC);
+    // Not dropped: a later block with a lower base fee can still take it.
+    BOOST_CHECK(pool.get(std::vector{a1->hash()})[0]);
 }
 
 BOOST_AUTO_TEST_CASE(seal_nonce_gap_stops_sender_regardless_of_tip)
@@ -397,9 +405,9 @@ BOOST_AUTO_TEST_CASE(l1_replacement_checks_both_caps)
     BOOST_CHECK(!fetched[1]);
 }
 
-BOOST_AUTO_TEST_CASE(l2_replacement_still_unconditional)
+BOOST_AUTO_TEST_CASE(fisco_add_replacement_still_unconditional)
 {
-    MemPoolImpl pool;  // L2 default
+    MemPoolImpl pool;  // Fisco default: no fee market, add() replaces unconditionally
     std::string sender("KKKKKKKKKKKKKKKKKKKK", 20);
     auto stored = makeFeeTx(sender, 0, 100, 200);
     pool.add(std::vector{stored});
@@ -409,6 +417,123 @@ BOOST_AUTO_TEST_CASE(l2_replacement_still_unconditional)
     auto fetched = pool.get(std::vector{stored->hash(), cheaper->hash()});
     BOOST_CHECK(!fetched[0]);
     BOOST_CHECK(fetched[1]);
+}
+
+BOOST_AUTO_TEST_CASE(fisco_tryadd_refuses_taken_nonce)
+{
+    MemPoolImpl pool;  // Fisco default: no fee market, first come first served
+    std::string sender("LLLLLLLLLLLLLLLLLLLL", 20);
+    auto stored = makeFeeTx(sender, 0, 100, 200);
+    BOOST_CHECK(pool.tryAdd(stored) == TransactionStatus::None);
+    auto richer = makeFeeTx(sender, 0, 1000, 2000);
+    BOOST_CHECK(pool.tryAdd(richer) == TransactionStatus::NonceCheckFail);
+    auto fetched = pool.get(std::vector{stored->hash(), richer->hash()});
+    BOOST_CHECK(fetched[0]);
+    BOOST_CHECK(!fetched[1]);
+}
+
+/// Replace-by-fee through tryAdd(), the entry eth_sendRawTransaction and gossip admit
+/// through: both fee-market kinds price the taken slot, Op exactly like L1.
+static void checkTryAddReplacesByFee(ChainKind kind)
+{
+    MemPoolImpl pool{MemPoolConfig{.chainKind = kind}};
+    std::string sender("MMMMMMMMMMMMMMMMMMMM", 20);
+    auto stored = makeFeeTx(sender, 0, 100, 200);
+    BOOST_CHECK(pool.tryAdd(stored) == TransactionStatus::None);
+
+    // Tip bumped by only 9%: underpriced, the stored transaction keeps the slot.
+    auto weakBump = makeFeeTx(sender, 0, 109, 220);
+    BOOST_CHECK(pool.tryAdd(weakBump) == TransactionStatus::ReplacementUnderpriced);
+    auto fetched = pool.get(std::vector{stored->hash(), weakBump->hash()});
+    BOOST_CHECK(fetched[0]);
+    BOOST_CHECK(!fetched[1]);
+
+    // Exactly +10% on both caps: the replacement is admitted and the stored one is gone.
+    auto fullBump = makeFeeTx(sender, 0, 110, 220);
+    BOOST_CHECK(pool.tryAdd(fullBump) == TransactionStatus::None);
+    fetched = pool.get(std::vector{stored->hash(), fullBump->hash()});
+    BOOST_CHECK(!fetched[0]);
+    BOOST_CHECK(fetched[1]);
+}
+
+BOOST_AUTO_TEST_CASE(l1_tryadd_replaces_by_fee)
+{
+    checkTryAddReplacesByFee(ChainKind::L1);
+}
+
+BOOST_AUTO_TEST_CASE(op_tryadd_replaces_by_fee)
+{
+    checkTryAddReplacesByFee(ChainKind::Op);
+}
+
+BOOST_AUTO_TEST_CASE(op_add_replacement_requires_the_bump_too)
+{
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::Op}};
+    std::string sender("NNNNNNNNNNNNNNNNNNNN", 20);
+    auto stored = makeFeeTx(sender, 0, 100, 200);
+    pool.add(std::vector{stored});
+    auto cheaper = makeFeeTx(sender, 0, 1, 1);
+    pool.add(std::vector{cheaper});
+    auto fetched = pool.get(std::vector{stored->hash(), cheaper->hash()});
+    BOOST_CHECK(fetched[0]);
+    BOOST_CHECK(!fetched[1]);
+}
+
+BOOST_AUTO_TEST_CASE(op_refuses_blob_transactions)
+{
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::Op}};
+    std::string sender("OOOOOOOOOOOOOOOOOOOO", 20);
+    BOOST_CHECK_THROW(pool.tryAdd(makeBlobTx(sender, 0, 1)), InvalidBlobTransaction);
+}
+
+BOOST_AUTO_TEST_CASE(op_seal_orders_by_effective_tip)
+{
+    // The OP lane calls the base-fee overload (OpEngineService::updateForkchoice): three
+    // senders with distinct tips come out highest tip first, whatever order they arrived.
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::Op}};
+    std::string senderA("PPPPPPPPPPPPPPPPPPPP", 20);
+    std::string senderB("QQQQQQQQQQQQQQQQQQQQ", 20);
+    std::string senderC("RRRRRRRRRRRRRRRRRRRR", 20);
+    u256 const baseFee = 50;
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(senderA, 0, 5, 1000)) == TransactionStatus::None);
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(senderB, 0, 20, 1000)) == TransactionStatus::None);
+    BOOST_CHECK(pool.tryAdd(makeFeeTx(senderC, 0, 10, 1000)) == TransactionStatus::None);
+
+    FeeMarketStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> out;
+    pool.seal(100 * kFeeTxGas, state, std::back_inserter(out), baseFee);
+
+    BOOST_REQUIRE_EQUAL(out.size(), 3);
+    BOOST_CHECK_EQUAL(std::string(out[0]->sender()), senderB);
+    BOOST_CHECK_EQUAL(std::string(out[1]->sender()), senderC);
+    BOOST_CHECK_EQUAL(std::string(out[2]->sender()), senderA);
+}
+
+BOOST_AUTO_TEST_CASE(replacement_moves_to_the_back_of_the_expiry_sequence)
+{
+    // A re-bid slot must not shield older transactions from lifetime eviction: the
+    // sequenced index is walked as a prefix of import times, so a replacement has to land
+    // at its back instead of keeping the replaced transaction's early slot.
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1, .txLifetimeMs = 60 * 1000}};
+    std::string senderA("SSSSSSSSSSSSSSSSSSSS", 20);
+    std::string senderB("TTTTTTTTTTTTTTTTTTTT", 20);
+    auto a0 = makeFeeTx(senderA, 0, 100, 200);
+    auto b0 = makeFeeTx(senderB, 0, 100, 200);
+    BOOST_CHECK(pool.tryAdd(a0) == TransactionStatus::None);
+    BOOST_CHECK(pool.tryAdd(b0) == TransactionStatus::None);
+    // Re-bid A0 while both are fresh; it sat in front of B0 in arrival order.
+    auto a0Bumped = makeFeeTx(senderA, 0, 110, 220);
+    BOOST_CHECK(pool.tryAdd(a0Bumped) == TransactionStatus::None);
+    // Time passes for B0 only (the import time lives on the transaction object).
+    b0->setImportTime(static_cast<int64_t>(utcTime()) - 10 * 60 * 1000);
+
+    FeeMarketStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> out;
+    pool.seal(100 * kFeeTxGas, state, std::back_inserter(out), u256(1));
+
+    BOOST_REQUIRE_EQUAL(out.size(), 1);
+    BOOST_CHECK_EQUAL(out[0]->hash(), a0Bumped->hash());
+    BOOST_CHECK(!pool.get(std::vector{b0->hash()})[0]);
 }
 
 BOOST_AUTO_TEST_CASE(capacity_evicts_cheapest_transaction)
