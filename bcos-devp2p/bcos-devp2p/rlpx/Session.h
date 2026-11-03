@@ -39,6 +39,9 @@ public:
     bcos::codec::rlp::RlpResult<Message> recvMessage();
 
     void enableCompression() { m_codec.enableCompression(); }
+    // Unblock a recvMessage parked on this session from another thread (see
+    // Socket::shutdown). Safe to call concurrently with the owning loop's I/O.
+    void shutdown() noexcept { m_socket.shutdown(); }
 
 private:
     Socket m_socket;

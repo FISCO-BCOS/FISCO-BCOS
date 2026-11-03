@@ -231,6 +231,7 @@ AuthKeys Handshake::authInitiator(Socket& _socket)
         bytesConstRef(ackData.data(), ackData.size()), ref(m_keyPair.privateKey()));
 
     AuthKeys keys;
+    keys.peerPublicKey = m_recipientPublicKey;
     keys.peerEphemeralPublicKey = ackMessage.ephemeralPublicKey();
     keys.ephemeralPrivateKey = ephemeralKeyPair.privateKey();
     keys.initiatorNonce = authMessage.nonce().toBytes();
@@ -266,6 +267,7 @@ AuthKeys Handshake::authRecipient(Socket& _socket)
     _socket.sendAll(bytesConstRef(ackData.data(), ackData.size()));
 
     AuthKeys keys;
+    keys.peerPublicKey = authMessage.initiatorPublicKey();
     keys.peerEphemeralPublicKey = authMessage.ephemeralPublicKey();
     keys.ephemeralPrivateKey = ephemeralKeyPair.privateKey();
     keys.initiatorNonce = authMessage.nonce().toBytes();

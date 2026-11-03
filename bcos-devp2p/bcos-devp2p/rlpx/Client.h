@@ -28,6 +28,9 @@
 #include "Session.h"
 #include "Socket.h"
 #include <bcos-utilities/FixedBytes.h>
+#include <functional>
+#include <optional>
+#include <stdexcept>
 #include <string>
 
 namespace bcos::devp2p::rlpx
@@ -46,6 +49,41 @@ struct PeerConfig
     bcos::h256 headHash;
     bcos::bytes totalDifficulty;  // minimal big-endian u256
     bcos::devp2p::eth::ForkId forkId;
+    // --- appended fields (E6): the EIP-7642 block range announced in an eth/69+ Status.
+    // Defaults (0, 0, zero hash) mean "genesis only": the handshake then advertises
+    // [0, 0] with latestBlockHash = genesisHash, the pre-E6 behaviour.
+    uint64_t earliestBlock{0};
+    uint64_t latestBlock{0};
+    bcos::h256 latestBlockHash;
+};
+
+// A handshake that completed the wire exchange but ended in a Disconnect we sent (or
+// must send) with `reason`: no common eth capability, network/genesis/fork-id mismatch,
+// an invalid block range, an identity that does not repeat the ECIES-authenticated key,
+// or an admission refusal. Distinct from a transport error so the inbound side can log
+// the reason and the outbound sync loop can keep treating it as a failed peer.
+struct HandshakeRejected : public std::runtime_error
+{
+    HandshakeRejected(DisconnectReason _reason, std::string const& _what)
+      : std::runtime_error(_what), reason(_reason)
+    {}
+    DisconnectReason reason;
+};
+
+// Policy knobs for the Hello/Status exchange shared by both directions.
+struct HandshakeOptions
+{
+    // Lowest eth version advertised in Hello (outbound: eth::kMinProtocolVersion keeps
+    // 68 for the op-geth follow path; inbound: eth::kMinServingProtocolVersion).
+    uint8_t minEthVersion{bcos::devp2p::eth::kMinProtocolVersion};
+    // Highest eth version advertised (tests pin a peer to an older generation).
+    uint8_t maxEthVersion{bcos::devp2p::eth::kProtocolVersion};
+    // EIP-2124 fork-id check of the peer's Status; null skips it (the outbound sync loop
+    // trusts its configured bootnodes, the inbound listener always sets it).
+    std::function<std::optional<std::string>(bcos::devp2p::eth::ForkId const&)> forkIdReject;
+    // Admission decision taken after Hello (identity known) and before Status: a reason
+    // means Disconnect(reason). Null admits everyone.
+    std::function<std::optional<DisconnectReason>(HelloMessage const&)> admit;
 };
 
 // The result of a successful connection: the encrypted session plus the
@@ -62,11 +100,23 @@ struct EstablishedSession
     {}
 };
 
+// Hello + eth Status exchange over an already-encrypted session; shared by the outbound
+// client, the test server and the inbound Listener. Throws HandshakeRejected after
+// sending the Disconnect frame on a policy failure, std::runtime_error on transport or
+// decoding failures (a peer Disconnect during the exchange included).
+EstablishedSession performHandshake(Session&& _session, AuthKeys const& _authKeys,
+    EccKeyPair const& _keyPair, PeerConfig const& _config, HandshakeOptions const& _options = {});
+
+// Recipient side of a fresh inbound TCP connection: ECIES auth/ack, framing keys, then
+// performHandshake. The returned session has snappy enabled.
+EstablishedSession acceptHandshake(Socket&& _socket, EccKeyPair const& _keyPair,
+    PeerConfig const& _config, HandshakeOptions const& _options = {});
+
 class RlpxClient
 {
 public:
     // _keyPair is this node's identity key (used for the ECIES handshake).
-    RlpxClient(EccKeyPair _keyPair, PeerConfig _config);
+    RlpxClient(EccKeyPair _keyPair, PeerConfig _config, HandshakeOptions _options = {});
 
     // Connect, perform the encrypted handshake, exchange Hello + eth Status,
     // and return an established session (snappy enabled after Hello).
@@ -75,6 +125,7 @@ public:
 private:
     EccKeyPair m_keyPair;
     PeerConfig m_config;
+    HandshakeOptions m_options;
 };
 
 // Minimal server side used by tests: accept + handshake + Hello/Status exchange.
