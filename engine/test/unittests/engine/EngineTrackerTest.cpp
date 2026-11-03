@@ -1027,8 +1027,10 @@ BOOST_AUTO_TEST_CASE(engine_common_capabilities_gold)
         "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
         "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
         "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4",
-        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1", "engine_getBlobsV1",
-        "engine_getClientVersionV1", "engine_exchangeClientVersionV1"};
+        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
+        "engine_getPayloadBodiesByHashV2", "engine_getPayloadBodiesByRangeV2", "engine_getBlobsV1",
+        "engine_getBlobsV2", "engine_getBlobsV3", "engine_getClientVersionV1",
+        "engine_exchangeClientVersionV1"};
     BOOST_CHECK(caps == gold);
 }
 
