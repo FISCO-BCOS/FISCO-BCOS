@@ -53,6 +53,7 @@ struct NodeEntry
     // without pinging first.
     Clock::time_point lastPongReceived{};
     Clock::time_point lastPingReceived{};
+    Clock::time_point lastPingSent{};  // rate-limits re-pinging an unbonded node
     Clock::time_point addedAt{};
     uint32_t findNodeFailures{0};
 
@@ -85,13 +86,20 @@ public:
     enum class AddResult
     {
         Added,        // placed in its bucket
-        Updated,      // already present; endpoint refreshed
+        Updated,      // already present; only enrSeq/record merged
         Replacement,  // bucket full; kept in the replacement cache
         Self,         // our own id, ignored
     };
-    // Insert or refresh. On Updated the endpoint and enrSeq/record are taken from `_entry`
-    // when set, timestamps keep the later of the two.
+    // Insert a node, or merge enrSeq/record into an existing one. The endpoint and the
+    // proof timestamps of an existing entry are NEVER taken from `_entry`: entries
+    // learned from Neighbors are relayed and unverified, so a peer must not be able to
+    // repoint a known id (and its bond) at another address. See updateEndpoint().
     AddResult add(NodeEntry _entry);
+    // Record a proven endpoint for `_id` — call only after a Pong arrived from
+    // `_ip:_udp`. A changed ip or udp resets both proof timestamps (the caller stamps
+    // the fresh pong afterwards); `_tcp` == 0 keeps the known TCP port.
+    bool updateEndpoint(
+        bcos::h256 const& _id, bcos::bytes const& _ip, uint16_t _udp, uint16_t _tcp);
     // Bucket entries and replacements alike.
     NodeEntry* find(bcos::h256 const& _id);
     NodeEntry const* find(bcos::h256 const& _id) const;
