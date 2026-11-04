@@ -254,6 +254,63 @@ std::optional<HeaderWithHash> HeaderChain::requestHeaderByHash(
     return header;
 }
 
+std::vector<bcos::h256> HeaderChain::requestPinnedHashes(
+    rlpx::Session& _session, bcos::h256 const& _tipHash, uint64_t _tipNumber)
+{
+    if (_tipNumber < m_nextNumber)
+    {
+        throw std::invalid_argument("HeaderChain: pinned tip is below the next block");
+    }
+    std::vector<bcos::h256> hashes(_tipNumber - m_nextNumber + 1);
+    auto expectedHash = _tipHash;
+    auto expectedNumber = _tipNumber;
+    size_t remaining = hashes.size();
+    while (remaining > 0)
+    {
+        eth::GetBlockHeadersMessage request;
+        request.requestId = ++m_requestId;
+        request.originHash = expectedHash;
+        request.amount = std::min<uint64_t>(remaining, m_maxHeadersPerRequest);
+        request.reverse = true;
+        _session.sendMessage(
+            rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
+                eth::encodeGetBlockHeaders(request)});
+        auto const wireHeaders = recvBlockHeadersReply(_session, request.requestId, request.amount);
+        if (wireHeaders.empty())
+        {
+            throw std::runtime_error("HeaderChain: peer cannot serve the pinned chain");
+        }
+        for (auto const& rlp : wireHeaders)
+        {
+            bcos::protocol::EthBlockHeader header;
+            try
+            {
+                header.rlpDecode(bytesConstRef(rlp.data(), rlp.size()));
+            }
+            catch (bcos::codec::rlp::RlpDecodeException const& e)
+            {
+                throw std::runtime_error("HeaderChain: header RLP decode failed: " +
+                                         bcos::codec::rlp::rlpErrorMessage(e, "malformed header"));
+            }
+            if (bcos::crypto::keccak256Hash(bytesConstRef(rlp.data(), rlp.size())) !=
+                    expectedHash ||
+                static_cast<uint64_t>(header.data().number) != expectedNumber)
+            {
+                throw std::runtime_error("HeaderChain: header does not match the pinned chain");
+            }
+            --remaining;
+            hashes[remaining] = expectedHash;
+            expectedHash = header.data().parentInfo.blockHash;
+            --expectedNumber;
+        }
+    }
+    if (expectedHash != m_anchorHash)
+    {
+        throw ParentHashMismatch("HeaderChain: the pinned chain does not build on the anchor");
+    }
+    return hashes;
+}
+
 void HeaderChain::advance(uint64_t _count, HeaderWithHash const& _lastHeader)
 {
     m_nextNumber += _count;
