@@ -59,8 +59,8 @@ constexpr uint8_t BlockRangeUpdate = 0x11;  // eth/69+ (EIP-7642)
 // OUTBOUND dials only (kMinProtocolVersion): the [debug] follow_devp2p lane dials an
 // op-geth whose version is not pinned anywhere in this repo, and an op-geth older than
 // the geth v1.17.1 baseline that dropped eth/68 would otherwise lose its only peer.
-// The inbound listener advertises from kMinServingProtocolVersion (ADR 0003: new peers
-// speak 69/70; geth >= v1.17.1 refuses 68).
+// The inbound listener advertises from kMinServingProtocolVersion (new peers speak
+// 69/70; geth >= v1.17.1 refuses 68).
 constexpr uint8_t kProtocolVersion = 70;  // highest eth version we support
 constexpr uint8_t kMinProtocolVersion = 68;
 constexpr uint8_t kMinServingProtocolVersion = 69;

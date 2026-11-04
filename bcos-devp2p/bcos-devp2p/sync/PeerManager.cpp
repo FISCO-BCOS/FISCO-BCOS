@@ -34,7 +34,8 @@ PeerManager::PeerManager(PeerManagerConfig _config, Clock _clock)
     }
     if (m_config.maxInbound == 0 || m_config.maxInbound > m_config.maxPeers)
     {
-        m_config.maxInbound = m_config.maxPeers - m_config.maxPeers / 3;
+        // At least one slot stays reserved for our own dials, or sync could starve.
+        m_config.maxInbound = m_config.maxPeers - std::max<size_t>(1, m_config.maxPeers / 3);
     }
 }
 
@@ -60,69 +61,61 @@ std::optional<rlpx::DisconnectReason> PeerManager::tryAdmit(NodeId const& _id, D
     {
         return rlpx::DisconnectReason::UselessPeer;
     }
-    if (m_connected.contains(_id))
+    auto& side = _direction == Direction::Inbound ? m_inbound : m_outbound;
+    if (side.contains(_id))
     {
         return rlpx::DisconnectReason::AlreadyConnected;
     }
-    if (m_connected.size() >= m_config.maxPeers)
+    if (m_inbound.size() + m_outbound.size() >= m_config.maxPeers)
     {
         return rlpx::DisconnectReason::TooManyPeers;
     }
-    if (_direction == Direction::Inbound)
+    if (_direction == Direction::Inbound && m_inbound.size() >= m_config.maxInbound)
     {
-        size_t inbound = 0;
-        for (auto const& [id, peer] : m_connected)
-        {
-            inbound += peer.direction == Direction::Inbound ? 1 : 0;
-        }
-        if (inbound >= m_config.maxInbound)
-        {
-            return rlpx::DisconnectReason::TooManyPeers;
-        }
+        return rlpx::DisconnectReason::TooManyPeers;
     }
-    m_connected.emplace(_id, Connected{_direction});
+    side.insert(_id);
     return std::nullopt;
 }
 
-void PeerManager::release(NodeId const& _id)
+void PeerManager::release(NodeId const& _id, Direction _direction)
 {
     std::unique_lock lock(m_mutex);
-    m_connected.erase(_id);
+    (_direction == Direction::Inbound ? m_inbound : m_outbound).erase(_id);
 }
 
 bool PeerManager::isConnected(NodeId const& _id) const
 {
     std::unique_lock lock(m_mutex);
-    return m_connected.contains(_id);
+    return m_inbound.contains(_id) || m_outbound.contains(_id);
 }
 
 size_t PeerManager::connectedCount() const
 {
     std::unique_lock lock(m_mutex);
-    return m_connected.size();
+    return m_inbound.size() + m_outbound.size();
 }
 
 size_t PeerManager::inboundCount() const
 {
     std::unique_lock lock(m_mutex);
-    size_t inbound = 0;
-    for (auto const& [id, peer] : m_connected)
-    {
-        inbound += peer.direction == Direction::Inbound ? 1 : 0;
-    }
-    return inbound;
+    return m_inbound.size();
 }
 
 std::vector<PeerSnapshot> PeerManager::connectedPeers() const
 {
     std::unique_lock lock(m_mutex);
     std::vector<PeerSnapshot> out;
-    out.reserve(m_connected.size());
-    for (auto const& [id, peer] : m_connected)
-    {
-        auto score = m_scores.find(id);
-        out.push_back({id, peer.direction, score == m_scores.end() ? 0 : score->second});
-    }
+    out.reserve(m_inbound.size() + m_outbound.size());
+    auto const collect = [&](std::set<NodeId> const& _side, Direction _direction) {
+        for (auto const& id : _side)
+        {
+            auto score = m_scores.find(id);
+            out.push_back({id, _direction, score == m_scores.end() ? 0 : score->second});
+        }
+    };
+    collect(m_inbound, Direction::Inbound);
+    collect(m_outbound, Direction::Outbound);
     return out;
 }
 
@@ -189,13 +182,18 @@ void PeerManager::addCandidate(rlpx::PeerConfig _peer)
     m_discovered.push_back(std::move(_peer));
 }
 
-std::vector<rlpx::PeerConfig> PeerManager::dialCandidates() const
+bool PeerManager::isStatic(NodeId const& _id) const
+{
+    std::unique_lock lock(m_mutex);
+    return m_staticIds.contains(_id);
+}
+
+std::vector<rlpx::PeerConfig> PeerManager::dialCandidates(size_t _maxDiscovered) const
 {
     std::unique_lock lock(m_mutex);
     std::vector<rlpx::PeerConfig> out;
-    out.reserve(m_static.size() + m_discovered.size());
     auto const eligible = [&](rlpx::PeerConfig const& peer) {
-        return !bannedLocked(peer.peerPublicKey) && !m_connected.contains(peer.peerPublicKey);
+        return !bannedLocked(peer.peerPublicKey) && !m_outbound.contains(peer.peerPublicKey);
     };
     for (auto const& peer : m_static)
     {
@@ -204,11 +202,17 @@ std::vector<rlpx::PeerConfig> PeerManager::dialCandidates() const
             out.push_back(peer);
         }
     }
+    size_t discovered = 0;
     for (auto const& peer : m_discovered)
     {
+        if (discovered >= _maxDiscovered)
+        {
+            break;
+        }
         if (eligible(peer))
         {
             out.push_back(peer);
+            ++discovered;
         }
     }
     return out;

@@ -19,11 +19,15 @@
  */
 #include "Listener.h"
 
+#if !defined(_WIN32)  // like Socket.cpp: the blocking RLPx socket layer is POSIX only
+
 #include <bcos-utilities/LogStream.h>
 #include <fcntl.h>
 #include <boost/asio/post.hpp>
+#include <chrono>
 #include <exception>
 #include <stdexcept>
+#include <system_error>
 #include <utility>
 
 namespace bcos::devp2p::rlpx
@@ -35,7 +39,8 @@ Listener::Listener(EccKeyPair _keyPair, ListenerConfig _config, StatusProvider _
     m_statusProvider(std::move(_statusProvider)),
     m_onSession(std::move(_onSession)),
     m_handshakeOptions(std::move(_handshakeOptions)),
-    m_acceptor(m_io)
+    m_acceptor(m_io),
+    m_acceptRetry(m_io)
 {
     if (!m_statusProvider || !m_onSession)
     {
@@ -73,7 +78,17 @@ void Listener::start()
     }
     m_io.restart();
     armAccept();
-    m_ioThread = std::thread([self = shared_from_this()]() { self->m_io.run(); });
+    m_ioThread = std::thread([self = shared_from_this()]() {
+        try
+        {
+            self->m_io.run();
+        }
+        catch (std::exception const& e)
+        {
+            BCOS_LOG(ERROR) << LOG_BADGE("rlpx-listener") << "acceptor thread exited on exception"
+                            << LOG_KV("error", e.what());
+        }
+    });
     BCOS_LOG(INFO) << LOG_BADGE("rlpx-listener") << "listening"
                    << LOG_KV("bind", m_config.bindAddress) << LOG_KV("port", m_boundPort);
 }
@@ -84,20 +99,14 @@ void Listener::stop()
     {
         return;
     }
-    // Close the acceptor on the io thread (cancels the pending async_accept), then
-    // drain the io_context and join its thread.
-    boost::asio::post(m_io, [weak = weak_from_this()]() {
-        if (auto self = weak.lock())
-        {
-            boost::system::error_code ignored;
-            self->m_acceptor.close(ignored);
-        }
-    });
     m_io.stop();
     if (m_ioThread.joinable())
     {
         m_ioThread.join();
     }
+    // The io thread is gone, so nothing else touches the acceptor.
+    boost::system::error_code ignored;
+    m_acceptor.close(ignored);
     // Wake every connection parked in session I/O, then join them all. A connection
     // still inside the handshake has no session yet and wakes at the socket I/O
     // timeout (15s) at the latest.
@@ -106,11 +115,14 @@ void Listener::stop()
         std::unique_lock lock(m_connectionsMutex);
         connections.swap(m_connections);
     }
-    for (auto const& connection : connections)
     {
-        if (connection->established)
+        std::unique_lock lock(m_connectionsMutex);  // runConnection publishes `established`
+        for (auto const& connection : connections)
         {
-            connection->established->session.shutdown();
+            if (connection->established)
+            {
+                connection->established->session.shutdown();
+            }
         }
     }
     for (auto const& connection : connections)
@@ -149,7 +161,17 @@ void Listener::armAccept()
             {
                 BCOS_LOG(WARNING) << LOG_BADGE("rlpx-listener") << "accept failed"
                                   << LOG_KV("error", _error.message());
-                self->armAccept();  // transient (EMFILE, ECONNABORTED): keep accepting
+                // Transient (EMFILE, ECONNABORTED). Accepting again at once would spin: the
+                // error repeats until a descriptor frees up.
+                self->m_acceptRetry.expires_after(std::chrono::milliseconds(100));
+                self->m_acceptRetry.async_wait(
+                    [weak = self->weak_from_this()](boost::system::error_code const& _waitError) {
+                        auto retry = weak.lock();
+                        if (!_waitError && retry && retry->m_running.load())
+                        {
+                            retry->armAccept();
+                        }
+                    });
             }
             return;
         }
@@ -160,6 +182,15 @@ void Listener::armAccept()
 
 void Listener::onAccepted(boost::asio::ip::tcp::socket&& _socket)
 {
+    reapFinished();
+    {
+        std::unique_lock lock(m_connectionsMutex);
+        if (m_connections.size() >= m_config.maxConnections)
+        {
+            BCOS_LOG(DEBUG) << LOG_BADGE("rlpx-listener") << "connection limit reached, closing";
+            return;  // _socket closes on destruction in the accept handler
+        }
+    }
     std::string remote;
     try
     {
@@ -187,18 +218,28 @@ void Listener::onAccepted(boost::asio::ip::tcp::socket&& _socket)
     }
     Socket socket(fd);
 
-    reapFinished();
     auto connection = std::make_shared<Connection>();
     {
         std::unique_lock lock(m_connectionsMutex);
         m_connections.push_back(connection);
     }
-    connection->thread =
-        std::thread([self = shared_from_this(), connection,
-                        socket = std::make_shared<Socket>(std::move(socket)), remote]() mutable {
-            self->runConnection(connection, std::move(*socket), remote);
-            connection->done.store(true);
-        });
+    try
+    {
+        connection->thread = std::thread(
+            [self = shared_from_this(), connection,
+                socket = std::make_shared<Socket>(std::move(socket)), remote]() mutable {
+                self->runConnection(connection, std::move(*socket), remote);
+                connection->done.store(true);
+            });
+    }
+    catch (std::system_error const& e)
+    {
+        // Out of threads: drop this peer. Escaping here would end the acceptor thread.
+        std::unique_lock lock(m_connectionsMutex);
+        std::erase(m_connections, connection);
+        BCOS_LOG(WARNING) << LOG_BADGE("rlpx-listener") << "cannot start connection thread"
+                          << LOG_KV("remote", remote) << LOG_KV("error", e.what());
+    }
 }
 
 void Listener::runConnection(
@@ -237,6 +278,11 @@ void Listener::runConnection(
         BCOS_LOG(INFO) << LOG_BADGE("rlpx-listener") << "inbound peer dropped"
                        << LOG_KV("remote", _remote) << LOG_KV("error", e.what());
     }
+    catch (...)
+    {
+        BCOS_LOG(WARNING) << LOG_BADGE("rlpx-listener") << "inbound peer dropped: unknown error"
+                          << LOG_KV("remote", _remote);
+    }
 }
 
 void Listener::reapFinished()
@@ -268,3 +314,5 @@ void Listener::reapFinished()
     }
 }
 }  // namespace bcos::devp2p::rlpx
+
+#endif  // !defined(_WIN32)

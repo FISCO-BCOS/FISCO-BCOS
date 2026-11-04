@@ -641,7 +641,6 @@ void Discv4Service::handlePing(
                 {
                     node->tcp = ping.from.tcp;
                 }
-                m_table.touch(_sender);
                 // discv4.md: ping back only when we hold no fresh proof of the sender.
                 shouldPing = !node->bonded(now);
             }
@@ -649,6 +648,11 @@ void Discv4Service::handlePing(
                 now - node->lastPingSent < c_pingRepeatInterval)
             {
                 shouldPing = false;
+            }
+            // Last: touch() rotates the bucket, so `node` then points at another entry.
+            if (node->ip == fromIp && node->udp == _from.port())
+            {
+                m_table.touch(_sender);
             }
         }
     }
@@ -918,7 +922,6 @@ void Discv4Service::onBonded(bcos::h256 const& _id, bcos::bytes const& _publicKe
         node->lastPongReceived = now;
         node->enrSeq = std::max(node->enrSeq, _pong.enrSeq);
         node->findNodeFailures = 0;
-        m_table.touch(_id);
         ++m_stats.pongsReceived;
         if (m_everBonded.insert(_id).second)
         {
@@ -928,6 +931,8 @@ void Discv4Service::onBonded(bcos::h256 const& _id, bcos::bytes const& _publicKe
         {
             needsRecord = *node;
         }
+        // Last: touch() rotates the bucket, so `node` then points at another entry.
+        m_table.touch(_id);
     }
     noteOurEndpoint(_from, _pong.to);
     if (needsRecord)

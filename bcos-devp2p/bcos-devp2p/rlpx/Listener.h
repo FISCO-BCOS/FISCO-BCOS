@@ -28,6 +28,7 @@
 #include "Socket.h"
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -43,6 +44,9 @@ struct ListenerConfig
 {
     std::string bindAddress{"0.0.0.0"};
     uint16_t port{30303};  // 0 = ephemeral (tests); the bound port is port() after start()
+    // Connections held at once, handshaking or established; further ones are closed on
+    // accept. Each costs a thread, and nothing has authenticated them yet.
+    size_t maxConnections{128};
 };
 
 // Owns the acceptor thread and every connection thread it spawned; stop() closes the
@@ -96,6 +100,7 @@ private:
 
     boost::asio::io_context m_io;
     boost::asio::ip::tcp::acceptor m_acceptor;
+    boost::asio::steady_timer m_acceptRetry;
     std::thread m_ioThread;
     std::atomic<bool> m_running{false};
     uint16_t m_boundPort{0};
