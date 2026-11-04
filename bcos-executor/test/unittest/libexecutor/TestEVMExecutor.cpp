@@ -1370,6 +1370,158 @@ BOOST_AUTO_TEST_CASE(preBugfixRejectedCreate2PinsStatusGasOutput)
                        << " out=" << result4->data().size());
 }
 
+// [R7 must-fix] A failed nested CREATE must push 0x0. evmone 0.21 pushed the host's
+// result.create_address (which externalRequest filled from newEVMContractAddress — empty
+// on the failed-create arms, so the pushed value was 0); ABI 18 removed that echo and
+// evmone 0.24 pushes msg.recipient — the derived child address — whenever the host
+// reports EVMC_SUCCESS. TransactionExecutive::go's three post-execution failed-create
+// arms (code too large, code deposit out of gas, empty runtime code) revert the child
+// but leave evmStatus at the EVMC_SUCCESS the init code produced, so without
+// HostContext::externalRequest's create mapping the pushed value silently becomes the
+// derived address on default serial chains — a state-root divergence from the base.
+// Each arm runs a creator contract that CREATEs the failing init and returns the pushed
+// word; all three words must be zero. Reverting the mapping is the negative control:
+// these asserts then see the derived child address instead.
+BOOST_AUTO_TEST_CASE(failedNestedCreatePushesZero)
+{
+    // Creator runtime (25 bytes) with the failing init appended at offset 0x19:
+    //   PUSH2 M PUSH2 0x19 PUSH1 0 CODECOPY   copy the init out of the tail
+    //   PUSH2 M PUSH1 0 PUSH1 0 CREATE        value 0 from mem[0..M)
+    //   PUSH1 0 MSTORE                         store the pushed word at mem[0]
+    //   PUSH1 0x20 PUSH1 0 RETURN              return it
+    auto runFailedCreate = [this](
+                               bcos::bytes const& innerInit, std::string const& deployTo,
+                               int64_t contextBase) {
+        BOOST_REQUIRE_LT(innerInit.size(), 0x80u);
+        const auto m = static_cast<uint8_t>(innerInit.size());
+        bcos::bytes runtime{
+            0x61, 0x00, m,        // PUSH2 M
+            0x61, 0x00, 0x19,     // PUSH2 0x19 (inner init offset)
+            0x60, 0x00,           // PUSH1 0 (CODECOPY dest)
+            0x39,                 // CODECOPY
+            0x61, 0x00, m,        // PUSH2 M (init size)
+            0x60, 0x00,           // PUSH1 0 (init offset)
+            0x60, 0x00,           // PUSH1 0 (value)
+            0xf0,                 // CREATE
+            0x60, 0x00, 0x52,     // PUSH1 0 MSTORE
+            0x60, 0x20, 0x60, 0x00, 0xf3  // PUSH1 0x20 PUSH1 0 RETURN
+        };
+        BOOST_REQUIRE_EQUAL(runtime.size(), 25u);
+        runtime += innerInit;
+
+        // Deploy stub: CODECOPY input[12..] to mem and RETURN it as the runtime.
+        const auto l = static_cast<uint8_t>(runtime.size());
+        bcos::bytes input{0x60, l, 0x60, 0x0c, 0x60, 0x00, 0x39, 0x60, l, 0x60, 0x00, 0xf3};
+        input += runtime;
+
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(contextBase + 1),
+                100000 + contextBase, "1", "1");
+        auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+
+        auto params = std::make_unique<NativeExecutionMessage>();
+        params->setContextID(contextBase);
+        params->setSeq(contextBase * 10);
+        params->setDepth(0);
+        params->setOrigin(std::string(sender));
+        params->setFrom(std::string(sender));
+        h256 deployAddress(deployTo);
+        params->setTo(deployAddress.hex().substr(0, 40));
+        params->setStaticCall(false);
+        params->setGasAvailable(gas);
+        params->setData(input);
+        params->setType(NativeExecutionMessage::TXHASH);
+        params->setTransactionHash(hash);
+        params->setCreate(true);
+
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> deployPromise;
+        executor->executeTransaction(std::move(params),
+            [&](bcos::Error::UniquePtr&& error,
+                bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                deployPromise.set_value(std::move(result));
+            });
+        auto deployed = deployPromise.get_future().get();
+        BOOST_REQUIRE(deployed);
+        BOOST_TEST_MESSAGE("deploy result: type=" << (int)deployed->type()
+                                                 << " status=" << deployed->status()
+                                                 << " msg=" << deployed->message());
+        auto const address = deployed->newEVMContractAddress();
+        BOOST_REQUIRE_GT(address.size(), 0u);
+
+        // Call the creator: its runtime runs the CREATE and returns the pushed word.
+        auto call = std::make_unique<NativeExecutionMessage>();
+        call->setContextID(contextBase + 1);
+        call->setSeq(contextBase * 10 + 1);
+        call->setDepth(0);
+        call->setFrom(std::string(sender));
+        call->setTo(std::string(address));
+        call->setOrigin(std::string(sender));
+        call->setStaticCall(false);
+        call->setGasAvailable(gas);
+        call->setType(NativeExecutionMessage::MESSAGE);
+        std::promise<ExecutionMessage::UniquePtr> callPromise;
+        executor->executeTransaction(std::move(call),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                callPromise.set_value(std::move(result));
+            });
+        auto observed = callPromise.get_future().get();
+        BOOST_REQUIRE(observed);
+        std::string wordHex;
+        boost::algorithm::hex_lower(
+            observed->data().begin(), observed->data().end(), std::back_inserter(wordHex));
+        BOOST_TEST_MESSAGE("call result: type=" << (int)observed->type()
+                                               << " status=" << observed->status()
+                                               << " word=" << wordHex);
+        BOOST_REQUIRE_EQUAL(observed->data().size(), 32u);
+        // data() is a bytesConstRef view into the message — copy out before it dies.
+        return bcos::bytes(observed->data().begin(), observed->data().end());
+    };
+
+    // One block, three deploy+call pairs (the fixture runs the serial entry: the DMC
+    // lane rewrites type == REVERT to EVMC_REVERT at 3.3+ and would mask the shape).
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // Arm 1: code too large — the init returns 0x100001 bytes, above every schedule's
+    // maxEvmCodeSize (0x40000 pre-V3.2, 0x100000 after).
+    auto tooLarge = runFailedCreate(bcos::bytes{0x62, 0x10, 0x00, 0x01, 0x60, 0x00, 0xf3},
+        "aa0000000000000000000000000000000000000100000000000000000000000000000000", 230);
+    // Arm 2: code deposit out of gas — 0x40000 bytes at createDataGas 20 = 5,242,880,
+    // above the ~2.9M the CREATE forwards. The size is not above any maxEvmCodeSize,
+    // so the deposit arm is what fires.
+    auto depositOog = runFailedCreate(bcos::bytes{0x62, 0x04, 0x00, 0x00, 0x60, 0x00, 0xf3},
+        "aa0000000000000000000000000000000000000200000000000000000000000000000000", 240);
+    // Arm 3: empty runtime code — the init returns nothing.
+    auto emptyCode = runFailedCreate(bcos::bytes{0x60, 0x00, 0x60, 0x00, 0xf3},
+        "aa0000000000000000000000000000000000000300000000000000000000000000000000", 250);
+
+    BOOST_CHECK_MESSAGE(std::all_of(tooLarge.begin(), tooLarge.end(),
+                            [](bcos::byte b) { return b == 0; }),
+        "code-too-large CREATE pushed a non-zero address");
+    BOOST_CHECK_MESSAGE(std::all_of(depositOog.begin(), depositOog.end(),
+                            [](bcos::byte b) { return b == 0; }),
+        "code-deposit-OOG CREATE pushed a non-zero address");
+    BOOST_CHECK_MESSAGE(std::all_of(emptyCode.begin(), emptyCode.end(),
+                            [](bcos::byte b) { return b == 0; }),
+        "empty-runtime-code CREATE pushed a non-zero address");
+}
+
 
 // [R6 F1] The DMC nested-CREATE derivation follows the schedulerSeq the scheduler
 // handed back on resume: the parent frame's externalCall adopts the stamp, so a nested

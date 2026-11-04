@@ -364,7 +364,25 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     }
 
     // Convert CallParameters to evmc_resultx
-    evmc_result result{.status_code = toEVMStatus(response, blockContext),
+    auto status = toEVMStatus(response, blockContext);
+    // A nested CREATE whose child reverted but whose init code succeeded reports
+    // evmStatus == EVMC_SUCCESS (parseEVMCResult writes the VM's answer; the failed-create
+    // arms in TransactionExecutive::go — code too large, code deposit out of gas, empty
+    // runtime code — set type = REVERT and the legacy status but never touch evmStatus).
+    // evmone 0.21 pushed the host's result.create_address (filled from
+    // newEVMContractAddress, which those arms leave empty -> the pushed value was 0);
+    // ABI 18 removed that echo and evmone 0.24 pushes msg.recipient — the derived child
+    // address — whenever the status is SUCCESS. Map the impossible shape (create reported
+    // success but produced no address) to REVERT so the pushed value stays 0 like history;
+    // the same shape reaches here from the auth-check rejects (revertAuth only rewrites
+    // evmStatus behind bugfix_auth_check). Below Amsterdam create_impl reads the status
+    // only for the push decision, so gas, refund and return data stay identical.
+    if ((_msg->kind == EVMC_CREATE || _msg->kind == EVMC_CREATE2) &&
+        status == EVMC_SUCCESS && response->newEVMContractAddress.empty())
+    {
+        status = EVMC_REVERT;
+    }
+    evmc_result result{.status_code = status,
         .gas_left = response->gas,
         .gas_refund = 0,
         .state_gas = {},  // evmc ABI 19 (EIP-8037); unused below Amsterdam.
