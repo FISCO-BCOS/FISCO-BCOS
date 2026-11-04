@@ -118,10 +118,16 @@ public:
     void markClean() { setTainted(false); }
 };
 
-static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t nonce)
+/// seal() budgets by gas: every test transaction declares a plain-transfer gas limit so
+/// a budget of N * kTxGas admits exactly N of them.
+constexpr int64_t kTxGas = 21000;
+
+static protocol::Transaction::Ptr makeTxWithGas(
+    std::string_view senderBytes, int64_t nonce, int64_t gasLimit)
 {
     auto tx = std::make_shared<TestTransactionImpl>();
     tx->mutableInner().data.to.assign(senderBytes.begin(), senderBytes.end());
+    tx->mutableInner().data.gasLimit = gasLimit;
     tx->setNonce(std::to_string(nonce));
     tx->forceSender(toBytes(senderBytes));
     Keccak256 hasher;
@@ -129,6 +135,11 @@ static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t n
     tx->markClean();
     tx->setImportTime(nonce);
     return tx;
+}
+
+static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t nonce)
+{
+    return makeTxWithGas(senderBytes, nonce, kTxGas);
 }
 
 // The mempool stores senders as raw address bytes (TransactionImpl::sender), while
@@ -187,7 +198,7 @@ BOOST_AUTO_TEST_CASE(seal_single_sender_contiguous)
 
     MapStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
-    pool.seal(100, state, std::back_inserter(out));
+    pool.seal(100 * kTxGas, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 3);
     // seal() is read-only: it must not create or advance the account nonce in `state`.
@@ -210,7 +221,7 @@ BOOST_AUTO_TEST_CASE(seal_limit_within_single_sender)
 
     MapStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
-    pool.seal(kSealLimit, state, std::back_inserter(out));
+    pool.seal(kSealLimit * kTxGas, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 2);
     auto nonces = ::ranges::views::transform(out, [](auto& txPtr) {
@@ -238,7 +249,7 @@ BOOST_AUTO_TEST_CASE(seal_limit_across_senders)
 
     MapStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
-    pool.seal(kSealLimit, state, std::back_inserter(out));
+    pool.seal(kSealLimit * kTxGas, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 2);
     bool foundA0 = false;
@@ -275,7 +286,7 @@ BOOST_AUTO_TEST_CASE(seal_limit_exact_boundary)
 
     MapStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
-    pool.seal(2, state, std::back_inserter(out));
+    pool.seal(2 * kTxGas, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 2);
     // seal() is read-only: it must not create or advance the account nonce in `state`.
@@ -295,7 +306,7 @@ BOOST_AUTO_TEST_CASE(seal_multiple_senders_and_gaps)
 
     MapStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
-    pool.seal(10, state, std::back_inserter(out));
+    pool.seal(10 * kTxGas, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 1);
     BOOST_CHECK_EQUAL(std::string(out.front()->sender()), senderA);
@@ -319,7 +330,7 @@ BOOST_AUTO_TEST_CASE(seal_with_existing_ledger_nonce)
     setNonce(state, sender, "1");
 
     std::vector<protocol::Transaction::Ptr> out;
-    pool.seal(10, state, std::back_inserter(out));
+    pool.seal(10 * kTxGas, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 2);
     auto nonces = ::ranges::views::transform(out, [](auto& txPtr) {
@@ -492,6 +503,89 @@ BOOST_AUTO_TEST_CASE(testAddTaintedTransaction)
     tx->calculateHash(hasher);
     BOOST_CHECK_THROW(
         pool.add(std::vector<protocol::Transaction::Ptr>{tx}), InvalidTaintedTransaction);
+}
+
+
+// Gas budget, not a count: three 21000-gas transfers against a 42000 budget seal exactly the
+// first two nonces; the third stays pooled for the next block (the block the executor is
+// handed already fits — no culprit eviction and no whole-block rerun).
+BOOST_AUTO_TEST_CASE(seal_gas_budget_fits_two_of_three)
+{
+    MemPoolImpl pool;
+    std::string sender("TTTTTTTTTTTTTTTTTTTT", 20);
+    pool.add(std::vector{makeTx(sender, 0), makeTx(sender, 1), makeTx(sender, 2)});
+
+    MapStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> out;
+    pool.seal(2 * kTxGas, state, std::back_inserter(out));
+
+    BOOST_REQUIRE_EQUAL(out.size(), 2);
+    auto nonces = ::ranges::views::transform(out, [](auto& txPtr) {
+        return std::stoll(std::string(txPtr->nonce()));
+    }) | ::ranges::to<std::vector>();
+    ::ranges::sort(nonces);
+    BOOST_CHECK(nonces == std::vector<long long>({0, 1}));
+}
+
+// A head that does not fit ends only its sender's run: the other sender's transfer still
+// fills the remaining budget, and the oversized sender's later nonce cannot jump the gap.
+BOOST_AUTO_TEST_CASE(seal_gas_budget_skips_sender_that_does_not_fit)
+{
+    MemPoolImpl pool;
+    std::string big("UUUUUUUUUUUUUUUUUUUU", 20);
+    std::string small("VVVVVVVVVVVVVVVVVVVV", 20);
+    pool.add(std::vector{makeTxWithGas(big, 0, 50000), makeTx(big, 1), makeTx(small, 0)});
+
+    MapStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> out;
+    pool.seal(40000, state, std::back_inserter(out));
+
+    BOOST_REQUIRE_EQUAL(out.size(), 1);
+    BOOST_CHECK_EQUAL(std::string(out.front()->sender()), small);
+}
+
+// No count ceiling: 1500 transfers of 21000 gas fill a 31.5M-gas block in one seal (the old
+// constant capped every block at 1000 transactions regardless of gas).
+BOOST_AUTO_TEST_CASE(seal_gas_budget_30m_takes_1500_small_transfers)
+{
+    MemPoolImpl pool;
+    std::vector<protocol::Transaction::Ptr> txs;
+    for (int senderIndex = 0; senderIndex < 15; ++senderIndex)
+    {
+        std::string sender(20, static_cast<char>('a' + senderIndex));
+        for (int64_t nonce = 0; nonce < 100; ++nonce)
+        {
+            txs.push_back(makeTxWithGas(sender, nonce, 21000));
+        }
+    }
+    pool.add(txs);
+
+    MapStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> out;
+    pool.seal(31500000, state, std::back_inserter(out));
+
+    BOOST_CHECK_EQUAL(out.size(), 1500);
+}
+
+// A transaction that declares no gas (gasLimit 0, legal for FISCO transactions on the lanes
+// that do not meter gas) still spends c_minSealGas of the budget: a budget that never
+// decreased would seal the whole pool into one block.
+BOOST_AUTO_TEST_CASE(seal_charges_zero_gas_transactions_the_floor)
+{
+    MemPoolImpl pool;
+    std::string sender(20, 'z');
+    std::vector<protocol::Transaction::Ptr> txs;
+    for (int64_t nonce = 0; nonce < 30; ++nonce)
+    {
+        txs.push_back(makeTxWithGas(sender, nonce, 0));
+    }
+    pool.add(txs);
+
+    MapStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> out;
+    pool.seal(10 * c_minSealGas, state, std::back_inserter(out));
+
+    BOOST_CHECK_EQUAL(out.size(), 10);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

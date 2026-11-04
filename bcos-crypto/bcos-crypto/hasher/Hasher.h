@@ -16,4 +16,9 @@ concept Hasher = requires(HasherType hasher, std::span<std::byte> out) {
         std::decay_t<HasherType>>;
 };
 
+template <class HasherType>
+concept SnapshotHasher =
+    Hasher<HasherType> &&
+    requires(HasherType hasher, std::span<std::byte> out) { hasher.digest(out); };
+
 }  // namespace bcos::crypto::hasher

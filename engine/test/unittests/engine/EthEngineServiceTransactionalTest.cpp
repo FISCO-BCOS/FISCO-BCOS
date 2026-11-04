@@ -1047,8 +1047,7 @@ BOOST_AUTO_TEST_CASE(commit_publishes_the_post_commit_configuration_into_the_hol
 
     using Service = EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
     Service service(memPool, storage, executor, scheduler, blockFactory, ledger,
-        bcos::engine::c_defaultBlockTxCountLimit, static_cast<std::uint32_t>(ApiVersion::V3),
-        nullptr, ledgerConfigState);
+        static_cast<std::uint32_t>(ApiVersion::V3), nullptr, ledgerConfigState);
 
     auto forkchoice = makeForkchoiceState();
     seedForkchoiceStorage(storage, forkchoice);

@@ -116,7 +116,9 @@ if(FULLNODE)
         include(CTest)
         enable_testing()
         add_subdirectory(tests)
-        add_subdirectory(benchmark)
+        if(WITH_BENCHMARK)
+            add_subdirectory(benchmark)
+        endif()
     endif()
 endif()
 
@@ -128,20 +130,12 @@ if(WITH_L2_CONTRACTS)
     add_subdirectory(bcos-l2-contracts)
 endif()
 
-# for code coverage
+# for code coverage. The compiler flags live in cmake/CompilerSettings.cmake: that file
+# is included before the add_subdirectory() calls above, so its CMAKE_*_FLAGS reach every
+# module target; a set() here would only reach targets defined in this directory.
 if(COVERAGE)
     include(Coverage)
     set(TESTS ON)
-    if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-        set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS} -fprofile-update=atomic")
-        set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS} -fprofile-update=atomic")
-        set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
-        set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
-    elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-        add_compile_options(-Wno-unused-command-line-argument)
-        set(CMAKE_CXX_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
-        set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
-    endif()
     config_coverage("coverage" "")
 endif()
 

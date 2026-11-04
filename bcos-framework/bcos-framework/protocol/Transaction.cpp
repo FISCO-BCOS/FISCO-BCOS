@@ -1,4 +1,5 @@
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/BlobSchedule.h"
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/LogStream.h>
@@ -173,5 +174,20 @@ u256 effectiveGasPrice(Transaction const& tx)
         return *price;
     }
     return tx.maxFeePerGas().value_or(0);
+}
+
+u512 maxCost(Transaction const& tx)
+{
+    u512 cost = u512{tx.value()} + u512{tx.gasLimit()} * u512{effectiveGasPrice(tx)};
+    if (auto const& blobFee = tx.maxFeePerBlobGas(); blobFee.has_value())
+    {
+        cost += u512{tx.blobVersionedHashes().size()} * u512{BLOB_GAS_PER_BLOB} * u512{*blobFee};
+    }
+    return cost;
+}
+
+u512 costAt(Transaction const& tx, CostBasis basis)
+{
+    return basis == CostBasis::ValueOnly ? u512{tx.value()} : maxCost(tx);
 }
 }  // namespace bcos::protocol

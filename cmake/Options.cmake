@@ -94,6 +94,8 @@ macro(configure_project)
     default_option(WITH_TARS_SERVICES OFF)
     default_option(WITH_CPPSDK ON)
     default_option(WITH_SWIG_SDK OFF)
+    # The benchmark/ directories under TESTS. OFF skips them where nothing runs them,
+    # e.g. the Coverage CI job.
     default_option(WITH_BENCHMARK ON)
     default_option(WITH_VTUNE_ITT OFF)
     default_option(ONLY_CPP_SDK OFF)

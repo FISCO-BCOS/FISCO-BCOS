@@ -298,8 +298,7 @@ SvcTestEngineServiceImpl makeCommittingEngineServiceImpl(MemPoolImpl& memPool,
     bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
 {
     return SvcTestEngineServiceImpl(memPool, storage, sharedStubExecutor(), sharedStubScheduler(),
-        svcTestBlockFactory(), std::move(ledger), bcos::engine::c_defaultBlockTxCountLimit,
-        std::move(ledgerConfigState));
+        svcTestBlockFactory(), std::move(ledger), std::move(ledgerConfigState));
 }
 
 /// Reads the block header the commit persisted, the way eth_getBlockByNumber reaches it
@@ -497,6 +496,45 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_empty_withdrawals)
     BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
     BOOST_CHECK_NE(
         result.payloadStatus.validationError->find("non-empty withdrawals"), std::string::npos);
+}
+
+// Committing a built payload drops the sender's executed transactions from the pool: a
+// transaction pooled after the build (so the build's own prune never saw it) whose nonce the
+// post-commit state has consumed is gone once newPayload answers VALID.
+BOOST_AUTO_TEST_CASE(new_payload_commit_drops_executed_transactions_from_the_pool)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto builtPayload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    globalStateStorageFixture.setBlockNumber(
+        builtPayload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
+
+    std::string sender("pppppppppppppppppppp", 20);
+    auto executed = makeSvcTx(sender, 0);
+    auto pending = makeSvcTx(sender, 1);
+    memPool.add(std::vector{executed, pending});
+    // The stub executor writes no state: the block's effect on the account is the
+    // post-commit nonce the prune must read.
+    globalStateStorageFixture.setNonce(sender, "1");
+
+    auto request = makeNewPayloadRequestV3(builtPayload->executionPayload);
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_REQUIRE_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto fetched = memPool.get(std::vector{executed->hash(), pending->hash()});
+    BOOST_REQUIRE_EQUAL(fetched.size(), 2);
+    BOOST_CHECK(!fetched[0]);
+    BOOST_CHECK(fetched[1]);
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
@@ -879,6 +917,43 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
     BOOST_REQUIRE(committed->executionPayload.withdrawalsRoot.has_value());
     BOOST_CHECK_EQUAL(
         *committed->executionPayload.withdrawalsRoot, *payload->executionPayload.withdrawalsRoot);
+}
+
+// The v1 lane seals against the tx_gas_limit row it stamps as the block gasLimit
+// (engine_common::legacyBlockGasLimit): with the row at 42000 and three 21000-gas Web3
+// transfers pooled, the built payload carries two and the third stays pooled.
+BOOST_AUTO_TEST_CASE(build_payload_seals_against_the_tx_gas_limit_row)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
+    writeRawSysConfig(globalStateStorageFixture.backendStorage, "tx_gas_limit", "42000");
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
+    std::string sender("eeeeeeeeeeeeeeeeeeee", 20);
+    std::vector<protocol::Transaction::Ptr> txs;
+    for (uint64_t nonce = 0; nonce < 3; ++nonce)
+    {
+        auto tx = makeSvcWeb3Tx(sender, nonce);
+        // The pool budgets by Transaction::gasLimit(), the Tars field the ingress bridge
+        // fills from the envelope; the helper's RLP body alone does not populate it.
+        std::static_pointer_cast<SvcTestTransactionImpl>(tx)->mutableInner().data.gasLimit = 21000;
+        txs.push_back(std::move(tx));
+    }
+    memPool.add(txs);
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto payloadAttributes = makePayloadAttributesV2();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
+    BOOST_CHECK_EQUAL(payload->executionPayload.gasLimit, u256(42000));
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 2);
+    auto fetched = memPool.get(std::vector{txs[2]->hash()});
+    BOOST_REQUIRE_EQUAL(fetched.size(), 1);
+    BOOST_CHECK(fetched[0]);  // the third transfer waits for the next block
 }
 
 BOOST_AUTO_TEST_CASE(build_payload_reassembles_web3_raw_bytes)
