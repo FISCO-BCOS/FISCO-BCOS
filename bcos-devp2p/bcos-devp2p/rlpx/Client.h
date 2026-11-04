@@ -78,13 +78,13 @@ struct HandshakeOptions
     uint8_t minEthVersion{bcos::devp2p::eth::kMinProtocolVersion};
     // Highest eth version advertised (tests pin a peer to an older generation).
     uint8_t maxEthVersion{bcos::devp2p::eth::kProtocolVersion};
-    // EIP-2124 fork-id check of the peer's Status; null skips it (the outbound sync loop
-    // trusts its configured bootnodes, the inbound listener always sets it).
+    // EIP-2124 fork-id check of the peer's Status; null skips it (configured bootnodes are
+    // trusted; the inbound listener and dials to discovered peers set it).
     std::function<std::optional<std::string>(bcos::devp2p::eth::ForkId const&)> forkIdReject;
-    // Admission decision taken after Hello (identity known) and before Status: a reason
-    // means Disconnect(reason). Null admits everyone.
-    std::function<std::optional<DisconnectReason>(HelloMessage const&)> admit;
 };
+
+// Best-effort Disconnect(reason); a peer that is already gone is not an error.
+void sendDisconnect(Session& _session, DisconnectReason _reason) noexcept;
 
 // The result of a successful connection: the encrypted session plus the
 // peer's advertised identity and status.

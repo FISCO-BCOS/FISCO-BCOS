@@ -19,11 +19,13 @@
  */
 #include "DnsDiscovery.h"
 #include "../rlpx/Crypto.h"
-#include <arpa/nameser.h>
 #include <bcos-utilities/BoostLog.h>
+#if !defined(_WIN32)
+#include <arpa/nameser.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <resolv.h>
+#endif
 #include <algorithm>
 #include <charconv>
 #include <stdexcept>
@@ -220,6 +222,12 @@ std::string enrTreeEntryHash(std::string_view _content)
 // ---------------------------------------------------------------------------
 // libresolv resolver
 // ---------------------------------------------------------------------------
+#if defined(_WIN32)
+std::vector<std::string> ResolvDnsResolver::lookupTxt(std::string const&)
+{
+    throw std::runtime_error("dnsdisc: libresolv is not available on Windows");
+}
+#else
 std::vector<std::string> ResolvDnsResolver::lookupTxt(std::string const& _name)
 {
     struct __res_state state{};
@@ -287,6 +295,7 @@ std::vector<std::string> ResolvDnsResolver::lookupTxt(std::string const& _name)
     }
     return records;
 }
+#endif  // defined(_WIN32)
 
 // ---------------------------------------------------------------------------
 // DnsDiscovery

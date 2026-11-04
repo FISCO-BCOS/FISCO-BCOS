@@ -67,17 +67,12 @@ std::string disconnectReason(bytesConstRef _data)
 }
 
 // Send Disconnect(reason) best-effort (the peer may already be gone) and throw.
+constexpr size_t c_maxHandshakeFrameSize = 64 * 1024;
+
 [[noreturn]] void rejectHandshake(
     Session& _session, DisconnectReason _reason, std::string const& _what)
 {
-    try
-    {
-        _session.sendMessage(Message{baseMsg::Disconnect, encodeDisconnect({_reason})});
-    }
-    catch (std::exception const&)
-    {
-        // best effort: the reject itself is what the caller reports
-    }
+    sendDisconnect(_session, _reason);
     throw HandshakeRejected(_reason, _what);
 }
 }  // namespace
@@ -159,16 +154,6 @@ EstablishedSession performHandshake(Session&& _session, AuthKeys const& _authKey
         rejectHandshake(session, DisconnectReason::UselessPeer,
             "exchangeHandshake: no common eth capability with peer");
     }
-    if (_options.admit)
-    {
-        if (auto reason = _options.admit(peerHello))
-        {
-            rejectHandshake(session, *reason,
-                "exchangeHandshake: peer not admitted (reason=" +
-                    std::to_string(static_cast<int>(*reason)) + ")");
-        }
-    }
-
     // --- eth Status exchange ---
     eth::StatusMessage status;
     status.protocolVersion = negotiatedEth;
@@ -255,6 +240,18 @@ EstablishedSession performHandshake(Session&& _session, AuthKeys const& _authKey
     return EstablishedSession(std::move(session), std::move(peerHello), std::move(peerStatus));
 }
 
+void sendDisconnect(Session& _session, DisconnectReason _reason) noexcept
+{
+    try
+    {
+        _session.sendMessage(Message{baseMsg::Disconnect, encodeDisconnect({_reason})});
+    }
+    catch (...)
+    {
+        // best effort: the caller already decided to drop this peer
+    }
+}
+
 EstablishedSession acceptHandshake(Socket&& _socket, EccKeyPair const& _keyPair,
     PeerConfig const& _config, HandshakeOptions const& _options)
 {
@@ -262,7 +259,12 @@ EstablishedSession acceptHandshake(Socket&& _socket, EccKeyPair const& _keyPair,
     Handshake handshake(_keyPair, /* isInitiator = */ false);
     auto authKeys = handshake.execute(socket);
     auto session = makeSession(std::move(socket), authKeys, /* isInitiator = */ false);
-    return performHandshake(std::move(session), authKeys, _keyPair, _config, _options);
+    // Whoever connects can claim a frame size, and the frame buffer is allocated before it
+    // arrives. Hello and Status are small, so a stranger gets no 16 MiB buffer.
+    session.setMaxFrameSize(c_maxHandshakeFrameSize);
+    auto established = performHandshake(std::move(session), authKeys, _keyPair, _config, _options);
+    established.session.setMaxFrameSize(MessageCodec::kMaxFrameSize);
+    return established;
 }
 
 RlpxClient::RlpxClient(EccKeyPair _keyPair, PeerConfig _config, HandshakeOptions _options)

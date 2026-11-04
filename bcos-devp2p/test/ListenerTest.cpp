@@ -31,6 +31,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::devp2p;
@@ -138,20 +139,12 @@ BOOST_AUTO_TEST_CASE(acceptsDialerNegotiatesEth70AndAnnouncesRange)
     BOOST_CHECK_EQUAL(listener->liveConnections(), 0u);
 }
 
-BOOST_AUTO_TEST_CASE(rejectsLegacyOnlyWrongNetworkAndDeniedPeers)
+BOOST_AUTO_TEST_CASE(rejectsLegacyOnlyAndWrongNetworkPeers)
 {
     rlpx::EccKeyPair serverKey;
     std::atomic<int> sessions{0};
-    std::atomic<bool> deny{false};
     rlpx::HandshakeOptions options;
     options.minEthVersion = eth::kMinServingProtocolVersion;
-    options.admit = [&](rlpx::HelloMessage const&) -> std::optional<rlpx::DisconnectReason> {
-        if (deny.load())
-        {
-            return rlpx::DisconnectReason::TooManyPeers;
-        }
-        return std::nullopt;
-    };
     options.forkIdReject = [](eth::ForkId const& forkId) -> std::optional<std::string> {
         if (forkId.hash != 0x12345678)
         {
@@ -170,7 +163,7 @@ BOOST_AUTO_TEST_CASE(rejectsLegacyOnlyWrongNetworkAndDeniedPeers)
 
     // The Hello/Status exchange is symmetric: a mismatch the DIALER can see itself
     // (capability, network id) surfaces as its own HandshakeRejected; one only the
-    // listener checks (fork-id filter, admission) arrives as the listener's Disconnect
+    // listener checks (fork-id filter) arrives as the listener's Disconnect
     // frame — either while the dialer still waits for Status, or right after a connect()
     // that already returned because both Status frames crossed on the wire.
     auto expectDisconnect = [&](rlpx::PeerConfig config, rlpx::HandshakeOptions clientOptions,
@@ -216,11 +209,6 @@ BOOST_AUTO_TEST_CASE(rejectsLegacyOnlyWrongNetworkAndDeniedPeers)
     badRange.earliestBlock = 10;
     badRange.latestBlock = 5;
     expectDisconnect(badRange, {}, rlpx::DisconnectReason::ProtocolBreach);
-    // Admission refused -> TooManyPeers after Hello.
-    deny.store(true);
-    expectDisconnect(
-        clientConfig(listener->port(), serverKey), {}, rlpx::DisconnectReason::TooManyPeers);
-    deny.store(false);
     // And a good dialer still gets through afterwards.
     rlpx::EccKeyPair clientKey;
     rlpx::RlpxClient client(clientKey, clientConfig(listener->port(), serverKey));
@@ -228,6 +216,41 @@ BOOST_AUTO_TEST_CASE(rejectsLegacyOnlyWrongNetworkAndDeniedPeers)
     BOOST_CHECK_EQUAL(established.peerStatus.protocolVersion, 70u);
     listener->stop();
     BOOST_CHECK_EQUAL(sessions.load(), 1);
+}
+
+// A failed handshake never reaches the session handler, the only place a peer slot is
+// claimed; and connections beyond the limit are closed instead of costing a thread.
+BOOST_AUTO_TEST_CASE(connectionLimitClosesExcessSockets)
+{
+    rlpx::EccKeyPair serverKey;
+    rlpx::ListenerConfig config{"127.0.0.1", 0};
+    config.maxConnections = 2;
+    auto listener = std::make_shared<rlpx::Listener>(
+        serverKey, config, serverStatus, [](rlpx::EstablishedSession&) {});
+    listener->start();
+    auto connect = [&]() {
+        rlpx::Socket socket;
+        socket.connect("127.0.0.1", listener->port());
+        return socket;
+    };
+    // Two idle dialers sit in the handshake and hold the limit.
+    auto first = connect();
+    auto second = connect();
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (listener->liveConnections() < 2 && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    BOOST_REQUIRE_EQUAL(listener->liveConnections(), 2u);
+    // The third is accepted and closed at once: its read ends well before the 15 s I/O timeout.
+    auto third = connect();
+    auto const start = std::chrono::steady_clock::now();
+    BOOST_CHECK_THROW(third.recvFixed(1), std::exception);
+    BOOST_CHECK(std::chrono::steady_clock::now() - start < std::chrono::seconds(5));
+    BOOST_CHECK_EQUAL(listener->liveConnections(), 2u);
+    first.shutdown();
+    second.shutdown();
+    listener->stop();
 }
 
 // stop() must wake a handler parked in recvMessage (idle peer) and join it promptly —

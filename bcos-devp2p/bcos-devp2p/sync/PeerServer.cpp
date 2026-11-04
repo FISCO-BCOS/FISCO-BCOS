@@ -175,6 +175,11 @@ PeerServer::Outcome PeerServer::serveHeaders(eth::GetBlockHeadersMessage const& 
         bytes += std::max(header->size(), m_limits.estHeaderBytes);
         response.headers.push_back(std::move(*header));
         // Next number; stop on arithmetic over/underflow (geth's "skip overflow" guard).
+        // skip = UINT64_MAX wraps the step to 0: the next number is out of range either way.
+        if (step == 0)
+        {
+            break;
+        }
         if (_request.reverse)
         {
             if (number < step)
@@ -256,10 +261,9 @@ PeerServer::Outcome PeerServer::serveReceipts(
         }
         std::vector<bcos::bytes> encoded;
         encoded.reserve(receipts->size());
-        // eth/70: the first block's list starts at firstBlockReceiptIndex (the
+        // eth/70: the first REQUESTED block's list starts at firstBlockReceiptIndex (the
         // requester already holds the earlier ones from a partial answer).
-        size_t const first =
-            (_ethVersion >= 70 && response.receipts.empty()) ? _request.firstBlockReceiptIndex : 0;
+        size_t const first = (_ethVersion >= 70 && i == 0) ? _request.firstBlockReceiptIndex : 0;
         bool truncated = false;
         for (size_t k = first; k < receipts->size(); ++k)
         {

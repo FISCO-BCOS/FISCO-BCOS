@@ -85,9 +85,6 @@ class Discv4Service : public std::enable_shared_from_this<Discv4Service>
 {
 public:
     using Ptr = std::shared_ptr<Discv4Service>;
-    // Called (off the lock, on the discovery thread) when a node with a TCP port becomes
-    // bonded for the first time.
-
     struct Stats
     {
         size_t tableSize{0};

@@ -29,6 +29,7 @@
 #include <cstddef>
 #include <deque>
 #include <functional>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -84,9 +85,10 @@ public:
     // --- connected peers ---
     // Claim a slot for a peer that completed the handshake. nullopt = admitted (hold the
     // slot until release()); otherwise the Disconnect reason to send: AlreadyConnected,
-    // TooManyPeers, or UselessPeer for a banned node.
+    // TooManyPeers, or UselessPeer for a banned node. Directions are deduped separately:
+    // an inbound session only serves, so a peer dialing us must not stop us syncing from it.
     std::optional<rlpx::DisconnectReason> tryAdmit(NodeId const& _id, Direction _direction);
-    void release(NodeId const& _id);
+    void release(NodeId const& _id, Direction _direction);
     bool isConnected(NodeId const& _id) const;
     size_t connectedCount() const;
     size_t inboundCount() const;
@@ -104,24 +106,25 @@ public:
     // Deduped by node id against static and discovered peers; oldest discovered entry
     // is dropped past maxCandidates. Entries without a 64-byte key are ignored.
     void addCandidate(rlpx::PeerConfig _peer);
-    // Static peers first, then discovered ones, minus banned and currently connected
-    // nodes. The dial loop walks this list.
-    std::vector<rlpx::PeerConfig> dialCandidates() const;
+    // Static peers first, then up to _maxDiscovered discovered ones, minus banned nodes and
+    // nodes we already dialed. The dial loop walks this list.
+    std::vector<rlpx::PeerConfig> dialCandidates(
+        size_t _maxDiscovered = std::numeric_limits<size_t>::max()) const;
+    // Whether the operator configured this node. Only these peers are trusted to pick the
+    // chain; a discovered peer is an unauthenticated stranger.
+    bool isStatic(NodeId const& _id) const;
     size_t candidateCount() const;
 
     PeerManagerConfig const& config() const { return m_config; }
 
 private:
-    struct Connected
-    {
-        Direction direction;
-    };
     bool bannedLocked(NodeId const& _id) const;  // expires stale bans; m_mutex held
 
     PeerManagerConfig m_config;
     Clock m_clock;
     mutable std::mutex m_mutex;
-    std::map<NodeId, Connected> m_connected;
+    std::set<NodeId> m_inbound;
+    std::set<NodeId> m_outbound;
     std::map<NodeId, int> m_scores;
     mutable std::map<NodeId, std::chrono::steady_clock::time_point> m_bans;  // expiry
     std::vector<rlpx::PeerConfig> m_static;
