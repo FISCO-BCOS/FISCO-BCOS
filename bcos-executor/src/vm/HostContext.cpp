@@ -316,9 +316,6 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
     if (_isEvmPrecompiled)
     {
-        // Reference: Yellow Paper (https://ethereum.github.io/yellowpaper/paper.pdf),
-        // message call to an account with no code halts non-exceptionally (z=1, no execution).
-        // Reference: EIP-140 (https://eips.ethereum.org/EIPS/eip-140), REVERT is failure semantics
         auto gasUsed =
             m_executive->costOfPrecompiled(_request->receiveAddress, ref(_request->data));
         /// NOTE: this assignment is wrong, will cause out of gas, should not use evm precompiled

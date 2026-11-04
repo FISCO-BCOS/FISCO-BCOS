@@ -281,16 +281,21 @@ BOOST_AUTO_TEST_CASE(web3ChainIdSharesParseWeb3ChainId)
     BOOST_CHECK_THROW(trySet("4294967296"), PrecompiledError);
 }
 
-// An unknown feature name is refused by governance instead of silently enabling nothing.
-// SystemConfigPrecompiled::validate rethrows NoSuchFeatureError as "unsupported key".
-BOOST_AUTO_TEST_CASE(unknownFlagNameIsRefusedByGovernance)
+// feature_l2_ethereum_compat is gone, not merely gated: the old name is deliberately NOT
+// recognised -- Features::string2Flag throws NoSuchFeatureError for it, so a config or
+// transaction still carrying the name fails loudly instead of silently enabling nothing.
+// The lane it used to switch on is a genesis property now (executor_version >= 2). This
+// pins the refusal where an operator meets it: the governance setValueByKey transaction
+// rejects the key as unknown ("unsupported key", SystemConfigPrecompiled::validate, which
+// re-throws with the errinfo_comment the caller sees as the revert reason).
+BOOST_AUTO_TEST_CASE(removedL2FlagNameIsRefusedByGovernance)
 {
     SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
     auto setParameters = std::make_shared<PrecompiledExecResult>();
     CodecWrapper codec(hashImpl);
 
     auto setInput = codec.encodeWithSig("setValueByKey(string,string)",
-        std::string("reserved_removed_l2_ethereum_compat"), std::string("1"));
+        std::string("feature_l2_ethereum_compat"), std::string("1"));
     setParameters->m_input = bcos::ref(setInput);
     BOOST_CHECK_EXCEPTION(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError,
         [](PrecompiledError const& e) {

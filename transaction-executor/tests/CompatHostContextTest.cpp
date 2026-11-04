@@ -100,6 +100,25 @@ BOOST_AUTO_TEST_CASE(TE_FC_revision_cancun_only)
         EVMC_CANCUN);
 }
 
+BOOST_AUTO_TEST_CASE(TE_FC_access_always_cold)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    auto host = makeHost(features);
+    auto const* hostInterface = host.hostInterface();
+    evmc_address address{};
+    evmc_bytes32 key{};
+
+    BOOST_REQUIRE(hostInterface != nullptr);
+    BOOST_CHECK_EQUAL(hostInterface->access_account(host.hostCtx(), &address), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(hostInterface->access_account(host.hostCtx(), &address), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(
+        hostInterface->access_storage(host.hostCtx(), &address, &key), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(
+        hostInterface->access_storage(host.hostCtx(), &address, &key), EVMC_ACCESS_COLD);
+}
+
 BOOST_AUTO_TEST_CASE(TE_FC_revision_fallback_london)
 {
     bcos::ledger::Features features;

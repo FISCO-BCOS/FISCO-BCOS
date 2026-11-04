@@ -202,10 +202,8 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_raw_address",
         "feature_rpbft_vrf_type_secp256k1",
         "feature_balance_policy2",
-        "feature_l2_ethereum_compat",
         "feature_mpt_state_root",
         "bugfix_nonce_ordering",
-        "feature_op_jovian",
         "bugfix_eip161_1052_account_semantics",
     };
     // clang-format on
@@ -230,7 +228,8 @@ BOOST_AUTO_TEST_CASE(allFlagNamesRoundTrip)
 // silently enabling nothing.
 BOOST_AUTO_TEST_CASE(retiredNamesAreRejected)
 {
-    for (auto name : {"reserved_removed_l2_ethereum_compat", "reserved_removed_op_jovian"})
+    for (auto name : {"feature_l2_ethereum_compat", "feature_op_jovian",
+             "reserved_removed_l2_ethereum_compat", "reserved_removed_op_jovian"})
     {
         BOOST_CHECK(!Features::contains(name));
         BOOST_CHECK_THROW(Features::string2Flag(name), NoSuchFeatureError);

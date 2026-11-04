@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE(FC_S_cancun_only_identity_precompile)
 
 BOOST_AUTO_TEST_CASE(FC_S_legacy_tx_no_prague_path)
 {
-    // FC-06: ordinary pre-Cancun path — identity precompile on cancun-only profile.
+    // FC-06: identity precompile on the cancun-only profile (not a pre-Cancun path).
     using compat::CompatFeatureProfile;
 
     auto host =
@@ -40,9 +40,20 @@ BOOST_AUTO_TEST_CASE(FC_S_legacy_tx_no_prague_path)
     BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
 }
 
-BOOST_AUTO_TEST_CASE(FC_S_cancun_only_legacy_gas_smoke)
+BOOST_AUTO_TEST_CASE(FC_S_access_always_cold)
 {
-    BOOST_TEST_MESSAGE("FC-01b: full legacy gas regression is FC-S scope only.");
+    auto host = makeCompatHostContext(*this, compat::CompatFeatureProfile::cancunOnly());
+    auto* context = reinterpret_cast<evmc_host_context*>(&host);
+    evmc_address address{};
+    evmc_bytes32 key{};
+
+    BOOST_REQUIRE(host.hostInterface != nullptr);
+    BOOST_CHECK_EQUAL(host.hostInterface->access_account(context, &address), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.hostInterface->access_account(context, &address), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(
+        host.hostInterface->access_storage(context, &address, &key), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(
+        host.hostInterface->access_storage(context, &address, &key), EVMC_ACCESS_COLD);
 }
 
 BOOST_AUTO_TEST_SUITE_END()  // CompatSmoke

@@ -40,8 +40,8 @@ DERIVE_BCOS_EXCEPTION(NoSuchFeatureError);
 class Features
 {
 public:
-    // Flags persist by NAME only (SYS_CONFIG keys and the genesis pin), so never rename one.
-    // A retired flag keeps its name while existing genesis files may still carry it.
+    // Flags persist by NAME only (SYS_CONFIG keys and the genesis pin), so never rename a
+    // recognized flag. Removed names stay rejected so stale genesis and governance keys fail.
     enum class Flag
     {
         bugfix_revert = 0,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
@@ -95,6 +95,8 @@ public:
         feature_balance_precompiled = 44,
         feature_balance_policy1 = 45,
         feature_paillier_add_raw = 46,
+        // 47, 49 and 50 were feature_evm_eip2929 / feature_evm_prague / feature_evm_osaka,
+        // introduced on release-3.18.0 but never released. Do not reuse their names or values.
         feature_evm_cancun = 48,
         feature_evm_timestamp = 51,
         feature_evm_address = 52,
@@ -107,23 +109,13 @@ public:
         // accepted with a warning and records an inert no-op row.
         feature_raw_address = 54,
         feature_rpbft_vrf_type_secp256k1 = 55,
-        feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist
-        feature_l2_ethereum_compat = 57,  // OP-Stack L2 mode: Ethereum-compatible
-                                          // genesis/predeploys
-        feature_mpt_state_root = 58,      // MPT lazy-build: block stateRoot switches to the
-                                          // Ethereum MPT root from this flag's activation
-                                          // block on (spec 2026-04-24 design3 4.3)
-        // Takes the next unused number per the rule above, rather than the slot next to
-        // bugfix_statestorage_hash_v3_17 it occupies on release-3.17.0: inserting it there would
-        // renumber every feature_ flag after it and silently move their on-chain bits.
-        bugfix_nonce_ordering = 59,  // web3 EOA nonce must be independent of intra-block tx order
-        feature_op_jovian = 60,      // OP-Stack: Jovian fork semantics (DA footprint in
-                                     // header.BlobGasUsed, operator fee ×100 formula, 17B Jovian
-                                     // extraData). OFF → Isthmus semantics. Replaces the former
-                                     // chain.jovian_time timestamp threshold (FISCO has no
-                                     // timestamp-based fork activation); read at startup from
-                                     // genesis [features], same channel as
-                                     // feature_l2_ethereum_compat.
+        feature_balance_policy2 = 56,  // 转账白名单 Transfer whitelist
+        // 57 was the unreleased feature_l2_ethereum_compat; do not reuse its name or value.
+        feature_mpt_state_root = 58,  // MPT lazy-build: block stateRoot switches to the
+                                      // Ethereum MPT root from this flag's activation
+                                      // block on (spec 2026-04-24 design3 4.3)
+        bugfix_nonce_ordering = 59,   // web3 EOA nonce must be independent of intra-block tx order
+        // 60 was the unreleased feature_op_jovian; do not reuse its name or value.
         bugfix_eip161_1052_account_semantics = 61,  // #5371/#5372: v1 executor answers
                                                     // account_exists per EIP-161 (empty == absent)
                                                     // and EXTCODEHASH per EIP-1052: the chain
