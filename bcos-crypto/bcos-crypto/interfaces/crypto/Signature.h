@@ -40,12 +40,24 @@ public:
         bool _signatureWithPub = false) const = 0;
 
     // verify checks whether a signature is calculated from a given hash
-    virtual bool verify(
-        const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const = 0;
+    bool verify(const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
+    {
+        try
+        {
+            return verify(
+                bytesConstRef(reinterpret_cast<const byte*>(_pubKey.constData()), _pubKey.size()),
+                _hash, _signatureData);
+        }
+        catch (const InvalidKey&)
+        {
+            return false;
+        }
+    }
     virtual bool verify(
         bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const = 0;
 
-    // recover recovers the public key from the given signature
+    // recover is intentionally closed to KeyImpl: SignatureCrypto does not support alternative
+    // key representations, so interfaces/crypto depends on signature/key by design.
     virtual KeyImpl recover(const HashType& _hash, bytesConstRef _signatureData) const = 0;
     virtual bytes recoverAddress(
         crypto::Hash& _hashImpl, const HashType& _hash, bytesConstRef _signatureData) const

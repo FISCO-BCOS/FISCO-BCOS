@@ -125,7 +125,8 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     std::cout << "#### publicKey:" << keyPair->publicKey()->hex() << std::endl;
 
     // verify
-    bool result = secp256k1Verify(
+    Secp256k1Crypto k1Crypto;
+    bool result = k1Crypto.verify(
         *keyPair->publicKey(), hashData, bytesConstRef(signData.data(), signData.size()));
     BOOST_CHECK(result == true);
     std::cout << "### verify result:" << result << std::endl;
@@ -135,8 +136,13 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     // recover
     auto pub = secp256k1Recover(hashData, bytesConstRef(signData.data(), signData.size()));
     auto hashImpl = std::make_shared<Keccak256>();
-    auto address = right160(hashImpl->hash(ref(pub.data())));
-    Secp256k1Crypto k1Crypto;
+    auto address = calculateAddress(*hashImpl, pub);
+    auto pubPtr = std::make_shared<KeyImpl>(pub.data());
+    BOOST_CHECK(address == calculateAddress(hashImpl, pubPtr));
+    BOOST_CHECK(address == calculateAddress(*hashImpl, pubPtr));
+    BOOST_CHECK(address.asBytes() == calculateAddress(*hashImpl,
+                                         reinterpret_cast<uint8_t*>(pub.mutableData()),
+                                         SECP256K1_PUBLICKEY_LEN));
     auto ret = k1Crypto.recoverAddress(
         *hashImpl, hashData, bytesConstRef(signData.data(), signData.size()));
     std::cout << "### right   address:" << address.hex() << std::endl;
@@ -151,7 +157,7 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     /// exception check:
     // check1: invalid payload(hash)
     h256 invalidHash = keccak256Hash(bytesConstRef((std::string)("abce")));
-    result = secp256k1Verify(
+    result = k1Crypto.verify(
         *keyPair->publicKey(), invalidHash, bytesConstRef(signData.data(), signData.size()));
     BOOST_CHECK(result == false);
 
@@ -161,7 +167,7 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
 
     // check2: invalid sig
     auto anotherSig(secp256k1Sign(*keyPair, invalidHash));
-    result = secp256k1Verify(
+    result = k1Crypto.verify(
         *keyPair->publicKey(), hashData, bytesConstRef(anotherSig.data(), anotherSig.size()));
     BOOST_CHECK(result == false);
 
@@ -170,7 +176,7 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
 
     // check3: invalid keyPair
     auto keyPair2 = secp256k1GenerateKeyPair();
-    result = secp256k1Verify(
+    result = k1Crypto.verify(
         *keyPair2->publicKey(), hashData, bytesConstRef(signData.data(), signData.size()));
     BOOST_CHECK(result == false);
 
@@ -185,7 +191,7 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     // check4: invalid sig: len is not equal to 65(r+s+v)
     bytesConstRef invalidSigData = bytesConstRef(signData.data(), signData.size() - 1);
     BOOST_CHECK_THROW(
-        secp256k1Verify(*keyPair->publicKey(), hashData, invalidSigData), InvalidSignature);
+        k1Crypto.verify(*keyPair->publicKey(), hashData, invalidSigData), InvalidSignature);
     BOOST_CHECK_THROW(
         secp256k1Crypto->recoverAddress(*hashImpl, hashData, invalidSigData), InvalidSignature);
 

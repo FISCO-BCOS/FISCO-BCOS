@@ -47,7 +47,6 @@ inline const u256 c_secp256k1nOver2 = c_secp256k1n / 2;
 secp256k1_context* secp256k1Context();
 
 bytes secp256k1Sign(const KeyPairInterface& _keyPair, const HashType& _hash);
-bool secp256k1Verify(const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData);
 bool secp256k1Verify(
     bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData);
 std::unique_ptr<KeyPairInterface> secp256k1GenerateKeyPair();
@@ -59,16 +58,12 @@ class Secp256k1Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<Secp256k1Crypto>;
+    using SignatureCrypto::verify;
     Secp256k1Crypto() = default;
     ~Secp256k1Crypto() override = default;
     bytes sign(const KeyPairInterface& _keyPair, const HashType& _hash, bool) const override
     {
         return secp256k1Sign(_keyPair, _hash);
-    }
-    bool verify(
-        const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const override
-    {
-        return secp256k1Verify(_pubKey, _hash, _signatureData);
     }
 
     bool verify(bytesConstRef _pubKeyBytes, const HashType& _hash,

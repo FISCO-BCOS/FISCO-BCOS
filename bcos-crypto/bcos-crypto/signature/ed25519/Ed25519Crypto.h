@@ -30,8 +30,6 @@ bytes ed25519Sign(
     const KeyPairInterface& _keyPair, const HashType& _messageHash, bool _signatureWithPub = false);
 KeyPairInterface::UniquePtr ed25519GenerateKeyPair();
 bool ed25519Verify(
-    const Public& _pubKey, const HashType& _messageHash, bytesConstRef _signatureData);
-bool ed25519Verify(
     bytesConstRef _pubKeyBytes, const HashType& _messageHash, bytesConstRef _signatureData);
 KeyImpl ed25519Recover(const HashType& _messageHash, bytesConstRef _signatureData);
 
@@ -41,18 +39,13 @@ class Ed25519Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<Ed25519Crypto>;
+    using SignatureCrypto::verify;
     Ed25519Crypto() = default;
     ~Ed25519Crypto() override {}
     bytes sign(const KeyPairInterface& _keyPair, const HashType& _messageHash,
         bool _signatureWithPub = false) const override
     {
         return ed25519Sign(_keyPair, _messageHash, _signatureWithPub);
-    }
-
-    bool verify(const Public& _pubKey, const HashType& _messageHash,
-        bytesConstRef _signatureData) const override
-    {
-        return ed25519Verify(_pubKey, _messageHash, _signatureData);
     }
 
     bool verify(bytesConstRef _pubKeyBytes, const HashType& _hash,

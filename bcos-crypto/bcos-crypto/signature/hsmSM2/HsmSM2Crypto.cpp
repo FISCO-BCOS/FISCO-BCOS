@@ -157,17 +157,6 @@ bool HsmSM2Crypto::verify(
     return true;
 }
 
-bool HsmSM2Crypto::verify(
-    const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
-{
-    if (_pubKey.size() < HSM_SM2_PUBLIC_KEY_LEN)
-    {
-        return false;
-    }
-    return verify(bytesConstRef(reinterpret_cast<const byte*>(_pubKey.constData()), _pubKey.size()),
-        _hash, _signatureData);
-}
-
 KeyImpl HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
 {
     auto signatureStruct = std::make_shared<SignatureDataWithPub>(_signData);

@@ -76,14 +76,6 @@ bytes bcos::crypto::secp256k1Sign(const KeyPairInterface& _keyPair, const HashTy
 }
 
 bool bcos::crypto::secp256k1Verify(
-    const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData)
-{
-    return secp256k1Verify(
-        bytesConstRef(reinterpret_cast<const byte*>(_pubKey.constData()), _pubKey.size()), _hash,
-        _signatureData);
-}
-
-bool bcos::crypto::secp256k1Verify(
     bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData)
 {
     if (_pubKeyBytes.size() < SECP256K1_PUBLICKEY_LEN)

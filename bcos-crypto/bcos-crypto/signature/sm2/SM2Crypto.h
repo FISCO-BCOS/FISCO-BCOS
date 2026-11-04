@@ -33,13 +33,11 @@ class SM2Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<SM2Crypto>;
+    using SignatureCrypto::verify;
     SM2Crypto();
     ~SM2Crypto() = default;
     bytes sign(const KeyPairInterface& _keyPair, const HashType& _hash,
         bool _signatureWithPub = false) const override;
-
-    bool verify(
-        const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const override;
 
     bool verify(bytesConstRef _pubKeyBytes, const HashType& _hash,
         bytesConstRef _signatureData) const override;

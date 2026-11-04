@@ -225,14 +225,14 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, crypto::Hash& _hashImpl,
     std::cout << "TPS of " << _signatureName << " verify:" << getTPS(utcTime(), startT, _count)
               << std::endl;
     auto pub = _signatureImpl->recover(_msgHash, ref(signedData));
-    auto address = right160(_hashImpl.hash(pub.data())).asBytes();
+    auto address = calculateAddress(_hashImpl, pub).asBytes();
     // recover
     signedData = _signatureImpl->sign(*keyPair, _msgHash, true);
     startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
         auto pub = _signatureImpl->recover(_msgHash, ref(signedData));
-        auto recoverAddress = right160(_hashImpl.hash(pub.data())).asBytes();
+        auto recoverAddress = calculateAddress(_hashImpl, pub).asBytes();
         if (recoverAddress != address)
         {
             return;

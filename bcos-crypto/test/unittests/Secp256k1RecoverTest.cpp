@@ -65,6 +65,7 @@ BOOST_AUTO_TEST_CASE(verifyBytesPublicKeyRejectsShortInput)
     BOOST_CHECK(secp256k1Verify(ref(pubBytes), hash, ref(signature)));
 
     pubBytes.pop_back();
+    BOOST_CHECK(!crypto.verify(KeyImpl(pubBytes), hash, ref(signature)));
     BOOST_CHECK_THROW(crypto.verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
     BOOST_CHECK_THROW(secp256k1Verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
 }

@@ -98,17 +98,6 @@ bytes SM2Crypto::sign(
     return signatureData;
 }
 
-bool SM2Crypto::verify(
-    const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
-{
-    if (_pubKey.size() < SM2_PUBLIC_KEY_LEN)
-    {
-        return false;
-    }
-    return verify(bytesConstRef(reinterpret_cast<const byte*>(_pubKey.constData()), _pubKey.size()),
-        _hash, _signatureData);
-}
-
 KeyImpl SM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
 {
     auto signatureStruct = std::make_shared<SignatureDataWithPub>(_signData);
