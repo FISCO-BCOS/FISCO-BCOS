@@ -1480,8 +1480,8 @@ std::shared_ptr<bcos::gateway::InboundChannel> bcos::gateway::Service::subscribe
         // Count AND byte bounded (the byte measure is inboundMessageBytes): the session recv
         // channel already caps what one peer can pin — this budget caps what a slow per-type
         // consumer lets the whole node pin, keeping the FIB-184 bound intact one hop downstream.
-        slot = std::make_shared<InboundChannel>(std::move(_poster), _capacity,
-            DEFAULT_INBOUND_QUEUE_BYTES, inboundMessageBytes, InboundChannel::WaitPolicy::FirstFit);
+        slot = std::make_shared<InboundChannel>(
+            std::move(_poster), _capacity, DEFAULT_INBOUND_QUEUE_BYTES, inboundMessageBytes);
     }
     return slot;
 }
@@ -1599,9 +1599,8 @@ bcos::gateway::DispatchBudget::Ptr bcos::gateway::Service::ensureGlobalDispatchB
     }
     if (!m_globalDispatchBudget)
     {
-        m_globalDispatchBudget = std::make_shared<DispatchBudget>(m_dispatchConfig.globalBytes,
-            m_dispatchConfig.globalCount, makeDispatchPoster(),
-            DispatchBudget::WaitPolicy::FirstFit, std::chrono::milliseconds(CHECK_INTERVAL));
+        m_globalDispatchBudget = std::make_shared<DispatchBudget>(
+            m_dispatchConfig.globalBytes, m_dispatchConfig.globalCount, makeDispatchPoster());
     }
     return m_globalDispatchBudget;
 }

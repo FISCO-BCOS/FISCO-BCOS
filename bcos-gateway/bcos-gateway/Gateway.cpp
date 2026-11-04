@@ -585,8 +585,22 @@ bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, Service::Ptr 
             co_return true;
         });
     m_p2pInterface->subscribeHandler(GatewayMessageType::BroadcastMessage,
-        [this](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
-            onReceiveBroadcastMessage(std::move(inbound.session), std::move(inbound.message));
+        [this, dispatchState = m_dispatchState](
+            bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
+            std::shared_ptr<Gateway> self;
+            {
+                std::lock_guard lock(dispatchState->mutex);
+                if (dispatchState->stopped)
+                {
+                    co_return false;
+                }
+                self = weak_from_this().lock();
+                if (!self)
+                {
+                    co_return false;
+                }
+            }
+            self->onReceiveBroadcastMessage(std::move(inbound.session), std::move(inbound.message));
             co_return true;
         });
 }

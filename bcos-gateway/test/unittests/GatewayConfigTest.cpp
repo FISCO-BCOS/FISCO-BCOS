@@ -514,13 +514,13 @@ BOOST_AUTO_TEST_CASE(test_dispatchBudgetConfig)
         config->initP2PConfig(pt, false);
         auto dispatchConfig = config->dispatchBudgetConfig();
         BOOST_CHECK_EQUAL(
-            dispatchConfig.globalBytes, DispatchBudgetConfig::DEFAULT_GLOBAL_IN_FLIGHT_BYTES);
+            dispatchConfig.globalBytes, DispatchBudgetLimits::DEFAULT_GLOBAL_IN_FLIGHT_BYTES);
         BOOST_CHECK_EQUAL(
-            dispatchConfig.globalCount, DispatchBudgetConfig::DEFAULT_GLOBAL_IN_FLIGHT_COUNT);
+            dispatchConfig.globalCount, DispatchBudgetLimits::DEFAULT_GLOBAL_IN_FLIGHT_COUNT);
         BOOST_CHECK_EQUAL(
-            dispatchConfig.peerBytes, DispatchBudgetConfig::DEFAULT_PEER_IN_FLIGHT_BYTES);
+            dispatchConfig.peerBytes, DispatchBudgetLimits::DEFAULT_PEER_IN_FLIGHT_BYTES);
         BOOST_CHECK_EQUAL(
-            dispatchConfig.peerCount, DispatchBudgetConfig::DEFAULT_PEER_IN_FLIGHT_COUNT);
+            dispatchConfig.peerCount, DispatchBudgetLimits::DEFAULT_PEER_IN_FLIGHT_COUNT);
     }
 
     {

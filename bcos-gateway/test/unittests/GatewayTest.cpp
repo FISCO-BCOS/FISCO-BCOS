@@ -960,10 +960,9 @@ BOOST_AUTO_TEST_CASE(dispatchBudgetDoesNotBypassReadyWaiter)
     second.reset();
 }
 
-BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitSkipsUnsatisfiedWaiter)
+BOOST_AUTO_TEST_CASE(dispatchBudgetFifoDoesNotSkipUnsatisfiedWaiter)
 {
-    DispatchBudget budget(100, 8, [](std::function<void()> wake) { wake(); },
-        DispatchBudget::WaitPolicy::FirstFit);
+    DispatchBudget budget(100, 8, [](std::function<void()> wake) { wake(); });
     auto initial = task::syncWait(budget.acquire(90));
     BOOST_REQUIRE(initial);
 
@@ -980,104 +979,68 @@ BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitSkipsUnsatisfiedWaiter)
     };
     task::wait(acquire(budget, 20, large, largeDone));
     task::wait(acquire(budget, 10, small, smallDone));
-    BOOST_REQUIRE(smallDone);
-    BOOST_CHECK(!largeDone);
-
     task::wait(acquire(budget, 10, later, laterDone));
-    BOOST_CHECK(!laterDone);
-    small.reset();
-    BOOST_REQUIRE(laterDone);
     BOOST_CHECK(!largeDone);
-    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 100);
-    BOOST_CHECK_EQUAL(budget.usage().waiting, 1);
+    BOOST_CHECK(!smallDone);
+    BOOST_CHECK(!laterDone);
+    BOOST_CHECK_EQUAL(budget.usage().waiting, 3);
 
-    later.reset();
     initial.reset();
     BOOST_REQUIRE(largeDone);
-    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 20);
+    BOOST_REQUIRE(smallDone);
+    BOOST_REQUIRE(laterDone);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 40);
     BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
     large.reset();
+    small.reset();
+    later.reset();
 }
 
-BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitAgesHeadWaiter)
+BOOST_AUTO_TEST_CASE(dispatchBudgetReservesReadyBytes)
 {
+    std::vector<std::function<void()>> wakes;
     DispatchBudget budget(
-        100, 8, [](std::function<void()> wake) { wake(); }, DispatchBudget::WaitPolicy::FirstFit,
-        std::chrono::milliseconds{0});
-    auto initial = task::syncWait(budget.acquire(85));
-    auto extra = task::syncWait(budget.acquire(5));
+        100, 8, [&wakes](std::function<void()> wake) { wakes.push_back(std::move(wake)); });
+    auto initial = task::syncWait(budget.acquire(90));
     BOOST_REQUIRE(initial);
-    BOOST_REQUIRE(extra);
 
     std::optional<DispatchBudget::Permit> large;
     std::optional<DispatchBudget::Permit> small;
+    std::optional<DispatchBudget::Permit> next;
     bool largeDone = false;
     bool smallDone = false;
+    bool nextDone = false;
     auto acquire = [](DispatchBudget& budget, std::size_t bytes,
                        std::optional<DispatchBudget::Permit>& out, bool& done) -> task::Task<void> {
         out = co_await budget.acquire(bytes);
         done = true;
     };
     task::wait(acquire(budget, 20, large, largeDone));
-    task::wait(acquire(budget, 10, small, smallDone));
-    BOOST_CHECK(!largeDone);
-    BOOST_CHECK(!smallDone);
-    BOOST_CHECK_EQUAL(budget.usage().waiting, 2);
-
-    extra.reset();
-    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 85);
-    BOOST_CHECK(!largeDone);
-    BOOST_CHECK(!smallDone);
-
-    initial.reset();
-    BOOST_REQUIRE(largeDone);
-    BOOST_REQUIRE(smallDone);
-    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 30);
-    BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
-    large.reset();
-    small.reset();
-}
-
-BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitReservesReadyBytes)
-{
-    std::vector<std::function<void()>> wakes;
-    DispatchBudget budget(100, 8,
-        [&wakes](std::function<void()> wake) { wakes.push_back(std::move(wake)); },
-        DispatchBudget::WaitPolicy::FirstFit);
-    auto initial = task::syncWait(budget.acquire(90));
-    BOOST_REQUIRE(initial);
-
-    std::optional<DispatchBudget::Permit> large;
-    bool largeDone = false;
-    task::wait([](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
-                   bool& done) -> task::Task<void> {
-        out = co_await budget.acquire(20);
-        done = true;
-    }(budget, large, largeDone));
     initial.reset();
     BOOST_REQUIRE_EQUAL(wakes.size(), 1);
     BOOST_CHECK(!largeDone);
 
-    auto small = task::syncWait(budget.acquire(70));
-    BOOST_REQUIRE(small);
-    std::optional<DispatchBudget::Permit> next;
-    bool nextDone = false;
-    task::wait([](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
-                   bool& done) -> task::Task<void> {
-        out = co_await budget.acquire(20);
-        done = true;
-    }(budget, next, nextDone));
+    task::wait(acquire(budget, 70, small, smallDone));
+    task::wait(acquire(budget, 20, next, nextDone));
+    BOOST_CHECK(!smallDone);
     BOOST_CHECK(!nextDone);
-    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 70);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 0);
 
     wakes[0]();
     BOOST_REQUIRE(largeDone);
+    BOOST_CHECK(!smallDone);
+    BOOST_CHECK(!nextDone);
+    BOOST_REQUIRE_EQUAL(wakes.size(), 2);
+    BOOST_CHECK_EQUAL(budget.usage().usedBytes, 20);
+
+    wakes[1]();
+    BOOST_REQUIRE(smallDone);
     BOOST_CHECK(!nextDone);
     BOOST_CHECK_EQUAL(budget.usage().usedBytes, 90);
 
     small.reset();
-    BOOST_REQUIRE_EQUAL(wakes.size(), 2);
-    wakes[1]();
+    BOOST_REQUIRE_EQUAL(wakes.size(), 3);
+    wakes[2]();
     BOOST_REQUIRE(nextDone);
     BOOST_CHECK_EQUAL(budget.usage().usedBytes, 40);
     BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
@@ -1085,19 +1048,22 @@ BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitReservesReadyBytes)
     next.reset();
 }
 
-BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitReservesReadyCount)
+BOOST_AUTO_TEST_CASE(dispatchBudgetReservesReadyCount)
 {
     std::vector<std::function<void()>> wakes;
-    DispatchBudget budget(3, 2,
-        [&wakes](std::function<void()> wake) { wakes.push_back(std::move(wake)); },
-        DispatchBudget::WaitPolicy::FirstFit);
+    DispatchBudget budget(
+        3, 2, [&wakes](std::function<void()> wake) { wakes.push_back(std::move(wake)); });
     auto initial = task::syncWait(budget.acquire(1));
     auto other = task::syncWait(budget.acquire(1));
     BOOST_REQUIRE(initial);
     BOOST_REQUIRE(other);
 
     std::optional<DispatchBudget::Permit> first;
+    std::optional<DispatchBudget::Permit> second;
+    std::optional<DispatchBudget::Permit> third;
     bool firstDone = false;
+    bool secondDone = false;
+    bool thirdDone = false;
     auto acquire = [](DispatchBudget& budget, std::optional<DispatchBudget::Permit>& out,
                        bool& done) -> task::Task<void> {
         out = co_await budget.acquire(1);
@@ -1108,23 +1074,26 @@ BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitReservesReadyCount)
     BOOST_REQUIRE_EQUAL(wakes.size(), 1);
     other.reset();
 
-    std::optional<DispatchBudget::Permit> second;
-    bool secondDone = false;
     task::wait(acquire(budget, second, secondDone));
-    BOOST_REQUIRE(secondDone);
-    std::optional<DispatchBudget::Permit> third;
-    bool thirdDone = false;
     task::wait(acquire(budget, third, thirdDone));
+    BOOST_CHECK(!secondDone);
     BOOST_CHECK(!thirdDone);
 
     wakes[0]();
     BOOST_REQUIRE(firstDone);
+    BOOST_CHECK(!secondDone);
+    BOOST_CHECK(!thirdDone);
+    BOOST_REQUIRE_EQUAL(wakes.size(), 2);
+    BOOST_CHECK_EQUAL(budget.usage().usedCount, 1);
+
+    wakes[1]();
+    BOOST_REQUIRE(secondDone);
     BOOST_CHECK(!thirdDone);
     BOOST_CHECK_EQUAL(budget.usage().usedCount, 2);
 
     second.reset();
-    BOOST_REQUIRE_EQUAL(wakes.size(), 2);
-    wakes[1]();
+    BOOST_REQUIRE_EQUAL(wakes.size(), 3);
+    wakes[2]();
     BOOST_REQUIRE(thirdDone);
     BOOST_CHECK_EQUAL(budget.usage().usedCount, 2);
     BOOST_CHECK_EQUAL(budget.usage().waiting, 0);
@@ -1133,7 +1102,7 @@ BOOST_AUTO_TEST_CASE(dispatchBudgetFirstFitReservesReadyCount)
     BOOST_CHECK_EQUAL(budget.usage().usedCount, 0);
 }
 
-BOOST_AUTO_TEST_CASE(globalDispatchBackpressureAllowsFittingPeerAndBroadcast)
+BOOST_AUTO_TEST_CASE(globalDispatchBackpressureIsFifoAcrossPeers)
 {
     auto keyFactory = std::make_shared<KeyFactoryImpl>();
     auto service = std::make_shared<ParkedSendService>();
@@ -1176,24 +1145,25 @@ BOOST_AUTO_TEST_CASE(globalDispatchBackpressureAllowsFittingPeerAndBroadcast)
     };
     auto peerD = std::make_shared<FakePeerSession>("peerD");
     bool largeCompleted = false;
-    task::wait(receive(*service, peerD, makeP2PRequest(4, dstNodeID, 8 * smallBytes),
-        largeCompleted));
+    task::wait(
+        receive(*service, peerD, makeP2PRequest(4, dstNodeID, 8 * smallBytes), largeCompleted));
     BOOST_REQUIRE(!largeCompleted);
 
     auto peerE = std::make_shared<FakePeerSession>("peerE");
     bool smallCompleted = false;
     task::wait(receive(*service, peerE, makeP2PRequest(5, dstNodeID), smallCompleted));
-    BOOST_REQUIRE(smallCompleted);
+    BOOST_REQUIRE(!smallCompleted);
     auto peerF = std::make_shared<FakePeerSession>("peerF");
     task::syncWait(service->onMessage(
         bcos::network::NetworkException{}, nullptr, makeBroadcastRequest(6), peerF));
-    BOOST_REQUIRE_EQUAL(front->received.size(), 5u);
+    BOOST_REQUIRE_EQUAL(front->received.size(), 4u);
     BOOST_CHECK_EQUAL(front->received.back().second, "b");
-    BOOST_CHECK_EQUAL(service->sendStarted, 4);
+    BOOST_CHECK_EQUAL(service->sendStarted, 3);
     BOOST_CHECK(!largeCompleted);
 
     service->releaseAll();
     BOOST_REQUIRE(largeCompleted);
+    BOOST_REQUIRE(smallCompleted);
     BOOST_CHECK_EQUAL(front->received.size(), 6u);
     BOOST_CHECK_EQUAL(service->sendStarted, 5);
     service->releaseAll();

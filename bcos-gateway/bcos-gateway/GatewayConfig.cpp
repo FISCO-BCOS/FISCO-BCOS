@@ -157,7 +157,7 @@ GatewayConfig::RateLimiterConfig GatewayConfig::rateLimiterConfig() const
     return m_rateLimiterConfig;
 }
 
-DispatchBudgetConfig GatewayConfig::dispatchBudgetConfig() const
+DispatchBudgetLimits GatewayConfig::dispatchBudgetConfig() const
 {
     return m_dispatchBudgetConfig;
 }
@@ -580,17 +580,15 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
 
     m_enableCompress = _pt.get<bool>("p2p.enable_compression", true);
 
-    DispatchBudgetConfig dispatchBudgetConfig;
-    dispatchBudgetConfig.globalBytes = _pt.get<std::size_t>(
-        "p2p.dispatch_global_in_flight_bytes",
-        DispatchBudgetConfig::DEFAULT_GLOBAL_IN_FLIGHT_BYTES);
-    dispatchBudgetConfig.globalCount = _pt.get<std::size_t>(
-        "p2p.dispatch_global_in_flight_count",
-        DispatchBudgetConfig::DEFAULT_GLOBAL_IN_FLIGHT_COUNT);
+    DispatchBudgetLimits dispatchBudgetConfig;
+    dispatchBudgetConfig.globalBytes = _pt.get<std::size_t>("p2p.dispatch_global_in_flight_bytes",
+        DispatchBudgetLimits::DEFAULT_GLOBAL_IN_FLIGHT_BYTES);
+    dispatchBudgetConfig.globalCount = _pt.get<std::size_t>("p2p.dispatch_global_in_flight_count",
+        DispatchBudgetLimits::DEFAULT_GLOBAL_IN_FLIGHT_COUNT);
     dispatchBudgetConfig.peerBytes = _pt.get<std::size_t>(
-        "p2p.dispatch_peer_in_flight_bytes", DispatchBudgetConfig::DEFAULT_PEER_IN_FLIGHT_BYTES);
+        "p2p.dispatch_peer_in_flight_bytes", DispatchBudgetLimits::DEFAULT_PEER_IN_FLIGHT_BYTES);
     dispatchBudgetConfig.peerCount = _pt.get<std::size_t>(
-        "p2p.dispatch_peer_in_flight_count", DispatchBudgetConfig::DEFAULT_PEER_IN_FLIGHT_COUNT);
+        "p2p.dispatch_peer_in_flight_count", DispatchBudgetLimits::DEFAULT_PEER_IN_FLIGHT_COUNT);
     if (dispatchBudgetConfig.peerBytes == 0 || dispatchBudgetConfig.peerCount == 0 ||
         dispatchBudgetConfig.globalBytes / 2 < dispatchBudgetConfig.peerBytes ||
         dispatchBudgetConfig.globalCount <= dispatchBudgetConfig.peerCount)

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "bcos-gateway/libp2p/DispatchBudgetLimits.h"
 #include <bcos-task/Task.h>
 #include <chrono>
 #include <cstddef>
@@ -31,22 +32,13 @@
 
 namespace bcos::gateway
 {
-// Byte-and-count admission budget with configurable multi-acquirer waits. Strict FIFO admits only
-// the queue head; first-fit lets later requests use capacity that cannot satisfy earlier waiters.
-// Once the first-fit head reaches the aging threshold, later requests stop bypassing it until it
-// resumes or is cancelled. A ready waiter's charge is reserved until then; abandoned waits
-// unregister.
+// Byte-and-count admission budget with multi-acquirer FIFO waits. A ready waiter's charge is
+// reserved until it resumes or is cancelled; abandoned waits unregister.
 class DispatchBudget
 {
 public:
     using Ptr = std::shared_ptr<DispatchBudget>;
     using Poster = std::function<void(std::function<void()>)>;
-
-    enum class WaitPolicy
-    {
-        StrictFIFO,
-        FirstFit
-    };
 
     struct Usage
     {
@@ -80,20 +72,13 @@ private:
 
     struct State
     {
-        State(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster, WaitPolicy _policy,
-            std::chrono::steady_clock::duration _agingThreshold)
-          : maxBytes(_maxBytes),
-            maxCount(_maxCount),
-            poster(std::move(_poster)),
-            policy(_policy),
-            agingThreshold(_agingThreshold)
+        State(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster)
+          : maxBytes(_maxBytes), maxCount(_maxCount), poster(std::move(_poster))
         {}
 
         std::size_t maxBytes;
         std::size_t maxCount;
         Poster poster;
-        WaitPolicy policy;
-        std::chrono::steady_clock::duration agingThreshold;
         std::mutex mutex;
         std::size_t usedBytes = 0;
         std::size_t usedCount = 0;
@@ -122,14 +107,6 @@ private:
             availableBytes -= _state.ready->bytes;
         }
         return _bytes <= availableBytes;
-    }
-
-    static bool headWaiterAgedLocked(State const& _state)
-    {
-        return _state.policy == WaitPolicy::FirstFit && !_state.waiters.empty() &&
-               _state.waiters.front()->result == WaitResult::Pending &&
-               std::chrono::steady_clock::now() - _state.waiters.front()->since >=
-                   _state.agingThreshold;
     }
 
     static void finishWaiterLocked(State& _state, Waiter const& _waiter)
@@ -173,12 +150,7 @@ private:
             }
             if (!fitsLocked(_state, (*it)->bytes))
             {
-                if (_state.policy == WaitPolicy::StrictFIFO || headWaiterAgedLocked(_state))
-                {
-                    return nullptr;
-                }
-                ++it;
-                continue;
+                return nullptr;
             }
             _state.ready = *it;
             _state.waiters.erase(it);
@@ -332,11 +304,8 @@ public:
         std::size_t m_bytes = 0;
     };
 
-    DispatchBudget(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster,
-        WaitPolicy _policy = WaitPolicy::StrictFIFO,
-        std::chrono::steady_clock::duration _agingThreshold = std::chrono::seconds(10))
-      : m_state(std::make_shared<State>(
-            _maxBytes, _maxCount, std::move(_poster), _policy, _agingThreshold))
+    DispatchBudget(std::size_t _maxBytes, std::size_t _maxCount, Poster _poster)
+      : m_state(std::make_shared<State>(_maxBytes, _maxCount, std::move(_poster)))
     {}
     ~DispatchBudget() { close(); }
 
@@ -373,9 +342,7 @@ public:
                 {
                     co_return Permit{};
                 }
-                else if (!waiter && !headWaiterAgedLocked(*state) &&
-                         (state->policy == WaitPolicy::FirstFit ||
-                             (state->waiters.empty() && !state->ready)) &&
+                else if (!waiter && state->waiters.empty() && !state->ready &&
                          fitsLocked(*state, _bytes))
                 {
                     ++state->usedCount;
@@ -524,21 +491,20 @@ struct DispatchPermit
     DispatchBudget::Permit global;
 };
 
-// Per-peer caps are smaller than the global cap in both dimensions, so one peer cannot exhaust
-// either global dimension. Defaults require eight peers by bytes or twelve by count. At genuine
-// saturation, a receive loop waiting for a global permit also pauses later packet types on its
-// session until a permit is released or its wait is cancelled by disconnect/stop.
 struct DispatchBudgetConfig
 {
-    constexpr static std::size_t DEFAULT_GLOBAL_IN_FLIGHT_BYTES = 768 * 1024 * 1024;
-    constexpr static std::size_t DEFAULT_GLOBAL_IN_FLIGHT_COUNT = 3072;
-    constexpr static std::size_t DEFAULT_PEER_IN_FLIGHT_BYTES = 96 * 1024 * 1024;
-    constexpr static std::size_t DEFAULT_PEER_IN_FLIGHT_COUNT = 256;
+    DispatchBudgetConfig() = default;
+    explicit DispatchBudgetConfig(DispatchBudgetLimits const& _limits)
+      : globalBytes(_limits.globalBytes),
+        globalCount(_limits.globalCount),
+        peerBytes(_limits.peerBytes),
+        peerCount(_limits.peerCount)
+    {}
 
-    std::size_t globalBytes = DEFAULT_GLOBAL_IN_FLIGHT_BYTES;
-    std::size_t globalCount = DEFAULT_GLOBAL_IN_FLIGHT_COUNT;
-    std::size_t peerBytes = DEFAULT_PEER_IN_FLIGHT_BYTES;
-    std::size_t peerCount = DEFAULT_PEER_IN_FLIGHT_COUNT;
+    std::size_t globalBytes = DispatchBudgetLimits::DEFAULT_GLOBAL_IN_FLIGHT_BYTES;
+    std::size_t globalCount = DispatchBudgetLimits::DEFAULT_GLOBAL_IN_FLIGHT_COUNT;
+    std::size_t peerBytes = DispatchBudgetLimits::DEFAULT_PEER_IN_FLIGHT_BYTES;
+    std::size_t peerCount = DispatchBudgetLimits::DEFAULT_PEER_IN_FLIGHT_COUNT;
     DispatchBudget::Poster poster;
 };
 }  // namespace bcos::gateway
