@@ -233,7 +233,9 @@ std::vector<std::string> ResolvDnsResolver::lookupTxt(std::string const& _name)
         ~Closer() { res_nclose(state); }
     } closer{&state};
 
-    std::vector<unsigned char> answer(8192);
+    // 65535 is the largest DNS message. res_nquery returns the full message length even
+    // when it did not fit, so an oversized length must never reach ns_initparse.
+    std::vector<unsigned char> answer(65535);
     int const length =
         res_nquery(&state, _name.c_str(), ns_c_in, ns_t_txt, answer.data(), answer.size());
     if (length < 0)
@@ -244,6 +246,10 @@ std::vector<std::string> ResolvDnsResolver::lookupTxt(std::string const& _name)
         }
         throw std::runtime_error("dnsdisc: TXT lookup failed for " + _name + " (h_errno " +
                                  std::to_string(state.res_h_errno) + ")");
+    }
+    if (static_cast<size_t>(length) > answer.size())
+    {
+        throw std::runtime_error("dnsdisc: truncated DNS answer for " + _name);
     }
     ns_msg message;
     if (ns_initparse(answer.data(), length, &message) != 0)

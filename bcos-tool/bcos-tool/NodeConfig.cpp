@@ -1473,26 +1473,27 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; whole sequencing window). A tip-reorg-avoidance heuristic, not a
         ; finality boundary. Range [0, 10000]; 0 = download up to the tip.
         op_sync_lag_blocks=64
-        ; --- discovery (E5) ---
-        ; devp2p node discovery (discv4 over UDP + EIP-1459 DNS node list); bonded
-        ; discovered nodes are dialed after the bootnodes. EL mode only.
+        ; --- discovery ---
+        ; devp2p node discovery (discv4 over UDP + EIP-1459 DNS node list). Bonded discovered
+        ; nodes are dialed only to fetch a chain the consensus client named; following the
+        ; chain on our own stays with the bootnodes. EL mode only.
         discovery=true
         ; UDP port of the discv4 endpoint. Range [1, 65535].
         discovery_port=30303
-        ; EIP-1459 enrtree:// URL; empty disables DNS discovery. Default: the Sepolia
-        ; list from go-ethereum params/bootnodes.go (commit 5dcdd05159ac).
-        dns_discovery_url=enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@all.sepolia.ethdisco.net
+        ; EIP-1459 enrtree:// URL of this chain's node list, chain-specific like
+        ; bootnodes_file; empty disables DNS discovery.
+        dns_discovery_url=
         ; cap on discovered candidates handed to the dialer per sync round. Range [1, 1000].
         max_discovered_peers=8
-        ; --- end discovery (E5) ---
-        ; --- peer serving (E6) ---
+        ; --- end discovery ---
+        ; --- peer serving ---
         ; accept inbound devp2p peers and serve them headers/bodies/receipts
         serve_peers=true
         ; TCP port of the RLPx listener. Range [1, 65535].
         listen_port=30303
         ; connected peer ceiling, inbound + outbound. Range [1, 1000].
         max_peers=50
-        ; --- end peer serving (E6) ---
+        ; --- end peer serving ---
     */
     // NOTE: this loader deliberately stays PURE parsing of the config.ini
     // [ethereum] section — it must NOT read m_genesisConfig members: tools
@@ -1517,7 +1518,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
     m_ethereumMaxBatchSize = maxBatch;
 
-    // --- peer serving (E6) ---
+    // --- peer serving ---
     m_ethereumServePeers = _pt.get<bool>("ethereum.serve_peers", true);
     auto const listenPort = checkAndGetValue(_pt, "ethereum.listen_port", "30303");
     if (listenPort <= 0 || listenPort > 65535)
@@ -1666,7 +1667,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
     m_ethereumMempoolMaxTxsPerSender = static_cast<size_t>(maxTxsPerSender);
 
-    // --- discovery (E5) ---
+    // --- discovery ---
     m_ethereumDiscovery = _pt.get<bool>("ethereum.discovery", true);
     auto const discoveryPort = checkAndGetValue(_pt, "ethereum.discovery_port", "30303");
     if (discoveryPort <= 0 || discoveryPort > 65535)
@@ -1676,8 +1677,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                                   std::to_string(discoveryPort)));
     }
     m_ethereumDiscoveryPort = static_cast<uint16_t>(discoveryPort);
-    m_ethereumDnsDiscoveryUrl = _pt.get<std::string>("ethereum.dns_discovery_url",
-        "enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@all.sepolia.ethdisco.net");
+    m_ethereumDnsDiscoveryUrl = _pt.get<std::string>("ethereum.dns_discovery_url", "");
     boost::trim(m_ethereumDnsDiscoveryUrl);
     // Syntax only here (bcos-tool does not link the devp2p codec): the discovery service
     // rejects a URL whose base32 key does not decode when it syncs.
@@ -1698,32 +1698,28 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                                   std::to_string(maxDiscovered)));
     }
     m_ethereumMaxDiscoveredPeers = static_cast<size_t>(maxDiscovered);
-    // --- end discovery (E5) ---
+    // --- end discovery ---
 
-    NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig")
-                         << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
-                         << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
-                         << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
-                         << LOG_KV("servePeers", m_ethereumServePeers)
-                         << LOG_KV("listenPort", m_ethereumListenPort)
-                         << LOG_KV("maxPeers", m_ethereumMaxPeers)
-                         << LOG_KV("reorgWindow", m_ethereumReorgWindow)
-                         << LOG_KV("mempoolCapacity", m_ethereumMempoolCapacity)
-                         << LOG_KV("mempoolTxLifetimeMinutes", m_ethereumMempoolTxLifetimeMinutes)
-                         << LOG_KV("mempoolMaxTxsPerSender", m_ethereumMempoolMaxTxsPerSender)
-                         << LOG_KV("discovery", m_ethereumDiscovery)
-                         << LOG_KV("discoveryPort", m_ethereumDiscoveryPort)
-                         << LOG_KV("dnsDiscoveryUrl", m_ethereumDnsDiscoveryUrl)
-                         << LOG_KV("maxDiscoveredPeers", m_ethereumMaxDiscoveredPeers)
-                         << LOG_KV("depositContractAddress",
-                                "0x" + m_ethereumDepositContractAddress.hex())
-                         << LOG_KV("opBlockTimeSeconds", m_opBlockTimeSeconds)
-                         << LOG_KV("opSyncLagBlocks", m_opSyncLagBlocks)
-                         << LOG_KV("finalizedCheckpoint",
-                                m_ethereumFinalizedCheckpoint ?
-                                    std::to_string(m_ethereumFinalizedCheckpoint->number) + ":" +
-                                        m_ethereumFinalizedCheckpoint->hash.hex() :
-                                    "none");
+    NodeConfig_LOG(INFO)
+        << LOG_DESC("loadEthereumConfig") << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
+        << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
+        << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
+        << LOG_KV("servePeers", m_ethereumServePeers) << LOG_KV("listenPort", m_ethereumListenPort)
+        << LOG_KV("maxPeers", m_ethereumMaxPeers) << LOG_KV("reorgWindow", m_ethereumReorgWindow)
+        << LOG_KV("mempoolCapacity", m_ethereumMempoolCapacity)
+        << LOG_KV("mempoolTxLifetimeMinutes", m_ethereumMempoolTxLifetimeMinutes)
+        << LOG_KV("mempoolMaxTxsPerSender", m_ethereumMempoolMaxTxsPerSender)
+        << LOG_KV("discovery", m_ethereumDiscovery)
+        << LOG_KV("discoveryPort", m_ethereumDiscoveryPort)
+        << LOG_KV("dnsDiscoveryUrl", m_ethereumDnsDiscoveryUrl)
+        << LOG_KV("maxDiscoveredPeers", m_ethereumMaxDiscoveredPeers)
+        << LOG_KV("depositContractAddress", "0x" + m_ethereumDepositContractAddress.hex())
+        << LOG_KV("opBlockTimeSeconds", m_opBlockTimeSeconds)
+        << LOG_KV("opSyncLagBlocks", m_opSyncLagBlocks)
+        << LOG_KV("finalizedCheckpoint", m_ethereumFinalizedCheckpoint ?
+                                             std::to_string(m_ethereumFinalizedCheckpoint->number) +
+                                                 ":" + m_ethereumFinalizedCheckpoint->hash.hex() :
+                                             "none");
 }
 
 // The L1 EL lane's fork schedule ([fork_timestamps] in config.genesis), the only source of a v2
@@ -3991,7 +3987,7 @@ uint32_t bcos::tool::NodeConfig::ethereumMaxBatchSize() const
 {
     return m_ethereumMaxBatchSize;
 }
-// --- discovery (E5) ---
+// --- discovery ---
 bool bcos::tool::NodeConfig::ethereumDiscoveryEnabled() const
 {
     return m_ethereumDiscovery;
@@ -4008,8 +4004,8 @@ size_t bcos::tool::NodeConfig::ethereumMaxDiscoveredPeers() const
 {
     return m_ethereumMaxDiscoveredPeers;
 }
-// --- end discovery (E5) ---
-// --- peer serving (E6) ---
+// --- end discovery ---
+// --- peer serving ---
 bool bcos::tool::NodeConfig::ethereumServePeers() const
 {
     return m_ethereumServePeers;
@@ -4022,7 +4018,7 @@ size_t bcos::tool::NodeConfig::ethereumMaxPeers() const
 {
     return m_ethereumMaxPeers;
 }
-// --- end peer serving (E6) ---
+// --- end peer serving ---
 uint64_t bcos::tool::NodeConfig::ethereumChainId() const
 {
     // Copied from config.genesis's [chain] chain_id on executor.version >= 2

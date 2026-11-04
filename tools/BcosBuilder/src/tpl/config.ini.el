@@ -70,21 +70,22 @@
     ; cross-check when verifying blocks. The code default is the Ethereum mainnet
     ; deposit contract; this template targets Sepolia, whose deposit contract is:
     deposit_contract_address=0x7f02c3e3c98b133055b8b348b2ac625669182295
-    ; --- discovery (E5) ---
+    ; --- discovery ---
     ; devp2p node discovery: discv4 over UDP plus the EIP-1459 DNS node list.
-    ; Discovered nodes that answered our ping are dialed after the bootnodes above,
-    ; so a node is no longer limited to the hard-coded bootnode list.
+    ; Discovered nodes that answered our ping are dialed only to fetch a chain the
+    ; consensus client named; following the chain on our own stays with the bootnodes.
     discovery=true
     ; UDP port of the discv4 endpoint (geth default 30303)
     discovery_port=30303
-    ; EIP-1459 node list; empty disables DNS discovery. This is go-ethereum's Sepolia
-    ; list (params/bootnodes.go, commit 5dcdd05159ac). Mainnet: all.mainnet.ethdisco.net
-    ; with the same key.
-    dns_discovery_url=enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@all.sepolia.ethdisco.net
+    ; EIP-1459 node list of this chain; empty disables DNS discovery. go-ethereum's
+    ; lists (params/bootnodes.go, commit 5dcdd05159ac) use this key for both networks:
+    ; Sepolia enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@all.sepolia.ethdisco.net
+    ; Mainnet enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@all.mainnet.ethdisco.net
+    dns_discovery_url=
     ; at most this many discovered peers are dialed per sync round, after the bootnodes
     max_discovered_peers=8
-    ; --- end discovery (E5) ---
-    ; --- peer serving (E6) ---
+    ; --- end discovery ---
+    ; --- peer serving ---
     ; accept inbound devp2p peers and serve them headers/bodies/receipts (eth/69, eth/70)
     serve_peers=true
     ; TCP port of the RLPx listener (the enode port other clients dial)
@@ -92,7 +93,7 @@
     ; connected peer ceiling, inbound and outbound together (about one third stays
     ; reserved for our own dials)
     max_peers=50
-    ; --- end peer serving (E6) ---
+    ; --- end peer serving ---
 
 [engine_rpc]
     ; Authenticated Engine API listener (JSON-RPC over HTTP + JWT) for a consensus

@@ -30,13 +30,10 @@ BOOST_AUTO_TEST_SUITE(IpTrackerTest)
 
 namespace
 {
-h256 reporter(uint64_t _n)
+IpTracker::Address reporter(uint64_t _n)
 {
-    h256 id;
-    id[31] = static_cast<uint8_t>(_n & 0xff);
-    id[30] = static_cast<uint8_t>((_n >> 8) & 0xff);
-    id[29] = static_cast<uint8_t>((_n >> 16) & 0xff);
-    return id;
+    return {100, static_cast<uint8_t>((_n >> 16) & 0xff), static_cast<uint8_t>((_n >> 8) & 0xff),
+        static_cast<uint8_t>(_n & 0xff)};
 }
 }  // namespace
 
@@ -61,6 +58,25 @@ BOOST_AUTO_TEST_CASE(minimumAgreementAndOneVotePerReporter)
     tracker.addStatement(reporter(10), a, now);
     BOOST_REQUIRE(tracker.predict(now).has_value());
     BOOST_CHECK(*tracker.predict(now) == a);
+}
+
+BOOST_AUTO_TEST_CASE(oneHostCannotOutvoteTheNetwork)
+{
+    IpTracker tracker(10, std::chrono::minutes(5));
+    auto const now = IpTracker::Clock::now();
+    IpTracker::Address const forged{198, 51, 100, 9};
+    // 200 minted node ids behind one public /24 are one vote.
+    for (int i = 0; i < 200; ++i)
+    {
+        tracker.addStatement(
+            IpTracker::reporterKey({203, 0, 113, static_cast<uint8_t>(i)}), forged, now);
+    }
+    BOOST_CHECK_EQUAL(tracker.size(), 1u);
+    BOOST_CHECK(!tracker.predict(now).has_value());
+    // A private network legitimately sits in one /24: its hosts keep separate votes.
+    BOOST_CHECK(
+        IpTracker::reporterKey({192, 168, 1, 7}) != IpTracker::reporterKey({192, 168, 1, 8}));
+    BOOST_CHECK(IpTracker::reporterKey({127, 0, 0, 1}) != IpTracker::reporterKey({127, 0, 0, 2}));
 }
 
 BOOST_AUTO_TEST_CASE(floodOfDistinctAddressesDoesNotResetOrFlip)
