@@ -114,6 +114,72 @@ BOOST_AUTO_TEST_CASE(dynamicRange)
     auto b = bcos::crypto::trivial::DynamicRange<std::vector<char>>;
 }
 
+BOOST_AUTO_TEST_CASE(digestPreservesState)
+{
+    openssl::OpenSSL_Keccak256_Hasher hasher;
+    std::string abc = "abc";
+    hasher.update(abc);
+
+    std::array<std::byte, 32> firstDigest;
+    hasher.digest(firstDigest);
+    std::array<std::byte, 32> repeatedDigest;
+    hasher.digest(repeatedDigest);
+    BOOST_CHECK_EQUAL(firstDigest, repeatedDigest);
+
+    std::string def = "def";
+    hasher.update(def);
+    bcos::bytes continuedDigest;
+    hasher.digest(continuedDigest);
+
+    openssl::OpenSSL_Keccak256_Hasher reference;
+    std::string abcdef = "abcdef";
+    reference.update(abcdef);
+    bcos::bytes expectedDigest;
+    reference.final(expectedDigest);
+    BOOST_CHECK_EQUAL(continuedDigest, expectedDigest);
+
+    openssl::OpenSSL_Keccak256_Hasher empty;
+    bcos::bytes emptyDigest;
+    empty.digest(emptyDigest);
+
+    openssl::OpenSSL_Keccak256_Hasher emptyReference;
+    bcos::bytes expectedEmptyDigest;
+    emptyReference.final(expectedEmptyDigest);
+    BOOST_CHECK_EQUAL(emptyDigest, expectedEmptyDigest);
+}
+
+BOOST_AUTO_TEST_CASE(spanOutputSizeValidation)
+{
+    openssl::OpenSSL_Keccak256_Hasher hasher;
+    std::array<std::byte, 31> output{};
+    BOOST_CHECK_THROW(
+        hasher.digest(std::span<std::byte>{output}), boost::wrapexcept<std::invalid_argument>);
+    BOOST_CHECK_THROW(
+        hasher.final(std::span<std::byte>{output}), boost::wrapexcept<std::invalid_argument>);
+}
+
+BOOST_AUTO_TEST_CASE(finalFailurePreservesState)
+{
+    openssl::OpenSSL_Keccak256_Hasher hasher;
+    std::string abc = "abc";
+    hasher.update(abc);
+
+    std::array<std::byte, 31> shortOutput{};
+    BOOST_CHECK_THROW(hasher.final(shortOutput), boost::wrapexcept<std::runtime_error>);
+
+    std::string def = "def";
+    hasher.update(def);
+    bcos::bytes continuedDigest;
+    hasher.digest(continuedDigest);
+
+    openssl::OpenSSL_Keccak256_Hasher reference;
+    std::string abcdef = "abcdef";
+    reference.update(abcdef);
+    bcos::bytes expectedDigest;
+    reference.final(expectedDigest);
+    BOOST_CHECK_EQUAL(continuedDigest, expectedDigest);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
 

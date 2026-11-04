@@ -23,6 +23,7 @@
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <memory>
 #include <utility>
 
@@ -63,6 +64,7 @@ protected:
 private:
     std::shared_ptr<bcos::rpc::Rpc> m_rpc;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
+    bcos::IOServicePool::Ptr m_ioServicePool;
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     bcos::group::GroupInfoFactory::Ptr m_groupInfoFactory;
     bcos::group::ChainNodeInfoFactory::Ptr m_chainNodeInfoFactory;

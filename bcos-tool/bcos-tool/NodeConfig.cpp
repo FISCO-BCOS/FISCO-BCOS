@@ -1614,6 +1614,18 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                 std::to_string(mempoolLifetime)));
     }
     m_ethereumMempoolTxLifetimeMinutes = mempoolLifetime;
+    // 0 lifts the cap (a sequencer fed by one relayer account may need that); anything
+    // above the pool capacity bound is a typo, not a policy.
+    auto const maxTxsPerSender = checkAndGetValue(_pt, "ethereum.mempool_max_txs_per_sender", "64");
+    if (maxTxsPerSender < 0 || maxTxsPerSender > 10'000'000)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.mempool_max_txs_per_sender must be in [0, 10000000] (0 = unlimited), "
+                "got " +
+                std::to_string(maxTxsPerSender)));
+    }
+    m_ethereumMempoolMaxTxsPerSender = static_cast<size_t>(maxTxsPerSender);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig")
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
@@ -1622,6 +1634,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("reorgWindow", m_ethereumReorgWindow)
                          << LOG_KV("mempoolCapacity", m_ethereumMempoolCapacity)
                          << LOG_KV("mempoolTxLifetimeMinutes", m_ethereumMempoolTxLifetimeMinutes)
+                         << LOG_KV("mempoolMaxTxsPerSender", m_ethereumMempoolMaxTxsPerSender)
                          << LOG_KV("depositContractAddress",
                                 "0x" + m_ethereumDepositContractAddress.hex())
                          << LOG_KV("opBlockTimeSeconds", m_opBlockTimeSeconds)
@@ -2033,13 +2046,15 @@ void NodeConfig::loadCertConfig(boost::property_tree::ptree const& _pt)
     m_smNodeKey = smNodeKeyFile;
     m_enSmNodeCert = smEnNodeCertFile;
     m_enSmNodeKey = smEnNodeKeyFile;
+    m_enableLegacySmCertChain = _pt.get<bool>("cert.enable_legacy_sm_cert_chain", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadCertConfig") << LOG_KV("ca_path", m_certPath)
                          << LOG_KV("sm_ca_cert", smCaCertFile)
                          << LOG_KV("sm_node_cert", smNodeCertFile)
                          << LOG_KV("sm_node_key", smNodeKeyFile)
                          << LOG_KV("sm_ennode_cert", smEnNodeCertFile)
-                         << LOG_KV("sm_ennode_key", smEnNodeKeyFile);
+                         << LOG_KV("sm_ennode_key", smEnNodeKeyFile)
+                         << LOG_KV("enable_legacy_sm_cert_chain", m_enableLegacySmCertChain);
 
     // load cert
     std::string caCertFile = m_certPath + "/" + _pt.get<std::string>("cert.ca_cert", "ca.crt");
@@ -3436,6 +3451,11 @@ void NodeConfig::setSmNodeCert(const std::string& _smNodeCert)
     m_smNodeCert = _smNodeCert;
 }
 
+bool NodeConfig::enableLegacySmCertChain() const
+{
+    return m_enableLegacySmCertChain;
+}
+
 const std::string& NodeConfig::smNodeKey() const
 {
     return m_smNodeKey;
@@ -3975,6 +3995,10 @@ size_t bcos::tool::NodeConfig::ethereumMempoolCapacity() const
 std::int64_t bcos::tool::NodeConfig::ethereumMempoolTxLifetimeMinutes() const
 {
     return m_ethereumMempoolTxLifetimeMinutes;
+}
+size_t bcos::tool::NodeConfig::ethereumMempoolMaxTxsPerSender() const
+{
+    return m_ethereumMempoolMaxTxsPerSender;
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

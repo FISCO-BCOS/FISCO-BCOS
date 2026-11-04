@@ -58,11 +58,14 @@ BOOST_AUTO_TEST_CASE(settersAndGettersRoundTrip)
     BOOST_CHECK_EQUAL(cfg.certConfig().nodeCert, "nc");
 
     ContextConfig::SMCertConfig sm;
+    BOOST_CHECK(!sm.enableLegacyChain);
     sm.caCert = "sca";
     sm.enNodeCert = "enc";
+    sm.enableLegacyChain = true;
     cfg.setSmCertConfig(sm);
     BOOST_CHECK_EQUAL(cfg.smCertConfig().caCert, "sca");
     BOOST_CHECK_EQUAL(cfg.smCertConfig().enNodeCert, "enc");
+    BOOST_CHECK(cfg.smCertConfig().enableLegacyChain);
 }
 
 BOOST_AUTO_TEST_CASE(initConfigSslType)
@@ -92,7 +95,8 @@ BOOST_AUTO_TEST_CASE(initConfigSmSslType)
 {
     auto path = writeTempIni(
         "[common]\nssl_type=sm_ssl\n[cert]\nca_path=.\nsm_ca_cert=sca.crt\nsm_node_cert=sn.crt\nsm_"
-        "node_key=sn.key\nsm_ennode_cert=en.crt\nsm_ennode_key=en.key\n");
+        "node_key=sn.key\nsm_ennode_cert=en.crt\nsm_ennode_key=en.key\nenable_legacy_sm_cert_"
+        "chain=true\n");
     for (auto* f : {"sca.crt", "sn.crt", "sn.key", "en.crt", "en.key"})
     {
         touchFile(f);
@@ -103,6 +107,7 @@ BOOST_AUTO_TEST_CASE(initConfigSmSslType)
     BOOST_CHECK_EQUAL(cfg.sslType(), "sm_ssl");
     BOOST_CHECK_EQUAL(cfg.smCertConfig().caCert, "./sca.crt");
     BOOST_CHECK_EQUAL(cfg.smCertConfig().enNodeCert, "./en.crt");
+    BOOST_CHECK(cfg.smCertConfig().enableLegacyChain);
 
     for (auto* f : {"sca.crt", "sn.crt", "sn.key", "en.crt", "en.key"})
     {

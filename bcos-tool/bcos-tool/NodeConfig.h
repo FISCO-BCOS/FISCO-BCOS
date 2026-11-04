@@ -355,6 +355,10 @@ public:
     // pool holds and how many minutes one lives before expiry. Defaults 5120 / 30.
     size_t ethereumMempoolCapacity() const;
     std::int64_t ethereumMempoolTxLifetimeMinutes() const;
+    // [ethereum] mempool_max_txs_per_sender: how many of one sender's transactions the
+    // engine mempool holds at once; 0 = unlimited. Default 64 (geth has no such cap on
+    // executable transactions; its AccountQueue bounds gapped ones at 64).
+    size_t ethereumMempoolMaxTxsPerSender() const;
 
     // config for cert
     const std::string& certPath();
@@ -374,6 +378,7 @@ public:
 
     const std::string& smNodeCert() const;
     void setSmNodeCert(const std::string& _smNodeCert);
+    bool enableLegacySmCertChain() const;
 
     const std::string& smNodeKey() const;
     void setSmNodeKey(const std::string& _smNodeKey);
@@ -687,6 +692,7 @@ private:
     // (EL mode only; see ethereumMempoolCapacity()).
     size_t m_ethereumMempoolCapacity = 5120;
     std::int64_t m_ethereumMempoolTxLifetimeMinutes = 30;
+    size_t m_ethereumMempoolMaxTxsPerSender = 64;
     // EIP-6110 deposit contract ([ethereum] deposit_contract_address in config.ini) for the
     // Prague+ requestsHash cross-check. Defaults to the Ethereum mainnet deposit contract —
     // the same address scheduler_v1::c_mainnetDepositContractAddress pins (Sepolia:
@@ -718,6 +724,7 @@ private:
     std::string m_smNodeKey;
     std::string m_enSmNodeCert;
     std::string m_enSmNodeKey;
+    bool m_enableLegacySmCertChain = false;
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default

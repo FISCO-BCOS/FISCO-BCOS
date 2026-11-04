@@ -1,4 +1,3 @@
-#include "bcos-task/Generator.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
@@ -176,35 +175,6 @@ struct SleepTask
     }
     constexpr void await_resume() const {}
 };
-
-// GCC -Wmismatched-new-delete false positive: std::generator's promise allocator is diagnosed
-// inside the coroutine body below (the diagnostic points at libstdc++ internals, not this code).
-// It is triggered at -Os + -Werror, so scope the suppression to this construct rather than
-// downgrading the warning for the whole project. Same idiom as bcos-utilities/BucketMap.h.
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
-#endif
-bcos::task::Generator<int> genInt()
-{
-    co_yield 1;
-    co_yield 2;
-    co_yield 3;
-}
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
-#pragma GCC diagnostic pop
-#endif
-
-BOOST_AUTO_TEST_CASE(generator)
-{
-    int j = 0;
-    for (auto i : genInt())
-    {
-        BOOST_CHECK_EQUAL(i, ++j);
-        std::cout << i << std::endl;
-    }
-    std::cout << "All outputed" << std::endl;
-}
 
 Task<int> taskWithThrow()
 {

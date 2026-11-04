@@ -40,6 +40,7 @@ public:
         std::optional<std::string> enNodeCert;
         std::optional<std::string> enNodeKey;
         std::string multiCaPath;
+        bool enableLegacyChain = false;
     };
 
     // config for rate limit

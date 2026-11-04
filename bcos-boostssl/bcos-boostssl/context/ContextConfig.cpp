@@ -107,6 +107,7 @@ void ContextConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
     smCertConfig.nodeKey = smNodeKeyFile;
     smCertConfig.enNodeCert = smEnNodeCertFile;
     smCertConfig.enNodeKey = smEnNodeKeyFile;
+    smCertConfig.enableLegacyChain = _pt.get<bool>("cert.enable_legacy_sm_cert_chain", false);
 
     m_smCertConfig = smCertConfig;
 
@@ -115,7 +116,8 @@ void ContextConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
                       << LOG_KV("sm_node_cert", smCertConfig.nodeCert)
                       << LOG_KV("sm_node_key", smCertConfig.nodeKey)
                       << LOG_KV("sm_ennode_cert", smCertConfig.enNodeCert)
-                      << LOG_KV("sm_ennode_key", smCertConfig.enNodeKey);
+                      << LOG_KV("sm_ennode_key", smCertConfig.enNodeKey)
+                      << LOG_KV("enable_legacy_sm_cert_chain", smCertConfig.enableLegacyChain);
 }
 
 void ContextConfig::checkFileExist(const std::string& _path)

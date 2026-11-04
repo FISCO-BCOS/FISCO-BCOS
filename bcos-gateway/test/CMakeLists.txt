@@ -28,8 +28,11 @@ if (TOOLS)
     add_subdirectory(main)
 endif()
 
+file(COPY "${CMAKE_SOURCE_DIR}/bcos-boostssl/test/unittests/data/sm_ca" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/data")
+
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
+target_compile_definitions(${TEST_BINARY_NAME} PRIVATE BCOS_NTLS_TEST_CERT_DIR="${CMAKE_CURRENT_BINARY_DIR}/data/sm_ca/")
 
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 

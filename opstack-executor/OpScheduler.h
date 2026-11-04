@@ -1052,8 +1052,9 @@ private:
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<OpRecentBlockHashes<ViewType>> hashes;
-            co_await preBlockOpEthSteps(view, header, spec, rawTxBytes, deposits, executor.vm(),
-                sharedError, hashes, hashErr, daFootprintGasScalar);
+            evmc::VM vm{evmc_create_evmone()};
+            co_await preBlockOpEthSteps(view, header, spec, rawTxBytes, deposits, vm, sharedError,
+                hashes, hashErr, daFootprintGasScalar);
 
             // Fee params load on the first normal tx. blockGasLeft is narrowed from gasLimit.
             // BLOCKHASH answers come from the per-block OpRecentBlockHashes (op-geth GetHashFn
@@ -1540,7 +1541,8 @@ private:
         OpRecentBlockHashes<AnyView> hashes(
             view, header.number(), detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
 
-        // One executor (and one evmc::VM) per call.
+        // One executor per call; the EVM instance is created per transaction inside
+        // ExecuteContext::execute, so nothing is shared across calls or threads.
         OpEthExecutor executor(m_receiptFactory, spec);
 
         protocol::TransactionReceipt::Ptr receipt;
