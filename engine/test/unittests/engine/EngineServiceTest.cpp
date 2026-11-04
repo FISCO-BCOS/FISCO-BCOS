@@ -498,6 +498,45 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_empty_withdrawals)
         result.payloadStatus.validationError->find("non-empty withdrawals"), std::string::npos);
 }
 
+// Committing a built payload drops the sender's executed transactions from the pool: a
+// transaction pooled after the build (so the build's own prune never saw it) whose nonce the
+// post-commit state has consumed is gone once newPayload answers VALID.
+BOOST_AUTO_TEST_CASE(new_payload_commit_drops_executed_transactions_from_the_pool)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto builtPayload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    globalStateStorageFixture.setBlockNumber(
+        builtPayload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
+
+    std::string sender("pppppppppppppppppppp", 20);
+    auto executed = makeSvcTx(sender, 0);
+    auto pending = makeSvcTx(sender, 1);
+    memPool.add(std::vector{executed, pending});
+    // The stub executor writes no state: the block's effect on the account is the
+    // post-commit nonce the prune must read.
+    globalStateStorageFixture.setNonce(sender, "1");
+
+    auto request = makeNewPayloadRequestV3(builtPayload->executionPayload);
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_REQUIRE_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto fetched = memPool.get(std::vector{executed->hash(), pending->hash()});
+    BOOST_REQUIRE_EQUAL(fetched.size(), 2);
+    BOOST_CHECK(!fetched[0]);
+    BOOST_CHECK(fetched[1]);
+}
+
 BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
 {
     MemPoolImpl memPool;
