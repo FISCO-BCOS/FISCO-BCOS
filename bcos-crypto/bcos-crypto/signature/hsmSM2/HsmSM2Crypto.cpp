@@ -211,10 +211,6 @@ KeyPairInterface::UniquePtr HsmSM2Crypto::createKeyPair(SecretPtr _secretKey) co
     return m_keyPairFactory->createKeyPair(std::move(_secretKey));
 }
 
-KeyPairInterface::UniquePtr HsmSM2Crypto::createKeyPair(const Secret& _secretKey) const
-{
-    return m_keyPairFactory->createKeyPair(std::make_shared<KeyImpl>(_secretKey.data()));
-}
 
 KeyPairInterface::UniquePtr HsmSM2Crypto::createKeyPair(
     unsigned int _keyIndex, std::string _password)

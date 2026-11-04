@@ -181,8 +181,3 @@ KeyPairInterface::UniquePtr Ed25519Crypto::createKeyPair(SecretPtr _secretKey) c
 {
     return std::make_unique<Ed25519KeyPair>(std::move(_secretKey));
 }
-
-KeyPairInterface::UniquePtr Ed25519Crypto::createKeyPair(const Secret& _secretKey) const
-{
-    return std::make_unique<Ed25519KeyPair>(std::make_shared<KeyImpl>(_secretKey.data()));
-}

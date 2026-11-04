@@ -58,6 +58,7 @@ class Secp256k1Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<Secp256k1Crypto>;
+    using SignatureCrypto::createKeyPair;
     using SignatureCrypto::verify;
     Secp256k1Crypto() = default;
     ~Secp256k1Crypto() override = default;
@@ -86,6 +87,5 @@ public:
         bytesConstRef _signatureData) const override;
 
     std::unique_ptr<KeyPairInterface> createKeyPair(SecretPtr _secretKey) const override;
-    std::unique_ptr<KeyPairInterface> createKeyPair(const Secret& _secretKey) const override;
 };
 }  // namespace bcos::crypto

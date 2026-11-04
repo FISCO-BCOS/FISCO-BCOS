@@ -239,8 +239,3 @@ KeyPairInterface::UniquePtr Secp256k1Crypto::createKeyPair(SecretPtr _secretKey)
 {
     return std::make_unique<Secp256k1KeyPair>(std::move(_secretKey));
 }
-
-KeyPairInterface::UniquePtr Secp256k1Crypto::createKeyPair(const Secret& _secretKey) const
-{
-    return std::make_unique<Secp256k1KeyPair>(std::make_shared<KeyImpl>(_secretKey.data()));
-}

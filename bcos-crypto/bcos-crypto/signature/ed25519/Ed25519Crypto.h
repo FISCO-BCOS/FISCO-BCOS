@@ -39,6 +39,7 @@ class Ed25519Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<Ed25519Crypto>;
+    using SignatureCrypto::createKeyPair;
     using SignatureCrypto::verify;
     Ed25519Crypto() = default;
     ~Ed25519Crypto() override {}
@@ -67,7 +68,6 @@ public:
     }
 
     KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
-    KeyPairInterface::UniquePtr createKeyPair(const Secret& _secretKey) const override;
 };
 }  // namespace crypto
 }  // namespace bcos

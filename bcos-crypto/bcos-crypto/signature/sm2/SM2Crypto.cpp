@@ -70,10 +70,6 @@ KeyPairInterface::UniquePtr SM2Crypto::createKeyPair(SecretPtr _secretKey) const
     return m_keyPairFactory->createKeyPair(std::move(_secretKey));
 }
 
-KeyPairInterface::UniquePtr SM2Crypto::createKeyPair(const Secret& _secretKey) const
-{
-    return m_keyPairFactory->createKeyPair(std::make_shared<KeyImpl>(_secretKey.data()));
-}
 
 bytes SM2Crypto::sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const

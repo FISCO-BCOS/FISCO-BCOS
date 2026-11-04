@@ -39,7 +39,10 @@ public:
     virtual bytes sign(const KeyPairInterface& _keyPair, const HashType& _hash,
         bool _signatureWithPub = false) const = 0;
 
-    // verify checks whether a signature is calculated from a given hash
+    // verify checks whether a signature is calculated from a given hash.
+    // The Public& overload returns false for an undersized key, while bytesConstRef throws
+    // InvalidKey. Secp256k1 also throws InvalidSignature for malformed signatures and recovery
+    // failure; the other implementations return false for short signatures.
     bool verify(const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
     {
         try
@@ -72,6 +75,9 @@ public:
     // recoverAddress recovers address from a signature(for precompiled)
     virtual std::pair<bool, bytes> recoverAddress(Hash& _hashImpl, bytesConstRef _in) const = 0;
     virtual std::unique_ptr<KeyPairInterface> createKeyPair(SecretPtr _secretKey) const = 0;
-    virtual std::unique_ptr<KeyPairInterface> createKeyPair(const Secret& _secretKey) const = 0;
+    std::unique_ptr<KeyPairInterface> createKeyPair(const Secret& _secretKey) const
+    {
+        return createKeyPair(std::make_shared<KeyImpl>(_secretKey.data()));
+    }
 };
 }  // namespace bcos::crypto

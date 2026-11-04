@@ -33,6 +33,7 @@ class SM2Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<SM2Crypto>;
+    using SignatureCrypto::createKeyPair;
     using SignatureCrypto::verify;
     SM2Crypto();
     ~SM2Crypto() = default;
@@ -48,7 +49,6 @@ public:
     std::pair<bool, bytes> recoverAddress(Hash& _hashImpl, bytesConstRef _in) const override;
 
     KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
-    KeyPairInterface::UniquePtr createKeyPair(const Secret& _secretKey) const override;
 
 protected:
     std::function<int8_t(const CInputBuffer* private_key, const CInputBuffer* public_key,

@@ -32,6 +32,7 @@ class HsmSM2Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<HsmSM2Crypto>;
+    using SignatureCrypto::createKeyPair;
     using SignatureCrypto::verify;
     HsmSM2Crypto(std::string _libPath);
     ~HsmSM2Crypto() override = default;
@@ -47,7 +48,6 @@ public:
 
     KeyPairInterface::UniquePtr generateKeyPair() const override;
     KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
-    KeyPairInterface::UniquePtr createKeyPair(const Secret& _secretKey) const override;
     KeyPairInterface::UniquePtr createKeyPair(unsigned int _keyIndex, std::string _password);
 
 private:
