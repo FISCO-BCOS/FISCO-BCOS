@@ -597,25 +597,12 @@ void Host::handshakeServer(const boost::system::error_code& error,
         {
             return;
         }
-        // inbound (accepted) connections have no awaiting connect() coroutine to receive the
-        // session, so deliver it to the registered connection handler — posted to the socket's
-        // io_context so the handler runs off the accept path
-        auto weakHost = weak_from_this();
-        boost::asio::post(socket->ioService(), [weakHost, session = std::move(session), info]() {
-            auto host = weakHost.lock();
-            if (!host)
-            {
-                return;
-            }
-            if (host->m_connectionHandler)
-            {
-                host->m_connectionHandler(NetworkException(0, ""), info, session);
-            }
-            else
-            {
-                HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
-            }
-        });
+        if (!m_acceptChannel.push(
+                AcceptedConnection{.p2pInfo = std::move(info), .session = std::move(session)}))
+        {
+            HOST_LOG(WARNING) << LOG_DESC("accept queue full or closed, reject connection")
+                              << LOG_KV("endpoint", socket->nodeIPEndpoint());
+        }
     }
 }
 
@@ -971,6 +958,8 @@ void Host::stop()
     }
     // signal run() to prepare for shutdown and reset m_timer
     m_run = false;
+    m_acceptChannel.close(
+        std::make_exception_ptr(NetworkException(P2PExceptionType::Disconnect, "HostStopped")));
     // Cancel the acceptor so the accept loop's pending async_accept completes with
     // operation_aborted: acceptLoop's coroutine frame holds a strong reference to this Host, and
     // only the completed accept lets the loop observe m_run == false and exit, releasing it.
@@ -1040,7 +1029,19 @@ bcos::gateway::Host::Host(bcos::crypto::Hash::Ptr _hash,
     std::shared_ptr<ASIOInterface> _asioInterface, std::shared_ptr<SessionFactory> _sessionFactory)
   : m_hashImpl(std::move(_hash)),
     m_asioInterface(std::move(_asioInterface)),
-    m_sessionFactory(std::move(_sessionFactory))
+    m_sessionFactory(std::move(_sessionFactory)),
+    m_acceptChannel(
+        [this](std::function<void()> wake) {
+            if (m_run && m_asioInterface)
+            {
+                m_asioInterface->post(std::move(wake));
+            }
+            else
+            {
+                wake();
+            }
+        },
+        MAX_ACCEPT_QUEUE_SIZE)
 {
     // FIB-186 (vector D): a single dedicated thread for session-teardown notifications, off the
     // shared IOServicePool that carries inbound-message delivery. See postTeardown / Host.h.
@@ -1091,17 +1092,6 @@ void bcos::gateway::Host::setHostPort(std::string host, uint16_t port)
 {
     m_listenHost = std::move(host);
     m_listenPort = port;
-}
-std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-bcos::gateway::Host::connectionHandler() const
-{
-    return m_connectionHandler;
-}
-void bcos::gateway::Host::setConnectionHandler(
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-        connectionHandler)
-{
-    m_connectionHandler = std::move(connectionHandler);
 }
 std::function<bool(X509* x509, std::string& pubHex)> bcos::gateway::Host::sslContextPubHandler()
 {

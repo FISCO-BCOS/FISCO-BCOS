@@ -10,6 +10,7 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
+#include "bcos-task/Channel.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Common.h"
 #include <openssl/x509.h>
@@ -93,11 +94,16 @@ public:
     virtual std::string listenHost() const;
     virtual void setHostPort(std::string host, uint16_t port);
 
-    virtual std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-    connectionHandler() const;
-    virtual void setConnectionHandler(
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-            connectionHandler);
+    struct AcceptedConnection
+    {
+        P2PInfo p2pInfo;
+        std::shared_ptr<SessionFace> session;
+    };
+
+    virtual task::Task<AcceptedConnection> acceptSession()
+    {
+        co_return co_await m_acceptChannel.recv();
+    }
 
     virtual std::function<bool(X509* x509, std::string& pubHex)> sslContextPubHandler();
 
@@ -150,6 +156,7 @@ public:
     // below; these constants are the defaults used when the config omits them.
     constexpr static std::size_t DEFAULT_MAX_CONCURRENT_SESSIONS = 1024;
     constexpr static std::size_t DEFAULT_MAX_SESSIONS_PER_IP = 32;
+    constexpr static std::size_t MAX_ACCEPT_QUEUE_SIZE = DEFAULT_MAX_CONCURRENT_SESSIONS;
 
     std::size_t maxConcurrentSessions() const { return m_maxConcurrentSessions; }
     void setMaxConcurrentSessions(std::size_t _limit) { m_maxConcurrentSessions = _limit; }
@@ -324,6 +331,7 @@ protected:
     /// representing to the network state
     std::shared_ptr<ASIOInterface> m_asioInterface;
     std::shared_ptr<SessionFactory> m_sessionFactory;
+    task::Channel<AcceptedConnection> m_acceptChannel;
     int m_connectTimeThre = 50000;
 
     std::set<NodeIPEndpoint> m_pendingConns;
@@ -338,9 +346,6 @@ protected:
     uint16_t m_listenPort = 0;
     // enable ssl verify or not
     bool m_enableSSLVerify = true;
-
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-        m_connectionHandler;
 
     // get the hex public key of the peer from the the SSL connection
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandler;

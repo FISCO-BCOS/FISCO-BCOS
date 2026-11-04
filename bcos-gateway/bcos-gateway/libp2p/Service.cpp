@@ -67,18 +67,29 @@ void Service::start()
     {
         m_run = true;
 
-        auto self = std::weak_ptr<Service>(shared_from_this());
-        m_host->setConnectionHandler([self](NetworkException e, P2PInfo const& p2pInfo,
-                                         std::shared_ptr<SessionFace> session) {
-            auto service = self.lock();
-            if (service)
+        task::wait([](std::shared_ptr<Service> service) -> task::Task<void> {
+            try
             {
-                service->onConnect(std::move(e), p2pInfo, std::move(session));
+                co_await service->acceptPump();
             }
-        });
+            catch (std::exception const& e)
+            {
+                SERVICE_LOG(WARNING) << LOG_DESC("accept pump exit")
+                                     << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }(shared_from_this()));
         m_host->start();
 
         heartBeat();
+    }
+}
+
+task::Task<void> Service::acceptPump()
+{
+    while (m_run)
+    {
+        auto connection = co_await m_host->acceptSession();
+        onConnect(NetworkException(0, ""), connection.p2pInfo, std::move(connection.session));
     }
 }
 
