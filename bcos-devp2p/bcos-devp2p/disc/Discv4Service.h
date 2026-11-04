@@ -87,7 +87,6 @@ public:
     using Ptr = std::shared_ptr<Discv4Service>;
     // Called (off the lock, on the discovery thread) when a node with a TCP port becomes
     // bonded for the first time.
-    using CandidateSink = std::function<void(rlpx::PeerConfig const&)>;
 
     struct Stats
     {
@@ -120,7 +119,6 @@ public:
 
     // Bonded nodes (pong within 12h) with a TCP port, most recently verified first.
     std::vector<rlpx::PeerConfig> candidates(size_t _max) const;
-    void setCandidateSink(CandidateSink _sink);
 
     // Thread-safe entry points; the work runs on the discovery thread.
     // A verified record from another source (EIP-1459 DNS): tabled and pinged.
@@ -133,6 +131,8 @@ public:
     static constexpr uint32_t c_maxFindNodeFailures = 5;  // geth maxFindnodeFailures
     static constexpr std::chrono::seconds c_packetExpiration{20};
     static constexpr std::chrono::seconds c_pingRepeatInterval{10};
+    static constexpr size_t c_maxPendingReplies = 1024;
+    static constexpr size_t c_maxPingBackEndpoints = 4096;
 
 private:
     Discv4Service(Discv4Config _config, rlpx::EccKeyPair _key);
@@ -203,7 +203,8 @@ private:
     void addSeen(NodeEntry _entry);
     void onBonded(bcos::h256 const& _id, bcos::bytes const& _publicKey, UdpEndpoint const& _from,
         uint16_t _announcedTcp, PongPacket const& _pong);
-    void noteOurEndpoint(bcos::h256 const& _reporter, Endpoint const& _to);
+    void noteOurEndpoint(UdpEndpoint const& _reporter, Endpoint const& _to);
+    bool allowPingBack(UdpEndpoint const& _from, Clock::time_point _now);
     void rebuildLocalRecord();
     void seedBootnodes();
     std::optional<NodeEntry> resolveSeed(SeedNode const& _seed) const;
@@ -238,7 +239,7 @@ private:
     std::array<bcos::byte, 2048> m_receiveBuffer{};
     UdpEndpoint m_receiveFrom;
 
-    // Guards m_table, m_localRecord, m_stats, m_bondedIds and the sink.
+    // Guards m_table, m_localRecord, m_stats and m_everBonded.
     mutable std::mutex m_mutex;
     KademliaTable m_table;
     Enr m_localRecord;
@@ -247,10 +248,10 @@ private:
     IpTracker m_ipTracker;
     Stats m_stats;
     std::set<bcos::h256> m_everBonded;
-    CandidateSink m_sink;
 
     // I/O-thread only.
     std::list<Pending> m_pending;
+    std::map<UdpEndpoint, Clock::time_point> m_pingBackAt;
     uint64_t m_nextPendingId{1};
     size_t m_lookupRound{0};
     std::mt19937_64 m_random;

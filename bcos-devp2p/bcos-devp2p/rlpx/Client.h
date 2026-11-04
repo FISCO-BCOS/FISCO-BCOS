@@ -49,9 +49,9 @@ struct PeerConfig
     bcos::h256 headHash;
     bcos::bytes totalDifficulty;  // minimal big-endian u256
     bcos::devp2p::eth::ForkId forkId;
-    // --- appended fields (E6): the EIP-7642 block range announced in an eth/69+ Status.
+    // --- appended fields: the EIP-7642 block range announced in an eth/69+ Status.
     // Defaults (0, 0, zero hash) mean "genesis only": the handshake then advertises
-    // [0, 0] with latestBlockHash = genesisHash, the pre-E6 behaviour.
+    // [0, 0] with latestBlockHash = genesisHash, the former behaviour.
     uint64_t earliestBlock{0};
     uint64_t latestBlock{0};
     bcos::h256 latestBlockHash;

@@ -175,12 +175,6 @@ BOOST_AUTO_TEST_CASE(threeNodesBondAndDiscover)
     // A: no bootnodes. B seeds from A. C seeds from B only and must learn A through a
     // lookup (B answers C's FindNode with A).
     auto a = Discv4Service::create(loopbackConfig(30301), keyA);
-    std::vector<rlpx::PeerConfig> sinkSeen;
-    std::mutex sinkMutex;
-    a->setCandidateSink([&](rlpx::PeerConfig const& _peer) {
-        std::lock_guard lock(sinkMutex);
-        sinkSeen.push_back(_peer);
-    });
     a->start();
     BOOST_REQUIRE_NE(a->udpPort(), 0);
     BOOST_CHECK(a->localRecord().verify());
@@ -217,19 +211,6 @@ BOOST_AUTO_TEST_CASE(threeNodesBondAndDiscover)
         BOOST_CHECK(peer.port == 30302 || peer.port == 30303);
     }
     BOOST_CHECK_EQUAL(a->candidates(1).size(), 1u);
-    // The sink reported every newly bonded node exactly once.
-    BOOST_CHECK(waitFor(
-        [&]() {
-            std::lock_guard lock(sinkMutex);
-            return sinkSeen.size() >= 2;
-        },
-        std::chrono::seconds(5)));
-    {
-        std::lock_guard lock(sinkMutex);
-        BOOST_CHECK(hasPeer(sinkSeen, keyB.publicKey()));
-        BOOST_CHECK(hasPeer(sinkSeen, keyC.publicKey()));
-        BOOST_CHECK_EQUAL(sinkSeen.size(), 2u);
-    }
     // EIP-868: pongs carried the ENR seq, so records were fetched and verified.
     BOOST_CHECK(waitFor([&]() { return b->stats().recordsFetched >= 1; }, std::chrono::seconds(5)));
     auto statsA = a->stats();
@@ -371,6 +352,35 @@ BOOST_AUTO_TEST_CASE(pingAloneDoesNotTableTheSender)
     // And a FindNode from that unverified source is still ignored.
     raw.send(target, FindNodePacket{raw.key.publicKey(), RawNode::expiry()});
     BOOST_CHECK(!raw.receive(std::chrono::milliseconds(600)).has_value());
+    a->stop();
+}
+
+BOOST_AUTO_TEST_CASE(pingBackIsThrottledPerEndpoint)
+{
+    rlpx::EccKeyPair keyA;
+    auto a = Discv4Service::create(loopbackConfig(30325), keyA);
+    a->start();
+    udp::endpoint const target(boost::asio::ip::make_address("127.0.0.1"), a->udpPort());
+    RawNode raw;
+    PingPacket ping;
+    ping.from = Endpoint{{127, 0, 0, 1}, raw.port(), 30399};
+    ping.to = Endpoint{{127, 0, 0, 1}, a->udpPort(), 0};
+    ping.expiration = RawNode::expiry();
+    // A spoofed source could repeat this at will: every ping earns a pong, but only the
+    // first one earns a ping back at that endpoint.
+    for (int i = 0; i < 5; ++i)
+    {
+        raw.send(target, ping);
+    }
+    size_t pongs = 0;
+    size_t pings = 0;
+    while (auto packet = raw.receive(std::chrono::milliseconds(500)))
+    {
+        pongs += packet->type == PacketType::Pong ? 1 : 0;
+        pings += packet->type == PacketType::Ping ? 1 : 0;
+    }
+    BOOST_CHECK_EQUAL(pongs, 5u);
+    BOOST_CHECK_EQUAL(pings, 1u);
     a->stop();
 }
 

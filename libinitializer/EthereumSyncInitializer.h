@@ -50,12 +50,12 @@
 #include "libinitializer/Common.h"
 #include "libinitializer/GlobalStateStorageInitializer.h"
 #include "libinitializer/TxGossipService.h"
-// --- peer serving (E6) ---
+// --- peer serving ---
 #include "bcos-devp2p/rlpx/Listener.h"
 #include "bcos-devp2p/sync/PeerManager.h"
 #include "bcos-devp2p/sync/PeerServer.h"
 #include "libinitializer/LedgerBlockSource.h"
-// --- end peer serving (E6) ---
+// --- end peer serving ---
 #include <bcos-utilities/ClientIdentity.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string/trim.hpp>
@@ -1460,7 +1460,7 @@ private:
             *m_localKey, configuredBootnodes(*m_nodeConfig), std::move(configFactory));
     }
 
-    // --- discovery (E5) -------------------------------------------------------------
+    // --- discovery -------------------------------------------------------------
     // devp2p node discovery ([ethereum] discovery): discv4 over UDP seeded from the
     // bootnode list, plus the EIP-1459 DNS list feeding the same table. The sync round
     // dials the configured bootnodes first, then up to max_discovered_peers bonded
@@ -1542,7 +1542,7 @@ private:
 
     bcos::devp2p::disc::Discv4Service::Ptr m_discovery;
     bcos::devp2p::disc::DnsDiscovery::Ptr m_dnsDiscovery;
-    // --- end discovery (E5) ---------------------------------------------------------
+    // --- end discovery ---------------------------------------------------------
 
     std::atomic_bool m_running{false};
     std::thread m_thread;
@@ -1550,7 +1550,7 @@ private:
     std::optional<bcos::devp2p::rlpx::EccKeyPair> m_localKey;
 
     // ------------------------------------------------------------------------------
-    // --- peer serving (E6): peer table, inbound listener, ledger-backed serving ---
+    // --- peer serving: peer table, inbound listener, ledger-backed serving ---
     // ------------------------------------------------------------------------------
 public:
     /// The one peer table shared by the inbound listener and the outbound dial loop;
@@ -1716,7 +1716,7 @@ private:
     std::shared_ptr<LedgerBlockSource> m_blockSource;
     std::optional<bcos::devp2p::eth::ForkFilter> m_forkFilter;
     std::shared_ptr<bcos::devp2p::rlpx::Listener> m_listener;
-    // --- end peer serving (E6) ---
+    // --- end peer serving ---
 };
 
 }  // namespace bcos::initializer

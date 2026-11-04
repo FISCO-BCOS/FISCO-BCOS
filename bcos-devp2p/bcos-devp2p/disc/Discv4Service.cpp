@@ -70,10 +70,7 @@ std::optional<boost::asio::ip::address> addressOf(bcos::bytes const& _ip)
 
 bool isPrivateV4(boost::asio::ip::address_v4 const& _a)
 {
-    auto raw = _a.to_bytes();
-    return raw[0] == 10 || (raw[0] == 172 && raw[1] >= 16 && raw[1] <= 31) ||
-           (raw[0] == 192 && raw[1] == 168) || (raw[0] == 169 && raw[1] == 254) ||
-           (raw[0] == 100 && raw[1] >= 64 && raw[1] <= 127);  // CGNAT
+    return !_a.is_loopback() && IpTracker::isPrivateOrLoopback(_a.to_bytes());
 }
 
 uint64_t nowMilliseconds()
@@ -256,12 +253,6 @@ std::vector<rlpx::PeerConfig> Discv4Service::candidates(size_t _max) const
         out.push_back(peerConfigOf(entry));
     }
     return out;
-}
-
-void Discv4Service::setCandidateSink(CandidateSink _sink)
-{
-    std::lock_guard lock(m_mutex);
-    m_sink = std::move(_sink);
 }
 
 void Discv4Service::addRecord(Enr const& _record)
@@ -661,10 +652,40 @@ void Discv4Service::handlePing(
             }
         }
     }
-    if (shouldPing)
+    if (shouldPing && allowPingBack(_from, now))
     {
         sendPing(_sender, _packet.senderPublicKey, _from, ping.from.tcp, [](bool, uint64_t) {});
     }
+}
+
+bool Discv4Service::allowPingBack(UdpEndpoint const& _from, Clock::time_point _now)
+{
+    // The source of an unbonded ping can be spoofed and node ids are free to mint, so the
+    // ping-back is throttled per endpoint and bounded overall: we must not become a
+    // reflector, and pending replies must not grow with inbound traffic.
+    if (m_pending.size() >= c_maxPendingReplies)
+    {
+        return false;
+    }
+    if (m_pingBackAt.size() >= c_maxPingBackEndpoints)
+    {
+        std::erase_if(m_pingBackAt,
+            [&](auto const& _entry) { return _now - _entry.second >= c_pingRepeatInterval; });
+        if (m_pingBackAt.size() >= c_maxPingBackEndpoints)
+        {
+            return false;
+        }
+    }
+    auto [it, inserted] = m_pingBackAt.try_emplace(_from, _now);
+    if (!inserted)
+    {
+        if (_now - it->second < c_pingRepeatInterval)
+        {
+            return false;
+        }
+        it->second = _now;
+    }
+    return true;
 }
 
 void Discv4Service::handleFindNode(
@@ -867,9 +888,7 @@ void Discv4Service::onBonded(bcos::h256 const& _id, bcos::bytes const& _publicKe
     UdpEndpoint const& _from, uint16_t _announcedTcp, PongPacket const& _pong)
 {
     auto const now = Clock::now();
-    std::optional<rlpx::PeerConfig> newCandidate;
     std::optional<NodeEntry> needsRecord;
-    CandidateSink sink;
     {
         std::lock_guard lock(m_mutex);
         auto* node = m_table.find(_id);
@@ -896,7 +915,6 @@ void Discv4Service::onBonded(bcos::h256 const& _id, bcos::bytes const& _publicKe
         // The pong came from `_from`: that endpoint is now proven for this id. A changed
         // ip/udp resets the old bond inside updateEndpoint before it is re-stamped here.
         m_table.updateEndpoint(_id, ipBytes(_from.address()), _from.port(), _announcedTcp);
-        bool const wasBonded = node->bonded(now);
         node->lastPongReceived = now;
         node->enrSeq = std::max(node->enrSeq, _pong.enrSeq);
         node->findNodeFailures = 0;
@@ -906,24 +924,15 @@ void Discv4Service::onBonded(bcos::h256 const& _id, bcos::bytes const& _publicKe
         {
             ++m_stats.nodesBonded;
         }
-        if (!wasBonded && node->tcp != 0 && node->ip.size() == 4)
-        {
-            newCandidate = peerConfigOf(*node);
-            sink = m_sink;
-        }
         if (_pong.enrSeq != 0 && (!node->record || node->record->seq() < _pong.enrSeq))
         {
             needsRecord = *node;
         }
     }
-    noteOurEndpoint(_id, _pong.to);
+    noteOurEndpoint(_from, _pong.to);
     if (needsRecord)
     {
         sendEnrRequest(*needsRecord);
-    }
-    if (sink && newCandidate)
-    {
-        sink(*newCandidate);
     }
 }
 
@@ -1141,9 +1150,9 @@ void Discv4Service::addSeen(NodeEntry _entry)
     }
 }
 
-void Discv4Service::noteOurEndpoint(bcos::h256 const& _reporter, Endpoint const& _to)
+void Discv4Service::noteOurEndpoint(UdpEndpoint const& _reporter, Endpoint const& _to)
 {
-    if (m_config.externalIp || !_to.isV4())
+    if (m_config.externalIp || !_to.isV4() || !_reporter.address().is_v4())
     {
         return;
     }
@@ -1171,7 +1180,8 @@ void Discv4Service::noteOurEndpoint(bcos::h256 const& _reporter, Endpoint const&
     std::copy(raw.begin(), raw.end(), ip.begin());
     std::lock_guard lock(m_mutex);
     auto const now = Clock::now();
-    m_ipTracker.addStatement(_reporter, ip, now);
+    m_ipTracker.addStatement(
+        IpTracker::reporterKey(_reporter.address().to_v4().to_bytes()), ip, now);
     auto predicted = m_ipTracker.predict(now);
     if (!predicted || m_publishedIp == predicted)
     {

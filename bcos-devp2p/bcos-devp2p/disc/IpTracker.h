@@ -21,7 +21,6 @@
  */
 #pragma once
 
-#include <bcos-utilities/FixedBytes.h>
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -43,10 +42,31 @@ public:
       : m_minStatements(_minStatements), m_window(_window), m_maxStatements(_maxStatements)
     {}
 
-    // `_reporter` says it sees us at `_address`. A reporter has one statement: a repeat
-    // replaces its previous one (it never counts twice). Statements older than the window
-    // are evicted here; beyond maxStatements the oldest statement goes, never the table.
-    void addStatement(bcos::h256 const& _reporter, Address const& _address, Clock::time_point _now)
+    // The vote key of a reporter seen at `_ip`, its proven UDP source. Node ids are free to
+    // mint, so one host must not be able to outvote the network: a public address votes
+    // per /24. Private and loopback sources keep their full address, because a private
+    // network legitimately sits in one /24 and outsiders cannot reach it.
+    static Address reporterKey(Address _ip)
+    {
+        if (!isPrivateOrLoopback(_ip))
+        {
+            _ip[3] = 0;
+        }
+        return _ip;
+    }
+
+    static bool isPrivateOrLoopback(Address const& _ip)
+    {
+        return _ip[0] == 127 || _ip[0] == 10 || (_ip[0] == 172 && _ip[1] >= 16 && _ip[1] <= 31) ||
+               (_ip[0] == 192 && _ip[1] == 168) || (_ip[0] == 169 && _ip[1] == 254) ||
+               (_ip[0] == 100 && _ip[1] >= 64 && _ip[1] <= 127);  // CGNAT
+    }
+
+    // `_reporter` (see reporterKey) says it sees us at `_address`. A reporter has one
+    // statement: a repeat replaces its previous one (it never counts twice). Statements
+    // older than the window are evicted here; beyond maxStatements the oldest statement
+    // goes, never the table.
+    void addStatement(Address const& _reporter, Address const& _address, Clock::time_point _now)
     {
         evictExpired(_now);
         m_statements[_reporter] = Statement{_address, _now};
@@ -117,6 +137,6 @@ private:
     size_t m_minStatements;
     Clock::duration m_window;
     size_t m_maxStatements;
-    std::map<bcos::h256, Statement> m_statements;
+    std::map<Address, Statement> m_statements;
 };
 }  // namespace bcos::devp2p::disc
