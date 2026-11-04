@@ -145,6 +145,13 @@ public:
             {
                 return std::nullopt;
             }
+            // Ommers are not persisted, so a pre-merge block that has them cannot be
+            // reassembled: its body would not match the header. Declining is honest.
+            if (bcos::protocol::EthBlockHeader(*block->blockHeader()).data().uncleHash !=
+                bcos::protocol::c_emptyOmmersHash)
+            {
+                return std::nullopt;
+            }
             bcos::devp2p::eth::BlockBody body;
             for (auto const& tx : block->transactions())
             {

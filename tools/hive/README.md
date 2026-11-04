@@ -109,12 +109,10 @@ The entrypoint:
 
 ## Current limitations (tracked follow-up work)
 
-- **Outbound-only devp2p**: the node does not listen for inbound RLPx
-  connections yet, so `enode.sh` output is informational; the `devp2p` eth
-  suite and `ethereum/sync` (which dial into the client) are not expected to
-  pass yet.
-- **No node discovery** (discv4/discv5): `devp2p` discovery suites are out of
-  scope.
+- **Inbound devp2p and discv4 are not yet run against the simulators**: the node
+  listens for RLPx on 30303 and answers discv4 there, but the `devp2p` and
+  `ethereum/sync` simulators are not part of the nightly run yet.
+- **No discv5**: the `devp2p` discv5 suite is out of scope.
 - **No GraphQL**: `ethereum/graphql` is out of scope.
 - **No Clique/PoW**: `HIVE_CLIQUE_*` are ignored.
 - **Pre-London chains are not representable for block import**: the EL fork

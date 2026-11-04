@@ -246,7 +246,8 @@ public:
 
     /// Start the background sync loop. No-op if already started. Throws if the node
     /// key cannot be loaded/persisted (a misconfigured identity must fail startup,
-    /// not kill the sync thread later); on a throw nothing has started.
+    /// not kill the sync thread later), or if a devp2p port cannot be bound; on a throw
+    /// nothing of this initializer is left running.
     void start()
     {
         if (m_running.load())
@@ -261,9 +262,18 @@ public:
         m_localKey = std::move(localKey);
         // Peer table + inbound listener first: the sync loop below dials through the
         // same table, and discovery advertises the listener's port in its ENR.
-        // stop() tears both down before the sync thread joins.
-        startPeerServing();
-        startDiscovery();
+        // stop() tears both down before the sync thread joins. A bind failure must not
+        // leave the other one running.
+        try
+        {
+            startPeerServing();
+            startDiscovery();
+        }
+        catch (...)
+        {
+            stop();
+            throw;
+        }
         // Transaction gossip: its pumps reference this initializer only through the
         // peer-config factory, and stop() tears it down before the sync thread joins.
         startTxGossip();
@@ -759,7 +769,7 @@ private:
                     continue;
                 }
                 auto devp2pConfig = devp2pChainConfig();
-                auto bootnodes = dialCandidates();
+                auto bootnodes = dialCandidates(backfillTarget.has_value());
                 if (bootnodes.empty())
                 {
                     // no peers to sync from; poll on the caught-up cadence for a bootnode
@@ -799,6 +809,15 @@ private:
                     if (!backfillTarget && !autonomousAllowed)
                     {
                         break;
+                    }
+                    // A discovered peer is an unauthenticated stranger. Without a CL target
+                    // there is nothing to pin its blocks to, and its failures below only
+                    // cost it score: they never reach the rollback, the suspension or the
+                    // deterministic-stall bookkeeping that bootnodes can trigger.
+                    bool const trustedPeer = m_peerManager->isStatic(peer.peerPublicKey);
+                    if (!trustedPeer && !backfillTarget)
+                    {
+                        continue;
                     }
                     // Refresh the resume point for EVERY bootnode, not once per
                     // round: a peer whose download commits blocks — fully, or
@@ -868,6 +887,15 @@ private:
                         }
                         return true;
                     };
+                    auto onUntrustedFailure = [&](std::exception const& e,
+                                                  bcos::devp2p::sync::Penalty penalty) {
+                        anyPeerFailed = true;
+                        m_peerManager->penalize(peer.peerPublicKey, penalty);
+                        INITIALIZER_LOG(DEBUG)
+                            << LOG_DESC("EL sync: discovered peer failed")
+                            << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
+                            << LOG_KV("error", e.what());
+                    };
                     // A single unreachable bootnode must not stall the round: each peer's
                     // connect + download is fault-isolated so the loop moves on to the next
                     // bootnode (online fallback) and retries the whole list next round.
@@ -898,7 +926,16 @@ private:
                         clientConfig.latestBlock = static_cast<uint64_t>(resume.anchor.number);
                         clientConfig.latestBlockHash = clientConfig.headHash;
 
-                        bcos::devp2p::rlpx::RlpxClient client(localKey, clientConfig);
+                        bcos::devp2p::rlpx::HandshakeOptions clientOptions;
+                        if (!trustedPeer)
+                        {
+                            clientOptions.forkIdReject =
+                                [this](bcos::devp2p::eth::ForkId const& remote) {
+                                    return forkIdRejection(remote);
+                                };
+                        }
+                        bcos::devp2p::rlpx::RlpxClient client(
+                            localKey, clientConfig, std::move(clientOptions));
                         // DEBUG: in steady state (caught up) the loop re-dials every
                         // bootnode each round — per-peer connect/handshake noise at
                         // INFO would drown the log; the download path below logs its
@@ -934,6 +971,10 @@ private:
                         // download completes (the CL-announced target). Nullopt on the
                         // autonomous lane, whose window tip is not hash-pinned.
                         std::optional<bcos::h256> expectedTipHash;
+                        // Untrusted peer only: the hash every block must carry, proven from
+                        // the CL's target BEFORE anything commits. expectedTipHash alone is
+                        // checked after the whole range, too late for a stranger's blocks.
+                        std::vector<bcos::h256> pinnedHashes;
                         if (backfillTarget)
                         {
                             // CL-directed backfill: pull the chain toward the exact hash the
@@ -1051,6 +1092,11 @@ private:
                             }
                             downloadEnd = targetHeader->number();
                             expectedTipHash = *backfillTarget;
+                            if (!trustedPeer)
+                            {
+                                pinnedHashes = exchange.requestPinnedHashes(
+                                    established.session, *backfillTarget, downloadEnd);
+                            }
                             madeProgress = true;
                             INITIALIZER_LOG(INFO)
                                 << LOG_DESC("EL sync: starting CL-directed backfill")
@@ -1127,6 +1173,16 @@ private:
                                     // peer's tip. Caught below as a normal shutdown.
                                     BOOST_THROW_EXCEPTION(
                                         SyncCancelled("EL sync: cancelled by stop()"));
+                                }
+                                if (!pinnedHashes.empty() &&
+                                    block.hash !=
+                                        pinnedHashes.at(static_cast<uint64_t>(block.header.number) -
+                                                        resume.startNumber))
+                                {
+                                    BOOST_THROW_EXCEPTION(BlockVerificationFailed(
+                                        "EL sync: discovered peer served block " +
+                                        std::to_string(block.header.number) +
+                                        " outside the chain the CL's target commits to"));
                                 }
                                 // Operator-pinned finalized checkpoint: the block that
                                 // CROSSES the checkpoint height must carry the pinned
@@ -1239,6 +1295,11 @@ private:
                     }
                     catch (bcos::devp2p::sync::ParentHashMismatch const& e)
                     {
+                        if (!trustedPeer)
+                        {
+                            onUntrustedFailure(e, bcos::devp2p::sync::Penalty::UselessResponse);
+                            continue;
+                        }
                         // Reorg signal: the peer's chain does not build on our
                         // committed local head (or does not end at the CL-announced
                         // backfill target). ONLY this failure type feeds the
@@ -1321,6 +1382,11 @@ private:
                     }
                     catch (bcos::devp2p::sync::HeaderRuleViolation const& e)
                     {
+                        if (!trustedPeer)
+                        {
+                            onUntrustedFailure(e, bcos::devp2p::sync::Penalty::Malformed);
+                            continue;
+                        }
                         if (onDeterministicFailure(e))
                         {
                             break;
@@ -1328,6 +1394,11 @@ private:
                     }
                     catch (BlockVerificationFailed const& e)
                     {
+                        if (!trustedPeer)
+                        {
+                            onUntrustedFailure(e, bcos::devp2p::sync::Penalty::Malformed);
+                            continue;
+                        }
                         if (onDeterministicFailure(e))
                         {
                             break;
@@ -1350,6 +1421,11 @@ private:
                         // WARNING and try the next bootnode; no streak, so two
                         // transient errors can never corroborate a reorg suspension
                         // or pin the loop into the deterministic stall.
+                        if (!trustedPeer)
+                        {
+                            onUntrustedFailure(e, bcos::devp2p::sync::Penalty::HandshakeFailed);
+                            continue;
+                        }
                         anyPeerFailed = true;
                         logPeerFailure(e);
                     }
@@ -1568,9 +1644,10 @@ private:
     {
         std::shared_ptr<bcos::devp2p::sync::PeerManager> manager;
         bcos::devp2p::sync::NodeId id;
+        bcos::devp2p::sync::Direction direction;
         PeerSlot(std::shared_ptr<bcos::devp2p::sync::PeerManager> _manager,
-            bcos::devp2p::sync::NodeId _id)
-          : manager(std::move(_manager)), id(std::move(_id))
+            bcos::devp2p::sync::NodeId _id, bcos::devp2p::sync::Direction _direction)
+          : manager(std::move(_manager)), id(std::move(_id)), direction(_direction)
         {}
         PeerSlot(PeerSlot const&) = delete;
         PeerSlot& operator=(PeerSlot const&) = delete;
@@ -1578,7 +1655,7 @@ private:
         {
             if (manager)
             {
-                manager->release(id);
+                manager->release(id, direction);
             }
         }
     };
@@ -1593,24 +1670,36 @@ private:
                                    << LOG_KV("reason", static_cast<int>(*reason));
             return std::nullopt;
         }
-        return std::optional<PeerSlot>(std::in_place, m_peerManager, _id);
+        return std::optional<PeerSlot>(
+            std::in_place, m_peerManager, _id, bcos::devp2p::sync::Direction::Outbound);
     }
 
     /// The dial list for one sync round: the bootnode file (re-read every round so an
-    /// operator can add one at runtime) as the static peers, plus whatever discovery
-    /// pushed through addCandidate, minus banned and connected nodes.
-    std::vector<bcos::devp2p::rlpx::PeerConfig> dialCandidates()
+    /// operator can add one at runtime) as the static peers, minus banned and connected
+    /// nodes. Discovered nodes join only when the CL named a target: anyone can get
+    /// discovered, so a stranger never picks the chain, it can only serve the blocks the
+    /// CL's hash commits to (requestPinnedHashes in the sync loop).
+    std::vector<bcos::devp2p::rlpx::PeerConfig> dialCandidates(bool _haveClTarget)
     {
         m_peerManager->setStaticPeers(configuredBootnodes(*m_nodeConfig));
-        if (m_discovery)
+        if (!_haveClTarget || !m_discovery)
         {
-            for (auto& candidate :
-                m_discovery->candidates(m_nodeConfig->ethereumMaxDiscoveredPeers()))
-            {
-                m_peerManager->addCandidate(std::move(candidate));
-            }
+            return m_peerManager->dialCandidates(0);
         }
-        return m_peerManager->dialCandidates();
+        for (auto& candidate : m_discovery->candidates(m_peerManager->config().maxCandidates))
+        {
+            m_peerManager->addCandidate(std::move(candidate));
+        }
+        return m_peerManager->dialCandidates(m_nodeConfig->ethereumMaxDiscoveredPeers());
+    }
+
+    /// The EIP-2124 verdict on a peer's fork id at the local head; set for every peer we
+    /// do not trust by configuration.
+    std::optional<std::string> forkIdRejection(bcos::devp2p::eth::ForkId const& _remote)
+    {
+        auto resume = resumePoint();
+        return m_forkFilter->reject(_remote, static_cast<uint64_t>(resume.anchor.number),
+            static_cast<uint64_t>(resume.anchor.timestamp));
     }
 
     /// The Status fields an inbound peer sees: chain identity pinned to the genesis,
@@ -1655,32 +1744,36 @@ private:
     {
         bcos::devp2p::sync::PeerManagerConfig peerConfig;
         peerConfig.maxPeers = m_nodeConfig->ethereumMaxPeers();
-        peerConfig.maxCandidates = m_nodeConfig->ethereumMaxDiscoveredPeers();
         m_peerManager = std::make_shared<bcos::devp2p::sync::PeerManager>(peerConfig);
         m_blockSource = std::make_shared<LedgerBlockSource>(m_ledger, genesisAnchorHeader());
+        m_forkFilter.emplace(makeForkFilter());
         if (!m_nodeConfig->ethereumServePeers())
         {
             INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: peer serving disabled (serve_peers=false)");
             return;
         }
-        m_forkFilter.emplace(makeForkFilter());
         bcos::devp2p::rlpx::HandshakeOptions options;
         options.minEthVersion = bcos::devp2p::eth::kMinServingProtocolVersion;
         options.forkIdReject = [this](bcos::devp2p::eth::ForkId const& remote) {
-            auto resume = resumePoint();
-            return m_forkFilter->reject(remote, static_cast<uint64_t>(resume.anchor.number),
-                static_cast<uint64_t>(resume.anchor.timestamp));
-        };
-        options.admit = [this](bcos::devp2p::rlpx::HelloMessage const& hello) {
-            return m_peerManager->tryAdmit(hello.id, bcos::devp2p::sync::Direction::Inbound);
+            return forkIdRejection(remote);
         };
         bcos::devp2p::rlpx::ListenerConfig listenerConfig;
         listenerConfig.bindAddress = "0.0.0.0";
         listenerConfig.port = m_nodeConfig->ethereumListenPort();
+        // Room for every peer slot plus a margin of connections still in handshake.
+        listenerConfig.maxConnections = peerConfig.maxPeers + 64;
         m_listener = std::make_shared<bcos::devp2p::rlpx::Listener>(
             *m_localKey, listenerConfig, [this]() { return inboundStatus(); },
             [this](bcos::devp2p::rlpx::EstablishedSession& established) {
+                // Admit only here, after Status: every earlier failure then holds no slot.
                 auto const id = established.peerHello.id;
+                auto const direction = bcos::devp2p::sync::Direction::Inbound;
+                if (auto reason = m_peerManager->tryAdmit(id, direction))
+                {
+                    bcos::devp2p::rlpx::sendDisconnect(established.session, *reason);
+                    return;
+                }
+                PeerSlot slot(m_peerManager, id, direction);
                 bcos::devp2p::sync::PeerServer server(*m_blockSource);
                 auto const exit = server.serve(established, &m_running);
                 using Exit = bcos::devp2p::sync::PeerServer::ExitReason;
@@ -1692,7 +1785,6 @@ private:
                 {
                     m_peerManager->penalize(id, bcos::devp2p::sync::Penalty::Timeout);
                 }
-                m_peerManager->release(id);
             },
             std::move(options));
         m_listener->start();
