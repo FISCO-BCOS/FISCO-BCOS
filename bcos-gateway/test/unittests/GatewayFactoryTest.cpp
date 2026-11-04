@@ -21,11 +21,14 @@
 
 #include "bcos-gateway/GatewayFactory.h"
 #include "bcos-gateway/GatewayConfig.h"
-#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
+#include "bcos-gateway/libp2p/P2PIdentity.h"
+#include "bcos-network/Host.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/context/NtlsCompatibility.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -98,17 +101,17 @@ BOOST_AUTO_TEST_SUITE_END()
 namespace
 {
 namespace context = bcos::boostssl::context;
-struct TestHost : Host
+struct TestHost : P2PHost
 {
-    using Host::Host;
-    using Host::newVerifyCallback;
+    using P2PHost::newVerifyCallback;
+    using P2PHost::P2PHost;
 };
 
 struct NodeIdProbe
 {
     std::function<bool(bool, boost::asio::ssl::verify_context&)> callback;
     std::vector<X509*> depth0Certificates;
-    std::shared_ptr<std::string> nodeId;
+    bcos::network::IdentityToken nodeId;
 };
 
 int nodeIdProbeIndex()
@@ -162,15 +165,16 @@ std::string verifyLegacyNodeId(const std::vector<X509*>& certificates, X509* sig
     auto sslContext = builder.buildSslContext(true, config);
 
     GatewayFactory factory("", "");
-    auto host = std::make_shared<TestHost>(nullptr, nullptr, nullptr);
-    host->setSSLContextPubHandler(factory.sslContextPubHandler());
-    host->setSSLContextPubHandlerWithoutExtInfo(factory.sslContextPubHandlerWithoutExtInfo());
+    auto host = std::make_shared<TestHost>(nullptr, nullptr);
+    auto peerIdentity = std::make_shared<P2PPeerIdentity>(std::make_shared<crypto::Keccak256>(),
+        factory.sslContextPubHandler(), factory.sslContextPubHandlerWithoutExtInfo());
+    host->setPeerIdentity(peerIdentity);
     host->setEnableSslVerify(true);
     std::string signingNodeId;
     BOOST_REQUIRE(factory.sslContextPubHandlerWithoutExtInfo()(sign, signingNodeId));
-    host->setPeerWhitelist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Whitelist,
+    peerIdentity->setPeerWhitelist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Whitelist,
         std::set<std::string>{boost::to_upper_copy(signingNodeId)}, true));
-    auto nodeId = std::make_shared<std::string>();
+    auto nodeId = peerIdentity->newIdentitySlot();
     NodeIdProbe probe{host->newVerifyCallback(nodeId), {}, nodeId};
     Ssl ssl(SSL_new(sslContext->native_handle()), &SSL_free);
     BOOST_REQUIRE(ssl);
@@ -203,7 +207,7 @@ std::string verifyLegacyNodeId(const std::vector<X509*>& certificates, X509* sig
     {
         BOOST_CHECK_EQUAL(certificate, sign);
     }
-    return *probe.nodeId;
+    return P2PPeerIdentity::p2pInfoOf(probe.nodeId)->rawP2pID;
 }
 }  // namespace
 
