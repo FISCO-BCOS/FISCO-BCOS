@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
     StubMemPool memPool;
     FCEngineService engineService(memPool, fixture.m_multiLayerStorage, fixture.m_executor,
         fixture.m_schedulerImpl, fixture.m_blockFactory, fixture.m_ledger,
-        bcos::engine::c_defaultBlockTxCountLimit, /*ledgerConfigState=*/nullptr, pruner);
+        /*ledgerConfigState=*/nullptr, pruner);
 
     auto const genesisHash = task::syncWait(ledger::getBlockHash(*fixture.m_ledger, 0));
     // Whole-second millisecond timestamps, strictly past the genesis header's (the Eth RLP

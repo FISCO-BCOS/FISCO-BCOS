@@ -20,6 +20,7 @@
  */
 #include "BoostLogInitializer.h"
 #include "BoostLogCollector.h"
+#include "LineLayout.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-utilities/BlockStat.h"
@@ -149,20 +150,51 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     }
     m_minFreeSpace = _pt.get<uint64_t>("log.min_free_space", 0) * MB_IN_BYTES;
 
-    // Custom log.format strings are no longer supported: the pipeline formats
-    // the built-in line layout on the producer thread and never builds a
-    // boost record. The deprecation notice goes to stderr unconditionally —
-    // it announces a removed configuration key, so it must not be subject to
-    // log.level or log.enable — and is repeated at ERROR below so it also
-    // lands in the log file when a sink is registered.
+    // A non-empty log.format is compiled into a whole-line layout that
+    // commitLine replays on the producer thread; absent or unparsable, the
+    // built-in layout is used. The layout is (re)installed on every initLog
+    // call, so a repeated initLog never inherits a previous call's layout.
+    // A parse failure is reported on stderr unconditionally — it must not be
+    // subject to log.level or log.enable — and is repeated at ERROR below so
+    // it also lands in the log file once a sink is registered. A layout that
+    // parses but contains no %Message% renders no log content at all; it is
+    // still installed (the boost formatter grammar renders exactly what is
+    // configured), but is reported through the same channel as a warning.
     auto logFormat = _pt.get<std::string>("log.format", "");
+    std::string logFormatError;
+    std::unique_ptr<bcos::log::LineLayout> lineLayout;
     if (!logFormat.empty())
     {
-        std::fprintf(stderr,
-            "[log] log.format is no longer supported, the built-in log line format is always "
-            "used, configured format = %s\n",
-            logFormat.c_str());
+        lineLayout = bcos::log::parseLineLayout(logFormat, logFormatError);
+        if (!lineLayout)
+        {
+            logFormatError =
+                "failed to parse log.format (" + logFormatError +
+                "), the built-in log line format is used, configured format = " + logFormat;
+            std::fprintf(stderr, "[log] %s\n", logFormatError.c_str());
+        }
+        else
+        {
+            bool rendersMessage = false;
+            for (auto const& segment : lineLayout->segments)
+            {
+                if (segment.field == bcos::log::LineLayout::Field::Message)
+                {
+                    rendersMessage = true;
+                    break;
+                }
+            }
+            if (!rendersMessage)
+            {
+                logFormatError =
+                    "log.format contains no %Message% placeholder, the log message is not "
+                    "rendered, configured format = " +
+                    logFormat;
+                std::fprintf(stderr, "[log] %s\n", logFormatError.c_str());
+            }
+        }
     }
+    bcos::log::setLineLayout(std::move(lineLayout));
 
     if (m_consoleLog)
     {
@@ -209,11 +241,9 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
         bcos::BlockStat::disable();
     }
 
-    if (!logFormat.empty())
+    if (!logFormatError.empty())
     {
-        BCOS_LOG(ERROR) << "log.format is no longer supported, the built-in log line format "
-                           "is always used, configured format = "
-                        << logFormat;
+        BCOS_LOG(ERROR) << logFormatError;
     }
 }
 

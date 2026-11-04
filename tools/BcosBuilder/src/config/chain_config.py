@@ -48,7 +48,7 @@ class GenesisConfig:
         self.gas_limit = utilities.get_item_value(
             self.config, "gas_limit", "3000000000", False, self.desc)
         self.compatibility_version = utilities.get_item_value(
-            self.config, "compatibility_version", "3.1.0", False, self.desc)
+            self.config, "compatibility_version", "3.18.0", False, self.desc)
         self.vm_type = utilities.get_item_value(
             self.config, "vm_type", "evm", False, self.desc)
         self.auth_check = utilities.get_item_value(
@@ -56,10 +56,29 @@ class GenesisConfig:
         self.init_auth_address = utilities.get_item_value(
             self.config, "init_auth_address", "", True, self.desc)
 
-        if len(self.init_auth_address) == 0 and (self.compatibility_version >= "3.3.0" or self.auth_check):
+        if len(self.init_auth_address) == 0 and (
+                self._version_tuple(self.compatibility_version) >= (3, 3, 0) or self.auth_check):
             utilities.log_error("Must config 'init_auth_address' when compatibility_version >= 3.3.0 or auth_check is "
                                 "true")
             sys.exit(-1)
+
+    @staticmethod
+    def _version_tuple(version):
+        """Parse compatibility_version the way the node does (bcos-tool VersionConverter.h
+        toVersionNumber): "3.0.0-rc4" is the RC form and predates every 3.x release, "3.3" is
+        "3.3.0" (PATCH optional), "3.18.0" -> (3, 18, 0). A plain string compare would put
+        "3.18.0" below "3.3.0"; a bare int() split rejects the RC form."""
+        normalized = version.strip().lower().lstrip("v")
+        if normalized.startswith("3.0.0-rc"):
+            return (3, 0, 0)
+        parts = normalized.split(".")
+        if len(parts) not in (2, 3) or not all(part.isdigit() for part in parts):
+            utilities.log_error("Invalid compatibility_version '%s': expected MAJOR.MINOR[.PATCH] "
+                                "or 3.0.0-rc{x}" % version)
+            sys.exit(-1)
+        while len(parts) < 3:
+            parts.append("0")
+        return tuple(int(part) for part in parts)
 
 
 class AgencyConfig:

@@ -152,6 +152,7 @@ BOOST_AUTO_TEST_CASE(readOnlyAccessorsQueryableOnDefault)
     BOOST_CHECK_NO_THROW(cfg.executorVersion());
     BOOST_CHECK_NO_THROW(cfg.singlePointConsensus());
     BOOST_CHECK_NO_THROW(cfg.forceSender());
+    BOOST_CHECK(!cfg.enableLegacySmCertChain());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

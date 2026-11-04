@@ -62,6 +62,20 @@ BOOST_AUTO_TEST_CASE(balanceCoveringGasAndValueButNotTheRollupCostIsRejected)
     BOOST_CHECK_EQUAL(harness.rollupCostAsks, 1);
 }
 
+// The pending budget stacks on the rollup cost: the balance must fund the pooled
+// transactions, this one's L2 cost AND its L1 fee; one wei short refuses.
+BOOST_AUTO_TEST_CASE(pooledCostStacksOnTheRollupCost)
+{
+    OpHarness harness;
+    harness.rollupCost = 123456789;
+    harness.pendingCost = u512{OpHarness::txCost()} * 2;
+    harness.account.balance = OpHarness::txCost() * 3 + u256(*harness.rollupCost);
+    auto tx = admitTx();
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+    harness.account.balance -= 1;
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
+}
+
 BOOST_AUTO_TEST_CASE(balanceCoveringTheRollupCostTooIsAdmitted)
 {
     OpHarness harness;

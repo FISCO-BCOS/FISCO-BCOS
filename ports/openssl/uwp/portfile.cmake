@@ -17,10 +17,9 @@ get_filename_component(NASM_EXE_PATH ${NASM} DIRECTORY)
 vcpkg_add_to_path(PREPEND "${NASM_EXE_PATH}")
 
 set(CONFIGURE_COMMAND ${PERL} Configure
+    enable-ntls
     enable-static-engine
     enable-capieng
-    no-unit-test
-    no-ssl2
     no-asm
     no-uplink
     no-tests

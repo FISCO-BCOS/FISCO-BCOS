@@ -368,6 +368,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         }
 
         contextConfig->setIsCertPath(false);
+        certConfig.enableLegacyChain = _nodeConfig->enableLegacySmCertChain();
 
         contextConfig->setSmCertConfig(certConfig);
         contextConfig->setSslType("sm_ssl");

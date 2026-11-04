@@ -112,7 +112,15 @@ private:
     };
     ForkchoiceContext forkchoiceContext() const;
 
-    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
+    /// @param gasUsed when non-null, set to the receipt's gasUsed.
+    /// @param isEstimate true for eth_estimateGas (sizes the budget from the target header and
+    ///        refuses an unreadable one rather than substituting a constant).
+    /// @param budgetUsed when non-null, set to the gas limit the transaction was actually run
+    ///        with. The budget rule (the RPC cap, an explicit `gas`, the target block's limit,
+    ///        and the `gas == 0` treatment) is decided in one place, here; a caller that needs the
+    ///        number must ask for it rather than re-deriving it, or the two copies drift.
+    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate,
+        uint64_t* budgetUsed = nullptr);
 };
 
 }  // namespace bcos::rpc
