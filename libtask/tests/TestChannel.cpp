@@ -337,11 +337,10 @@ BOOST_AUTO_TEST_CASE(parkedProducersWakeInFifoOrder)
     BOOST_CHECK_EQUAL(stats.producerParks, 2);
 }
 
-BOOST_AUTO_TEST_CASE(firstFitProducerSkipsUnsatisfiedFifoHead)
+BOOST_AUTO_TEST_CASE(fifoProducerDoesNotSkipUnsatisfiedHead)
 {
     Channel<int> channel(
-        inlinePoster(), 8, 100, [](const int& value) { return static_cast<std::size_t>(value); },
-        Channel<int>::WaitPolicy::FirstFit);
+        inlinePoster(), 8, 100, [](const int& value) { return static_cast<std::size_t>(value); });
     BOOST_CHECK(channel.push(10));
     BOOST_CHECK(channel.push(90));
 
@@ -364,14 +363,17 @@ BOOST_AUTO_TEST_CASE(firstFitProducerSkipsUnsatisfiedFifoHead)
 
     BOOST_CHECK_EQUAL(syncWait(channel.recv()), 10);
     BOOST_CHECK(!largeDone);
-    BOOST_CHECK(smallDone);
-    BOOST_CHECK_EQUAL(channel.stats().producerWaiters, 1);
+    BOOST_CHECK(!smallDone);
+    BOOST_CHECK_EQUAL(channel.stats().producerWaiters, 2);
 
     BOOST_CHECK_EQUAL(syncWait(channel.recv()), 90);
     BOOST_CHECK(largeDone);
+    BOOST_CHECK(!smallDone);
+    BOOST_CHECK_EQUAL(channel.stats().producerWaiters, 1);
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 20);
+    BOOST_CHECK(smallDone);
     BOOST_CHECK_EQUAL(channel.stats().producerWaiters, 0);
     BOOST_CHECK_EQUAL(syncWait(channel.recv()), 10);
-    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 20);
 }
 
 BOOST_AUTO_TEST_CASE(closeWakesAllParkedProducers)

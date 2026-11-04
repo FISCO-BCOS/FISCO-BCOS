@@ -42,9 +42,9 @@ namespace bcos::task
 // leaving the value INTACT, so a producer can park and retry the same item: a coroutine producer
 // co_awaits waitWritable(bytes) until a push of `bytes` (same measure as sizeOf) fits, turning
 // "full" into producer-side backpressure rather than a drop. Producers park in a FIFO queue and
-// their wakes are also delivered through the poster. A pop wakes the queue head under StrictFIFO,
-// or the first producer whose item fits under FirstFit; recv() remains single-waiter, with a second
-// recv() displacing the first. A producer wake does not reserve the space — another producer may
+// their wakes are also delivered through the poster. A pop wakes only the FIFO head when its item
+// fits; recv() remains single-waiter, with a second recv() displacing the first. A producer wake
+// does not reserve the space — another producer may
 // consume it first — so multi-producer users must loop push/waitWritable (safe because a failed
 // push keeps the value). close() is idempotent (the FIRST close's exception sticks), wakes a parked
 // recv() with that exception and every parked waitWritable() with false, and rejects later pushes;
@@ -78,12 +78,6 @@ public:
     using Poster = std::function<void(std::function<void()>)>;
     using Ptr = std::shared_ptr<Channel>;
 
-    enum class WaitPolicy
-    {
-        StrictFIFO,
-        FirstFit
-    };
-
     struct Stats
     {
         std::size_t count = 0;
@@ -94,10 +88,8 @@ public:
 
     // maxBytes == 0 disables the byte budget; sizeOf defaults to 1-per-item (pure count cap).
     Channel(Poster poster, std::size_t maxCount, std::size_t maxBytes = 0,
-        std::function<std::size_t(const T&)> sizeOf = nullptr,
-        WaitPolicy policy = WaitPolicy::StrictFIFO)
-      : m_state(std::make_shared<State>(
-            std::move(poster), maxCount, maxBytes, std::move(sizeOf), policy))
+        std::function<std::size_t(const T&)> sizeOf = nullptr)
+      : m_state(std::make_shared<State>(std::move(poster), maxCount, maxBytes, std::move(sizeOf)))
     {}
 
     Channel(const Channel&) = delete;
@@ -264,12 +256,11 @@ private:
     struct State
     {
         State(Poster poster, std::size_t maxCount, std::size_t maxBytes,
-            std::function<std::size_t(const T&)> sizeOf, WaitPolicy policy)
+            std::function<std::size_t(const T&)> sizeOf)
           : poster(std::move(poster)),
             maxCount(maxCount),
             maxBytes(maxBytes),
-            sizeOf(std::move(sizeOf)),
-            policy(policy)
+            sizeOf(std::move(sizeOf))
         {}
 
         // The value/error slots point into the awaiting coroutine's frame: the producer fills
@@ -359,32 +350,21 @@ private:
             return takeWaiterLocked();
         }
 
-        // Called by the consumer after a pop: strict FIFO considers only the head; first-fit scans
-        // for the first pending push that fits the currently available space.
+        // Called by the consumer after a pop: only the FIFO head may consume the released space.
         std::function<void()> takeWritableWaiterIfSpaceLocked()
         {
-            for (auto it = writableWaiters.begin(); it != writableWaiters.end(); ++it)
+            if (writableWaiters.empty() || !hasSpaceForLocked(writableWaiters.front().bytes))
             {
-                if (hasSpaceForLocked(it->bytes))
-                {
-                    auto handle = it->handle;
-                    *it->result = true;
-                    writableWaiters.erase(it);
-                    return [handle]() { handle.resume(); };
-                }
-                if (policy == WaitPolicy::StrictFIFO)
-                {
-                    return nullptr;
-                }
+                return nullptr;
             }
-            return nullptr;
+            *writableWaiters.front().result = true;
+            return takeWritableWaiterLocked();
         }
 
         Poster poster;
         std::size_t maxCount;
         std::size_t maxBytes;
         std::function<std::size_t(const T&)> sizeOf;
-        WaitPolicy policy;
 
         mutable std::mutex mutex;
         std::deque<T> queue;
