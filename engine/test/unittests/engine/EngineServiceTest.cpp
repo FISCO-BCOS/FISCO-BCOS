@@ -335,9 +335,9 @@ BOOST_AUTO_TEST_CASE(exchange_capabilities_returns_supported_methods)
     // Everything implemented, not narrowed to the active fork (op-geth advertises its
     // whole method set and lets the CL pick). The Karst triple joins the pre-Karst
     // versions rather than replacing them; the payload-bodies pair and the client-version
-    // the committed ledger / build info; engine_getBlobsV1 answers from the blob pool and
-    // the persisted blob sidecar rows (all-null on an L2, which the spec allows).
-    BOOST_CHECK_EQUAL(capabilities.size(), 18);
+    // the committed ledger / build info; engine_getBlobsV1/V2/V3 answer from the blob pool
+    // and the persisted blob sidecar rows (all-null on an L2, which the spec allows).
+    BOOST_CHECK_EQUAL(capabilities.size(), 22);
     auto contains = [&](std::string_view name) {
         return std::find(capabilities.begin(), capabilities.end(), name) != capabilities.end();
     };
@@ -356,13 +356,20 @@ BOOST_AUTO_TEST_CASE(exchange_capabilities_returns_supported_methods)
     BOOST_CHECK(contains("engine_newPayloadV4"));
     BOOST_CHECK(contains("engine_getPayloadBodiesByHashV1"));
     BOOST_CHECK(contains("engine_getPayloadBodiesByRangeV1"));
+    BOOST_CHECK(contains("engine_getPayloadBodiesByHashV2"));
+    BOOST_CHECK(contains("engine_getPayloadBodiesByRangeV2"));
     BOOST_CHECK(contains("engine_getBlobsV1"));
+    BOOST_CHECK(contains("engine_getBlobsV2"));
+    BOOST_CHECK(contains("engine_getBlobsV3"));
     BOOST_CHECK(contains("engine_getClientVersionV1"));
     // The pre-rename draft name of engine_getClientVersionV1, kept routable for older CLs.
     BOOST_CHECK(contains("engine_exchangeClientVersionV1"));
-    // The one genuinely unimplemented version (the forkchoice window tops out at V3), so
-    // not advertised; the endpoint answers -38005.
+    // The Amsterdam methods are routable (-38005 / null) but not advertised: this binary
+    // has no Amsterdam execution.
     BOOST_CHECK(!contains("engine_forkchoiceUpdatedV4"));
+    BOOST_CHECK(!contains("engine_newPayloadV5"));
+    BOOST_CHECK(!contains("engine_getPayloadV6"));
+    BOOST_CHECK(!contains("engine_getBlobsV4"));
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_payload)

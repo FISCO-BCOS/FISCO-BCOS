@@ -72,6 +72,9 @@
 #include <bcos-utilities/DataConvertUtility.h>
 
 using namespace bcos;
+// The two spellings of the EIP-7594 cell count (the c-kzg constant and the framework's
+// sidecar-layout constant) must stay one number.
+static_assert(engine::CELL_PROOFS_PER_BLOB == crypto::kzg::CellsPerExtBlob);
 using namespace bcos::rpc;
 
 namespace
@@ -1388,9 +1391,22 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
                     fmt::format("blob transaction carries {} blobs, outside [1, {}]", blobCount,
                         maxBlobs)));
             }
+            // EIP-7594: the wrapper version must be the one the head's fork calls for (the
+            // pool refuses the other with a bare Malformed); named here so a sender learns
+            // which proofs to attach, and before the proofs are verified under the wrong rule.
+            if (auto const required = memPool->requiredBlobSidecarVersion();
+                blobSidecar->version != required) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(admissionError(protocol::TransactionStatus::Malformed,
+                    fmt::format("blob transaction wrapper version {} not admissible; the chain "
+                                "head's fork requires version {} ({})",
+                        blobSidecar->version, required,
+                        required == engine::BLOB_SIDECAR_VERSION_1 ? "EIP-7594 cell proofs" :
+                                                                     "EIP-4844 blob proofs")));
+            }
         }
-        if (!crypto::kzg::verifyBlobKzgProofBatch(
-                blobSidecar->blobs, blobSidecar->commitments, blobSidecar->proofs))
+        if (!crypto::kzg::verifyBlobSidecarProofs(blobSidecar->version, blobSidecar->blobs,
+                blobSidecar->commitments, blobSidecar->proofs))
         {
             BOOST_THROW_EXCEPTION(admissionError(
                 protocol::TransactionStatus::Malformed, "blob sidecar KZG proof invalid"));

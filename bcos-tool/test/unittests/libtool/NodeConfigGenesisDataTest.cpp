@@ -205,6 +205,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     BOOST_CHECK(data.find("osaka_time:") == std::string::npos);
     BOOST_CHECK(data.find("bpo1_time:") == std::string::npos);
     BOOST_CHECK(data.find("bpo2_time:") == std::string::npos);
+    BOOST_CHECK(data.find("amsterdam_time:") == std::string::npos);
     // The EL chain id is part of the pin too.
     BOOST_CHECK(data.find("[web3]") != std::string::npos);
     BOOST_CHECK(data.find("chain_id:1") != std::string::npos);
@@ -844,6 +845,19 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
                 return errinfoContains(e, "bpo1_time (1750000000) is earlier than");
             });
     }
+    // A scheduled amsterdam while bpo2 is unscheduled (terminal) -> decreasing.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(
+                                  head + "shanghai_time=1681338455\n"
+                                         "cancun_time=1710338135\nprague_time=1746612311\n"
+                                         "merge_block=0\n"
+                                         "osaka_time=1767225548\nbpo1_time=1770000000\n"
+                                         "amsterdam_time=1790000000\n"),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "amsterdam_time (1790000000) is earlier than");
+            });
+    }
     // A scheduled osaka with unscheduled bpos is fine (MAX is non-decreasing). The v2 lane
     // binding needs the [alloc.*] + [eth_genesis_header] sections; the rejected cases above
     // throw in loadForkTimestamps, before that binding runs.
@@ -857,6 +871,21 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
                                             "osaka_time=1767225548\n" +
                                             ethLaneGenesisSections()));
         BOOST_CHECK_EQUAL(cfg.genesisConfig().m_ethereumForkSchedule->m_osakaTime, 1767225548u);
+        // The unscheduled tail reads as "never", amsterdam included.
+        BOOST_CHECK_EQUAL(cfg.ethereumForkAmsterdamTime(), std::numeric_limits<uint64_t>::max());
+    }
+    // The whole tail scheduled in order, amsterdam last.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(head +
+                                            "shanghai_time=1681338455\n"
+                                            "cancun_time=1710338135\nprague_time=1746612311\n"
+                                            "merge_block=0\n"
+                                            "osaka_time=1767225548\nbpo1_time=1770000000\n"
+                                            "bpo2_time=1780000000\namsterdam_time=1790000000\n" +
+                                            ethLaneGenesisSections()));
+        BOOST_CHECK_EQUAL(cfg.ethereumForkAmsterdamTime(), 1790000000u);
     }
 }
 

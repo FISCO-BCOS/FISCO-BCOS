@@ -26,11 +26,13 @@
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/protocol/BlobSchedule.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/BlobSidecarRow.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
@@ -230,10 +232,35 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
     co_await handleForkchoiceUpdated(engine::ApiVersion::V3, request, response);
 }
 
+// The Amsterdam methods (amsterdam.md: PayloadAttributesV4 / ExecutionPayloadV4 with the
+// EIP-7928 block access list). This binary has no Amsterdam execution, so each answers the
+// spec's -38005 ("timestamp does not fall within the time frame of the Amsterdam fork" holds
+// for every timestamp it can serve) instead of -32601; none is advertised in
+// exchangeCapabilities. A CL on an earlier fork never calls them.
 task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(const Json::Value&, Json::Value& response)
 {
-    // Prague forkchoiceUpdated shape; not implemented (Karst builds payloads on V3).
     buildUnimplementedVersionError("engine_forkchoiceUpdatedV4", response);
+    co_return;
+}
+
+task::Task<void> EngineEndpoint::getPayloadV6(const Json::Value&, Json::Value& response)
+{
+    buildUnimplementedVersionError("engine_getPayloadV6", response);
+    co_return;
+}
+
+task::Task<void> EngineEndpoint::newPayloadV5(const Json::Value&, Json::Value& response)
+{
+    buildUnimplementedVersionError("engine_newPayloadV5", response);
+    co_return;
+}
+
+task::Task<void> EngineEndpoint::getBlobsV4(const Json::Value&, Json::Value& response)
+{
+    // amsterdam.md: the result is BlobCellsAndProofsV1 | null, and null is the "unable to
+    // serve" answer. Cell-granular serving (the indices bitarray) is not implemented.
+    Json::Value null(Json::nullValue);
+    buildJsonContent(null, response);
     co_return;
 }
 
@@ -351,8 +378,8 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     }
     catch (engine::UnsupportedFork const& e)
     {
-        // The payload's fork is outside this method's window (getPayloadV4 for a Karst payload,
-        // V5 for a pre-Karst one).
+        // The payload's fork is outside this method's window: OP lane getPayloadV4 for a Karst
+        // payload or V5 for a pre-Karst one; L1 lane V3/V4/V5 outside Cancun/Prague/Osaka.
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
@@ -465,7 +492,8 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     buildJsonContent(result, response);
 }
 
-task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumber number)
+task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(
+    protocol::BlockNumber number, bool bodyV2)
 {
     auto const& ledger = m_nodeService->ledger();
     protocol::Block::Ptr block;
@@ -556,25 +584,58 @@ task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumbe
         body["withdrawals"] =
             decodeWithdrawalsJson(bcos::bytes(rawWithdrawals.begin(), rawWithdrawals.end()));
     }
+    if (bodyV2)
+    {
+        // ExecutionPayloadBodyV2 (amsterdam.md): blockAccessList MUST be null for a
+        // pre-Amsterdam block, and every block this binary commits is one.
+        body["blockAccessList"] = Json::nullValue;
+    }
     co_return body;
 }
 
 task::Task<void> EngineEndpoint::getPayloadBodiesByHashV1(
     const Json::Value& request, Json::Value& response)
 {
+    co_await handleGetPayloadBodiesByHash(
+        "engine_getPayloadBodiesByHashV1", /*bodyV2=*/false, request, response);
+}
+
+task::Task<void> EngineEndpoint::getPayloadBodiesByHashV2(
+    const Json::Value& request, Json::Value& response)
+{
+    co_await handleGetPayloadBodiesByHash(
+        "engine_getPayloadBodiesByHashV2", /*bodyV2=*/true, request, response);
+}
+
+task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV1(
+    const Json::Value& request, Json::Value& response)
+{
+    co_await handleGetPayloadBodiesByRange(
+        "engine_getPayloadBodiesByRangeV1", /*bodyV2=*/false, request, response);
+}
+
+task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV2(
+    const Json::Value& request, Json::Value& response)
+{
+    co_await handleGetPayloadBodiesByRange(
+        "engine_getPayloadBodiesByRangeV2", /*bodyV2=*/true, request, response);
+}
+
+task::Task<void> EngineEndpoint::handleGetPayloadBodiesByHash(
+    std::string_view method, bool bodyV2, const Json::Value& request, Json::Value& response)
+{
     auto const& hashes = request[0u];
     if (!hashes.isArray())
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "engine_getPayloadBodiesByHashV1 expects an array of block hashes"));
+            InvalidParams, std::string(method) + " expects an array of block hashes"));
     }
-    // Same ceiling as getPayloadBodiesByRangeV1 / getBlobsV1: the spec permits answering
+    // Same ceiling as getPayloadBodiesByRange / getBlobs: the spec permits answering
     // -38004 above the client's own limit, and each entry costs two storage reads.
     if (hashes.size() > c_maxPayloadBodiesRange)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::TooLargeRequest,
-            "engine_getPayloadBodiesByHashV1: requested count too large: " +
-                std::to_string(hashes.size())));
+            std::string(method) + ": requested count too large: " + std::to_string(hashes.size())));
     }
     auto const& ledger = m_nodeService->ledger();
     Json::Value result(Json::arrayValue);
@@ -597,18 +658,18 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByHashV1(
             result.append(Json::nullValue);
             continue;
         }
-        result.append(co_await payloadBodyAtNumber(number));
+        result.append(co_await payloadBodyAtNumber(number, bodyV2));
     }
     buildJsonContent(result, response);
 }
 
-task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV1(
-    const Json::Value& request, Json::Value& response)
+task::Task<void> EngineEndpoint::handleGetPayloadBodiesByRange(
+    std::string_view method, bool bodyV2, const Json::Value& request, Json::Value& response)
 {
     if (request.size() < 2)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "engine_getPayloadBodiesByRangeV1 expects [start, count]"));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, std::string(method) + " expects [start, count]"));
     }
     auto const start = parseEngineQuantity(request[0u], "start");
     auto const count = parseEngineQuantity(request[1u], "count");
@@ -616,13 +677,12 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV1(
     if (start < 1 || count < 1)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "engine_getPayloadBodiesByRangeV1: start and count must be >= 1"));
+            InvalidParams, std::string(method) + ": start and count must be >= 1"));
     }
     if (count > c_maxPayloadBodiesRange)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::TooLargeRequest,
-            "engine_getPayloadBodiesByRangeV1: requested count too large: " +
-                std::to_string(count)));
+            std::string(method) + ": requested count too large: " + std::to_string(count)));
     }
     auto const& ledger = m_nodeService->ledger();
     auto const head = co_await ledger::getCurrentBlockNumber(*ledger);
@@ -634,7 +694,8 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV1(
         auto const last = std::min(start + count - 1, static_cast<uint64_t>(head));
         for (auto number = start; number <= last; ++number)
         {
-            result.append(co_await payloadBodyAtNumber(static_cast<protocol::BlockNumber>(number)));
+            result.append(
+                co_await payloadBodyAtNumber(static_cast<protocol::BlockNumber>(number), bodyV2));
         }
     }
     buildJsonContent(result, response);
@@ -642,7 +703,7 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV1(
 
 namespace
 {
-/// engine_getBlobsV1 request ceiling: the spec mandates support for at least 128 versioned
+/// engine_getBlobs request ceiling: the spec mandates support for at least 128 versioned
 /// hashes and a -38004 above the client's cap.
 constexpr std::size_t c_maxGetBlobsRequest = 128;
 /// Ledger fallback scan depth: the pool is the spec's data source; the committed-block
@@ -651,18 +712,42 @@ constexpr std::size_t c_maxGetBlobsRequest = 128;
 constexpr protocol::BlockNumber c_getBlobsLedgerScanDepth = 128;
 }  // namespace
 
-task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Value& response)
+task::Task<bool> EngineEndpoint::osakaActiveAtHead()
+{
+    auto const& ledger = m_nodeService->ledger();
+    if (!ledger)
+    {
+        co_return false;
+    }
+    auto const head = co_await ledger::getCurrentBlockNumber(*ledger);
+    if (head < 0)
+    {
+        co_return false;
+    }
+    auto const block = co_await ledger::getBlockData(*ledger, head, bcos::ledger::HEADER);
+    if (!block || !block->blockHeader())
+    {
+        co_return false;
+    }
+    // Header timestamps are milliseconds inside the node; the schedule is in seconds.
+    auto const headSeconds =
+        static_cast<uint64_t>(std::max<int64_t>(block->blockHeader()->timestamp(), 0)) / 1000;
+    co_return protocol::blobForkActive(m_nodeService->blobForkTimes().osakaTime, headSeconds);
+}
+
+task::Task<std::vector<std::optional<engine::BlobItem>>> EngineEndpoint::lookupBlobs(
+    std::string_view method, const Json::Value& request)
 {
     auto const& hashes = request[0u];
     if (!hashes.isArray())
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "engine_getBlobsV1 expects an array of blob versioned hashes"));
+            InvalidParams, std::string(method) + " expects an array of blob versioned hashes"));
     }
     if (hashes.size() > c_maxGetBlobsRequest)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::TooLargeRequest,
-            "engine_getBlobsV1: requested count too large: " + std::to_string(hashes.size())));
+            std::string(method) + ": requested count too large: " + std::to_string(hashes.size())));
     }
     std::vector<crypto::HashType> versionedHashes;
     versionedHashes.reserve(hashes.size());
@@ -697,40 +782,12 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
                 {
                     continue;
                 }
-                auto const rawRow = entry->get();
-                auto rowBytes = bcos::bytes(rawRow.begin(), rawRow.end());
-                auto in = bcos::ref(rowBytes);
+                std::vector<engine::BlobItem> rowItems;
                 try
                 {
-                    auto const outerHead = codec::rlp::decodeHeader(in);
-                    bcos::byte* const outerStart = in.data();
-                    while (
-                        static_cast<std::size_t>(in.data() - outerStart) < outerHead.payloadLength)
-                    {
-                        auto const itemHead = codec::rlp::decodeHeader(in);
-                        bcos::byte* const itemStart = in.data();
-                        bcos::bytes commitment, proof, blob;
-                        codec::rlp::decodeItems(in, commitment, proof, blob);
-                        if (static_cast<std::size_t>(in.data() - itemStart) !=
-                                itemHead.payloadLength ||
-                            commitment.size() != crypto::kzg::CommitmentSize)
-                        {
-                            break;  // corrupt row: stop mining it, other rows may still match
-                        }
-                        auto const versionedHash =
-                            crypto::kzg::versionedHashFromCommitment(bcos::ref(commitment));
-                        for (std::size_t j = 0; j < versionedHashes.size(); ++j)
-                        {
-                            if (!items[j].has_value() && versionedHashes[j] == versionedHash)
-                            {
-                                items[j] = engine::BlobItem{.commitment = std::move(commitment),
-                                    .proof = std::move(proof),
-                                    .blob = std::move(blob)};
-                                --missing;
-                                break;
-                            }
-                        }
-                    }
+                    auto const rawRow = entry->get();
+                    rowItems = decodeBlobSidecarRow(bcos::bytesConstRef(
+                        reinterpret_cast<const bcos::byte*>(rawRow.data()), rawRow.size()));
                 }
                 catch (std::exception const&)
                 {
@@ -738,22 +795,105 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
                     // served read as missing (null), the same as never-committed blobs.
                     continue;
                 }
+                for (auto& item : rowItems)
+                {
+                    auto const versionedHash =
+                        crypto::kzg::versionedHashFromCommitment(bcos::ref(item.commitment));
+                    for (std::size_t j = 0; j < versionedHashes.size(); ++j)
+                    {
+                        if (!items[j].has_value() && versionedHashes[j] == versionedHash)
+                        {
+                            items[j] = std::move(item);
+                            --missing;
+                            break;
+                        }
+                    }
+                }
             }
         }
     }
+    co_return items;
+}
 
+task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Value& response)
+{
+    // osaka.md "Update the methods of previous forks": -38005 once Osaka is active, judged
+    // at the committed head's timestamp (geth GetBlobsV1 on head.Time). The cell-proof
+    // sidecars pooled from then on have no blob proof to answer V1 with anyway.
+    if (co_await osakaActiveAtHead())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
+            "engine_getBlobsV1 is not available once the Osaka fork is active"));
+    }
+    auto const items = co_await lookupBlobs("engine_getBlobsV1", request);
     Json::Value result(Json::arrayValue);
     for (auto const& item : items)
     {
-        if (!item.has_value())
+        // A version-1 (cell proof) item has no single blob proof: null, like a missing blob.
+        if (!item.has_value() || item->version != engine::BLOB_SIDECAR_VERSION_0 ||
+            item->proofs.size() != 1)
         {
             result.append(Json::nullValue);
             continue;
         }
         Json::Value blobAndProof(Json::objectValue);
         blobAndProof["blob"] = toHexStringWithPrefix(bcos::ref(item->blob));
-        blobAndProof["proof"] = toHexStringWithPrefix(bcos::ref(item->proof));
+        blobAndProof["proof"] = toHexStringWithPrefix(bcos::ref(item->proofs.front()));
         result.append(std::move(blobAndProof));
+    }
+    buildJsonContent(result, response);
+}
+
+task::Task<void> EngineEndpoint::getBlobsV2(const Json::Value& request, Json::Value& response)
+{
+    co_await handleGetBlobsCellProofs("engine_getBlobsV2", /*partial=*/false, request, response);
+}
+
+task::Task<void> EngineEndpoint::getBlobsV3(const Json::Value& request, Json::Value& response)
+{
+    co_await handleGetBlobsCellProofs("engine_getBlobsV3", /*partial=*/true, request, response);
+}
+
+task::Task<void> EngineEndpoint::handleGetBlobsCellProofs(
+    std::string_view method, bool partial, const Json::Value& request, Json::Value& response)
+{
+    // Before Osaka the pool holds no cell-proof sidecars: null, the spec's "unable to serve
+    // blob pool data" answer (geth GetBlobsV2/V3 return nil below Osaka), not -38005 —
+    // osaka.md gives these methods no fork window.
+    if (!co_await osakaActiveAtHead())
+    {
+        Json::Value null(Json::nullValue);
+        buildJsonContent(null, response);
+        co_return;
+    }
+    auto const items = co_await lookupBlobs(method, request);
+    // osaka.md getBlobsV2: "null in case of any missing or older version blobs" (a blob held
+    // with an EIP-4844 blob proof counts as missing); getBlobsV3: the same length and order
+    // with null only at the missing positions.
+    Json::Value result(Json::arrayValue);
+    for (auto const& item : items)
+    {
+        if (!item.has_value() || item->version != engine::BLOB_SIDECAR_VERSION_1 ||
+            item->proofs.size() != engine::CELL_PROOFS_PER_BLOB)
+        {
+            if (!partial)
+            {
+                Json::Value null(Json::nullValue);
+                buildJsonContent(null, response);
+                co_return;
+            }
+            result.append(Json::nullValue);
+            continue;
+        }
+        Json::Value blobAndProofs(Json::objectValue);
+        blobAndProofs["blob"] = toHexStringWithPrefix(bcos::ref(item->blob));
+        Json::Value proofs(Json::arrayValue);
+        for (auto const& proof : item->proofs)
+        {
+            proofs.append(toHexStringWithPrefix(bcos::ref(proof)));
+        }
+        blobAndProofs["proofs"] = std::move(proofs);
+        result.append(std::move(blobAndProofs));
     }
     buildJsonContent(result, response);
 }

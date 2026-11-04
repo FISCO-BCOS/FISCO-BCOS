@@ -75,7 +75,8 @@ if env | grep -qE '^HIVE_(CHAIN_ID|FORK_|TERMINAL_TOTAL_DIFFICULTY|MERGE_BLOCK_I
       (if env.HIVE_PRAGUE_TIMESTAMP          then .config.pragueTime             = (env.HIVE_PRAGUE_TIMESTAMP|tonumber)          else . end) |
       (if env.HIVE_OSAKA_TIMESTAMP           then .config.osakaTime              = (env.HIVE_OSAKA_TIMESTAMP|tonumber)           else . end) |
       (if env.HIVE_BPO1_TIMESTAMP            then .config.bpo1Time               = (env.HIVE_BPO1_TIMESTAMP|tonumber)            else . end) |
-      (if env.HIVE_BPO2_TIMESTAMP            then .config.bpo2Time               = (env.HIVE_BPO2_TIMESTAMP|tonumber)            else . end)
+      (if env.HIVE_BPO2_TIMESTAMP            then .config.bpo2Time               = (env.HIVE_BPO2_TIMESTAMP|tonumber)            else . end) |
+      (if env.HIVE_AMSTERDAM_TIMESTAMP       then .config.amsterdamTime          = (env.HIVE_AMSTERDAM_TIMESTAMP|tonumber)       else . end)
     ' /genesis.json > /bcos/genesis.patched.json
     GENESIS_IN=/bcos/genesis.patched.json
 fi

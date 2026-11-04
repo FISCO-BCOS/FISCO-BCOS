@@ -788,6 +788,111 @@ BOOST_AUTO_TEST_CASE(handleBlobTxOverCountLimitRejectedBeforeKzg)
     BOOST_CHECK(!response.isMember("result"));
 }
 
+// EIP-7594 at eth_sendRawTransaction: the wrapper version must be the one the chain head's
+// fork calls for. With the pool's head at Osaka a version-1 wrapper (cell proofs) is
+// admitted and its sidecar pooled, a version-0 wrapper is refused by name before any KZG
+// work; with the head before Osaka the version-1 wrapper is the one refused.
+BOOST_AUTO_TEST_CASE(handleBlobTxWrapperVersionFollowsTheHeadFork)
+{
+    nodeService->setExecutorVersion(bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
+    nodeService->setEthereumELMode(true);
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(1));
+    // The type gate judges blob envelopes by the snapshot's revision (Cancun or later) and by
+    // the lane's blob policy (the fixture's validator is the L2 default: no blobs); the
+    // unfunded sender rides the replay column, which drops the balance / nonce-window checks
+    // and keeps every other one, the sidecar gates included.
+    auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>(*m_ledgerConfigState->get());
+    ledgerConfig->setEVMCRevision(EVMC_OSAKA);
+    m_ledgerConfigState->set(std::move(ledgerConfig));
+    auto blobValidator = std::make_shared<bcos::txvalidator::TxValidator>(
+        cryptoSuite, m_ledger, m_ledgerConfigState, /*txPoolNonceChecker=*/nullptr,
+        std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger),
+        [](bcos::protocol::Transaction const&) { return false; }, groupId, chainId,
+        bcos::txvalidator::BlobPolicy{.allow = true});
+    blobValidator->setScheduler(scheduler);
+    nodeService->setAdmissionValidator(
+        blobValidator, bcos::txvalidator::AdmissionContext::EESTReplay);
+    uint64_t headSeconds = 5000;  // Osaka (osaka_time 4000)
+    bcos::txpool::MemPoolImpl memPool{
+        bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1,
+            .headTimestampSeconds = [&headSeconds] { return headSeconds; },
+            .blobForks = bcos::protocol::BlobForkTimes{
+                .cancunTime = 1000, .pragueTime = 2000, .osakaTime = 4000}}};
+    nodeService->setMemPool(memPool);
+
+    bcos::bytes blob(crypto::kzg::BlobSize, bcos::byte{0});
+    blob.back() = bcos::byte{0x2c};
+    bcos::bytes commitment;
+    BOOST_REQUIRE(crypto::kzg::blobToKzgCommitment(bcos::ref(blob), commitment));
+    auto const versionedHash = crypto::kzg::versionedHashFromCommitment(bcos::ref(commitment));
+    engine::BlobTxSidecar v0;
+    v0.blobs = {blob};
+    v0.commitments = {commitment};
+    v0.proofs.emplace_back();
+    BOOST_REQUIRE(crypto::kzg::computeBlobKzgProof(
+        bcos::ref(blob), bcos::ref(commitment), v0.proofs.front()));
+    engine::BlobTxSidecar v1;
+    v1.version = engine::BLOB_SIDECAR_VERSION_1;
+    v1.blobs = {blob};
+    v1.commitments = {commitment};
+    BOOST_REQUIRE(crypto::kzg::computeCellKzgProofs(bcos::ref(blob), v1.proofs));
+
+    crypto::Secp256k1Crypto secp;
+    auto const keyPair = secp.generateKeyPair();
+    auto const makeSigned = [&](uint64_t nonce) {
+        rpc::Web3Transaction web3Tx;
+        web3Tx.type = rpc::TransactionType::EIP4844;
+        web3Tx.chainId = 1;
+        web3Tx.nonce = nonce;
+        web3Tx.maxPriorityFeePerGas = u256(1);
+        web3Tx.maxFeePerGas = u256(2);
+        web3Tx.gasLimit = 21000;
+        web3Tx.to = Address("1111111111111111111111111111111111111111");
+        web3Tx.value = u256(0);
+        web3Tx.maxFeePerBlobGas = u256(1);
+        web3Tx.blobVersionedHashes = {versionedHash};
+        auto const signature = secp.sign(*keyPair, web3Tx.hashForSign(), false);
+        BOOST_REQUIRE(signature && signature->size() == 65);
+        web3Tx.signatureR.assign(signature->begin(), signature->begin() + 32);
+        web3Tx.signatureS.assign(signature->begin() + 32, signature->begin() + 64);
+        web3Tx.signatureV = (*signature)[64];
+        return web3Tx;
+    };
+    auto const send = [&](bcos::bytes const& wrapper) {
+        return onRPCRequestWrapper(
+            R"({"jsonrpc":"2.0","id":7,"method":"eth_sendRawTransaction","params":[")" +
+            bcos::toHexStringWithPrefix(wrapper) + R"("]})");
+    };
+
+    // Osaka head: version 0 refused by name, version 1 admitted with its sidecar.
+    auto const tx0 = makeSigned(0);
+    auto const refusedV0 = send(rpc::encodeBlobTxNetworkWrapper(tx0, v0));
+    BOOST_REQUIRE(refusedV0.isMember("error"));
+    BOOST_CHECK(refusedV0["error"]["message"].asString().find("wrapper version 0 not admissible") !=
+                std::string::npos);
+    BOOST_CHECK(
+        refusedV0["error"]["message"].asString().find("requires version 1") != std::string::npos);
+    auto const admittedV1 = send(rpc::encodeBlobTxNetworkWrapper(tx0, v1));
+    BOOST_REQUIRE_MESSAGE(admittedV1.isMember("result"), admittedV1.toStyledString());
+    BOOST_CHECK_EQUAL(admittedV1["result"].asString(), tx0.txHash().hexPrefixed());
+    BOOST_CHECK(memPool.blobSidecarVersion(tx0.txHash()) == std::optional<std::uint8_t>{1});
+    // engine_getBlobs' pool half answers the pooled cell proofs for the versioned hash.
+    auto const items = memPool.blobsByVersionedHashes(std::vector{versionedHash});
+    BOOST_REQUIRE(items.at(0).has_value());
+    BOOST_CHECK_EQUAL(items[0]->proofs.size(), engine::CELL_PROOFS_PER_BLOB);
+
+    // Pre-Osaka head: the mirror image.
+    headSeconds = 3000;
+    auto const tx1 = makeSigned(1);
+    auto const refusedV1 = send(rpc::encodeBlobTxNetworkWrapper(tx1, v1));
+    BOOST_REQUIRE(refusedV1.isMember("error"));
+    BOOST_CHECK(refusedV1["error"]["message"].asString().find("wrapper version 1 not admissible") !=
+                std::string::npos);
+    auto const admittedV0 = send(rpc::encodeBlobTxNetworkWrapper(tx1, v0));
+    BOOST_REQUIRE_MESSAGE(admittedV0.isMember("result"), admittedV0.toStyledString());
+    BOOST_CHECK(memPool.blobSidecarVersion(tx1.txHash()) == std::optional<std::uint8_t>{0});
+}
+
 BOOST_AUTO_TEST_CASE(handleEngineNotAvailableTest)
 {
     const auto request =
