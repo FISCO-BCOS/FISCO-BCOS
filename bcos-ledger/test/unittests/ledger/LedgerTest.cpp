@@ -2324,5 +2324,37 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
     }());
 }
 
+// An Ethereum lane writes flat rows (genesis import and EthereumState) and has no key pages, so
+// a key-page view over them answers nothing. key_page_size defaults to 10240 in NodeConfig and in
+// the EL config template: reading through that view makes every account look empty, and admission
+// refuses every fee-paying transaction as InsufficientFunds.
+BOOST_AUTO_TEST_CASE(getStorageAtReadsFlatRowsOnEthLaneWithKeyPages)
+{
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(
+        bcos::ledger::account::AddressTableMode::Hex);
+    task::syncWait([this]() -> task::Task<void> {
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 0);
+        ledger->setKeyPageSize(10240);
+
+        std::string const address = "4200000000000000000000000000000000009876";
+        co_await storage2::writeOne(*storage,
+            executor_v1::StateKey(
+                "/apps/" + address, std::string(ledger::ACCOUNT_TABLE_FIELDS::BALANCE)),
+            storage::Entry{std::string_view{"12345"}});
+        co_await storage2::writeOne(*storage,
+            executor_v1::StateKey(ledger::SYS_CONFIG,
+                std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version))),
+            storage::Entry{bcos::storage::serialize::encode(ledger::SystemConfigEntry{
+                std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION), 0})});
+
+        auto entry =
+            co_await ledger->getStorageAt(address, ledger::ACCOUNT_TABLE_FIELDS::BALANCE, 0);
+        BOOST_REQUIRE(entry.has_value());
+        BOOST_CHECK_EQUAL(std::string(entry->get()), "12345");
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

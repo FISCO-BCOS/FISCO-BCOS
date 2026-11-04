@@ -448,7 +448,7 @@ public:
     /// charged, the value alone on a free-gas chain -- the same basis admission charges the new
     /// transaction on. No default: the validator decides the basis once, callers forward it.
     u512 pendingCost(
-        std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis) const;
+        std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis);
 
     /// The sidecar of a pooled blob transaction, or nullopt when the transaction is not
     /// pooled or carries none.

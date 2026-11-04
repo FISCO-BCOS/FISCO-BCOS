@@ -193,13 +193,16 @@ bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::insertLocked(
 }
 
 bcos::u512 bcos::txpool::MemPoolImpl::pendingCost(
-    std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis) const
+    std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis)
 {
     // An unparsable exclusion excludes nothing: the caller's transaction is then refused by
     // the same nonce parse at insert, so over-counting here changes no admission verdict.
     auto const excluded = parseNonce(excludeNonce);
     u512 total = 0;
     std::unique_lock lock(m_mutex);
+    // Expired transactions reserve nothing. The budget is read before insertion's own cleanup,
+    // and a non-building node has no seal to run it.
+    evictExpiredLocked();
     auto const& senderIndex = m_transactions.get<2>();
     auto [it, end] = senderIndex.equal_range(sender);
     for (; it != end; ++it)

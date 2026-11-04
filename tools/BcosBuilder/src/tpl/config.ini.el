@@ -1,41 +1,36 @@
+; ============================================================================
+; FISCO-BCOS Ethereum L1 EL-mode node configuration (config.ini)
+; Run as a pure Ethereum execution-layer client: config.genesis executor
+; version 2 makes the node download blocks from RLPx bootnodes and serve the
+; Engine API to a consensus client, verify blocks with the Ethereum block
+; verifier and commit them locally. No FISCO gateway / PBFT / txpool network is
+; started.
 ;
-== == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == ==
-    == == == == ==
-    ;
-FISCO - BCOS Ethereum L1 EL - mode node configuration(config.ini);
-Run as a pure Ethereum execution - layer client : config.genesis executor;
-version 2 makes the node download blocks from RLPx bootnodes and serve the;
-Engine API to a consensus client, verify blocks with the Ethereum block;
-verifier and commit them locally.No FISCO gateway / PBFT / txpool network is;
-started.;
+; Usage:
+;   fisco-bcos -c config.ini -g config.genesis [--bootnodes bootnodes.json]
 ;
-Usage :;
-fisco - bcos - c config.ini - g config.genesis[--bootnodes bootnodes.json];
-;
-CURRENT LIMITATIONS(follow - up work, tracked) :;
-- Sync is serial and no full Sepolia from - genesis time / disk benchmark is;
-published yet;
-the log reports each committed block, without a rate or ETA.;
-Tracked in #5623.;
-- No rollback / truncate tool ships:after a fatal checkpoint / reorg stop, the;
-supported recovery is a full resync from scratch.Tracked in #5621;
-;
-reorg handling / a finality feed beyond finalized_checkpoint is #5622.;   - No backup/restore guidance for EL nodes yet;
-tracked in #5624.;
-- executor version 2 is pre - release;
-its consensus gates are tracked in;
-https :  // github.com/FISCO-BCOS/FISCO-BCOS/issues/5563.
-         ;
-== == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == ==
-    == == == == ==
+; CURRENT LIMITATIONS (follow-up work, tracked):
+;   - Sync is serial and no full Sepolia from-genesis time/disk benchmark is
+;     published yet; the log reports each committed block, without a rate or ETA.
+;     Tracked in #5623.
+;   - No rollback/truncate tool ships: after a fatal checkpoint/reorg stop, the
+;     supported recovery is a full resync from scratch. Tracked in #5621;
+;     reorg handling / a finality feed beyond finalized_checkpoint is #5622.
+;   - No backup/restore guidance for EL nodes yet; tracked in #5624.
+;   - executor version 2 is pre-release; its consensus gates are tracked in
+;     https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5563.
+; ============================================================================
 
-    [service];
-AIR nodes run in - process(no tars framework needed).Keep without_tars_framework;
-commented so the tars proxy file is not required.;
-without_tars_framework = true;
-tars_proxy_conf = conf / tars_proxy.ini rpc = chain0 gateway = chain0
+[service]
+    ; AIR nodes run in-process (no tars framework needed). Keep without_tars_framework
+    ; commented so the tars proxy file is not required.
+    ; without_tars_framework = true
+    ; tars_proxy_conf = conf/tars_proxy.ini
+    rpc=chain0
+    gateway=chain0
 
-                      [ethereum]; geth-style bootnodes file (a JSON array of enode:// strings); see bootnodes.json
+[ethereum]
+    ; geth-style bootnodes file (a JSON array of enode:// strings); see bootnodes.json
     ;
     ; TRUST MODEL: the bootnodes list is the trust root for chain data. The node
     ; commits the chain the bootnodes serve as long as it is internally consistent
