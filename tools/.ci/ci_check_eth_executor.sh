@@ -89,10 +89,10 @@ GENESIS_EOF
 
 # Pre-fund the fixture sender (secretKey below) via genesis alloc. The alloc
 # parser requires a `code` key; an empty value means "no code" (a plain EOA).
-# Sender is from fixtures/state_tests/berlin/eip2930_access_list/test_transaction_intrinsic_gas_cost.json
+# Sender is from fixtures/state_tests/for_berlin/berlin/eip2930_access_list/acl/transaction_intrinsic_gas_cost.json
 cat >> config.genesis <<'GENESIS_EOF'
 [alloc.0]
-    address=0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0
+    address=0xf6c3a9edc1afa0ad5b720e4d42e1437c43d3b3ff
     balance=1000000000000000000000
     nonce=0
     code=
@@ -171,9 +171,9 @@ python3 "${REPO_ROOT}/tools/.ci/eth_executor_rpc_test.py" \
     --rpc "${RPC_URL}" \
     --fixture-dir "${FIXTURE_DIR}" \
     --require-fixture \
-    --secret "0xa4e7ea6dc542e6de38bf1229c3ea744aa6b9f501386aa167ad42f49e3787066f" \
-    --to "0xc3ea744aa6b9f501386aa167ad42f49e3787066f" \
-    --sender "0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0" \
+    --secret "0x1ad604b3d94e06ec50b27732ec677f3d857c4d588f082f0016317697dd3a2d92" \
+    --to "0x35904c2cd4457856fb508b8cd8d4ed43e5d2d3ba" \
+    --sender "0xf6c3a9edc1afa0ad5b720e4d42e1437c43d3b3ff" \
     || fail "eth_executor_rpc_test.py failed"
 
 # ---- 5. pin the fork the blocks are built under ----
