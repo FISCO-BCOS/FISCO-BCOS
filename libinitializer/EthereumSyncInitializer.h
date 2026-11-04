@@ -68,6 +68,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -262,25 +263,25 @@ public:
         m_localKey = std::move(localKey);
         // Peer table + inbound listener first: the sync loop below dials through the
         // same table, and discovery advertises the listener's port in its ENR.
-        // stop() tears both down before the sync thread joins. A bind failure must not
-        // leave the other one running.
+        // stop() tears both down before the sync thread joins. A failure at any step must
+        // not leave the earlier ones running.
         try
         {
             startPeerServing();
             startDiscovery();
+            // Transaction gossip: its pumps reference this initializer only through the
+            // peer-config factory, and stop() tears it down before the sync thread joins.
+            startTxGossip();
+            INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: starting self-sync loop")
+                                  << LOG_KV("bootnodes", m_nodeConfig->ethereumBootnodesFile())
+                                  << LOG_KV("maxBatch", m_nodeConfig->ethereumMaxBatchSize());
+            m_thread = std::thread([this]() { syncLoop(); });
         }
         catch (...)
         {
             stop();
             throw;
         }
-        // Transaction gossip: its pumps reference this initializer only through the
-        // peer-config factory, and stop() tears it down before the sync thread joins.
-        startTxGossip();
-        INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: starting self-sync loop")
-                              << LOG_KV("bootnodes", m_nodeConfig->ethereumBootnodesFile())
-                              << LOG_KV("maxBatch", m_nodeConfig->ethereumMaxBatchSize());
-        m_thread = std::thread([this]() { syncLoop(); });
     }
 
     /// Stop the background thread and join it. The join is unconditional (not gated
@@ -290,6 +291,15 @@ public:
     void stop()
     {
         m_running.store(false);
+        {
+            // A long download only checks m_running between blocks, and a walk over headers
+            // not at all: wake the sync thread out of whatever it is reading.
+            std::lock_guard lock(m_activeSessionMutex);
+            if (m_activeSession != nullptr)
+            {
+                m_activeSession->shutdown();
+            }
+        }
         stopDiscovery();
         stopPeerServing();
         if (m_txGossip)
@@ -812,8 +822,8 @@ private:
                     }
                     // A discovered peer is an unauthenticated stranger. Without a CL target
                     // there is nothing to pin its blocks to, and its failures below only
-                    // cost it score: they never reach the rollback, the suspension or the
-                    // deterministic-stall bookkeeping that bootnodes can trigger.
+                    // cost it score: they never reach the rollback or the suspension, and
+                    // what it serves never feeds the deterministic-stall bookkeeping.
                     bool const trustedPeer = m_peerManager->isStatic(peer.peerPublicKey);
                     if (!trustedPeer && !backfillTarget)
                     {
@@ -945,6 +955,11 @@ private:
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                             << LOG_KV("startNumber", resume.startNumber);
                         auto established = client.connect();
+                        ActiveSession activeSession(*this, established.session);
+                        if (!m_running.load())
+                        {
+                            return;  // stop() ran before the session was registered
+                        }
                         // One peer table for both directions: a node already connected
                         // inbound is not dialled twice; the slot frees with the session.
                         auto peerSlot = admitOutbound(established.peerHello.id);
@@ -1659,6 +1674,27 @@ private:
             }
         }
     };
+
+    /// The sync thread's current outbound session, registered so stop() can wake it.
+    struct ActiveSession
+    {
+        EthereumSyncInitializer& owner;
+        ActiveSession(EthereumSyncInitializer& _owner, bcos::devp2p::rlpx::Session& _session)
+          : owner(_owner)
+        {
+            std::lock_guard lock(owner.m_activeSessionMutex);
+            owner.m_activeSession = &_session;
+        }
+        ActiveSession(ActiveSession const&) = delete;
+        ActiveSession& operator=(ActiveSession const&) = delete;
+        ~ActiveSession()
+        {
+            std::lock_guard lock(owner.m_activeSessionMutex);
+            owner.m_activeSession = nullptr;
+        }
+    };
+    std::mutex m_activeSessionMutex;
+    bcos::devp2p::rlpx::Session* m_activeSession{nullptr};
 
     /// Claim an outbound slot for a freshly connected peer; nullopt (and a DEBUG line)
     /// when the table refuses it (already connected inbound, full, banned).

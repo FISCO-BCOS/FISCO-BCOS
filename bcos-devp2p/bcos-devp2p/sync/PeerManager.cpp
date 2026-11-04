@@ -177,6 +177,7 @@ void PeerManager::addCandidate(rlpx::PeerConfig _peer)
     {
         m_discoveredIds.erase(m_discovered.front().peerPublicKey);
         m_discovered.pop_front();
+        m_discoveredCursor -= m_discoveredCursor > 0 ? 1 : 0;
     }
     m_discoveredIds.insert(_peer.peerPublicKey);
     m_discovered.push_back(std::move(_peer));
@@ -202,17 +203,20 @@ std::vector<rlpx::PeerConfig> PeerManager::dialCandidates(size_t _maxDiscovered)
             out.push_back(peer);
         }
     }
+    // A cap rotates through the discovered set, each call continuing where the last stopped:
+    // otherwise the oldest entries, even ones that serve nothing and cost no score, would
+    // hold the cap for good and the peers behind them would never be dialed.
     size_t discovered = 0;
-    for (auto const& peer : m_discovered)
+    for (size_t step = 0; step < m_discovered.size() && discovered < _maxDiscovered; ++step)
     {
-        if (discovered >= _maxDiscovered)
+        auto const index = (m_discoveredCursor + step) % m_discovered.size();
+        if (eligible(m_discovered[index]))
         {
-            break;
-        }
-        if (eligible(peer))
-        {
-            out.push_back(peer);
-            ++discovered;
+            out.push_back(m_discovered[index]);
+            if (++discovered == _maxDiscovered)
+            {
+                m_discoveredCursor = (index + 1) % m_discovered.size();
+            }
         }
     }
     return out;

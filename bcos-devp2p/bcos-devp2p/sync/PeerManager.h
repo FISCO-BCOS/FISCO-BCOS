@@ -106,8 +106,8 @@ public:
     // Deduped by node id against static and discovered peers; oldest discovered entry
     // is dropped past maxCandidates. Entries without a 64-byte key are ignored.
     void addCandidate(rlpx::PeerConfig _peer);
-    // Static peers first, then up to _maxDiscovered discovered ones, minus banned nodes and
-    // nodes we already dialed. The dial loop walks this list.
+    // Static peers first, then up to _maxDiscovered discovered ones (rotating between calls),
+    // minus banned nodes and nodes we already dialed. The dial loop walks this list.
     std::vector<rlpx::PeerConfig> dialCandidates(
         size_t _maxDiscovered = std::numeric_limits<size_t>::max()) const;
     // Whether the operator configured this node. Only these peers are trusted to pick the
@@ -131,5 +131,6 @@ private:
     std::set<NodeId> m_staticIds;
     std::deque<rlpx::PeerConfig> m_discovered;
     std::set<NodeId> m_discoveredIds;
+    mutable size_t m_discoveredCursor{0};
 };
 }  // namespace bcos::devp2p::sync

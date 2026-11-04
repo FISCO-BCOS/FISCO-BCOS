@@ -66,9 +66,9 @@ std::string disconnectReason(bytesConstRef _data)
     return "reason undecodable: " + disc.error().message;
 }
 
-// Send Disconnect(reason) best-effort (the peer may already be gone) and throw.
 constexpr size_t c_maxHandshakeFrameSize = 64 * 1024;
 
+// Send Disconnect(reason) best-effort (the peer may already be gone) and throw.
 [[noreturn]] void rejectHandshake(
     Session& _session, DisconnectReason _reason, std::string const& _what)
 {

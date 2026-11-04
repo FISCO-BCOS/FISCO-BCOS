@@ -53,11 +53,20 @@ std::vector<Block> BodySequence::requestBodies(
             unwrapOrThrow(_session.recvMessage(), "BodySequence: failed to decode a frame: ");
         if (response.id == rlpx::baseMsg::Ping)
         {
+            // Counted like a broadcast: each frame restarts the socket timeout.
             _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, {}});
+            if (++ignoredBroadcasts > 64)
+            {
+                throw std::runtime_error("BodySequence: too many frames before BlockBodies");
+            }
             continue;
         }
         if (response.id == rlpx::baseMsg::Pong)
         {
+            if (++ignoredBroadcasts > 64)
+            {
+                throw std::runtime_error("BodySequence: too many frames before BlockBodies");
+            }
             continue;
         }
         if (response.id != eth::frameId(eth::msg::BlockBodies))
