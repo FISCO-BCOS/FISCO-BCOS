@@ -62,6 +62,22 @@ BOOST_AUTO_TEST_CASE(balanceCoveringGasAndValueButNotTheRollupCostIsRejected)
     BOOST_CHECK_EQUAL(harness.rollupCostAsks, 1);
 }
 
+// The sequencer between forkchoiceUpdated and newPayload: the built block charged the pending
+// plane for a transaction still pooled. Check::L1Cost budgets from the committed balance as
+// Check::Balance does, so that transaction is not billed twice.
+BOOST_AUTO_TEST_CASE(rollupCostBudgetStartsFromTheCommittedBalance)
+{
+    OpHarness harness;
+    u256 const cost = OpHarness::txCost();
+    harness.account.balance = cost * 2 + 1;
+    harness.pendingBalance = cost + 1;
+    harness.pendingCost = u512{cost};
+    harness.rollupCost = 1;
+    auto tx = admitTx();
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+    BOOST_CHECK_EQUAL(harness.accountStateReads(), 0);
+}
+
 // The pending budget stacks on the rollup cost: the balance must fund the pooled
 // transactions, this one's L2 cost AND its L1 fee; one wei short refuses.
 BOOST_AUTO_TEST_CASE(pooledCostStacksOnTheRollupCost)

@@ -142,15 +142,16 @@ public:
     std::shared_ptr<LedgerNonceChecker> ledgerNonceChecker() const;
 
     /// Also bound after construction -- the scheduler does not exist yet when the pools are
-    /// built. Until it is bound, and in engine-driven mode where there is none, the balance check
-    /// falls back to the committed ledger balance instead of the pending plane.
+    /// built. Until it is bound, and whenever a PendingCostFn is bound, the balance check uses the
+    /// committed ledger balance instead of the pending plane.
     void setScheduler(std::weak_ptr<scheduler::SchedulerInterface> scheduler);
 
     /// Bound by the OP lane's initializer after construction. Unbound, Check::L1Cost passes.
     void setRollupCostFn(RollupCostFn rollupCost);
 
     /// Bound by the mempool lanes' initializer after construction: Check::Balance and
-    /// Check::L1Cost then charge the transaction on top of the sender's pooled cost.
+    /// Check::L1Cost then charge the transaction on top of the sender's pooled cost, both against
+    /// the committed balance (readAccountState stops reading the pending plane).
     void setPendingCostFn(PendingCostFn pendingCost);
 
     /// Run the check set for (kind of @p tx, @p context, @p policy), in c_checkOrder order.
@@ -168,8 +169,9 @@ public:
 
 protected:
     /// Balance, nonce and code for @p sender. Balance comes from the scheduler's PENDING plane
-    /// when a scheduler is bound and from the committed ledger otherwise; nonce always comes
-    /// from the COMMITTED plane through Web3NonceChecker's cache. That split is what AIR
+    /// when a scheduler is bound and no PendingCostFn is, and from the committed ledger otherwise
+    /// (the budget charges the pool, which the pending plane may already have paid); nonce always
+    /// comes from the COMMITTED plane through Web3NonceChecker's cache. That split is what AIR
     /// already does, and unifying it is a separate change.
     ///
     /// `code` is left EMPTY on every path, so the EIP-3607 sender-is-an-EOA check cannot

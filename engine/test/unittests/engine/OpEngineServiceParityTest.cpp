@@ -156,6 +156,15 @@ struct StubMemPool
             *out++ = tx;
         }
     }
+    /// The base fee the service priced the last seal() against: the OP lane seals by
+    /// effective tip, so it hands the pool the block's base fee (the fee-market overload).
+    std::optional<bcos::u256> lastSealBaseFee;
+    template <class View, class OutputIt>
+    void seal(int64_t gasLimit, View& view, OutputIt out, bcos::u256 const& baseFee)
+    {
+        lastSealBaseFee = baseFee;
+        seal(gasLimit, view, out);
+    }
 };
 
 /// First executeBlock fails with a structured culprit; later calls succeed so the
@@ -567,8 +576,8 @@ void registerCurrentBlockNumber(MLS& multiLayerStorage, int64_t number)
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
-void registerParentHeader(MLS& multiLayerStorage, bcos::protocol::BlockFactory& blockFactory,
-    int64_t number, int64_t timestampMs)
+bcos::protocol::BlockHeader::Ptr registerParentHeader(MLS& multiLayerStorage,
+    bcos::protocol::BlockFactory& blockFactory, int64_t number, int64_t timestampMs)
 {
     auto header = blockFactory.blockHeaderFactory()->createBlockHeader();
     header->setNumber(number);
@@ -587,6 +596,7 @@ void registerParentHeader(MLS& multiLayerStorage, bcos::protocol::BlockFactory& 
         StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(number)},
         std::move(entry)));
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
+    return header;
 }
 
 bcos::engine::NewPayloadRequest makeValidIsthmusNewPayload(
@@ -1137,6 +1147,32 @@ BOOST_AUTO_TEST_CASE(forcedEnvelopeGasIsDebitedFromTheSealBudget)
     BOOST_CHECK_EQUAL(pair.memPool.lastSealGasLimit, 0);
     BOOST_CHECK(pair.memPool.lastSealed.empty());
     BOOST_CHECK_EQUAL(delegate->executeCalls, 4);  // candidate + canonical, no retry again
+}
+
+BOOST_AUTO_TEST_CASE(buildSealsByTipAgainstTheParentDerivedBaseFee)
+{
+    // The OP lane seals through the pool's fee-market overload, priced at the base fee the
+    // built header carries (calcOpBaseFee over the parent), so candidates come out by
+    // effective tip rather than arrival order. The stub records the overload it was handed.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto const hash =
+        bcos::h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    auto parent = registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.noTxPool = false;
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    BOOST_REQUIRE(pair.memPool.lastSealBaseFee.has_value());
+    BOOST_CHECK_EQUAL(*pair.memPool.lastSealBaseFee,
+        bcos::engine::calcOpBaseFee(*parent, /*jovianActive=*/false));
 }
 
 static void driveBuildWithCulprit(bool capacityReject)

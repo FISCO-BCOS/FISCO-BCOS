@@ -53,14 +53,29 @@ struct TransactionData
     TransactionData(protocol::Transaction::Ptr transaction);
 };
 
-/// Which chain shape the pool serves: L2 (the OP Stack default: no blob transactions, no
-/// fee market) or L1 (vanilla Ethereum: blob transactions admitted, fee-market ordering
-/// and replacement rules apply).
+/// Which chain shape the pool serves. The kind fixes two admission rules at once: whether a
+/// taken (sender, nonce) is a fee-market decision (the incoming transaction must outbid the
+/// stored one, bumpsFee) or first come first served, and whether blob (type-3) transactions
+/// are admitted at all.
 enum class ChainKind : std::uint8_t
 {
-    L2,
-    L1,
+    Fisco,  ///< executor v0/v1: FISCO transactions, no fee market, no blobs
+    Op,     ///< the OP Stack lane: EIP-1559 fee market, no blobs (Ecotone onwards)
+    L1,     ///< vanilla Ethereum: fee market and blob transactions
 };
+
+/// A taken (sender, nonce) is priced on every lane that charges EIP-1559 fees; the FISCO
+/// lanes have no fee to compare and go first come first served.
+inline constexpr bool hasFeeMarket(ChainKind kind)
+{
+    return kind != ChainKind::Fisco;
+}
+/// Blob (type-3) transactions are the L1 fee market's point; the OP Stack never carries them
+/// (Ecotone onwards) and the FISCO lanes do not know the type.
+inline constexpr bool admitsBlobs(ChainKind kind)
+{
+    return kind == ChainKind::L1;
+}
 
 /// The least gas a sealed transaction spends from the block budget: Ethereum's intrinsic
 /// minimum (21000, TX_BASE_COST). Every admitted Web3 transaction already carries at least
@@ -71,15 +86,15 @@ inline constexpr int64_t c_minSealGas = 21000;
 
 struct MemPoolConfig
 {
-    ChainKind chainKind = ChainKind::L2;
-    /// Max pooled transactions; 0 = unlimited (the L2 default). When full, the cheapest
+    ChainKind chainKind = ChainKind::Fisco;
+    /// Max pooled transactions; 0 = unlimited (the Fisco default). When full, the cheapest
     /// transaction by static tip key is evicted.
     std::size_t capacity = 0;
     /// Milliseconds a transaction may sit in the pool before it is evicted; 0 = never
-    /// expires (the L2 default).
+    /// expires (the Fisco default).
     int64_t txLifetimeMs = 0;
     /// Max pooled transactions per sender, executable and gapped alike; 0 = unlimited (the
-    /// L2 default). A new (sender, nonce) slot past the cap is refused with
+    /// Fisco default). A new (sender, nonce) slot past the cap is refused with
     /// SenderTxLimitExceeded; replacing a held nonce does not count. Stricter than geth,
     /// which has no per-account cap on executable transactions (AccountSlots 16 is a
     /// guaranteed minimum under global pressure; AccountQueue 64 bounds gapped ones only).
@@ -219,7 +234,7 @@ private:
 
     Transactions m_transactions;
     /// EIP-4844 blob sidecars of pooled blob transactions, keyed by transaction hash (L1
-    /// only; the L2 pool never admits blob transactions). Registered atomically with the
+    /// only; the Fisco and Op pools never admit blob transactions). Registered atomically with the
     /// admission that carries them and dropped at every eviction point below, so the map
     /// can never hold a sidecar whose transaction is gone. Guarded by m_mutex.
     std::unordered_map<crypto::HashType, engine::BlobTxSidecar> m_blobSidecars;
@@ -260,7 +275,8 @@ private:
         return nonce;
     }
 
-    /// What the pool does when (sender, nonce) is already taken: the one policy difference
+    /// What the pool does when (sender, nonce) is already taken and there is no fee market to
+    /// price it (with one, bumpsFee decides on both entries): the one policy difference
     /// between its two entries, kept as a value so admission has one implementation, not two.
     enum class OnTakenNonce : std::uint8_t
     {
@@ -275,8 +291,8 @@ private:
         OnTakenNonce onTakenNonce, std::optional<engine::BlobTxSidecar> sidecar);
 
     /// Drop transactions older than the configured lifetime; a no-op when the lifetime
-    /// is 0 (the default, always on L2). The sequenced index is insertion order and every
-    /// insert stamps importTime, so the expired transactions form a prefix of it.
+    /// is 0 (the default; the FISCO lanes never set it). The sequenced index is insertion order and
+    /// every insert stamps importTime, so the expired transactions form a prefix of it.
     void evictExpiredLocked()
     {
         if (m_config.txLifetimeMs <= 0)
@@ -294,7 +310,7 @@ private:
 
     /// Enforce the configured capacity by evicting the cheapest transaction (lowest
     /// static tip key; the first minimum found wins the tie) until the pool fits. A no-op
-    /// when the capacity is 0 (unlimited — the default, always on L2).
+    /// when the capacity is 0 (unlimited — the default; the FISCO lanes never set it).
     void evictOverCapacityLocked()
     {
         if (m_config.capacity == 0)
@@ -335,7 +351,7 @@ private:
     }
 
 public:
-    /// The default config is the L2 pool exactly as before; L1 wiring passes a config.
+    /// The default config is the FISCO-lane pool; the Ethereum lanes pass a config.
     explicit MemPoolImpl(MemPoolConfig config = {}) : m_config(std::move(config)) {}
 
     MemPoolConfig const& config() const { return m_config; }
@@ -358,7 +374,7 @@ public:
     /// @p timestampSeconds: the timestamp-keyed schedule when the config wires a
     /// provider (EL mode), else the static per-transaction field — a statically
     /// configured L1 chain runs one fixed fork, whose per-block and per-transaction
-    /// maxima coincide. The L2 pool never holds blob transactions (admission refuses
+    /// maxima coincide. A Fisco or Op pool never holds blob transactions (admission refuses
     /// them), so the cap never binds there.
     std::size_t maxBlobsPerBlock(uint64_t timestampSeconds) const
     {
@@ -386,25 +402,29 @@ public:
     ///   success on the strength of add() having returned hands its user a transaction hash for
     ///   a transaction the pool does not hold, and the user polls for a receipt until they give
     ///   up;
-    ///   taken (sender, nonce) -- the newer transaction REPLACES the stored one, so it is an
-    ///   EARLIER submitter whose hash quietly stops being pollable;
+    ///   taken (sender, nonce) -- the newer transaction REPLACES the stored one (with a fee
+    ///   market, only when it bumps the fee), so it is an EARLIER submitter whose hash
+    ///   quietly stops being pollable;
     ///   duplicate hash -- the transaction is in the pool (someone already submitted it), and
     ///   the only thing lost is the caller's ability to tell that from a fresh admission.
     ///
-    /// The two entries also differ on that taken pair: this one refuses. First come first
-    /// served is what the other pool does (MemoryStorage's insertMemoryNonce), and a
-    /// replacement policy is a fee-market decision this pool has no fee market to make.
+    /// The two entries also differ on that taken pair, but only where there is no fee market
+    /// (ChainKind::Fisco): this one refuses -- first come first served, what the other pool
+    /// does (MemoryStorage's insertMemoryNonce) -- while add() replaces. With a fee market
+    /// (Op, L1) the pair is priced on both entries: the incoming transaction replaces the
+    /// stored one when it bumps both caps by 10% (bumpsFee) and is ReplacementUnderpriced
+    /// otherwise, which is what gives eth_sendRawTransaction and gossip geth's replace-by-fee.
     ///
     /// Refusing and reserving are ONE step here, under the same lock as the lookup. Asking the
     /// pool whether a pair is free and then adding it would be two, and two admissions racing
     /// through that gap both pass -- the TOCTOU FIB-51 removed from the other pool.
     ///
-    /// @return None when the transaction is now in the pool; AlreadyInTxPool, NonceCheckFail or
-    /// Malformed when it is not. THROWS on a null or tainted transaction, and on a blob
-    /// transaction on L2: none of those is a verdict about an otherwise well-formed
-    /// transaction -- they mean the caller skipped admission, so they must not be reportable as
-    /// one of its statuses. On L1 a blob transaction is admitted like any other, and a
-    /// taken-nonce replacement that does not meet the fee bump reports AlreadyInTxPool.
+    /// @return None when the transaction is now in the pool; AlreadyInTxPool, NonceCheckFail,
+    /// ReplacementUnderpriced, SenderTxLimitExceeded or Malformed when it is not. THROWS on a
+    /// null or tainted transaction, and on a blob transaction where the kind admits none: none
+    /// of those is a verdict about an otherwise well-formed transaction -- they mean the caller
+    /// skipped admission, so they must not be reportable as one of its statuses. On L1 a blob
+    /// transaction is admitted like any other.
     ///
     /// A blob transaction's EIP-4844 sidecar (network-wrapper payload) is registered
     /// atomically with the admission: passing it separately would open a window in which a
@@ -428,7 +448,7 @@ public:
     /// charged, the value alone on a free-gas chain -- the same basis admission charges the new
     /// transaction on. No default: the validator decides the basis once, callers forward it.
     u512 pendingCost(
-        std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis) const;
+        std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis);
 
     /// The sidecar of a pooled blob transaction, or nullopt when the transaction is not
     /// pooled or carries none.
@@ -530,13 +550,17 @@ public:
         }
     }
 
-    /// L1 fee-market seal: the per-sender selection is the same gapless prefix as
-    /// seal() above, but the prefixes are emitted ordered by effective priority fee —
-    /// geth's best_transactions(): one cursor per sender walks that sender's executable
+    /// Fee-market seal (the L1 and OP lanes): the per-sender selection is the same gapless
+    /// prefix as seal() above, but the prefixes are emitted ordered by effective priority fee
+    /// — geth's best_transactions(): one cursor per sender walks that sender's executable
     /// nonces, and a heap picks the best cursor head by (effectivePriorityTip desc, hash
-    /// asc). @p baseFee is the block's base fee; transactions whose fee cap does not
-    /// cover it sort last with tip 0 (they are not dropped — admission already enforces
-    /// FeeCapLessThanBaseFee against its own base fee). @p gasLimit is the block gas budget,
+    /// asc). @p baseFee is the block's base fee. A head whose fee cap is below it cannot pay
+    /// for this block and ends its sender's walk right there (geth's
+    /// Pending(PendingFilter{BaseFee}) cuts the executable list at the first such nonce); the
+    /// transaction is NOT dropped — it stays pooled for a block whose base fee has come down.
+    /// That gate is what makes the admission/seal gap harmless: admission prices against the
+    /// chain head's base fee, one EIP-1559 step behind the block being built. A fee cap equal
+    /// to the base fee is still includable, with tip 0. @p gasLimit is the block gas budget,
     /// debited per emitted transaction as in seal() above; a head that does not fit pops its
     /// sender for this block (geth's txs.Pop()) and the heap moves on.
     void seal(int64_t gasLimit,
@@ -568,6 +592,10 @@ public:
             return a.hash > b.hash;
         };
         std::priority_queue<Cursor, std::vector<Cursor>, decltype(cursorLess)> heap(cursorLess);
+        // The base-fee gate from the doc comment above: a strict <, as geth's filter.
+        auto const affordable = [&baseFee](protocol::Transaction const& transaction) {
+            return feeCapKey(transaction) >= baseFee;
+        };
 
         // senderIndex is hashed_non_unique: a sender appears once per transaction, so
         // track the senders whose cursor is already on the heap (same dedup seal()
@@ -583,7 +611,7 @@ public:
             int64_t currentNonce = accountNonce(state, sender);
             auto it = senderNonceIndex.lower_bound(std::make_tuple(sender, currentNonce));
             if (it != senderNonceIndex.end() && it->sender() == sender &&
-                it->nonce() == currentNonce)
+                it->nonce() == currentNonce && affordable(*it->m_transaction))
             {
                 heap.push(Cursor{.tip = effectivePriorityTip(*it->m_transaction, baseFee),
                     .hash = it->hash(),
@@ -605,10 +633,11 @@ public:
             gasLeft -= gas;
             *out++ = cursor.it->m_transaction;
             // Advance the cursor inside the same sender's gapless prefix; a nonce gap
-            // stops this sender for the block, exactly like seal()'s prefix walk.
+            // stops this sender for the block, exactly like seal()'s prefix walk, and so
+            // does a fee cap below the base fee (the later nonces cannot jump over it).
             auto next = std::next(cursor.it);
             if (next != senderNonceIndex.end() && next->sender() == cursor.sender &&
-                next->nonce() == cursor.nextNonce)
+                next->nonce() == cursor.nextNonce && affordable(*next->m_transaction))
             {
                 heap.push(Cursor{.tip = effectivePriorityTip(*next->m_transaction, baseFee),
                     .hash = next->hash(),

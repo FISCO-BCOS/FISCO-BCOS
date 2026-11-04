@@ -896,30 +896,40 @@ task::Task<std::optional<AccountState>> TxValidator::readAccountState(std::strin
     // Committed plane, through the FIB-59 cache. A miss leaves nonce unset rather than 0: the
     // nonce window declines to judge an unknown account, and collapsing the two would start
     // rejecting first-time senders whose nonce sits beyond the window measured from zero.
-    // Balance is read regardless -- an account absent from the committed plane may still hold a
-    // pending balance.
+    // Balance is read regardless -- without a budget bound, an account absent from the committed
+    // plane may still hold a pending balance.
     state.nonce = co_await m_web3NonceChecker->committedNonce(sender);
 
     std::shared_ptr<scheduler::SchedulerInterface> scheduler;
+    bool chargesPooledCost = false;
     {
         ReadGuard guard(x_lateBound);
         scheduler = m_scheduler.lock();
+        chargesPooledCost = m_pendingCost != nullptr;
     }
 
     auto const senderHex = toHex(sender);
-    if (!scheduler)
+    // A pooled-cost budget starts from the committed balance (geth's pool state is the chain head
+    // too): a built, uncommitted block has already charged the pending plane for transactions
+    // that stay pooled until it commits, so the pending balance would bill them twice. One window
+    // remains: from a block's commit to the engine's m_memPool.remove, the committed balance has
+    // paid for transactions still pooled, and a sender near its limit is refused until then.
+    if (!scheduler || chargesPooledCost)
     {
-        // No scheduler bound (engine-driven mode, or before the pool wires one): fall back to
-        // the COMMITTED balance. The old pool validator described this fallback in a comment but
+        // No scheduler bound (before the pool wires one) or a budget in force: the COMMITTED
+        // balance. The old pool validator described this fallback in a comment but
         // never performed it -- it logged and left the balance at 0, so every transaction came
         // back InsufficientFunds whenever the scheduler was missing.
         //
-        // Contract code is unreadable without the scheduler, so `code` stays empty and EIP-3607
-        // consequently passes. That weakens ONE check in a configuration whose alternative is
-        // refusing all traffic; balance and nonce are still enforced.
-        if (auto const storageState = co_await m_ledger->getStorageState(senderHex, 0))
+        // `code` stays empty on this path as on the pending one, so EIP-3607 passes here too;
+        // balance and nonce are still enforced.
+        //
+        // The balance row alone: getStorageState answers nullopt without a nonce row, which a
+        // deposit-funded account does not have yet.
+        if (auto const entry = co_await m_ledger->getStorageAt(
+                senderHex, ledger::ACCOUNT_TABLE_FIELDS::BALANCE, 0))
         {
-            if (auto const& balance = storageState.value().balance; !balance.empty())
+            if (auto const balance = entry->get(); !balance.empty())
             {
                 state.balance = parseBalance(balance);
             }
