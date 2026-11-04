@@ -113,6 +113,9 @@ BOOST_AUTO_TEST_CASE(discoveredCapAndTrust)
     candidates = manager.dialCandidates(1);
     BOOST_REQUIRE_EQUAL(candidates.size(), 2u);
     BOOST_CHECK_EQUAL(candidates[1].host, "10.0.0.11");
+    // The cap rotates: the entries behind it get their turn, and it wraps past the ban.
+    BOOST_CHECK_EQUAL(manager.dialCandidates(1)[1].host, "10.0.0.12");
+    BOOST_CHECK_EQUAL(manager.dialCandidates(1)[1].host, "10.0.0.11");
 }
 
 // With very few slots at least one stays free for our own dial.

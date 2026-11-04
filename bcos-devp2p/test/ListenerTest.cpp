@@ -253,6 +253,34 @@ BOOST_AUTO_TEST_CASE(connectionLimitClosesExcessSockets)
     listener->stop();
 }
 
+// A stranger gets no large frame before the handshake is done: an oversized Hello ends the
+// connection, while an ordinary dialer is unaffected.
+BOOST_AUTO_TEST_CASE(oversizedHelloIsRefused)
+{
+    rlpx::EccKeyPair serverKey;
+    std::atomic<int> sessions{0};
+    auto listener =
+        std::make_shared<rlpx::Listener>(serverKey, rlpx::ListenerConfig{"127.0.0.1", 0},
+            serverStatus, [&](rlpx::EstablishedSession&) { ++sessions; });
+    listener->start();
+    auto oversized = clientConfig(listener->port(), serverKey);
+    oversized.clientId.assign(100 * 1024, 'x');
+    {
+        rlpx::EccKeyPair clientKey;
+        rlpx::RlpxClient client(clientKey, oversized);
+        BOOST_CHECK_THROW(client.connect(), std::exception);
+    }
+    BOOST_CHECK_EQUAL(sessions.load(), 0);
+    {
+        rlpx::EccKeyPair clientKey;
+        rlpx::RlpxClient client(clientKey, clientConfig(listener->port(), serverKey));
+        auto established = client.connect();
+        BOOST_CHECK_EQUAL(established.peerStatus.protocolVersion, 70u);
+    }
+    listener->stop();
+    BOOST_CHECK_EQUAL(sessions.load(), 1);
+}
+
 // stop() must wake a handler parked in recvMessage (idle peer) and join it promptly —
 // well under the 15s socket I/O timeout.
 BOOST_AUTO_TEST_CASE(stopWakesIdleSession)

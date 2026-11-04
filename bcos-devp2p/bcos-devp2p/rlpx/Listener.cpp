@@ -108,8 +108,8 @@ void Listener::stop()
     boost::system::error_code ignored;
     m_acceptor.close(ignored);
     // Wake every connection parked in session I/O, then join them all. A connection
-    // still inside the handshake has no session yet and wakes at the socket I/O
-    // timeout (15s) at the latest.
+    // still inside the handshake has no session yet: it ends at its next socket I/O
+    // timeout (15s per read), once for each handshake step a silent peer stalls.
     std::vector<std::shared_ptr<Connection>> connections;
     {
         std::unique_lock lock(m_connectionsMutex);

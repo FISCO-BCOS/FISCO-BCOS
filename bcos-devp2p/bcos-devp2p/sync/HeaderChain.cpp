@@ -73,14 +73,25 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
                                response.data.data(), std::min<size_t>(response.data.size(), 100)));
         if (response.id == rlpx::baseMsg::Ping)
         {
-            // RLPx base protocol: Ping (id 0x02) is answered with Pong (id 0x03).
+            // RLPx base protocol: Ping (id 0x02) is answered with Pong (id 0x03). It counts
+            // against the same limit as broadcasts: each frame restarts the socket timeout,
+            // so a peer pinging forever would otherwise never have to answer the request.
             _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, {}});
             BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain") << "answered Ping with Pong";
+            if (++ignoredBroadcasts > 64)
+            {
+                throw std::runtime_error("HeaderChain: too many frames before BlockHeaders");
+            }
             continue;
         }
         if (response.id == rlpx::baseMsg::Pong)
         {
-            continue;  // answer to a Ping we (currently) never send; ignore
+            // answer to a Ping we (currently) never send; ignore
+            if (++ignoredBroadcasts > 64)
+            {
+                throw std::runtime_error("HeaderChain: too many frames before BlockHeaders");
+            }
+            continue;
         }
         if (response.id != eth::frameId(eth::msg::BlockHeaders))
         {

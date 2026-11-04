@@ -27,6 +27,7 @@
 #include <boost/test/unit_test.hpp>
 #include <functional>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -129,6 +130,61 @@ BOOST_AUTO_TEST_CASE(unknownTipAndWrongNumberAreRejected)
         BOOST_CHECK_THROW(exchange.requestPinnedHashes(_established.session, chain[4].hash, 3),
             std::runtime_error);
     });
+}
+
+// Every frame restarts the socket timeout, so a peer that pings instead of answering would
+// hold the serial sync loop forever if pings did not count against a limit.
+BOOST_AUTO_TEST_CASE(pingFloodInsteadOfAnAnswerIsRefused)
+{
+    auto const chain = devp2p::test::makeTestChain(1);
+    for (bool const answerHeaders : {false, true})
+    {
+        rlpx::EccKeyPair serverKey;
+        rlpx::EccKeyPair clientKey;
+        rlpx::PeerConfig serverConfig;
+        serverConfig.clientId = "pinger";
+        rlpx::RlpxServer server(serverKey, 0, serverConfig);
+        rlpx::PeerConfig clientConfig;
+        clientConfig.host = "127.0.0.1";
+        clientConfig.port = server.port();
+        clientConfig.peerPublicKey = serverKey.publicKey();
+        std::thread serverThread([&] {
+            try
+            {
+                auto established = server.accept();
+                auto message = established.session.recvMessage();
+                if (answerHeaders && message)
+                {
+                    auto request = eth::decodeGetBlockHeaders(
+                        bytesConstRef(message->data.data(), message->data.size()));
+                    eth::BlockHeadersMessage response;
+                    response.requestId = request->requestId;
+                    response.headers.push_back(chain[0].headerRlp);
+                    established.session.sendMessage(
+                        rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::BlockHeaders)),
+                            eth::encodeBlockHeaders(response)});
+                }
+                for (int i = 0; i < 1000; ++i)
+                {
+                    established.session.sendMessage(rlpx::Message{rlpx::baseMsg::Ping, {}});
+                }
+            }
+            catch (...)
+            {  // the client hanging up is what we expect
+            }
+        });
+        {
+            rlpx::RlpxClient client(std::move(clientKey), clientConfig);
+            auto established = client.connect();
+            sync::BlockExchange exchange(0, h256{});
+            BOOST_CHECK_EXCEPTION(
+                exchange.downloadRange(established.session, 1, [](sync::Block const&) {}),
+                std::runtime_error, [](std::runtime_error const& _error) {
+                    return std::string(_error.what()).find("too many frames") != std::string::npos;
+                });
+        }
+        serverThread.join();
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
