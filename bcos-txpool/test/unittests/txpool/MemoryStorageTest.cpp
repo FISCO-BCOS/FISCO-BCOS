@@ -613,6 +613,14 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
                       protocol::BlockNumber) -> task::Task<std::optional<ledger::StorageState>> {
             co_return std::nullopt;
         });
+    // The committed-balance read goes through the balance row alone (TxValidator reads
+    // ACCOUNT_TABLE_FIELDS::BALANCE with getStorageAt, not getStorageState): an unstubbed
+    // FakeIt method is undefined behaviour, so answer "no row" here as well.
+    fakeit::When(Method(mockLedger, getStorageAt))
+        .AlwaysDo([](std::string_view, std::string_view,
+                      protocol::BlockNumber) -> task::Task<std::optional<storage::Entry>> {
+            co_return std::nullopt;
+        });
 
     auto configWithSig = makeConfig(true);
     MemoryStorage storageWithSig(configWithSig, *ioServicePool->getIOService());

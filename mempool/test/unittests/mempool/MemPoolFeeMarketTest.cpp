@@ -688,6 +688,22 @@ BOOST_AUTO_TEST_CASE(pending_cost_includes_blob_gas_at_the_blob_fee_cap)
         u512{100000} * 7 + u512{2} * u512{protocol::BLOB_GAS_PER_BLOB} * 5);
 }
 
+// The budget is read before insertion's expiry cleanup runs, and a non-building node has no seal
+// to clean up either: an expired transaction must not keep reserving the sender's balance.
+BOOST_AUTO_TEST_CASE(pending_cost_ignores_expired_transactions)
+{
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1, .txLifetimeMs = 60 * 1000}};
+    std::string sender("EEEEEEEEEEEEEEEEEEEE", 20);
+    auto stale = makeFeeTx(sender, 5, 1, 200);
+    auto fresh = makeFeeTx(sender, 0, 1, 100);
+    pool.add(std::vector{stale, fresh});
+    // Both were live at insertion; the older one's lifetime runs out while it waits on the gap.
+    stale->setImportTime(static_cast<int64_t>(utcTime()) - 10 * 60 * 1000);
+
+    BOOST_CHECK_EQUAL(
+        pool.pendingCost(sender, {}, protocol::CostBasis::MaxCost), u512{kFeeTxGas} * 100);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 // ---------------------------------------------------------------------------

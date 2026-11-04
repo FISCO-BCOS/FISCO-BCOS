@@ -206,6 +206,48 @@ BOOST_AUTO_TEST_CASE(pooledCostCountsAgainstTheBalance)
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
 }
 
+// A block built but not committed has charged its transactions in the pending plane while they
+// are still pooled (the OP sequencer between forkchoiceUpdated and newPayload). The budget charges
+// the pool, so it must start from the committed balance or those transactions pay twice.
+BOOST_AUTO_TEST_CASE(pooledCostIsChargedAgainstTheCommittedBalance)
+{
+    AdmitHarness harness;
+    harness.ledgerConfig->setGasPrice({"1", 0});
+    u512 const cost = u512{100000} * u512{30000000000ULL} + 1;
+    harness.account.balance = (cost * 2).convert_to<u256>();
+    harness.pendingBalance = cost.convert_to<u256>();  // the built block paid for one
+    harness.pendingCost = cost;                        // and that one is still pooled
+
+    auto tx = admitTx();
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+    BOOST_CHECK_EQUAL(harness.accountStateReads(), 0);
+
+    // No budget bound (the FISCO lanes): the pending plane still answers.
+    harness.pendingCost.reset();
+    harness.account.balance = (cost * 10).convert_to<u256>();
+    harness.pendingBalance = u256(0);
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
+    BOOST_CHECK_GT(harness.accountStateReads(), 0);
+}
+
+// The budget reads the balance row on its own: an account funded by a deposit has a balance and
+// no nonce row yet, and Ledger::getStorageState answers nullopt for it.
+BOOST_AUTO_TEST_CASE(committedBalanceDoesNotNeedANonceRow)
+{
+    AdmitHarness harness;
+    harness.ledgerConfig->setGasPrice({"1", 0});
+    harness.accountExists = false;
+    harness.account.balance = 0;  // the pending plane holds nothing: only the row below can fund
+    harness.pendingCost = u512{0};
+    bcos::storage::Entry balance;
+    balance.set(u256("0xffffffffffffffffffffffffffff").convert_to<std::string>());
+    harness.ledger->setStorageAt(AdmitHarness::senderHex(),
+        std::string(ledger::ACCOUNT_TABLE_FIELDS::BALANCE), std::move(balance));
+
+    auto tx = admitTx();
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
 // The pending budget is charged on the chain's cost basis, the one Check::Balance charges the
 // new transaction on: a free-gas chain (no tx_gas_price) asks the pool for values only, so a
 // sender whose balance covers its pooled values is not refused for fee caps the chain never

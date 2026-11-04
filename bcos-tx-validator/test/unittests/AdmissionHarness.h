@@ -244,6 +244,9 @@ struct AdmitHarness
     ledger::EvmcRevisionSchedule revisionSchedule;
     AccountState account{};
     bool accountExists = true;
+    /// The pending plane's balance when it differs from the committed one (account.balance): a
+    /// block built but not committed has already been charged there.
+    std::optional<u256> pendingBalance;
     /// The OP rollup cost the bound RollupCostFn answers; nullopt = bind nothing, as on the
     /// FISCO and L1 lanes. `rollupCostAsks` counts the calls, so a case can state that a
     /// context or lane never priced the envelope rather than infer it from a status.
@@ -287,11 +290,15 @@ struct AdmitHarness
     /// Publish the account into the committed plane the validator actually reads.
     void publishAccount()
     {
-        scheduler->balance = account.balance;
+        scheduler->balance = pendingBalance.value_or(account.balance);
         if (!accountExists)
         {
             return;
         }
+        bcos::storage::Entry balanceEntry;
+        balanceEntry.set(account.balance.convert_to<std::string>());
+        ledger->setStorageAt(senderHex(), std::string(ledger::ACCOUNT_TABLE_FIELDS::BALANCE),
+            std::move(balanceEntry));
         ledger::StorageState state;
         state.nonce = account.nonce ? account.nonce->convert_to<std::string>() : "0";
         state.balance = account.balance.convert_to<std::string>();
