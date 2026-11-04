@@ -15,6 +15,7 @@
  */
 
 #pragma once
+#include <string>
 
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -83,11 +84,14 @@ using OpPendingDropped = boost::error_info<struct OpPendingDroppedTag, bool>;
 using OpSiblingReorgUnsupported = boost::error_info<struct OpSiblingReorgUnsupportedTag, bool>;
 
 /// True when an Engine API payload carries a transaction envelope this service cannot
-/// decode: a payload-content fault the FCU/newPayload paths map to a consensus INVALID
-/// (fcuInvalidIfUndecodable), never to -32603 — an untagged OpExecutionInternalError must
-/// keep propagating as an internal error. Same carrier convention as
+/// decode, or a forced one that fails validation: a payload-content fault the FCU/newPayload paths
+/// map to a consensus INVALID (fcuInvalidIfUndecodable), never to -32603 — an untagged
+/// OpExecutionInternalError must keep propagating as an internal error. Same carrier convention as
 /// OpCulpritTxHash/OpRejectIsCapacity; shared by the Eth and OP build paths.
 using OpPayloadUndecodable = boost::error_info<struct OpPayloadUndecodableTag, bool>;
+/// With OpPayloadUndecodable: the validationError the CL reads when the envelope decodes but
+/// cannot execute (a forced transaction that fails validation). Absent means undecodable.
+using OpPayloadInvalidReason = boost::error_info<struct OpPayloadInvalidReasonTag, std::string>;
 
 /// Consumed by OpEngineService (#5549) to classify execute-reject culprits; unused
 /// within #5547 itself.

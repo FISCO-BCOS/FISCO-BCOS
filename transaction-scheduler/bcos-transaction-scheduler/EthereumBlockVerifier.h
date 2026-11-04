@@ -518,6 +518,10 @@ struct EthereumBlockVerificationResult
 struct EthereumBlockExecution
 {
     std::optional<std::string> error;
+    /// With `error`: the positions of the transactions that failed pre-execution validation.
+    /// They wrote nothing, so a builder that leaves them out gets the same execution for the
+    /// rest. Empty for every other failure.
+    std::vector<std::size_t> invalidTransactions;
     protocol::BlockHeader::Ptr header;  ///< the FISCO execution header
     std::vector<protocol::Transaction::Ptr> transactions;
     std::vector<protocol::TransactionReceipt::Ptr> receipts;
@@ -822,17 +826,21 @@ public:
         // a zero-gas failure receipt — no EVM step ran, while an executed transaction always
         // burns at least its intrinsic gas. Ethereum has no such receipt: the transaction is
         // invalid and so is the block (geth's ApplyTransaction returns the error and
-        // Process fails). The builder reaches this too and fails its build, which is its
-        // documented policy for a pooled transaction the block cannot execute.
+        // Process fails). The builder reads invalidTransactions and rebuilds without them.
         for (std::size_t i = 0; i < receipts.size(); ++i)
         {
             auto const& receipt = receipts[i];
             if (receipt && receipt->status() != 0 && receipt->gasUsed() == 0)
             {
-                co_return co_await fail("EthereumBlockVerifier: transaction " + std::to_string(i) +
-                                        " is invalid (validation status " +
-                                        std::to_string(receipt->status()) + ")");
+                execution.invalidTransactions.push_back(i);
             }
+        }
+        if (!execution.invalidTransactions.empty())
+        {
+            auto const first = execution.invalidTransactions.front();
+            co_return co_await fail("EthereumBlockVerifier: transaction " + std::to_string(first) +
+                                    " is invalid (validation status " +
+                                    std::to_string(receipts[first]->status()) + ")");
         }
 
         // Finalize the block (EIP-4895 withdrawals, Shanghai+). geth applies the CL's
