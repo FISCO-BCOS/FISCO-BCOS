@@ -48,6 +48,8 @@ secp256k1_context* secp256k1Context();
 
 bytes secp256k1Sign(const KeyPairInterface& _keyPair, const HashType& _hash);
 bool secp256k1Verify(const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData);
+bool secp256k1Verify(
+    bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData);
 std::unique_ptr<KeyPairInterface> secp256k1GenerateKeyPair();
 
 KeyImpl secp256k1Recover(const HashType& _hash, bytesConstRef _signatureData);
@@ -85,9 +87,10 @@ public:
     {
         return secp256k1Recover(_hashImpl, _in);
     }
-    std::pair<bool, bytes> recoverAddress(crypto::Hash& _hashImpl, const HashType& _hash,
+    bytes recoverAddress(crypto::Hash& _hashImpl, const HashType& _hash,
         bytesConstRef _signatureData) const override;
 
+    std::unique_ptr<KeyPairInterface> createKeyPair(SecretPtr _secretKey) const override;
     std::unique_ptr<KeyPairInterface> createKeyPair(const Secret& _secretKey) const override;
 };
 }  // namespace bcos::crypto

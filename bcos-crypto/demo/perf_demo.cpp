@@ -247,7 +247,7 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, crypto::Hash& _hashImpl,
     for (size_t i = 0; i < _count; i++)
     {
         auto ret = _signatureImpl->recoverAddress(_hashImpl, _msgHash, ref(signedData));
-        if (ret.second != address)
+        if (ret != address)
         {
             return;
         }
@@ -268,7 +268,7 @@ void derivePublicKeyPerf(SignatureCrypto::Ptr _signatureImpl, std::string const&
     KeyPairInterface::Ptr keyPair;
     for (size_t i = 0; i < _count; i++)
     {
-        keyPair = _signatureImpl->createKeyPair(*_keyPair.secretKey());
+        keyPair = _signatureImpl->createKeyPair(_keyPair.secretKey());
         assert(keyPair->secretKey()->data() == _keyPair.secretKey()->data());
         assert(keyPair->publicKey()->data() == _keyPair.publicKey()->data());
     }

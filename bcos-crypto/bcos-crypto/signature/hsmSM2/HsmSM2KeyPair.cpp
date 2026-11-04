@@ -23,6 +23,7 @@
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -45,8 +46,8 @@ HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath, SecretPtr _secretKey) : HsmSM
                                   "Invalid InvalidSecretKey, hsm sm2 secret length must be " +
                                   std::to_string(HSM_SM2_PRIVATE_KEY_LEN)));
     }
-    m_secretKey = _secretKey;
     m_publicKey = priToPub(_secretKey);
+    m_secretKey = std::move(_secretKey);
 }
 
 HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath, unsigned int _keyIndex, std::string _password)

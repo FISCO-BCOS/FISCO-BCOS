@@ -61,7 +61,11 @@ BOOST_AUTO_TEST_CASE(testSecp256k1KeyPair)
     }
 
     auto signatureImpl = std::make_shared<Secp256k1Crypto>();
-    auto keyPair1 = signatureImpl->createKeyPair(*sec1);
+    auto ownedSec1 = std::make_shared<bcos::crypto::KeyImpl>(sec1->data());
+    auto* ownedSec1Raw = ownedSec1.get();
+    auto keyPair1 = signatureImpl->createKeyPair(std::move(ownedSec1));
+    BOOST_CHECK(!ownedSec1);
+    BOOST_CHECK(keyPair1->secretKey().get() == ownedSec1Raw);
     BOOST_CHECK(pub1->data() == keyPair1->publicKey()->data());
     BOOST_CHECK(sec1->data() == keyPair1->secretKey()->data());
 
@@ -136,9 +140,9 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     auto ret = k1Crypto.recoverAddress(
         *hashImpl, hashData, bytesConstRef(signData.data(), signData.size()));
     std::cout << "### right   address:" << address.hex() << std::endl;
-    std::cout << "### recover address:" << toHex(ret.second) << std::endl;
+    std::cout << "### recover address:" << toHex(ret) << std::endl;
 
-    BOOST_CHECK(address.asBytes() == ret.second);
+    BOOST_CHECK(address.asBytes() == ret);
     std::cout << "### secp256k1Recover begin, publicKey:" << toHex(keyPair->publicKey()->data())
               << std::endl;
     std::cout << "#### recoverd publicKey:" << toHex(pub.data()) << std::endl;
@@ -224,7 +228,11 @@ BOOST_AUTO_TEST_CASE(testSM2KeyPair)
     auto keyPair1 = std::make_shared<SM2KeyPair>(sec1);
 
     auto signatureImpl = std::make_shared<SM2Crypto>();
-    auto keyPairTest = signatureImpl->createKeyPair(*sec1);
+    auto ownedSec1 = std::make_shared<KeyImpl>(sec1->data());
+    auto* ownedSec1Raw = ownedSec1.get();
+    auto keyPairTest = signatureImpl->createKeyPair(std::move(ownedSec1));
+    BOOST_CHECK(!ownedSec1);
+    BOOST_CHECK(keyPairTest->secretKey().get() == ownedSec1Raw);
     BOOST_CHECK(keyPairTest->publicKey()->data() == keyPair1->publicKey()->data());
     BOOST_CHECK(keyPairTest->secretKey()->data() == keyPair1->secretKey()->data());
 
@@ -357,8 +365,8 @@ BOOST_AUTO_TEST_CASE(testSM2SignAndVerify)
 }
 
 // fast_sm2_verify copies raw_public_key->len bytes into a fixed 65-byte stack buffer;
-// KeyImpl does not truncate oversized input, so a >64-byte public key must fail cleanly
-// (under ASan any residual overflow would abort the test binary)
+// the verify entry points do not truncate oversized input, so a >64-byte public key must fail
+// cleanly (under ASan any residual overflow would abort the test binary)
 BOOST_AUTO_TEST_CASE(testSM2VerifyOversizedPublicKey)
 {
     auto signatureCrypto = std::make_shared<SM2Crypto>();
@@ -374,7 +382,7 @@ BOOST_AUTO_TEST_CASE(testSM2VerifyOversizedPublicKey)
     oversizedPub.push_back(0x01);
     BOOST_CHECK(!signatureCrypto->verify(
         ref(oversizedPub), hashData, bytesConstRef(signature.data(), signature.size())));
-    // short public key through the bytesConstRef overload: KeyImpl rejects it
+    // short public key through the bytesConstRef overload is rejected explicitly
     auto shortPub = bytes(keyPair->publicKey()->constData(),
         keyPair->publicKey()->constData() + keyPair->publicKey()->size() - 1);
     BOOST_CHECK_THROW(signatureCrypto->verify(ref(shortPub), hashData,

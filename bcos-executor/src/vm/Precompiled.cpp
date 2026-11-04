@@ -882,29 +882,28 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     crypto::HashType mHash;
     memcpy(mHash.data(), _in.data(), crypto::HashType::SIZE);
 
-    crypto::KeyImpl pk(PUBLIC_KEY_LENGTH);
     try
     {
-        pk = crypto::secp256k1Recover(mHash, bytesConstRef(rawRSV, RSV_LENGTH));
+        auto pk = crypto::secp256k1Recover(mHash, bytesConstRef(rawRSV, RSV_LENGTH));
+        pair<bool, bytes> ret{true, bytes(crypto::HashType::SIZE, 0)};
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("secp256k1_recover_public_key")
+                        << LOG_KV("hash", toHexStringWithPrefix(mHash))
+                        << LOG_KV("rsv", toHex(bytesConstRef(rawRSV, RSV_LENGTH)));
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled")
+                        << LOG_DESC("secp256k1_recover_public_key success");
+        // keccak256 and set first 12 byte to zero
+        auto pubkeyHash = keccak256Hash(
+            bytesConstRef(reinterpret_cast<const byte*>(pk.constData()), PUBLIC_KEY_LENGTH));
+        ret.second = pubkeyHash.asBytes();
+        memset(ret.second.data(), 0, 12);
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover success");
+        return ret;
     }
     catch (...)
     {
         // is also ok and return 0x0000000000000000000000000000000000000084
         return {true, {}};
     }
-
-    pair<bool, bytes> ret{true, bytes(crypto::HashType::SIZE, 0)};
-    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("secp256k1_recover_public_key")
-                    << LOG_KV("hash", toHexStringWithPrefix(mHash))
-                    << LOG_KV("rsv", toHex(bytesConstRef(rawRSV, RSV_LENGTH)));
-    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("secp256k1_recover_public_key success");
-    // keccak256 and set first 12 byte to zero
-    auto pubkeyHash = keccak256Hash(
-        bytesConstRef(reinterpret_cast<const byte*>(pk.constData()), PUBLIC_KEY_LENGTH));
-    ret.second = pubkeyHash.asBytes();
-    memset(ret.second.data(), 0, 12);
-    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover success");
-    return ret;
 }
 
 

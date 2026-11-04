@@ -49,6 +49,7 @@ public:
 
     std::pair<bool, bytes> recoverAddress(Hash& _hashImpl, bytesConstRef _in) const override;
 
+    KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
     KeyPairInterface::UniquePtr createKeyPair(const Secret& _secretKey) const override;
 
 protected:

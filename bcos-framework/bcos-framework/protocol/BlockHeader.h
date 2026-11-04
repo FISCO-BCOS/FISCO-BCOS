@@ -78,6 +78,11 @@ public:
         {
             auto sealerIndex = signature.index;
             auto signatureData = signature.signature;
+            if (sealerIndex < 0 || static_cast<size_t>(sealerIndex) >= sealers.size())
+            {
+                throwTrace(
+                    InvalidSignatureList() << errinfo_comment("signature index out of range"));
+            }
             if (!signatureImpl.verify(ref((sealers)[sealerIndex]), hash(),
                     bytesConstRef(signatureData.data(), signatureData.size())))
             {

@@ -53,5 +53,21 @@ BOOST_AUTO_TEST_CASE(recoverAddressRejectsBadSignature)
     BOOST_CHECK_THROW(crypto.recoverAddress(hasher, hash, bcos::ref(badSig)), std::exception);
 }
 
+BOOST_AUTO_TEST_CASE(verifyBytesPublicKeyRejectsShortInput)
+{
+    Secp256k1Crypto crypto;
+    auto keyPair = crypto.generateKeyPair();
+    HashType hash;
+    auto signature = crypto.sign(*keyPair, hash, false);
+    auto pubBytes = keyPair->publicKey()->data();
+
+    BOOST_CHECK(crypto.verify(ref(pubBytes), hash, ref(signature)));
+    BOOST_CHECK(secp256k1Verify(ref(pubBytes), hash, ref(signature)));
+
+    pubBytes.pop_back();
+    BOOST_CHECK_THROW(crypto.verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
+    BOOST_CHECK_THROW(secp256k1Verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

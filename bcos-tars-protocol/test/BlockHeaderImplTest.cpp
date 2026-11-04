@@ -9,6 +9,8 @@
  */
 
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <utility>
@@ -41,6 +43,25 @@ BOOST_AUTO_TEST_CASE(sharedPtrConstructorInnerAndSetInner)
     other->data.version = 7;
     header.setInner(*other);
     BOOST_CHECK_EQUAL(header.version(), 7U);
+}
+
+BOOST_AUTO_TEST_CASE(verifySignatureListRejectsOutOfRangeSealerIndex)
+{
+    bcos::crypto::Keccak256 hashImpl;
+    bcos::crypto::Secp256k1Crypto signatureImpl;
+    BlockHeaderImpl header;
+    header.setSealerList(std::vector<bcos::bytes>(1, bcos::bytes(64, 0)));
+
+    bcos::protocol::SignatureList signatures(1);
+    signatures[0].index = -1;
+    header.setSignatureList(signatures);
+    BOOST_CHECK_THROW(
+        header.verifySignatureList(hashImpl, signatureImpl), bcos::protocol::InvalidSignatureList);
+
+    signatures[0].index = 1;
+    header.setSignatureList(signatures);
+    BOOST_CHECK_THROW(
+        header.verifySignatureList(hashImpl, signatureImpl), bcos::protocol::InvalidSignatureList);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

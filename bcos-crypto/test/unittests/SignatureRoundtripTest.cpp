@@ -14,6 +14,7 @@
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -40,10 +41,25 @@ BOOST_AUTO_TEST_CASE(ed25519SignVerifyRecoverRoundtrip)
     // verify(bytesConstRef, ...) overload
     auto pubBytes = keyPair->publicKey()->data();
     BOOST_CHECK(crypto.verify(ref(pubBytes), hash, ref(sig)));
+    BOOST_CHECK(ed25519Verify(ref(pubBytes), hash, ref(sig)));
+
+    pubBytes.pop_back();
+    BOOST_CHECK_THROW(crypto.verify(ref(pubBytes), hash, ref(sig)), InvalidKey);
+    BOOST_CHECK_THROW(ed25519Verify(ref(pubBytes), hash, ref(sig)), InvalidKey);
+    BOOST_CHECK(!crypto.verify(KeyImpl(pubBytes), hash, ref(sig)));
+    pubBytes = keyPair->publicKey()->data();
 
     // createKeyPair(secret) reproduces the same public key
-    auto reproduced = crypto.createKeyPair(*keyPair->secretKey());
+    auto ownedSecret = std::make_shared<KeyImpl>(keyPair->secretKey()->data());
+    auto* ownedSecretRaw = ownedSecret.get();
+    auto reproduced = crypto.createKeyPair(std::move(ownedSecret));
+    BOOST_CHECK(!ownedSecret);
+    BOOST_CHECK(reproduced->secretKey().get() == ownedSecretRaw);
     BOOST_CHECK(reproduced->publicKey()->data() == keyPair->publicKey()->data());
+
+    auto borrowedReproduced = crypto.createKeyPair(*keyPair->secretKey());
+    BOOST_CHECK(borrowedReproduced->secretKey().get() != keyPair->secretKey().get());
+    BOOST_CHECK(borrowedReproduced->publicKey()->data() == keyPair->publicKey()->data());
 
     // recover success path
     const auto& pub = keyPair->publicKey()->data();

@@ -24,6 +24,7 @@
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
 #include <bcos-utilities/LogStream.h>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -38,8 +39,35 @@ SM2Crypto::SM2Crypto()
 bool SM2Crypto::verify(
     bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    KeyImpl pubKey(SM2_PUBLIC_KEY_LEN, _pubKeyBytes);
-    return verify(pubKey, _hash, _signatureData);
+    if (_pubKeyBytes.size() < SM2_PUBLIC_KEY_LEN)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidKey() << errinfo_comment(
+                "invalidKey, the key size: " + std::to_string(_pubKeyBytes.size()) +
+                ", expected size:" + std::to_string(SM2_PUBLIC_KEY_LEN)));
+    }
+    CInputBuffer publicKey{(const char*)_pubKeyBytes.data(), _pubKeyBytes.size()};
+    CInputBuffer messageHash{(const char*)_hash.data(), HashType::SIZE};
+
+    // reject short signatures while the length is still known: the fixed-length view below
+    // would otherwise read past the caller's buffer before any check in the verifier fires
+    if (_signatureData.size() < SM2_SIGNATURE_LEN)
+    {
+        return false;
+    }
+    auto signatureWithoutPub = bytesConstRef(_signatureData.data(), SM2_SIGNATURE_LEN);
+    CInputBuffer signature{(const char*)signatureWithoutPub.data(), signatureWithoutPub.size()};
+    auto verifyResult = m_verifier(&publicKey, &messageHash, &signature);
+    if (verifyResult == WEDPR_SUCCESS)
+    {
+        return true;
+    }
+    return false;
+}
+
+KeyPairInterface::UniquePtr SM2Crypto::createKeyPair(SecretPtr _secretKey) const
+{
+    return m_keyPairFactory->createKeyPair(std::move(_secretKey));
 }
 
 KeyPairInterface::UniquePtr SM2Crypto::createKeyPair(const Secret& _secretKey) const
@@ -73,23 +101,12 @@ bytes SM2Crypto::sign(
 bool SM2Crypto::verify(
     const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    CInputBuffer publicKey{_pubKey.constData(), _pubKey.size()};
-    CInputBuffer messageHash{(const char*)_hash.data(), HashType::SIZE};
-
-    // reject short signatures while the length is still known: the fixed-length view below
-    // would otherwise read past the caller's buffer before any check in the verifier fires
-    if (_signatureData.size() < SM2_SIGNATURE_LEN)
+    if (_pubKey.size() < SM2_PUBLIC_KEY_LEN)
     {
         return false;
     }
-    auto signatureWithoutPub = bytesConstRef(_signatureData.data(), SM2_SIGNATURE_LEN);
-    CInputBuffer signature{(const char*)signatureWithoutPub.data(), signatureWithoutPub.size()};
-    auto verifyResult = m_verifier(&publicKey, &messageHash, &signature);
-    if (verifyResult == WEDPR_SUCCESS)
-    {
-        return true;
-    }
-    return false;
+    return verify(bytesConstRef(reinterpret_cast<const byte*>(_pubKey.constData()), _pubKey.size()),
+        _hash, _signatureData);
 }
 
 KeyImpl SM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
@@ -123,7 +140,7 @@ std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash& _hashImpl, bytesConstRef 
         KeyImpl sm2Pub(SM2_PUBLIC_KEY_LEN, ref(signatureData->pub()));
         if (verify(sm2Pub, in.hash, bytesConstRef(encodedData->data(), encodedData->size())))
         {
-            auto address = right160(_hashImpl.hash(sm2Pub.data()));
+            auto address = calculateAddress(_hashImpl, sm2Pub);
             return {true, address.asBytes()};
         }
     }

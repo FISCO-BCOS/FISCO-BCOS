@@ -47,12 +47,11 @@ public:
 
     // recover recovers the public key from the given signature
     virtual KeyImpl recover(const HashType& _hash, bytesConstRef _signatureData) const = 0;
-    virtual std::pair<bool, bytes> recoverAddress(
+    virtual bytes recoverAddress(
         crypto::Hash& _hashImpl, const HashType& _hash, bytesConstRef _signatureData) const
     {
         auto pubKey = recover(_hash, _signatureData);
-        auto address = right160(_hashImpl.hash(pubKey.data()));
-        return {true, address.asBytes()};
+        return calculateAddress(_hashImpl, pubKey).asBytes();
     }
 
     // generateKeyPair generates keyPair
@@ -60,6 +59,7 @@ public:
 
     // recoverAddress recovers address from a signature(for precompiled)
     virtual std::pair<bool, bytes> recoverAddress(Hash& _hashImpl, bytesConstRef _in) const = 0;
+    virtual std::unique_ptr<KeyPairInterface> createKeyPair(SecretPtr _secretKey) const = 0;
     virtual std::unique_ptr<KeyPairInterface> createKeyPair(const Secret& _secretKey) const = 0;
 };
 }  // namespace bcos::crypto

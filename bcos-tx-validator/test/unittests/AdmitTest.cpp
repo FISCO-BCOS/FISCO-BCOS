@@ -824,9 +824,7 @@ BOOST_AUTO_TEST_CASE(forgedBcosDataHashDoesNotBindTheVictimAsSender)
     harness.run(*forged, AdmissionContext::PoolAdmission, SignaturePolicy::Required);
 
     // What the victim's key actually signed.
-    auto const [ok, victimAddress] =
-        signatureImpl->recoverAddress(*hashImpl, stolenHash, ref(signature));
-    BOOST_REQUIRE(ok);
+    auto const victimAddress = signatureImpl->recoverAddress(*hashImpl, stolenHash, ref(signature));
 
     // The forged body must NOT be attributed to the victim. Admission may still accept it as
     // some other (meaningless) sender -- what must never happen is the victim's address ending

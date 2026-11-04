@@ -26,6 +26,7 @@
 #include <hsm-crypto/hsm/CryptoProvider.h>
 #include <hsm-crypto/hsm/SDFCryptoProvider.h>
 #include <algorithm>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -112,25 +113,24 @@ bytes HsmSM2Crypto::sign(
 bool HsmSM2Crypto::verify(
     bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    KeyImpl pubKey(HSM_SM2_PUBLIC_KEY_LEN, _pubKeyBytes);
-    return verify(pubKey, _hash, _signatureData);
-}
-
-bool HsmSM2Crypto::verify(
-    const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
-{
+    if (_pubKeyBytes.size() < HSM_SM2_PUBLIC_KEY_LEN)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidKey() << errinfo_comment(
+                "invalidKey, the key size: " + std::to_string(_pubKeyBytes.size()) +
+                ", expected size:" + std::to_string(HSM_SM2_PUBLIC_KEY_LEN)));
+    }
     // get provider
     CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
 
-    // reject undersized inputs before the fixed-length copies below
-    if (_pubKey.size() < HSM_SM2_PUBLIC_KEY_LEN || _signatureData.size() < HSM_SM2_SIGNATURE_LEN)
+    if (_signatureData.size() < HSM_SM2_SIGNATURE_LEN)
     {
         return false;
     }
     // parse input
     Key key = Key();
     auto pubKey = std::make_shared<const std::vector<byte>>(
-        (byte*)_pubKey.constData(), (byte*)_pubKey.constData() + 64);
+        _pubKeyBytes.data(), _pubKeyBytes.data() + HSM_SM2_PUBLIC_KEY_LEN);
     key.setPublicKey(pubKey);
     bool verifyResult = false;
 
@@ -147,7 +147,7 @@ bool HsmSM2Crypto::verify(
     }
 
     code = provider.Verify(key, hsm::SM2, (const unsigned char*)hashResult.data(),
-        HSM_SM3_DIGEST_LENGTH, _signatureData.data(), 64, &verifyResult);
+        HSM_SM3_DIGEST_LENGTH, _signatureData.data(), HSM_SM2_SIGNATURE_LEN, &verifyResult);
     if (code != SDR_OK)
     {
         CRYPTO_LOG(WARNING) << "[HSMSignature::verify] ERROR of Verify"
@@ -155,6 +155,17 @@ bool HsmSM2Crypto::verify(
         return false;
     }
     return true;
+}
+
+bool HsmSM2Crypto::verify(
+    const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
+{
+    if (_pubKey.size() < HSM_SM2_PUBLIC_KEY_LEN)
+    {
+        return false;
+    }
+    return verify(bytesConstRef(reinterpret_cast<const byte*>(_pubKey.constData()), _pubKey.size()),
+        _hash, _signatureData);
 }
 
 KeyImpl HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
@@ -189,7 +200,7 @@ std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash& _hashImpl, bytesConstR
         KeyImpl hsmSM2Pub(HSM_SM2_PUBLIC_KEY_LEN, ref(signatureData->pub()));
         if (verify(hsmSM2Pub, in.hash, bytesConstRef(encodedData->data(), encodedData->size())))
         {
-            auto address = right160(_hashImpl.hash(hsmSM2Pub.data()));
+            auto address = calculateAddress(_hashImpl, hsmSM2Pub);
             return {true, address.asBytes()};
         }
     }
@@ -204,6 +215,11 @@ std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash& _hashImpl, bytesConstR
 KeyPairInterface::UniquePtr HsmSM2Crypto::generateKeyPair() const
 {
     return m_keyPairFactory->generateKeyPair();
+}
+
+KeyPairInterface::UniquePtr HsmSM2Crypto::createKeyPair(SecretPtr _secretKey) const
+{
+    return m_keyPairFactory->createKeyPair(std::move(_secretKey));
 }
 
 KeyPairInterface::UniquePtr HsmSM2Crypto::createKeyPair(const Secret& _secretKey) const

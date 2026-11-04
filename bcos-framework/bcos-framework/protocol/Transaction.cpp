@@ -121,15 +121,7 @@ void Transaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signat
     }
 
     auto const signature = signatureData();
-    auto [recovered, sender] = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
-    if (!recovered) [[unlikely]]
-    {
-        BCOS_LOG(INFO) << LOG_DESC("recover sender address failed")
-                       << LOG_KV("hash", hashResult.abridged());
-        BOOST_THROW_EXCEPTION(
-            std::invalid_argument("recover sender address from signature failed"));
-    }
-
+    auto sender = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
     forceSender(sender);
     setTainted(false);
 }

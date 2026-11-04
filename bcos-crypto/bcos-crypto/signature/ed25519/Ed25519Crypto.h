@@ -31,6 +31,8 @@ bytes ed25519Sign(
 KeyPairInterface::UniquePtr ed25519GenerateKeyPair();
 bool ed25519Verify(
     const Public& _pubKey, const HashType& _messageHash, bytesConstRef _signatureData);
+bool ed25519Verify(
+    bytesConstRef _pubKeyBytes, const HashType& _messageHash, bytesConstRef _signatureData);
 KeyImpl ed25519Recover(const HashType& _messageHash, bytesConstRef _signatureData);
 
 std::pair<bool, bytes> ed25519Recover(Hash& _hashImpl, bytesConstRef _in);
@@ -71,6 +73,7 @@ public:
         return ed25519Recover(_hashImpl, _in);
     }
 
+    KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
     KeyPairInterface::UniquePtr createKeyPair(const Secret& _secretKey) const override;
 };
 }  // namespace crypto
