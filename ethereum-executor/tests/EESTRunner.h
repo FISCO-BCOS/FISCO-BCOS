@@ -182,10 +182,6 @@ std::string strip0x(std::string const& hex);
 
 // === Fixture loader ===
 
-/// Detect fixture format from JSON object keys.
-/// Returns: "state_test", "blockchain_test", or "unknown".
-std::string detectFixtureFormat(Json::Value const& fixtureJson);
-
 /// Parse the "env" section.
 EESTEnvironment parseEnvironment(Json::Value const& envJson);
 

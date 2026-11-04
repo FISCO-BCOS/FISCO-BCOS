@@ -133,16 +133,6 @@ std::string strip0x(std::string const& hex)
     return hex;
 }
 
-std::string detectFixtureFormat(Json::Value const& fixtureJson)
-{
-    if (fixtureJson.isMember("env") && fixtureJson["env"].isObject() &&
-        fixtureJson.isMember("post") && fixtureJson["post"].isObject())
-        return "state_test";
-    if (fixtureJson.isMember("blocks") && fixtureJson["blocks"].isArray())
-        return "blockchain_test";
-    return "unknown";
-}
-
 EESTEnvironment parseEnvironment(Json::Value const& envJson)
 {
     EESTEnvironment env;
@@ -364,7 +354,8 @@ std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
             std::runtime_error("JSON parse error in " + filePath + ": " + errors));
 
     // The root is a map of test_name → fixture_data
-    int skippedBlockchain = 0;
+    if (!root.isObject())
+        BOOST_THROW_EXCEPTION(std::runtime_error("the file's root is not a JSON object"));
     for (auto it = root.begin(); it != root.end(); ++it)
     {
         if (it.key().asString().rfind("//", 0) == 0 ||  // comment entry
@@ -375,32 +366,21 @@ std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
         if (!it->isObject())
             continue;
 
-        // Per-fixture format check: some state_tests directories contain
-        // blockchain_test_from_state_test fixtures that lack currentGasLimit.
-        auto fmt = detectFixtureFormat(*it);
-        if (fmt == "blockchain_test")
-        {
-            ++skippedBlockchain;
-            continue;
-        }
-
         try
         {
             fixtures.push_back(parseFixture(it.key().asString(), *it));
         }
         catch (std::exception const& e)
         {
-            std::cerr << "Warning: Failed to parse fixture '" << it.key().asString()
-                      << "': " << e.what() << std::endl;
+            // Not a warning: a skipped fixture would leave the denominator unseen. The caller
+            // records the file as a load failure, which the known-failures gate refuses.
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "fixture '" + it.key().asString() + "' failed to parse: " + e.what()));
         }
     }
 
-    if (skippedBlockchain > 0 && fixtures.empty())
-    {
-        std::cerr << "Info: " << filePath << " contains " << skippedBlockchain
-                  << " blockchain_test fixture(s); use --fixture-dir with the"
-                  << " blockchain_tests directory or the individual file.\n";
-    }
+    if (fixtures.empty())
+        BOOST_THROW_EXCEPTION(std::runtime_error("the file holds no fixture"));
 
     return fixtures;
 }
@@ -580,6 +560,8 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
     if (!Json::parseFromStream(builder, file, &root, &errors))
         BOOST_THROW_EXCEPTION(
             std::runtime_error("JSON parse error in " + filePath + ": " + errors));
+    if (!root.isObject())
+        BOOST_THROW_EXCEPTION(std::runtime_error("the file's root is not a JSON object"));
 
     for (auto it = root.begin(); it != root.end(); ++it)
     {
@@ -596,10 +578,14 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
         }
         catch (std::exception const& e)
         {
-            std::cerr << "Warning: Failed to parse blockchain fixture '" << it.key().asString()
-                      << "': " << e.what() << std::endl;
+            // See loadEESTFixtures: a skipped fixture would leave the denominator unseen.
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "blockchain fixture '" + it.key().asString() + "' failed to parse: " + e.what()));
         }
     }
+
+    if (fixtures.empty())
+        BOOST_THROW_EXCEPTION(std::runtime_error("the file holds no fixture"));
 
     return fixtures;
 }
@@ -665,7 +651,7 @@ struct ProgramOptions
     bool noLog = false;         // suppress BCOS internal trace/debug log
     bool help = false;
     unsigned jobs = 0;          // fixture files processed concurrently; 0 = hardware threads
-    std::string knownFailures;  // file of regexes over "name [fork]" naming the open gaps
+    std::string knownFailures;  // file of regexes over "name [fork] reason" naming the open gaps
 };
 
 ProgramOptions g_opts;
@@ -773,8 +759,8 @@ Options:
   --no-log             Suppress BCOS internal trace/debug log output
   --jobs N             Process N fixture files concurrently (default: hardware threads)
   --known-failures F   File of ECMAScript regexes (one per line, # comments) matched against
-                       "<fixture name> [<fork>]"; a failure that matches is a known gap. The
-                       exit code is then 1 only for failures outside the file and for file
+                       "<fixture name> [<fork>] <reason>"; a failure that matches is a known
+                       gap. The exit code is then 1 only for failures outside the file and for file
                        entries that match nothing (stale), so the file shrinks as gaps close.
   --help               Show this help message
 
@@ -852,15 +838,24 @@ namespace
 {
 /// The fixtures (top-level keys) in a file: a file whose format this runner does not execute
 /// still counts every fixture as a failure, so nothing leaves the denominator silently.
+/// Throws on an unreadable file: that is a load failure, not a fixture of an unexecuted class.
 int countFixtureEntries(fs::path const& filePath)
 {
     std::ifstream file(filePath);
     Json::Value root;
     Json::CharReaderBuilder builder;
     std::string errors;
-    if (!file.is_open() || !Json::parseFromStream(builder, file, &root, &errors))
+    if (!file.is_open())
     {
-        return 1;
+        BOOST_THROW_EXCEPTION(std::runtime_error("cannot open file"));
+    }
+    if (!Json::parseFromStream(builder, file, &root, &errors))
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("JSON parse error: " + errors));
+    }
+    if (!root.isObject())
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("the file's root is not a JSON object"));
     }
     int count = 0;
     for (auto it = root.begin(); it != root.end(); ++it)
@@ -872,7 +867,11 @@ int countFixtureEntries(fs::path const& filePath)
         }
         ++count;
     }
-    return std::max(count, 1);
+    if (count == 0)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("the file holds no fixture"));
+    }
+    return count;
 }
 
 h256 toH256(std::string const& hex)
@@ -1466,7 +1465,18 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
     {
         // Not executed by this runner (yet): every fixture in the file counts as a failure,
         // named, so the summary cannot read 100% while a class is unrun.
-        auto const entries = countFixtureEntries(filePath);
+        int entries = 0;
+        try
+        {
+            entries = countFixtureEntries(filePath);
+        }
+        catch (std::exception const& e)
+        {
+            recordLoadFailure(filePath, format, e.what());
+            countOutcome(format, false);
+            ++result.failed;
+            return result;
+        }
         countOutcome(format, false, entries);
         result.failed += entries;
         g_failureDetails.push_back({filePath.filename().string(), format,
@@ -1502,7 +1512,7 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
     return result;
 }
 
-/// One line of the --known-failures file: a regex over "<fixture name> [<fork>]".
+/// One line of the --known-failures file: a regex over "<fixture name> [<fork>] <reason>".
 struct KnownFailure
 {
     std::string text;
@@ -1634,8 +1644,10 @@ int main(int argc, char* argv[])
                 continue;
             }
             // blockchain_tests_engine_x/pre_alloc/<hash>.json are shared pre-state groups the
-            // engine_x fixtures reference by preHash, not fixtures: they are not counted.
-            if (entry.path().string().find("/pre_alloc/") != std::string::npos)
+            // engine_x fixtures reference by preHash, and .meta/ is the release's index: neither
+            // holds fixtures, so they are not counted.
+            if (entry.path().string().find("/pre_alloc/") != std::string::npos ||
+                entry.path().string().find("/.meta/") != std::string::npos)
             {
                 continue;
             }
@@ -1655,7 +1667,7 @@ int main(int argc, char* argv[])
     if (fileList.empty())
     {
         std::cerr << "No fixture files found." << '\n';
-        return 0;
+        return 1;
     }
 
     // Sort for deterministic output
@@ -1814,7 +1826,8 @@ int main(int argc, char* argv[])
     }
 
     // Known-failure triage: each failure is matched against the file's regexes over
-    // "<name> [<fork>]" (the FAIL line's own label). The gate is on the rest.
+    // "<name> [<fork>] <reason>" (the FAIL line's own text), so an entry only excuses the
+    // failure it names. The gate is on the rest.
     int knownFailureCount = 0;
     std::vector<std::string> unexpectedFailures;
     if (!g_opts.knownFailures.empty())
@@ -1822,7 +1835,7 @@ int main(int argc, char* argv[])
         auto& known = *knownFailures;
         for (auto const& fd : g_failureDetails)
         {
-            auto const label = fd.testName + " [" + fd.forkName + "]";
+            auto const label = fd.testName + " [" + fd.forkName + "] " + fd.reason;
             bool matched = false;
             for (auto& entry : known)
             {

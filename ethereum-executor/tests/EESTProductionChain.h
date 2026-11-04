@@ -355,8 +355,8 @@ public:
 struct BlockOutcome
 {
     bool valid = false;
-    std::string error;
-    std::optional<std::string> fault;
+    std::string error{};
+    std::optional<std::string> fault{};
 };
 
 struct ExecutionOutcome
