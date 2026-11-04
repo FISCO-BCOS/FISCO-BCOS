@@ -22,5 +22,7 @@ install(DIRECTORY "bcos-transaction-scheduler"
 if (TESTS)
     enable_testing()
     add_subdirectory(tests)
-    add_subdirectory(benchmark)
+    if(WITH_BENCHMARK)
+        add_subdirectory(benchmark)
+    endif()
 endif()

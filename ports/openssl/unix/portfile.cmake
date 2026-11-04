@@ -4,16 +4,6 @@ vcpkg_extract_source_archive_ex(
     REF ${OPENSSL_VERSION}
 )
 
-# clang rejects integer-to-pointer assignment in TASSL s3_lib.c.
-vcpkg_replace_string("${MASTER_COPY_SOURCE_PATH}/ssl/s3_lib.c"
-    "        pctx->app_data = 1;"
-    "        pctx->app_data = (void*)1;"
-)
-vcpkg_replace_string("${MASTER_COPY_SOURCE_PATH}/ssl/s3_lib.c"
-    "        pctx->app_data = 0;"
-    "        pctx->app_data = (void*)0;"
-)
-
 if(CMAKE_HOST_WIN32)
     vcpkg_acquire_msys(MSYS_ROOT PACKAGES make perl)
     set(MAKE "${MSYS_ROOT}/usr/bin/make.exe")
@@ -45,4 +35,4 @@ foreach(HEADER ${HEADERS})
 endforeach()
 
 file(INSTALL ${RESOLVED_HEADERS} DESTINATION "${CURRENT_PACKAGES_DIR}/include/openssl")
-file(INSTALL "${MASTER_COPY_SOURCE_PATH}/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)
+file(INSTALL "${MASTER_COPY_SOURCE_PATH}/LICENSE.txt" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)

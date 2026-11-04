@@ -47,6 +47,7 @@
 #include <evmc/evmc.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
+#include <limits>
 #include <magic_enum/magic_enum.hpp>
 
 #include <bcos-utilities/DataConvertUtility.h>
@@ -143,7 +144,7 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
 /// payloadAttributes.transactions forced entry. The build path decodes every forced
 /// envelope into its executable form (opEnvelopeToTars), so a stub such as
 /// "0x02f8aabb" is no longer accepted — contrast the old raw-passthrough behaviour.
-static std::string makeForcedEnvelopeHex(uint64_t nonce)
+static std::string makeForcedEnvelopeHex(uint64_t nonce, uint64_t gasLimit = 21000)
 {
     bcos::rpc::Web3Transaction w3;
     w3.type = bcos::rpc::TransactionType::EIP1559;
@@ -151,7 +152,7 @@ static std::string makeForcedEnvelopeHex(uint64_t nonce)
     w3.nonce = nonce;
     w3.maxPriorityFeePerGas = 1;
     w3.maxFeePerGas = 1;
-    w3.gasLimit = 21000;
+    w3.gasLimit = gasLimit;
     w3.to = Address("5656565656565656565656565656565656565656");
     w3.value = 0;
     Secp256k1Crypto secp;
@@ -1752,6 +1753,103 @@ BOOST_AUTO_TEST_CASE(wire_round_trip_through_engine_helper)
     BOOST_CHECK_EQUAL(parsed.executionPayload.withdrawals->size(), shanghai.withdrawals->size());
     BOOST_CHECK(!parsed.executionPayload.blobGasUsed.has_value());
     BOOST_CHECK(!parsed.executionPayload.excessBlobGas.has_value());
+}
+
+// v1 lanes (both services): the pool fills what the forced envelopes leave of the tx_gas_limit
+// row the header carries. With the row at 42000, one forced 21000-gas envelope and two pooled
+// 21000-gas transfers, each service builds forced + one pooled transaction and leaves the
+// second pooled transfer in its pool. Not checkGetPayloadParity: the legacy service carries
+// forced entries raw-only (decoded == nullptr) while the Eth service decodes them.
+BOOST_AUTO_TEST_CASE(generic_forced_envelope_gas_comes_out_of_the_seal_budget)
+{
+    ServicePair pair;
+    writeRawSysConfig(pair.legacyStorage.backendStorage, "tx_gas_limit", "42000");
+    writeRawSysConfig(pair.newStorage.backendStorage, "tx_gas_limit", "42000");
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("efefefefefefefefefef", 20);
+    auto const pooledPair = [&](uint64_t nonce) {
+        auto legacyTx = makeWeb3Tx(sender, nonce);
+        auto newTx = makeWeb3Tx(sender, nonce);
+        // The pool budgets by Transaction::gasLimit(), the Tars field the ingress bridge fills
+        // from the envelope; the helper's RLP body alone does not populate it.
+        std::static_pointer_cast<TestTransactionImpl>(legacyTx)->mutableInner().data.gasLimit =
+            21000;
+        std::static_pointer_cast<TestTransactionImpl>(newTx)->mutableInner().data.gasLimit = 21000;
+        return std::pair{legacyTx, newTx};
+    };
+    auto [legacyFirst, newFirst] = pooledPair(0);
+    auto [legacySecond, newSecond] = pooledPair(1);
+    pair.legacyMemPool.add(std::vector{legacyFirst, legacySecond});
+    pair.newMemPool.add(std::vector{newFirst, newSecond});
+    pair.legacyStorage.setNonce(sender, "0");
+    pair.newStorage.setNonce(sender, "0");
+
+    auto attributes = makePayloadAttributesV3();
+    auto const forcedHex = makeForcedEnvelopeHex(0);
+    attributes.transactions = std::vector<std::string>{forcedHex};
+    auto legacyResult =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attributes, 3));
+    auto newResult = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attributes, 3));
+    checkForkchoiceParity(legacyResult, newResult);
+    BOOST_REQUIRE(legacyResult.payloadId.has_value());
+    BOOST_REQUIRE(newResult.payloadId.has_value());
+
+    auto const forcedRaw = bcos::fromHex(forcedHex);
+    auto const check = [&](GetPayloadData const& payload, MemPoolImpl& memPool,
+                           protocol::Transaction::Ptr const& first,
+                           protocol::Transaction::Ptr const& second) {
+        BOOST_CHECK_EQUAL(payload.executionPayload.gasLimit, u256(42000));
+        BOOST_REQUIRE_EQUAL(payload.executionPayload.transactions.size(), 2);
+        BOOST_CHECK(payload.executionPayload.transactions[0].raw == forcedRaw);
+        BOOST_REQUIRE(payload.executionPayload.transactions[1].decoded);
+        BOOST_CHECK_EQUAL(payload.executionPayload.transactions[1].decoded->hash(), first->hash());
+        auto const retained = memPool.get(std::vector{second->hash()});
+        BOOST_REQUIRE_EQUAL(retained.size(), 1);
+        BOOST_CHECK(retained[0]);  // the second pooled transfer waits for the next block
+    };
+    check(*task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, 3)), pair.legacyMemPool,
+        legacyFirst, legacySecond);
+    check(*task::syncWait(pair.fresh.getPayload(*newResult.payloadId, 3)), pair.newMemPool,
+        newFirst, newSecond);
+}
+
+// The rule the four seal sites share, asserted directly: a forced envelope takes its gasLimit,
+// an undecodable one takes nothing, an OP system deposit is unmetered, a deposit refused by
+// the lane's 0x7e policy takes nothing, and a gasLimit outside int64 (or a forced total above
+// the limit) leaves the pool nothing instead of a negative or wrapped budget.
+BOOST_AUTO_TEST_CASE(pool_gas_budget_rule)
+{
+    Keccak256 keccak;
+    auto const transfer = [](uint64_t gasLimit) {
+        return std::vector<bytes>{bcos::fromHex(makeForcedEnvelopeHex(0, gasLimit))};
+    };
+    BOOST_CHECK_EQUAL(engine_common::poolGasBudget(42000, transfer(21000), keccak, false), 21000);
+    BOOST_CHECK_EQUAL(engine_common::poolGasBudget(20000, transfer(21000), keccak, false), 0);
+    BOOST_CHECK_EQUAL(engine_common::poolGasBudget(
+                          42000, transfer(std::numeric_limits<uint64_t>::max()), keccak, false),
+        0);
+    std::vector<bytes> const undecodable{bytes{0x02, 0xf8, 0xaa, 0xbb}};
+    BOOST_CHECK_EQUAL(engine_common::poolGasBudget(42000, undecodable, keccak, false), 42000);
+    BOOST_CHECK_EQUAL(engine_common::poolGasBudget(-5, {}, keccak, false), 0);
+
+    bcos::rpc::Web3Transaction deposit;
+    deposit.type = bcos::rpc::TransactionType::Deposit;
+    deposit.sourceHash =
+        bcos::h256("0x1111111111111111111111111111111111111111111111111111111111111111");
+    deposit.from = bcos::Address("1234567890abcdef1234567890abcdef12345678");
+    deposit.to = bcos::Address("1234567890abcdef1234567890abcdef12345679");
+    deposit.gasLimit = 21000;
+    deposit.isSystemTx = true;
+    std::vector<bytes> const systemDeposit{deposit.encode()};
+    BOOST_CHECK_EQUAL(engine_common::poolGasBudget(42000, systemDeposit, keccak, true), 42000);
+    deposit.isSystemTx = false;
+    std::vector<bytes> const userDeposit{deposit.encode()};
+    BOOST_CHECK_EQUAL(engine_common::poolGasBudget(42000, userDeposit, keccak, true), 21000);
+    BOOST_CHECK_EQUAL(engine_common::poolGasBudget(42000, userDeposit, keccak, false), 42000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

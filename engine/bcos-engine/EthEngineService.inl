@@ -265,6 +265,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         l1Input->parentHeader = bcos::protocol::EthBlockHeader(*parentBlock->blockHeader()).data();
         l1Input->l1Context = co_await m_externalPayloadVerifier->deriveL1Context(
             l1Input->parentHeader, payloadAttributes->timestamp / 1000);
+        l1Input->gasLimit = co_await deriveL1GasLimit(view, l1Input->parentHeader);
     }
 
     std::vector<protocol::Transaction::Ptr> sealedTxs;
@@ -272,14 +273,30 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     if (!payloadAttributes->noTxPool.value_or(false))
     {
         m_memPool.remove(view);
+        // The seal fills what the forced envelopes leave of the gas limit the header will
+        // carry (buildPayload prepends them to the sealed list): the derived L1 limit, or
+        // on the v1 lane the tx_gas_limit row buildPayload stamps. allowDeposit=false as
+        // in buildPayload: a 0x7e envelope is invalid on this lane.
+        int64_t blockGasLimit = 0;
         if (l1Input.has_value())
         {
-            m_memPool.seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs),
-                l1Input->l1Context.baseFee);
+            blockGasLimit = l1Input->gasLimit.template convert_to<int64_t>();
         }
         else
         {
-            m_memPool.seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+            blockGasLimit = co_await engine_common::legacyBlockGasLimit(
+                view, *headBlockNumber, *m_blockFactory);
+        }
+        auto const poolBudget = engine_common::poolGasBudget(blockGasLimit, decodedForcedTxs,
+            *m_blockFactory->cryptoSuite()->hashImpl(), /*allowDeposit=*/false);
+        if (l1Input.has_value())
+        {
+            m_memPool.seal(
+                poolBudget, view, std::back_inserter(sealedTxs), l1Input->l1Context.baseFee);
+        }
+        else
+        {
+            m_memPool.seal(poolBudget, view, std::back_inserter(sealedTxs));
         }
     }
 
@@ -1019,6 +1036,13 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
         m_ledgerConfigState->set(std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
     }
+    // The block's transactions are executed now: drop them from the pool so the sender's
+    // per-sender count and pending-cost budget stop charging for them before the next
+    // build (which would prune them itself).
+    {
+        auto committed = m_globalStateStorage.fork();
+        m_memPool.remove(committed);
+    }
 
     co_return engine_common::makeStatus(
         PayloadValidationStatus::Valid, cached->executionPayload.blockHash, std::nullopt);
@@ -1130,6 +1154,14 @@ task::Task<PayloadStatus> EthEngineService<MemPoolType, GlobalStateStorageType, 
             auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
             m_ledgerConfigState->set(
                 std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
+        }
+        // ...and drops the block's transactions from the pool. Only buildPayload pruned
+        // before, so on a node that never builds (an EL whose CL rarely elects it, a pure
+        // RPC node) executed transactions stayed pooled until expiry, and the pool's
+        // per-sender count and pending-cost budget kept charging the sender for them.
+        {
+            auto committed = m_globalStateStorage.fork();
+            m_memPool.remove(committed);
         }
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
@@ -1443,19 +1475,10 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
              scheduler_v1::TransactionScheduler<SchedulerType,
                  typename GlobalStateStorageType::ViewType, ExecutorType,
                  std::vector<protocol::Transaction::Ptr>>
-task::Task<typename EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
-    SchedulerType>::BuildPayloadResult>
-EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildL1Payload(
-    const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
-    bcos::protocol::BlockNumber nextBlockNumber, std::vector<EngineTransaction> engineTransactions,
-    ViewType& view, L1BuildInput const& l1Input) const
+task::Task<u256> EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+    SchedulerType>::deriveL1GasLimit(ViewType& view,
+    bcos::protocol::EthBlockHeaderData const& parentHeader) const
 {
-    auto const& l1Context = l1Input.l1Context;
-    auto const forkVersion = l1Context.forkVersion;
-
-    ledger::LedgerConfig ledgerConfig;
-    co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
-
     // Block gas limit: inherit the PARENT header's limit by default (delta 0). The
     // chain's gas limit is a consensus property the parent-relative header validation
     // bounds to |delta| < parent/1024 per block; tx_gas_limit (a single-transaction
@@ -1463,7 +1486,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     // SYS_CONFIG row engine_common::c_l1GasLimitTargetKey (decimal) — pulls the limit
     // toward it by strictly less than parent/1024 per block, clamped to the 5000
     // consensus minimum. PayloadAttributes.gasLimit (the OP extension) is ignored on L1.
-    u256 gasLimit = l1Input.parentHeader.gasLimit;
+    u256 gasLimit = parentHeader.gasLimit;
     if (auto targetEntry =
             co_await ledger::getSystemConfig(view, engine_common::c_l1GasLimitTargetKey);
         targetEntry.has_value())
@@ -1480,7 +1503,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                                       std::string(engine_common::c_l1GasLimitTargetKey) +
                                       " SYS_CONFIG value: " + e.what()});
         }
-        u256 const parentLimit = l1Input.parentHeader.gasLimit;
+        u256 const parentLimit = parentHeader.gasLimit;
         u256 const bound = parentLimit / protocol::kGasLimitBoundDivisor;
         if (bound > 1)
         {
@@ -1496,6 +1519,29 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             gasLimit = u256(protocol::kMinGasLimit);
         }
     }
+    co_return gasLimit;
+}
+
+template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
+    requires executor_v1::TransactionExecutor<ExecutorType,
+                 typename GlobalStateStorageType::ViewType> &&
+             scheduler_v1::TransactionScheduler<SchedulerType,
+                 typename GlobalStateStorageType::ViewType, ExecutorType,
+                 std::vector<protocol::Transaction::Ptr>>
+task::Task<typename EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+    SchedulerType>::BuildPayloadResult>
+EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildL1Payload(
+    const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
+    bcos::protocol::BlockNumber nextBlockNumber, std::vector<EngineTransaction> engineTransactions,
+    ViewType& view, L1BuildInput const& l1Input) const
+{
+    auto const& l1Context = l1Input.l1Context;
+    auto const forkVersion = l1Context.forkVersion;
+
+    ledger::LedgerConfig ledgerConfig;
+    co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
+
+    u256 const gasLimit = l1Input.gasLimit;
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
         !payloadAttributes.parentBeaconBlockRoot.has_value())

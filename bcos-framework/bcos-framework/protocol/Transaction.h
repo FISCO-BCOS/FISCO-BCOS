@@ -229,6 +229,24 @@ private:
 // Returns 0 when no parseable price is available.
 u256 effectiveGasPrice(Transaction const& tx);
 
+/// The most a transaction can cost its sender (geth's tx.Cost()): value + gasLimit x the fee
+/// cap it bids (effectiveGasPrice: gasPrice for legacy/2930, maxFeePerGas for 1559+) + blob
+/// gas x maxFeePerBlobGas. 512-bit so gasLimit x a near-2^256 cap cannot wrap. The one
+/// formula admission (Check::Balance) and the pool's pending budget both charge by.
+u512 maxCost(Transaction const& tx);
+
+/// What a chain charges a sender for: the full maxCost on a chain with a base fee and on the
+/// OP lane, the value alone on a free-gas FISCO chain (tx_gas_price unset or "0"), where the
+/// declared fee cap is never debited. Admission (Check::Balance) and the pool's pending budget
+/// must use the same basis, or a free-gas chain budgets pooled transactions at a fee it never
+/// charges and refuses a sender who can pay.
+enum class CostBasis : uint8_t
+{
+    MaxCost,
+    ValueOnly,
+};
+u512 costAt(Transaction const& tx, CostBasis basis);
+
 using Transactions = std::vector<Transaction::Ptr>;
 using TransactionsPtr = std::shared_ptr<Transactions>;
 using TransactionsConstPtr = std::shared_ptr<const Transactions>;
