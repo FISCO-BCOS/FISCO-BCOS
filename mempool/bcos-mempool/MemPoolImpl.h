@@ -674,7 +674,7 @@ public:
         return out;
     }
 
-    /// Drop txs by hash during OP payload building.
+    /// Drop txs by hash during OP and L1 payload building.
     void removeByHash(std::span<bcos::crypto::HashType const> hashes)
     {
         std::unique_lock lock(m_mutex);

@@ -489,12 +489,16 @@ std::optional<evmc_message> EthereumHost<Storage, Policy>::prepare_message(
     {
         auto& sender_acc = m_state.get(msg.sender);
 
-        // EIP-2681 (already checked for depth 0 during transaction validation).
-        if (sender_acc.nonce == EthAccount::NonceMax)
-            return {};  // Light early exception.
-
         if (msg.depth != 0)
         {
+            // EIP-2681: a nested CREATE/CREATE2 whose creator sits at the nonce limit fails.
+            // Depth 0 is not checked here: validateTransaction already refused a sender AT
+            // the limit, and the transition has since bumped the nonce, so a sender that was
+            // at 2^64-2 now reads 2^64-1 and its top-level creation must still succeed
+            // (geth's evm.Create only rejects nonce+1 overflow; EEST
+            // test_tx_at_nonce_max_minus_one_create).
+            if (sender_acc.nonce == EthAccount::NonceMax)
+                return {};  // Light early exception.
             m_state.journal_bump_nonce(msg.sender);
             ++sender_acc.nonce;  // Bump sender nonce.
         }

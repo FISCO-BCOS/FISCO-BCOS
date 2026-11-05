@@ -178,6 +178,8 @@ struct ExternalL1Context
 {
     u256 baseFee = 0;
     u256 excessBlobGas = 0;
+    /// The EIP-4844 blob gas price this block's execution charges; 0 before Cancun.
+    u256 blobBaseFee = 0;
     bcos::protocol::EthBlockVersion forkVersion = bcos::protocol::EthBlockVersion::LONDON;
 };
 
@@ -197,12 +199,16 @@ struct ExternalBuildBlock
 /// Outcome of an EL block-build execution (Phase 4): the deterministic outputs the
 /// builder stamps into the payload/header, plus the commit-time artifacts (decoded
 /// transactions, receipts, MPT delta) the newPayload commit path persists. ok=false
-/// carries the execution failure (a decode/execution/system-call fault — the block
-/// cannot be built, which the FCU caller surfaces as an internal error).
+/// carries the execution failure: with invalidTransactions the builder rebuilds without
+/// them; otherwise (a decode/execution/system-call fault) the block cannot be built, which
+/// the FCU caller surfaces as an internal error.
 struct ExternalBuildResult
 {
     bool ok = false;
     std::string error;
+    /// ok=false only: positions in ExternalBuildBlock::rawTransactions that failed
+    /// pre-execution validation. Non-empty means the rest can still make a block.
+    std::vector<std::size_t> invalidTransactions;
     std::vector<protocol::Transaction::Ptr> transactions;
     std::vector<protocol::TransactionReceipt::Ptr> receipts;
     ledger::mpt::EthereumBlockComputation computation;
@@ -474,9 +480,10 @@ inline std::optional<ForkchoiceUpdatedResult> fcuInvalidIfUndecodable(
     {
         return std::nullopt;
     }
+    auto const* reason = boost::get_error_info<OpPayloadInvalidReason>(error);
     return ForkchoiceUpdatedResult{
         .payloadStatus = engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-            std::string("undecodable payload transaction envelope")),
+            reason != nullptr ? *reason : std::string("undecodable payload transaction envelope")),
         .payloadId = std::nullopt,
     };
 }

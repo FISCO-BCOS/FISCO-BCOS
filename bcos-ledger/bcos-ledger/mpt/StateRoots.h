@@ -42,6 +42,7 @@
 #include <bcos-task/TBBWait.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
+#include <evmc/evmc.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/task_arena.h>
 #include <optional>
@@ -62,23 +63,30 @@ namespace bcos::ledger::mpt
 ///                        refCountDeltas for a pruning CommitObserver (pass the observer's
 ///                        needsRefCountDeltas()); false skips the tally for producers whose
 ///                        commit path never reads it.
+/// @param blockRevision   the EVM revision the block executed under. Before Spurious Dragon
+///                        an EIP-161 empty account is a real leaf and stays in the trie; from
+///                        that fork on (and when the caller passes nullopt — every producer
+///                        whose chain starts at London or later) it is cleared.
 template <class ViewType>
 task::Task<MPTDeltaLayer> computeMptStateDelta(ViewType& view,
     crypto::HashType const& parentStateRoot, ledger::LedgerConfig const& ledgerConfig,
-    bool trackRefCounts = false)
+    bool trackRefCounts = false, std::optional<evmc_revision> blockRevision = std::nullopt)
 {
     ViewNodeStorage<ViewType> nodeStorage(view);
     bool const ethLane = ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
+    bool const clearEmptyAccounts = !blockRevision || *blockRevision >= EVMC_SPURIOUS_DRAGON;
     co_return co_await buildAndCollect(nodeStorage, parentStateRoot, view, ethLane,
-        ledger::account::nodeAddressTableMode(), trackRefCounts);
+        ledger::account::nodeAddressTableMode(), trackRefCounts, clearEmptyAccounts);
 }
 
 /// The root-only form, for callers that commit no MPT delta to an observer.
 template <class ViewType>
 task::Task<crypto::HashType> computeMptStateRoot(ViewType& view,
-    crypto::HashType const& parentStateRoot, ledger::LedgerConfig const& ledgerConfig)
+    crypto::HashType const& parentStateRoot, ledger::LedgerConfig const& ledgerConfig,
+    std::optional<evmc_revision> blockRevision = std::nullopt)
 {
-    auto delta = co_await computeMptStateDelta(view, parentStateRoot, ledgerConfig);
+    auto delta = co_await computeMptStateDelta(
+        view, parentStateRoot, ledgerConfig, /*trackRefCounts=*/false, blockRevision);
     co_return delta.stateRoot;
 }
 

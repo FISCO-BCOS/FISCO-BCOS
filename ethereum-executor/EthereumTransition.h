@@ -259,12 +259,15 @@ int64_t processAuthorizationList(
 /// Ported from evmone state.cpp validate_transaction. Reads the bcos
 /// Transaction directly; @p callParams carries the eth_call dry-run
 /// normalization overrides (all empty / false for real execution).
+/// @param nodeChainId the chain this node executes for; a transaction whose signed envelope
+///        binds another chain id is invalid (INVALID_CHAIN_ID). nullopt or 0 skips the check
+///        (chain id not configured: FISCO-native callers, some unit harnesses).
 /// @return Execution gas limit or transaction validation error.
 template <class Storage, class Policy = EthL1Policy>
 std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState<Storage>& state,
     EthBlockInfo const& block, protocol::Transaction const& tx, evmc_revision rev,
     int64_t blockGasLeft, int64_t blobGasLeft, EthCallParams const& callParams,
-    Policy const& policy = Policy{})
+    Policy const& policy = Policy{}, std::optional<uint64_t> nodeChainId = std::nullopt)
 {
     const auto txKind = tx.web3TypedTxKind();
     // The type-byte fork gating and the type-specific checks (blob / set-code)
@@ -273,6 +276,22 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     if (auto const typeError =
             policy.validateTxType(tx, txKind, rev, block, blobGasLeft, callParams))
         return *typeError;
+    // EIP-155 and every typed transaction bind a chain id in the signed envelope; one for
+    // another chain is invalid, and so is a block carrying it (geth: Sender() fails with
+    // ErrInvalidChainId, ApplyTransaction returns the error). Admission checks the same
+    // field (TxValidator Check::ChainId), but a block arrives without admission. A
+    // pre-EIP-155 legacy transaction binds none (nullopt) and passes, as does an OP deposit.
+    // web3ChainIdFromEnvelope also folds a MALFORMED envelope tail into nullopt, where
+    // TxValidator refuses it; that difference is unreachable here because a transaction only
+    // reaches execution through a decoder (block RLP, reassembleWeb3RawTransaction) that
+    // rejected a malformed envelope first. The OP lane passes no nodeChainId: its gate is
+    // opEthEnvelopeChainIdMismatch (OpEthExecutor.h), one implementation per lane.
+    if (nodeChainId.has_value() && *nodeChainId != 0)
+    {
+        if (auto const txChainId = tx.web3ChainIdFromEnvelope();
+            txChainId.has_value() && *txChainId != *nodeChainId)
+            return make_error_code(ErrorCode::INVALID_CHAIN_ID);
+    }
     const auto gasLimit = effectiveGasLimit(tx, callParams);
     const auto nonce = effectiveNonce(tx, callParams);
     const auto maxGasPrice = ethMaxGasPrice(tx, callParams);

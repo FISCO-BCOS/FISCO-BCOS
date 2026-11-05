@@ -330,7 +330,8 @@ BOOST_FIXTURE_TEST_CASE(sepoliaBlock1PoWRewardStateRoot, ESSFixture)
         block1.coinbase = bcos::Address(
             std::string_view("0x2f14582947e292a2ecd20c430b46f2d27cfe213c"), bcos::Address::FromHex);
         std::vector<bcos::bytes> noUncles;
-        co_await accumulatePoWBlockRewards(view, block1, noUncles, ledgerConfig);
+        // Sepolia block 1 is London-era PoW: the Constantinople+ 2 ETH reward.
+        co_await accumulatePoWBlockRewards(view, block1, noUncles, ledgerConfig, EVMC_LONDON);
 
         // 3. The resulting state root must be the canonical Sepolia block-1 root.
         auto block1Root = co_await EthereumBlockVerifier<SchedulerSerialImpl,

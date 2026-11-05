@@ -451,6 +451,9 @@ public:
 
             OpPolicy const policy{executor.m_spec, m_ctx->fee, *m_blockInfo, envelopeView(),
                 transaction, m_callParams, m_snapshot};
+            // No nodeChainId: the OP lane's chain-id gate is opEthEnvelopeChainIdMismatch
+            // above (fail-closed on a malformed envelope, skipped for eth_call) — one
+            // implementation, not two.
             auto validated = eth::validateTransaction(*m_state, *m_blockInfo, transaction,
                 executor.m_spec.rev, m_ctx->blockGasLeft,
                 0 /*blobGasLeft — blob txs are rejected by the policy*/, m_callParams, policy);

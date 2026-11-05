@@ -383,7 +383,8 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootIgnoredBeforeV4)
 
     // V1-V3: the field is ignored (matches op-geth NewPayloadV3, which performs no
     // withdrawalsRoot validation; the Isthmus spec leaves pre-V4 handling unspecified).
-    auto request = parseNewPayloadRequest(params, engine::ApiVersion::V3);
+    // Parsed at V2: the base payload carries no blob gas pair, which V3 requires.
+    auto request = parseNewPayloadRequest(params, engine::ApiVersion::V2);
     BOOST_CHECK(!request.executionPayload.withdrawalsRoot.has_value());
 
     // Even with the struct field set, V1-V3 serialization never emits it.

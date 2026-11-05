@@ -102,6 +102,8 @@ protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& 
             return static_cast<int32_t>(TransactionStatus::MaxInitCodeSizeExceeded);
         case evm::GAS_LIMIT_REACHED:
             return static_cast<int32_t>(TransactionStatus::BlockLimitCheckFail);
+        case evm::INVALID_CHAIN_ID:
+            return static_cast<int32_t>(TransactionStatus::InvalidChainId);
         default:
             return static_cast<int32_t>(TransactionStatus::Unknown);
         }
