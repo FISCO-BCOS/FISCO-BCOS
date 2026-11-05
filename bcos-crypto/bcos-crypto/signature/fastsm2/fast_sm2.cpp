@@ -19,6 +19,7 @@
  * @author yujiechen
  */
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/LogStream.h>
@@ -27,24 +28,48 @@
 #include <openssl/ecdsa.h>
 #include <openssl/evp.h>
 #include <openssl/obj_mac.h>
+#include <memory>
 
 using namespace bcos;
 using namespace bcos::crypto;
 
+namespace
+{
 constexpr char c_userId[] = "1234567812345678";
 const int c_R_FIELD_LEN = 32;
 const int c_S_FIELD_LEN = 32;
 const int c_PRIVATEKEY_LEN = 32;
 const int c_PUBLICKEY_LEN = 64;
-// Note: EC_GROUP_new_by_curve_name cost performance, So only one copy is created globally to
-// improve performance
-EC_GROUP* sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
+
+// EC_GROUP_new_by_curve_name is expensive, so one group is created per process, on first use
+// (function-local static: thread-safe one-time initialisation, freed at exit). An OpenSSL build
+// without the SM2 curve returns null; that throws here, at the first SM2 operation, instead of
+// surfacing as an unexplained failure of every later sign/verify. A throwing initialisation is
+// retried on the next call, so every caller gets the same error.
+const EC_GROUP* sm2Group()
+{
+    static const std::unique_ptr<EC_GROUP, void (*)(EC_GROUP*)> group = [] {
+        std::unique_ptr<EC_GROUP, void (*)(EC_GROUP*)> created{
+            EC_GROUP_new_by_curve_name(NID_sm2), &EC_GROUP_free};
+        if (!created)
+        {
+            BOOST_THROW_EXCEPTION(SM2CurveUnavailable() << errinfo_comment(
+                                      "fast_sm2: EC_GROUP_new_by_curve_name(NID_sm2) returned "
+                                      "null; this OpenSSL build has no SM2 curve"));
+        }
+        return created;
+    }();
+    return group.get();
+}
+}  // namespace
 
 // C interface for 'fast_sm2_sign'.
 int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
     const CInputBuffer* raw_public_key, const CInputBuffer* raw_message_hash,
     COutputBuffer* output_signature)
 {
+    // resolved before anything is allocated: it throws when the curve is unavailable
+    const EC_GROUP* group = sm2Group();
     int len = 0;
     EC_KEY* sm2Key = nullptr;
     ECDSA_SIG* sig = nullptr;
@@ -89,7 +114,7 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
         goto done;
     }
 
-    publicKey = EC_POINT_bn2point(sm2Group, bn, NULL, NULL);
+    publicKey = EC_POINT_bn2point(group, bn, NULL, NULL);
     if (publicKey == NULL)
     {
         CRYPTO_LOG(WARNING)
@@ -106,7 +131,7 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of EC_KEY_new";
         goto done;
     }
-    if (!EC_KEY_set_group(sm2Key, sm2Group))
+    if (!EC_KEY_set_group(sm2Key, group))
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of EC_KEY_set_group";
         goto done;
@@ -220,6 +245,8 @@ done:
 int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
     const CInputBuffer* raw_message_hash, const CInputBuffer* raw_signature)
 {
+    // resolved before anything is allocated: it throws when the curve is unavailable
+    const EC_GROUP* group = sm2Group();
     EC_KEY* sm2Key = NULL;
     EC_POINT* point = NULL;
     BIGNUM* r = NULL;
@@ -250,14 +277,14 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
     uint8_t publicKeyData[65] = {4};
     memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
     bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
-    point = EC_POINT_new(sm2Group);
+    point = EC_POINT_new(group);
     if (point == NULL)
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of EC_POINT_new";
         goto done;
     }
 
-    if (!EC_POINT_bn2point(sm2Group, bn, point, NULL))
+    if (!EC_POINT_bn2point(group, bn, point, NULL))
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of EC_POINT_bin2point";
         goto done;
@@ -270,7 +297,7 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
         goto done;
     }
 
-    if (!EC_KEY_set_group(sm2Key, sm2Group))
+    if (!EC_KEY_set_group(sm2Key, group))
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of EC_KEY_set_group";
         goto done;
@@ -378,6 +405,8 @@ done:
 int8_t bcos::crypto::fast_sm2_derive_public_key(
     const CInputBuffer* raw_private_key, COutputBuffer* output_public_key)
 {
+    // resolved before anything is allocated: it throws when the curve is unavailable
+    const EC_GROUP* group = sm2Group();
     int8_t ret = WEDPR_ERROR;
     EC_KEY* sm2Key = NULL;
     EC_POINT* pubPoint = NULL;
@@ -415,18 +444,18 @@ int8_t bcos::crypto::fast_sm2_derive_public_key(
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error EC_KEY_set_private_key";
         goto done;
     }
-    pubPoint = EC_POINT_new(sm2Group);
+    pubPoint = EC_POINT_new(group);
     if (!pubPoint)
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error EC_POINT_new";
         goto done;
     }
-    if (!EC_POINT_mul(sm2Group, pubPoint, privateKey, NULL, NULL, NULL))
+    if (!EC_POINT_mul(group, pubPoint, privateKey, NULL, NULL, NULL))
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of EC_POINT_mul";
         goto done;
     }
-    publicKeyLen = EC_POINT_point2buf(sm2Group, pubPoint, POINT_CONVERSION_UNCOMPRESSED,
+    publicKeyLen = EC_POINT_point2buf(group, pubPoint, POINT_CONVERSION_UNCOMPRESSED,
         reinterpret_cast<unsigned char**>(&publicKey), ctx);
     if (publicKeyLen != c_PUBLICKEY_LEN + 1)
     {
