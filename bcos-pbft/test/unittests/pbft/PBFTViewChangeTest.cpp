@@ -47,6 +47,37 @@ bool shouldExit(std::map<IndexType, PBFTFixture::Ptr>& _fakers, BlockNumber _num
     }
     return true;
 }
+// The cache at _index once it holds its pre-prepare, else nullptr. A cache is created by the
+// first message of any kind for that index, so a prepare vote that overtakes the pre-prepare
+// leaves a cache with no pre-prepare; find() also keeps a missing index from being inserted
+// as a null entry the way operator[] would.
+inline std::shared_ptr<FakePBFTCache> preparedCache(
+    PBFTCacheProcessor::Ptr const& _processor, BlockNumber _index)
+{
+    auto& caches = std::dynamic_pointer_cast<FakeCacheProcessor>(_processor)->caches();
+    auto it = caches.find(_index);
+    if (it == caches.end())
+    {
+        return nullptr;
+    }
+    auto cache = std::dynamic_pointer_cast<FakePBFTCache>(it->second);
+    return (cache && cache->prePrepare()) ? cache : nullptr;
+}
+
+inline std::string cachedIndexes(PBFTCacheProcessor::Ptr const& _processor)
+{
+    std::string indexes;
+    for (auto const& [index, cache] :
+        std::dynamic_pointer_cast<FakeCacheProcessor>(_processor)->caches())
+    {
+        auto fakeCache = std::dynamic_pointer_cast<FakePBFTCache>(cache);
+        indexes +=
+            std::to_string(index) +
+            ((fakeCache && fakeCache->prePrepare()) ? "(pre-prepared) " : "(no pre-prepare) ");
+    }
+    return indexes;
+}
+
 BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
 {
     auto hashImpl = std::make_shared<Keccak256>();
@@ -76,6 +107,21 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     auto futureBlockData = std::make_shared<bytes>();
     futureBlock->encode(*futureBlockData);
 
+    // The scenario: the first nodes hold both proposals in precommit without having sent their
+    // commit votes, so neither proposal can collect a commit quorum (5 of 10 votes) and only a
+    // view change can carry them on. The test puts those nodes into precommit by hand, which
+    // needs their pre-prepares. Hold them from the start: a node left to itself races that
+    // step, and once enough nodes have voted the proposals commit without any view change.
+    constexpr size_t precommitSize = 5;
+    auto holdPrecommit = [&](bool _hold) {
+        for (size_t i = 0; i < std::min(precommitSize, fakerMap.size()); i++)
+        {
+            std::dynamic_pointer_cast<FakePBFTConfig>(fakerMap[i]->pbftConfig())
+                ->setHoldPrecommit(_hold);
+        }
+    };
+    holdPrecommit(true);
+
     auto blockHeader = block->blockHeader();
     // the leader submit proposal
     leaderFaker->pbftEngine()->asyncSubmitProposal(
@@ -88,78 +134,72 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     auto cacheProcessor =
         std::dynamic_pointer_cast<FakeCacheProcessor>(leaderFaker->pbftEngine()->cacheProcessor());
     BOOST_CHECK(cacheProcessor->caches().size() == 1);
-    auto cache =
-        std::dynamic_pointer_cast<FakePBFTCache>((cacheProcessor->caches())[expectedProposal]);
-    BOOST_CHECK(cache->prePrepare());
+    auto cache = preparedCache(leaderFaker->pbftEngine()->cacheProcessor(), expectedProposal);
+    BOOST_REQUIRE_MESSAGE(cache, "the leader holds no pre-prepared cache at " << expectedProposal);
     BOOST_CHECK(cache->index() == expectedProposal);
-    BOOST_CHECK(cache->prePrepare());
 
     auto futureCacheProcessor =
         std::dynamic_pointer_cast<FakeCacheProcessor>(futureLeader->pbftEngine()->cacheProcessor());
-    auto futureCache = std::dynamic_pointer_cast<FakePBFTCache>(
-        (futureCacheProcessor->caches())[futureBlockIndex]);
+    auto futureCache =
+        preparedCache(futureLeader->pbftEngine()->cacheProcessor(), futureBlockIndex);
     BOOST_CHECK(futureCacheProcessor->caches().size() == 1);
-    BOOST_CHECK(futureCache->prePrepare());
+    BOOST_REQUIRE_MESSAGE(
+        futureCache, "the future leader holds no pre-prepared cache at " << futureBlockIndex);
     BOOST_CHECK(futureCache->index() == futureBlockIndex);
-    BOOST_CHECK(futureCache->prePrepare());
 
-    // Poll until all nodes reach preCommit (2 caches each). The budget is generous because
-    // this loop drives the fake nodes itself: on a loaded runner (macOS is the slow one here)
-    // 3s was not always enough, and when it ran out the test silently carried on and failed
-    // later at a cache lookup with no hint that the precondition had never been met.
+    // Poll until the held nodes have the pre-prepares of both proposals. Counting caches, as
+    // this loop used to, is not enough: a cache is created by the first message for its index,
+    // so a prepare vote that overtakes the pre-prepare leaves a cache intoPrecommit() cannot
+    // use (it dereferences the pre-prepare). The budget is generous because this loop drives
+    // the fake nodes itself: on a loaded runner (macOS is the slow one here) 3s was not always
+    // enough.
     auto precommitStartT = std::chrono::steady_clock::now();
-    bool allInPrecommit = false;
+    bool allPrePrepared = false;
     size_t deficientNode = 0;
-    size_t deficientCaches = 0;
-    while (!allInPrecommit &&
+    while (!allPrePrepared &&
            std::chrono::steady_clock::now() - precommitStartT < std::chrono::seconds(30))
     {
         for (auto const& otherNode : fakerMap)
         {
             otherNode.second->pbftEngine()->executeWorker();
         }
-        allInPrecommit = true;
-        for (auto const& otherNode : fakerMap)
+        allPrePrepared = true;
+        for (size_t i = 0; i < std::min(precommitSize, fakerMap.size()); i++)
         {
-            auto cacheProc = std::dynamic_pointer_cast<FakeCacheProcessor>(
-                otherNode.second->pbftEngine()->cacheProcessor());
-            if (cacheProc->caches().size() < 2)
+            auto processor = fakerMap[i]->pbftEngine()->cacheProcessor();
+            if (!preparedCache(processor, expectedProposal) ||
+                !preparedCache(processor, futureBlockIndex))
             {
-                allInPrecommit = false;
-                deficientNode = otherNode.first;
-                deficientCaches = cacheProc->caches().size();
+                allPrePrepared = false;
+                deficientNode = i;
                 break;
             }
         }
-        if (!allInPrecommit)
+        if (!allPrePrepared)
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-    // Every later check indexes these caches, so a timeout has to stop the test here with a
-    // message that names the precondition instead of surfacing as a null prePrepare() below.
-    BOOST_REQUIRE_MESSAGE(allInPrecommit,
-        "nodes did not all reach preCommit within 30s: expected 2 caches per node, node "
-            << deficientNode << " had " << deficientCaches);
-    // the precondition is now proven above, so these nodes are in preCommit
-    size_t precommitSize = 5;
+    // Every later check depends on this, so a timeout has to stop the test here and say what
+    // the deficient node actually holds.
+    BOOST_REQUIRE_MESSAGE(allPrePrepared,
+        "the first " << precommitSize << " nodes did not all cache the pre-prepares of "
+                     << expectedProposal << " and " << futureBlockIndex << " within 30s; node "
+                     << deficientNode << " is at block "
+                     << fakerMap[deficientNode]->ledger()->blockNumber() << " and holds: "
+                     << cachedIndexes(fakerMap[deficientNode]->pbftEngine()->cacheProcessor()));
     for (size_t i = 0; i < std::min(precommitSize, fakerMap.size()); i++)
     {
-        auto faker = fakerMap[i];
-        FakeCacheProcessor::Ptr cacheProcessor2 =
-            std::dynamic_pointer_cast<FakeCacheProcessor>(faker->pbftEngine()->cacheProcessor());
-        BOOST_CHECK(cacheProcessor2->caches().size() == 2);
-        auto cache2 =
-            std::dynamic_pointer_cast<FakePBFTCache>((cacheProcessor2->caches())[expectedProposal]);
-        BOOST_CHECK(cache2->prePrepare());
-        BOOST_CHECK(cache2->index() == expectedProposal);
-        cache2->intoPrecommit();
-
-        auto futureCache2 =
-            std::dynamic_pointer_cast<FakePBFTCache>((cacheProcessor2->caches())[futureBlockIndex]);
-        BOOST_CHECK(futureCache2->prePrepare());
-        BOOST_CHECK(futureCache2->index() == futureBlockIndex);
-        BOOST_CHECK(futureCache2->prePrepare());
-        futureCache2->intoPrecommit();
+        auto processor = fakerMap[i]->pbftEngine()->cacheProcessor();
+        for (auto index : {expectedProposal, futureBlockIndex})
+        {
+            auto cache = preparedCache(processor, index);
+            BOOST_REQUIRE_MESSAGE(cache, "node " << i << " holds: " << cachedIndexes(processor));
+            BOOST_CHECK(cache->index() == index);
+            cache->intoPrecommit();
+        }
     }
+    // from here the nodes follow the protocol again: after the view change they have to
+    // precommit the re-proposed blocks by themselves
+    holdPrecommit(false);
 
     for (size_t i = 0; i < fakerMap.size(); i++)
     {
