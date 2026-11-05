@@ -377,8 +377,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     // the same shape reaches here from the auth-check rejects (revertAuth only rewrites
     // evmStatus behind bugfix_auth_check). Below Amsterdam create_impl reads the status
     // only for the push decision, so gas, refund and return data stay identical.
-    if ((_msg->kind == EVMC_CREATE || _msg->kind == EVMC_CREATE2) &&
-        status == EVMC_SUCCESS && response->newEVMContractAddress.empty())
+    if ((_msg->kind == EVMC_CREATE || _msg->kind == EVMC_CREATE2) && status == EVMC_SUCCESS &&
+        response->newEVMContractAddress.empty())
     {
         status = EVMC_REVERT;
     }

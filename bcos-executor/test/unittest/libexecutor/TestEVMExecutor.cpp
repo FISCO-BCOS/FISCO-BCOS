@@ -1389,21 +1389,20 @@ BOOST_AUTO_TEST_CASE(failedNestedCreatePushesZero)
     //   PUSH2 M PUSH1 0 PUSH1 0 CREATE        value 0 from mem[0..M)
     //   PUSH1 0 MSTORE                         store the pushed word at mem[0]
     //   PUSH1 0x20 PUSH1 0 RETURN              return it
-    auto runFailedCreate = [this](
-                               bcos::bytes const& innerInit, std::string const& deployTo,
+    auto runFailedCreate = [this](bcos::bytes const& innerInit, std::string const& deployTo,
                                int64_t contextBase) {
         BOOST_REQUIRE_LT(innerInit.size(), 0x80u);
         const auto m = static_cast<uint8_t>(innerInit.size());
         bcos::bytes runtime{
-            0x61, 0x00, m,        // PUSH2 M
-            0x61, 0x00, 0x19,     // PUSH2 0x19 (inner init offset)
-            0x60, 0x00,           // PUSH1 0 (CODECOPY dest)
-            0x39,                 // CODECOPY
-            0x61, 0x00, m,        // PUSH2 M (init size)
-            0x60, 0x00,           // PUSH1 0 (init offset)
-            0x60, 0x00,           // PUSH1 0 (value)
-            0xf0,                 // CREATE
-            0x60, 0x00, 0x52,     // PUSH1 0 MSTORE
+            0x61, 0x00, m,                // PUSH2 M
+            0x61, 0x00, 0x19,             // PUSH2 0x19 (inner init offset)
+            0x60, 0x00,                   // PUSH1 0 (CODECOPY dest)
+            0x39,                         // CODECOPY
+            0x61, 0x00, m,                // PUSH2 M (init size)
+            0x60, 0x00,                   // PUSH1 0 (init offset)
+            0x60, 0x00,                   // PUSH1 0 (value)
+            0xf0,                         // CREATE
+            0x60, 0x00, 0x52,             // PUSH1 0 MSTORE
             0x60, 0x20, 0x60, 0x00, 0xf3  // PUSH1 0x20 PUSH1 0 RETURN
         };
         BOOST_REQUIRE_EQUAL(runtime.size(), 25u);
@@ -1414,9 +1413,8 @@ BOOST_AUTO_TEST_CASE(failedNestedCreatePushesZero)
         bcos::bytes input{0x60, l, 0x60, 0x0c, 0x60, 0x00, 0x39, 0x60, l, 0x60, 0x00, 0xf3};
         input += runtime;
 
-        auto tx =
-            fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(contextBase + 1),
-                100000 + contextBase, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(contextBase + 1),
+            100000 + contextBase, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -1437,17 +1435,17 @@ BOOST_AUTO_TEST_CASE(failedNestedCreatePushesZero)
         params->setCreate(true);
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> deployPromise;
-        executor->executeTransaction(std::move(params),
-            [&](bcos::Error::UniquePtr&& error,
-                bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+        executor->executeTransaction(
+            std::move(params), [&](bcos::Error::UniquePtr&& error,
+                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 deployPromise.set_value(std::move(result));
             });
         auto deployed = deployPromise.get_future().get();
         BOOST_REQUIRE(deployed);
         BOOST_TEST_MESSAGE("deploy result: type=" << (int)deployed->type()
-                                                 << " status=" << deployed->status()
-                                                 << " msg=" << deployed->message());
+                                                  << " status=" << deployed->status()
+                                                  << " msg=" << deployed->message());
         auto const address = deployed->newEVMContractAddress();
         BOOST_REQUIRE_GT(address.size(), 0u);
 
@@ -1473,9 +1471,8 @@ BOOST_AUTO_TEST_CASE(failedNestedCreatePushesZero)
         std::string wordHex;
         boost::algorithm::hex_lower(
             observed->data().begin(), observed->data().end(), std::back_inserter(wordHex));
-        BOOST_TEST_MESSAGE("call result: type=" << (int)observed->type()
-                                               << " status=" << observed->status()
-                                               << " word=" << wordHex);
+        BOOST_TEST_MESSAGE("call result: type=" << (int)observed->type() << " status="
+                                                << observed->status() << " word=" << wordHex);
         BOOST_REQUIRE_EQUAL(observed->data().size(), 32u);
         // data() is a bytesConstRef view into the message — copy out before it dies.
         return bcos::bytes(observed->data().begin(), observed->data().end());
@@ -1511,14 +1508,14 @@ BOOST_AUTO_TEST_CASE(failedNestedCreatePushesZero)
     auto emptyCode = runFailedCreate(bcos::bytes{0x60, 0x00, 0x60, 0x00, 0xf3},
         "aa0000000000000000000000000000000000000300000000000000000000000000000000", 250);
 
-    BOOST_CHECK_MESSAGE(std::all_of(tooLarge.begin(), tooLarge.end(),
-                            [](bcos::byte b) { return b == 0; }),
+    BOOST_CHECK_MESSAGE(
+        std::all_of(tooLarge.begin(), tooLarge.end(), [](bcos::byte b) { return b == 0; }),
         "code-too-large CREATE pushed a non-zero address");
-    BOOST_CHECK_MESSAGE(std::all_of(depositOog.begin(), depositOog.end(),
-                            [](bcos::byte b) { return b == 0; }),
+    BOOST_CHECK_MESSAGE(
+        std::all_of(depositOog.begin(), depositOog.end(), [](bcos::byte b) { return b == 0; }),
         "code-deposit-OOG CREATE pushed a non-zero address");
-    BOOST_CHECK_MESSAGE(std::all_of(emptyCode.begin(), emptyCode.end(),
-                            [](bcos::byte b) { return b == 0; }),
+    BOOST_CHECK_MESSAGE(
+        std::all_of(emptyCode.begin(), emptyCode.end(), [](bcos::byte b) { return b == 0; }),
         "empty-runtime-code CREATE pushed a non-zero address");
 }
 
