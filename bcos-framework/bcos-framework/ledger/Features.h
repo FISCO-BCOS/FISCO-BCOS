@@ -98,9 +98,14 @@ public:
         // 47 was feature_evm_eip2929, introduced on release-3.18.0 but never released.
         // Do not reuse its name or value.
         feature_evm_cancun = 48,
-        feature_evm_prague = 49,  // EIP-7702、BLS12-381；依赖 feature_evm_cancun
-        feature_evm_osaka = 50,   // EIP-7212 p256verify、EIP-7823/EIP-7883 modexp；依赖
-                                  // feature_evm_prague
+        // On executor_version 0/1 these flags only select the evmone revision and open the
+        // BLS12-381 / p256verify precompile gates. They do not enable an EIP-2929 warm set,
+        // the EIP-7623 calldata floor, or EIP-7823/EIP-7883 ModExp changes. A chain enabling
+        // either flag must run a uniform node implementation. Full rules live in
+        // ethereum-executor (executor_version >= 2); the legacy lanes must either implement
+        // those rules in a follow-up or retire these flags.
+        feature_evm_prague = 49,  // Prague revision and BLS12-381; depends on feature_evm_cancun
+        feature_evm_osaka = 50,   // Osaka revision and p256verify; depends on feature_evm_prague
         feature_evm_timestamp = 51,
         feature_evm_address = 52,
         feature_rpbft_term_weight = 53,

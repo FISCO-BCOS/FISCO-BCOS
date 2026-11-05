@@ -1003,11 +1003,16 @@ BOOST_AUTO_TEST_CASE(p256verify_all_zero)
 BOOST_AUTO_TEST_CASE(p256verify_valid_signature)
 {
     bytes input;
-    input += bcos::fromHex("bb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023");
-    input += bcos::fromHex("2ba3a8be6b94d5ec80a6d9d1190a436effe50d85a1eee859b8cc6af9bd5c2e18");
-    input += bcos::fromHex("4cd60b855d442f5b3c7b11eb6c4e0ae7525fe710fab9aa7c77a67f79e6fadd76");
-    input += bcos::fromHex("2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838");
-    input += bcos::fromHex("c7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513e");
+    input +=
+        bcos::fromHex("bb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023");  // h
+    input +=
+        bcos::fromHex("2ba3a8be6b94d5ec80a6d9d1190a436effe50d85a1eee859b8cc6af9bd5c2e18");  // r
+    input +=
+        bcos::fromHex("4cd60b855d442f5b3c7b11eb6c4e0ae7525fe710fab9aa7c77a67f79e6fadd76");  // s
+    input +=
+        bcos::fromHex("2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838");  // x
+    input +=
+        bcos::fromHex("c7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513e");  // y
     BOOST_REQUIRE_EQUAL(input.size(), 160u);
     auto [ok, out] = exec("p256verify", input);
     BOOST_CHECK(ok);
@@ -1022,24 +1027,6 @@ BOOST_AUTO_TEST_CASE(p256verify_gas)
     auto pricer = executor::PrecompiledRegistrar::pricer("p256verify");
     bytes empty;
     BOOST_CHECK_EQUAL(pricer(ref(empty)), 6900);
-}
-
-BOOST_AUTO_TEST_SUITE_END()
-
-BOOST_AUTO_TEST_SUITE(testEip7623)
-
-BOOST_AUTO_TEST_CASE(eip7623CallDataFloorCost)
-{
-    using namespace bcos::executor;
-    {
-        bytes dataEmpty;
-        BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(dataEmpty)), 0);
-    }
-
-    bytes data(100, 0x00);
-    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(data)), 1000);
-    bytes data2(100, 0xff);
-    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(data2)), 4000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -20,6 +20,8 @@ namespace
 {
 using compat::compatMakeModexpInput;
 
+// First valid vector from https://eips.ethereum.org/assets/eip-2537/add_G1_bls.json
+// ("bls_g1add_g1+p1").
 bytes blsG1AddValidInputG1PlusP1()
 {
     return bcos::fromHex(

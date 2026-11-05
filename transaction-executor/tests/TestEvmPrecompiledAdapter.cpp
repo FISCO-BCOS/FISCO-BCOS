@@ -482,12 +482,12 @@ BOOST_AUTO_TEST_CASE(swappedExecutorsEquivalentThroughManager)
     }
 
     std::vector<bytes> blsCorpus = genericCorpus();
-    blsCorpus.push_back(zeroBytes(256));
-    blsCorpus.push_back(zeroBytes(512));
-    blsCorpus.push_back(zeroBytes(160));
-    blsCorpus.push_back(zeroBytes(288));
-    blsCorpus.push_back(zeroBytes(384));
-    blsCorpus.push_back(concat({zeroBytes(16), BLS12_P, zeroBytes(192)}));
+    blsCorpus.push_back(zeroBytes(256));  // g1add shaped (infinity + infinity)
+    blsCorpus.push_back(zeroBytes(512));  // g2add shaped
+    blsCorpus.push_back(zeroBytes(160));  // g1msm shaped (infinity, scalar 0)
+    blsCorpus.push_back(zeroBytes(288));  // g2msm shaped
+    blsCorpus.push_back(zeroBytes(384));  // bls pairing shaped
+    blsCorpus.push_back(concat({zeroBytes(16), BLS12_P, zeroBytes(192)}));  // g1add: x1 == p
     for (auto const& input : blsCorpus)
     {
         checkManager(0x0b, "bls12_g1add", input);
