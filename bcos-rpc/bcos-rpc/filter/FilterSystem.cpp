@@ -348,9 +348,27 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         {
             co_return Json::Value(Json::arrayValue);
         }
-        auto processBlockNum = std::min(toBlock - fromBlock + 1, m_maxBlockProcessPerReq);
+        // A one-shot eth_getLogs has no cursor to continue from: the caller cannot tell that
+        // only a prefix of the range was scanned. Truncating it to m_maxBlockProcessPerReq
+        // answers a *smaller, plausible-looking* log set instead of the requested one, which
+        // silently hides events (a query covering any range wider than the budget returns a
+        // prefix and looks successful). Fail closed and say what the bound is; the streaming
+        // paths (getLogChangeImpl / eth_getFilterChanges) keep paginating, they do have a
+        // cursor. Raise web3_rpc.filter_max_process_block to widen the window.
+        auto const blockRange = toBlock - fromBlock + 1;
+        if (blockRange > m_maxBlockProcessPerReq)
+        {
+            FILTER_LOG(WARNING) << LOG_BADGE("getLogsImpl") << LOG_DESC("block range exceeds limit")
+                                << LOG_KV("fromBlock", fromBlock) << LOG_KV("toBlock", toBlock)
+                                << LOG_KV("blockRange", blockRange)
+                                << LOG_KV("maxBlockProcessPerReq", m_maxBlockProcessPerReq);
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
+                "block range too large: requested " + std::to_string(blockRange) +
+                    " blocks, limit is " + std::to_string(m_maxBlockProcessPerReq) +
+                    " (web3_rpc.filter_max_process_block)"));
+        }
         params->setFromBlock(fromBlock);
-        params->setToBlock(fromBlock + processBlockNum - 1);
+        params->setToBlock(toBlock);
         co_return co_await getLogsInternal(*ledger, std::move(params));
     }
 }

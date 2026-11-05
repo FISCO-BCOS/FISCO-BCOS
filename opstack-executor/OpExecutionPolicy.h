@@ -329,9 +329,14 @@ public:
     template <class Host>
     /// @param keepOutput accepted for signature parity with EthL1Policy::buildReceipt; the OP
     ///        receipt has always carried the return data, which is left unchanged here.
+    /// @param ethLaneContractAddress accepted for signature parity with EthL1Policy::buildReceipt.
+    ///        Unused: this policy already derives the address from the validate-time snapshot
+    ///        (m_sender / m_nonce), which is what op-geth's MakeReceipt does — the fresh
+    ///        sender_acc.nonce the eth lane passes in is the same value for a validated tx.
     protocol::TransactionReceipt::Ptr buildReceipt(Host& host, evmc::Result const& result,
         int64_t gasUsed, protocol::TransactionReceiptFactory const& rf, int64_t blockNumber,
-        [[maybe_unused]] bool keepOutput = false) const
+        [[maybe_unused]] bool keepOutput = false,
+        [[maybe_unused]] std::string ethLaneContractAddress = std::string{}) const
     {
         // gas_used is int64_t; a runtime non-negative check guards the cast against wrap
         // (evmone guarantees it; under NDEBUG the assert is gone and the consensus surface

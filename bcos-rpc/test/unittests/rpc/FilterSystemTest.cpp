@@ -177,6 +177,76 @@ BOOST_AUTO_TEST_CASE(test_filter_expiration)
         task::syncWait(filterSystem->getFilterChanges(id)), bcos::rpc::JsonRpcException);
 }
 
+// 1001: a one-shot eth_getLogs must never answer a truncated log set. The per-request budget
+// is filter_max_process_block (10 in this fixture); a wider window is an error, not a silent
+// prefix of the requested range. Streaming (eth_getFilterChanges) keeps its cursor semantics.
+BOOST_AUTO_TEST_CASE(test_getLogsOverRangeLimitFailsClosed)
+{
+    for (int i = 0; i < 20; ++i)
+    {
+        m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 1);
+    }
+    auto const latest = filterSystem->getLatestBlockNumber();
+    BOOST_REQUIRE_GE(latest, 16);
+
+    auto parseRequest = [&latest](std::string const& json) {
+        Json::Reader reader;
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(json, value));
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(value, latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt,
+            std::nullopt, false);
+        return request;
+    };
+
+    // 11 blocks (0x5..0xf) is one over the 10-block budget: refuse rather than return a prefix.
+    BOOST_CHECK_THROW(task::syncWait(filterSystem->getLogs(
+                          parseRequest(R"({"fromBlock":"0x5","toBlock":"0xf"})"))),
+        bcos::rpc::JsonRpcException);
+
+    // Exactly the budget (0x5..0xe) still answers.
+    auto logs = task::syncWait(
+        filterSystem->getLogs(parseRequest(R"({"fromBlock":"0x5","toBlock":"0xe"})")));
+    BOOST_TEST(logs.isArray());
+}
+
+// `address` and `topics` are optional in the Ethereum filter spec: an omitted or null field
+// matches everything, which is what LogMatcher already does for an empty set.
+BOOST_AUTO_TEST_CASE(filterRequestAcceptsMissingAddressAndTopics)
+{
+    Json::Reader reader;
+    auto parse = [&reader](std::string const& s) {
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(s, value));
+        return value;
+    };
+
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"fromBlock":"0x0","toBlock":"0x5"})"), 100, 1, 2, std::nullopt,
+            std::nullopt, false);
+        BOOST_CHECK(request->addresses().empty());
+        BOOST_CHECK(request->topics().empty());
+    }
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"fromBlock":"0x0","toBlock":"0x5",
+            "address":null,"topics":null})"),
+            100, 1, 2, std::nullopt, std::nullopt, false);
+        BOOST_CHECK(request->addresses().empty());
+        BOOST_CHECK(request->topics().empty());
+    }
+    // A topics-only request still filters by topic position 0.
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"fromBlock":"0x0","toBlock":"0x5","topics":["0xaa"]})"), 100, 1,
+            2, std::nullopt, std::nullopt, false);
+        BOOST_CHECK(request->addresses().empty());
+        BOOST_REQUIRE_EQUAL(request->topics().size(), 1U);
+        BOOST_CHECK(request->topics()[0].contains("0xaa"));
+    }
+}
+
 // Finding F (round-2): FilterRequest::fromJson must resolve "latest"/"safe"/"finalized"
 // against the REAL head and the configured depths — never the silent latest=0 / depth=0
 // defaults — and both the Web3 and legacy entries thread them explicitly.
