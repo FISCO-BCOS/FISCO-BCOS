@@ -249,6 +249,11 @@ struct AdmitHarness
     /// context or lane never priced the envelope rather than infer it from a status.
     std::optional<u512> rollupCost;
     int rollupCostAsks = 0;
+    /// When set, bound as the PendingCostFn; records what the validator asked for.
+    std::optional<u512> pendingCost;
+    std::string lastPendingCostSender;
+    std::string lastPendingCostNonce;
+    std::optional<protocol::CostBasis> lastPendingCostBasis;
     /// The envelope and head the callable was last asked about, for pinning what it is handed.
     bytes lastRollupEnvelope;
     uint64_t lastRollupGasLimit = 0;
@@ -324,6 +329,16 @@ struct AdmitHarness
                     lastRollupGasLimit = gasLimit;
                     lastRollupHeadNumber = head.blockNumber();
                     co_return rollupCost;
+                });
+        }
+        if (pendingCost)
+        {
+            validator->setPendingCostFn(
+                [this](std::string_view sender, std::string_view nonce, protocol::CostBasis basis) {
+                    lastPendingCostSender = std::string(sender);
+                    lastPendingCostNonce = std::string(nonce);
+                    lastPendingCostBasis = basis;
+                    return *pendingCost;
                 });
         }
         if (ledgerNonceChecker)

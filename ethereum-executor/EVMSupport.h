@@ -97,6 +97,7 @@ enum ErrorCode : int  // NOLINT(*-use-enum-class)
     CREATE_SET_CODE_TX,
     EMPTY_AUTHORIZATION_LIST,
     MAX_GAS_LIMIT_EXCEEDED,
+    INVALID_CHAIN_ID,
     UNKNOWN_ERROR,
 };
 
@@ -137,6 +138,8 @@ inline const std::error_category& evm_error_category() noexcept
                 return "sender not an eoa:";
             case INIT_CODE_SIZE_LIMIT_EXCEEDED:
                 return "max initcode size exceeded";
+            case INVALID_CHAIN_ID:
+                return "invalid chain id";
             case CREATE_BLOB_TX:
                 return "blob transaction must not be a create transaction";
             case EMPTY_BLOB_HASHES_LIST:

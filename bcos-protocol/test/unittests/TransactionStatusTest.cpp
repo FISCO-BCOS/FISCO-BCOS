@@ -72,6 +72,7 @@ constexpr Expectation kExpectations[] = {
     {TransactionStatus::FeeCapLessThanBaseFee, "FeeCapLessThanBaseFee"},
     {TransactionStatus::MaxGasLimitExceeded, "MaxGasLimitExceeded"},
     {TransactionStatus::BcosTxNotAllowed, "BcosTxNotAllowed"},
+    {TransactionStatus::SenderTxLimitExceeded, "SenderTxLimitExceeded"},
 };
 }  // namespace
 

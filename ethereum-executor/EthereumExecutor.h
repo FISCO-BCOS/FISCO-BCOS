@@ -422,7 +422,7 @@ public:
                 }
                 auto validationResult = validateTransaction(state, m_blockInfo, transaction.get(),
                     m_rev, m_blockInfo.gas_limit /*block_gas_left*/, blobGasLeft /*blob_gas_left*/,
-                    m_callParams);
+                    m_callParams, EthL1Policy{}, nodeChainId());
                 if (auto* props = std::get_if<EthTxProperties>(&validationResult))
                 {
                     // Valid against the current state — use the computed properties.

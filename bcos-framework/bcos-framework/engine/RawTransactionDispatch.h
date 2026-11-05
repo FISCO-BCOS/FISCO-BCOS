@@ -105,4 +105,39 @@ inline bool isRawTransactionPayloadAdmissible(RawTransactionKind kind)
     }
 }
 
+/// The EIP-2718 type byte that a transaction's receipt-trie leaf is prefixed with.
+///
+/// Taken from the signed envelope whenever the envelope is classifiable, never from
+/// `web3TypedTxKind()` alone: that is a tars field a peer can rewrite (see TransactionImpl), which
+/// is why every other type decision in the tree (isDepositTx, EngineStorageCommit's commitment
+/// builder) reads the envelope.
+///
+/// The mirror is consulted whenever the envelope does not classify, which is broader than one case:
+/// rawTransactionTypeByte returns nullopt for an empty envelope AND for a first byte of 0x00,
+/// 0x05-0x7d or 0x7f-0xbf. Of those, only the empty envelope is reachable here -- it is what
+/// FISCO-native and test-built transactions carry -- because admission rejects the rest: the
+/// envelope decode in bcos-tx-validator/bcos-tx-validator/Normalize.cpp refuses an unclassifiable
+/// Web3 transaction and then rewrites this mirror from the decoded envelope, so the two always
+/// agree for anything that got through. That gate, not this function, is what makes the non-empty
+/// cases unreachable; a future caller on another path must not assume it.
+///
+/// The fallback also predates this helper: those transactions already worked through
+/// web3TypedTxKind() -- 0 for a non-Web3 transaction -- and throwing here instead would fail them.
+///
+/// This belongs next to rawTransactionTypeByte because "which type is this envelope" is that
+/// module's decision: the committed receiptsRoot, the debug_getRawReceipts preimage and the
+/// OP-aware receipt encoder this repo has yet to add must all reach the same answer from here, not
+/// through copies. Duck-typed on the transaction so this header keeps its light include set (the
+/// callers pass `Transaction const&`, and `AnyTransaction` dereferences to one).
+template <class Transaction>
+[[nodiscard]] inline std::uint8_t receiptLeafTypeByte(Transaction const& transaction)
+{
+    if (auto const typeByte = rawTransactionTypeByte(transaction.extraTransactionBytes());
+        typeByte.has_value())
+    {
+        return *typeByte;
+    }
+    return transaction.web3TypedTxKind();
+}
+
 }  // namespace bcos::engine

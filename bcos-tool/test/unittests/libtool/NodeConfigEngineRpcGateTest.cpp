@@ -74,6 +74,39 @@ BOOST_AUTO_TEST_CASE(minerApiScopedPerListener)
     BOOST_CHECK(!probe2.engineApiListener().enableMinerApi);
 }
 
+// [ethereum] mempool_max_txs_per_sender: default 64, 0 lifts the cap, out-of-range values are
+// config errors at load time.
+BOOST_AUTO_TEST_CASE(ethereumMempoolMaxTxsPerSender)
+{
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_NO_THROW(probe.loadEthereumConfig(fromIni("[ethereum]\n")));
+        BOOST_CHECK_EQUAL(probe.ethereumMempoolMaxTxsPerSender(), 64);
+    }
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_NO_THROW(
+            probe.loadEthereumConfig(fromIni("[ethereum]\nmempool_max_txs_per_sender=0\n")));
+        BOOST_CHECK_EQUAL(probe.ethereumMempoolMaxTxsPerSender(), 0);
+    }
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_NO_THROW(
+            probe.loadEthereumConfig(fromIni("[ethereum]\nmempool_max_txs_per_sender=16\n")));
+        BOOST_CHECK_EQUAL(probe.ethereumMempoolMaxTxsPerSender(), 16);
+    }
+    for (auto const* bad : {"-1", "10000001"})
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_EXCEPTION(
+            probe.loadEthereumConfig(
+                fromIni(std::string("[ethereum]\nmempool_max_txs_per_sender=") + bad + "\n")),
+            InvalidConfig, [](InvalidConfig const& e) {
+                return errinfoContains(e, "mempool_max_txs_per_sender must be in [0, 10000000]");
+            });
+    }
+}
+
 BOOST_AUTO_TEST_CASE(ethereumDepositContractAddress)
 {
     // Default (key absent or empty): the Ethereum mainnet deposit contract.
