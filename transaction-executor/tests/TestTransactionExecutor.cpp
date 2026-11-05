@@ -644,16 +644,18 @@ BOOST_AUTO_TEST_CASE(buyGasAndRefundSuccessFlow)
         bcos::bytes helloworldBytecodeBinary;
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
 
-        // gasLimit=300000, tx.gasPrice=1: pre-deduct 300000; HelloWorld deploy uses ~149586,
-        // so ~150414 is refunded. Final balance = 1,000,000 - 149586.
+        // gasLimit=3000000, tx.gasPrice=1: pre-deduct 3000000; the HelloWorld deploy uses less
+        // (MAX_VERSION features include bugfix_tx_intrinsic_gas, so that is the intrinsic gas
+        // and 200 gas per code byte on top of the EVM run), and the rest is refunded.
+        constexpr static int64_t gasLimit = 3'000'000;
         auto transaction = transactionFactory.createTransaction(1, "", helloworldBytecodeBinary,
-            "0x5", 0, "", "", 0, std::string{}, "0x0", "0x1", 300000, "0x0", "0x0");
+            "0x5", 0, "", "", 0, std::string{}, "0x0", "0x1", gasLimit, "0x0", "0x0");
         evmc_address senderAddress = unhexAddress("e0e794ca86d198042b64285c5ce667aee747509b"sv);
         transaction->forceSender(
             bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
         dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
 
-        constexpr static int64_t initBalance = 1'000'000;
+        constexpr static int64_t initBalance = 5'000'000;
         ledger::account::EVMAccount senderAccount(
             storage, senderAddress, bcos::ledger::account::AddressTableMode::Hex);
         co_await senderAccount.setBalance(initBalance);
@@ -665,6 +667,7 @@ BOOST_AUTO_TEST_CASE(buyGasAndRefundSuccessFlow)
         // Final balance = initBalance - gasUsed (gasPrice = 1)
         BOOST_CHECK_EQUAL(co_await senderAccount.balance(), initBalance - receipt->gasUsed());
         BOOST_CHECK_GT(receipt->gasUsed(), 0);
+        BOOST_CHECK_LT(receipt->gasUsed(), gasLimit);
         // Nonce incremented
         BOOST_CHECK_EQUAL((co_await senderAccount.nonce()).value(), "6");
     }());

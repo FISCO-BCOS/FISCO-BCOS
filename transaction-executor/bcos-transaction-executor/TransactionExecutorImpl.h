@@ -6,6 +6,7 @@
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-utilities/Exceptions.h"
@@ -18,6 +19,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <span>
 #include <type_traits>
 
 namespace bcos::executor_v1
@@ -150,15 +152,42 @@ public:
                 {
                     co_return;
                 }
-                m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
+                m_data->m_evmcResult.emplace(co_await executeTopFrame());
                 co_await refundGas();
             }
             else
             {
                 // Legacy path
-                m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
+                m_data->m_evmcResult.emplace(co_await executeTopFrame());
                 co_await consumeBalance();
             }
+        }
+
+        // #5772 (bugfix_tx_intrinsic_gas): the transaction pays its intrinsic gas before the
+        // top-level frame runs. A budget below the charge fails the transaction with every
+        // unit consumed and nothing executed: the transaction is already in a block, so it is
+        // settled like any other out-of-gas instead of being dropped as Ethereum would.
+        task::Task<EVMCResult> executeTopFrame()
+        {
+            auto& hostContext = m_data->m_hostContext;
+            if (m_data->m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::bugfix_tx_intrinsic_gas))
+            {
+                auto& message = hostContext.mutableMessage();
+                const auto upfrontGas = protocol::gas::compute_tx_upfront_cost(
+                    hostContext.revision(), message.kind == EVMC_CREATE,
+                    std::span<const uint8_t>{message.input_data, message.input_size},
+                    protocol::gas::compute_access_list_cost(
+                        m_data->m_transaction.get().web3AccessList()));
+                if (message.gas < upfrontGas)
+                {
+                    co_return makeErrorEVMCResult(*m_data->m_executor.get().m_hashImpl,
+                        protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0,
+                        "Intrinsic gas too low", true);
+                }
+                message.gas -= upfrontGas;
+            }
+            co_return co_await hostContext.execute();
         }
 
         task::Task<bool> updateNonce()

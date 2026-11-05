@@ -123,6 +123,12 @@ public:
                                                // hasher's hash("") (keccak on a non-SM
                                                // chain) for a code-less live account, 0 for
                                                // an absent/empty one; was true / 0.
+        bugfix_tx_intrinsic_gas,  // #5772: executor_version 0 and 1 take Ethereum's intrinsic
+                                  // gas (protocol/TxGasModel.h) off a transaction's budget
+                                  // before its top-level frame runs, and charge 200 gas per
+                                  // byte of deployed code; was nothing up front on v0 (21000
+                                  // for a value transfer only), 21000 for a top-level call
+                                  // only on v1, and 20 gas per byte on both.
     };
 
     // magic_enum reflects values in its default range [-128, 127]; a flag past it would drop out

@@ -89,6 +89,11 @@ void DmcExecutor::setEnablePreFinishType(bool enable)
     m_enablePreFinishType = enable;
 }
 
+void DmcExecutor::setRestartSeqOnSendBack(bool enable)
+{
+    m_restartSeqOnSendBack = enable;
+}
+
 bool DmcExecutor::isCall()
 {
     return m_isCall;
@@ -403,6 +408,18 @@ void DmcExecutor::handleCreateMessage(ExecutiveState::Ptr executiveState)
     {
         // must clear callstack
         executiveState->callStack = std::stack<int64_t, std::list<int64_t>>();
+
+        // A sent-back transaction starts over, and under bugfix_tx_intrinsic_gas (#5772) it
+        // starts over at seq 0, like a transaction that never took the DAG path. The DAG send
+        // (BlockExecutive::DAGExecute) advanced currentSeq without executing anything, so the
+        // re-dispatch used to carry seq 1. The executor recognises a transaction's top-level
+        // frame by seq 0: at seq 1 it would skip the intrinsic gas (and already skipped the
+        // top-level transfer charge and the EIP-2929 warm-up), and a creation derived its
+        // address from seq 1 instead of 0.
+        if (m_restartSeqOnSendBack)
+        {
+            executiveState->currentSeq = 0;
+        }
 
         if (message->transactionHash() != h256(0))
         {
