@@ -26,15 +26,18 @@
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/ReceiptBlockPosition.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/EthereumBlockRoots.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/Exceptions.h"
@@ -2322,6 +2325,369 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
         BOOST_REQUIRE(laneEntry.has_value());
         BOOST_CHECK_EQUAL(std::string(laneEntry->get()), "lane-value");
     }());
+}
+
+// The stored receipt position is not repaired, and the RPC layer no longer reads it: the position
+// is derived from the block when a receipt is served (protocol::stampReceiptBlockPositions).
+//
+// That is what makes the two ways a node can hold the same historical block agree. The stored
+// value is producer-dependent and stays whatever that producer wrote: a block built through
+// BaselineScheduler carries real indices, one written by the serial driver (and one re-executed by
+// a resync) carries the struct default 0. Deriving at read time gives both nodes ONE answer
+// without rewriting a single stored row -- no backfill, no activation marker, no lane predicate.
+//
+// Two properties are pinned here:
+//
+//   1. this write path does not number the receipts it stores (they reach the ledger as the
+//      producer left them), so nothing tries to "repair" history behind the operator's back;
+//   2. the derivation produces the position op-node needs, from the block alone, with literal
+//      expectations rather than values read back off the receipts under test.
+//
+// (1) is why this asserts 0 on the read-back block: if someone reintroduced numbering here, that
+// assertion -- not a client test -- is what would catch it.
+BOOST_AUTO_TEST_CASE(ethereumLaneStoredReceiptsKeepTheirLegacyPosition)
+{
+    initFixture();
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    // A number no other case writes: the ledger dedups a block number it already holds, so
+    // sharing one would make this read the other case's rows instead of its own.
+    header->setNumber(4242);
+    header->setTimestamp(1000);
+    header->setGasLimit(30000000);
+    header->setSealer(0);
+    // Marks the block as Ethereum-lane: only those headers carry the EIP-4844 fields, and only
+    // those block hashes commit to a receiptsRoot that leaves transactionIndex out.
+    header->setExcessBlobGas(0);
+    header->setBlobGasUsed(0);
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+
+    // Three transactions, the first carrying two log entries and the rest one each, so a
+    // per-receipt logIndex restart shows up as a repeated 0.
+    std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    std::vector<protocol::Transaction::Ptr> transactions;
+    std::vector<std::size_t> const logsPerTx{2, 1, 1};
+    for (size_t i = 0; i < logsPerTx.size(); ++i)
+    {
+        auto tx = m_blockFactory->transactionFactory()->createTransaction(i,
+            "0x1000000000000000000000000000000000000000", bcos::bytes{0x60},
+            std::to_string(1000 + i), 1000, "chain0", "group0", 0);
+
+        std::vector<protocol::LogEntry> logs;
+        for (size_t log = 0; log < logsPerTx[i]; ++log)
+        {
+            logs.emplace_back(bcos::bytes(20, 0x10),
+                bcos::h256s{bcos::h256("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+                                       "deadbeefdeadbeef")},
+                bcos::bytes(32, static_cast<bcos::byte>(0xa0 + log)));
+        }
+        auto receipt = m_blockFactory->receiptFactory()->createReceipt2(21000, "", logs, 0,
+            bcos::ref(bcos::bytes{}), 1, "1", protocol::TransactionVersion::V1_VERSION, true);
+        receipts.push_back(receipt);
+        transactions.push_back(tx);
+    }
+
+    // Drive the producer that owns the numbering on this lane. computeEthereumRoots numbers the
+    // receipt pointers it is given (and derives their bloom/cumulativeGasUsed); the block then
+    // receives those same objects, so the write path stores what the producer finalized.
+    std::vector<bcos::bytes> noRawTransactions;
+    task::syncWait(ledger::mpt::computeEthereumRoots(
+        receipts, transactions | ::ranges::views::indirect, noRawTransactions));
+    for (size_t i = 0; i < receipts.size(); ++i)
+    {
+        block->appendTransaction(transactions[i]);
+        block->appendReceipt(receipts[i]);
+    }
+
+    std::promise<bool> prewritePromise;
+    m_ledger->asyncPrewriteBlock(
+        m_storage, nullptr, block,
+        [&](std::string, Error::Ptr&& error) {
+            BOOST_CHECK(!error);
+            prewritePromise.set_value(true);
+        },
+        true, std::nullopt, std::nullopt, true);
+    BOOST_REQUIRE(prewritePromise.get_future().get());
+
+    std::promise<protocol::Block::Ptr> blockPromise;
+    m_ledger->asyncGetBlockDataByNumber(
+        4242, bcos::ledger::RECEIPTS, [&](Error::Ptr error, protocol::Block::Ptr result) {
+            BOOST_CHECK(!error);
+            blockPromise.set_value(std::move(result));
+        });
+    auto readBlock = blockPromise.get_future().get();
+    BOOST_REQUIRE(readBlock != nullptr);
+    BOOST_REQUIRE_EQUAL(readBlock->receiptsSize(), logsPerTx.size());
+
+    // Stored rows keep the legacy value: nothing on the write path numbers them any more.
+    std::size_t receiptIndex = 0;
+    for (auto receipt : readBlock->receipts())
+    {
+        BOOST_CHECK_MESSAGE(receipt->transactionIndex() == 0,
+            "receipt " << receiptIndex << " stored transactionIndex " << receipt->transactionIndex()
+                       << ", expected the untouched 0");
+        BOOST_CHECK_MESSAGE(receipt->logIndex() == 0,
+            "receipt " << receiptIndex << " stored logIndex " << receipt->logIndex()
+                       << ", expected the untouched 0");
+        // Pin the log list itself, so a lost list fails loudly instead of letting the derivation
+        // below collapse to the same wrong answer as a missing row.
+        BOOST_REQUIRE_LT(receiptIndex, logsPerTx.size());
+        BOOST_CHECK_MESSAGE(receipt->logEntries().size() == logsPerTx[receiptIndex],
+            "receipt " << receiptIndex << " stored " << receipt->logEntries().size()
+                       << " logs, expected " << logsPerTx[receiptIndex]);
+        ++receiptIndex;
+    }
+    BOOST_CHECK_EQUAL(receiptIndex, logsPerTx.size());
+
+    // And the derivation the RPC layer publishes is the position op-node needs. Literal
+    // expectations, not values read back off the receipts under test.
+    std::vector<std::size_t> const expectedLogIndex{0, 2, 3};
+    auto const positions = protocol::stampReceiptBlockPositions(*readBlock);
+    BOOST_REQUIRE_EQUAL(positions.size(), logsPerTx.size());
+    for (std::size_t i = 0; i < positions.size(); ++i)
+    {
+        BOOST_CHECK_EQUAL(positions[i].transactionIndex, i);
+        BOOST_CHECK_EQUAL(positions[i].logIndex, expectedLogIndex[i]);
+    }
+}
+
+// The byte contract of the fault-proof data plane: debug_getRawReceipts serves, per transaction,
+// exactly the string a receipt's trie leaf holds -- so a client (kona-host) that reassembles the
+// index-keyed trie from those bytes reproduces the header's receiptsRoot. The endpoint itself is
+// pinned for reachability in DebugChallengerDataPlaneTest; what that fixture cannot do is hold
+// real stored receipts, so the encoding is verified here, against the root the producer committed.
+BOOST_AUTO_TEST_CASE(ethereumLaneReceiptLeavesRebuildTheCommittedRoot)
+{
+    initFixture();
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(4243);
+    header->setTimestamp(1001);
+    header->setGasLimit(30000000);
+    header->setSealer(0);
+    header->setExcessBlobGas(0);
+    header->setBlobGasUsed(0);
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+
+    std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    std::vector<protocol::Transaction::Ptr> transactions;
+    std::vector<std::size_t> const logsPerTx{1, 2};
+    for (size_t i = 0; i < logsPerTx.size(); ++i)
+    {
+        auto tx = m_blockFactory->transactionFactory()->createTransaction(i,
+            "0x1000000000000000000000000000000000000000", bcos::bytes{0x60},
+            std::to_string(2000 + i), 1000, "chain0", "group0", 0);
+        std::vector<protocol::LogEntry> logs;
+        for (size_t log = 0; log < logsPerTx[i]; ++log)
+        {
+            logs.emplace_back(bcos::bytes(20, 0x20), bcos::h256s{bcos::h256(2U)},
+                bcos::bytes(32, static_cast<bcos::byte>(0xb0 + log)));
+        }
+        receipts.push_back(m_blockFactory->receiptFactory()->createReceipt2(21000, "", logs, 0,
+            bcos::ref(bcos::bytes{}), 1, "1", protocol::TransactionVersion::V1_VERSION, true));
+        transactions.push_back(std::move(tx));
+    }
+
+    std::vector<bcos::bytes> noRawTransactions;
+    auto const computation = task::syncWait(ledger::mpt::computeEthereumRoots(
+        receipts, transactions | ::ranges::views::indirect, noRawTransactions));
+
+    // Rebuild the leaf strings exactly as debug_getRawReceipts does, then the trie over them.
+    std::vector<bcos::bytes> leaves;
+    leaves.reserve(receipts.size());
+    for (size_t i = 0; i < receipts.size(); ++i)
+    {
+        leaves.push_back(ledger::mpt::encodeReceiptLeaf(
+            *receipts[i], engine::receiptLeafTypeByte(*transactions[i])));
+    }
+    std::vector<bcos::bytesConstRef> leafRefs;
+    leafRefs.reserve(leaves.size());
+    for (auto const& leaf : leaves)
+    {
+        leafRefs.emplace_back(bcos::ref(leaf));
+    }
+    // The property the endpoint exists for: these bytes, and no others, reproduce the committed
+    // root. Swapping encodeReceiptLeaf for any other encoder turns this red.
+    BOOST_CHECK_EQUAL(ledger::mpt::calculateReceiptsRoot(leafRefs), computation.receiptsRoot);
+    BOOST_CHECK(computation.receiptsRoot != bcos::h256{});
+    // The producer finalizes bloom + cumulativeGasUsed only; the position is derived at read time
+    // (see ethereumLaneStoredReceiptsKeepTheirLegacyPosition), so it is still unset here.
+    BOOST_CHECK_EQUAL(receipts[1]->transactionIndex(), 0U);
+    BOOST_CHECK_EQUAL(receipts[1]->logIndex(), 0U);
+}
+
+// The receipt leaf's EIP-2718 prefix comes from the transaction's signed envelope, not from the
+// tars web3TypedTxKind() mirror. The two agree on everything the tree produces today, which is why
+// a case where they DISAGREE is the only one that pins the rule: with the mirror consulted first
+// (or only), a peer that rewrites that field would steer the prefix, and the committed receiptsRoot
+// would then differ from what a standard client computes for the same block.
+//
+// The envelope bytes here are a bare typed prefix, which is all the classification reads.
+BOOST_AUTO_TEST_CASE(receiptLeafTypeBytePrefersTheEnvelopeOverTheMirror)
+{
+    initFixture();
+
+    auto const makeTx = [&](bcos::bytes envelope, int mirror) {
+        auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+        auto& inner = tx->mutableInner();
+        inner.data.version = 1;
+        inner.type = static_cast<int>(bcos::protocol::TransactionType::Web3Transaction);
+        inner.web3TypedTxKind = mirror;
+        inner.extraTransactionBytes.assign(envelope.begin(), envelope.end());
+        return tx;
+    };
+
+    // Envelope 0x02 (EIP-1559) while the mirror claims legacy: the envelope wins.
+    auto const typed = makeTx(bcos::bytes{0x02, 0xc0}, /*mirror=*/0);
+    BOOST_CHECK_EQUAL(typed->web3TypedTxKind(), 0);
+    BOOST_CHECK_EQUAL(static_cast<int>(engine::receiptLeafTypeByte(*typed)), 0x02);
+
+    // Envelope 0x01 (EIP-2930) with a mirror claiming 0x02: still the envelope.
+    auto const accessList = makeTx(bcos::bytes{0x01, 0xc0}, /*mirror=*/2);
+    BOOST_CHECK_EQUAL(static_cast<int>(engine::receiptLeafTypeByte(*accessList)), 0x01);
+
+    // No envelope bytes at all (FISCO-native, and the synthetic transactions tests build): the
+    // mirror is the fallback, and a non-Web3 transaction maps to 0 rather than throwing.
+    auto const native = makeTx(bcos::bytes{}, /*mirror=*/0);
+    BOOST_CHECK_EQUAL(static_cast<int>(engine::receiptLeafTypeByte(*native)), 0x00);
+    auto const nativeWithMirror = makeTx(bcos::bytes{}, /*mirror=*/2);
+    BOOST_CHECK_EQUAL(static_cast<int>(engine::receiptLeafTypeByte(*nativeWithMirror)), 0x02);
+
+    // A legacy RLP list header (>= 0xc0) is legacy: 0x00, not "unsupported".
+    auto legac = makeTx(bcos::bytes{0xf8, 0x6e}, /*mirror=*/2);
+    BOOST_CHECK_EQUAL(static_cast<int>(engine::receiptLeafTypeByte(*legac)), 0x00);
+}
+
+// findReceiptPosition is what eth_getTransactionReceipt goes through, and it was checking the
+// receipts against transactionsSize() -- which counts transaction BODIES. Both callers read the
+// block with TRANSACTIONS_HASH, which fills the metadata list and leaves the bodies empty, so that
+// comparison was n != 0 and EVERY receipt lookup answered nullopt: the endpoint turned a plain
+// eth_getTransactionReceipt into InternalError ("is not in the block its receipt names") for every
+// transaction on the chain. It reached CI as 21 Hardhat timeouts on the executor-v1 lane, because
+// the suite polls for a receipt after each deploy and never got one.
+//
+// The block can be read with either flag, so both shapes are pinned here: the receipt list always
+// pairs one-to-one with whichever transaction list the read populated.
+BOOST_AUTO_TEST_CASE(receiptPositionIsFoundForEveryBlockReadShape)
+{
+    initFixture();
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(4244);
+    header->setTimestamp(1002);
+    header->setGasLimit(30000000);
+    header->setSealer(0);
+    header->setExcessBlobGas(0);
+    header->setBlobGasUsed(0);
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+
+    // Two logs in the first transaction only, so a wrong log base is visible as 0 where 2 belongs.
+    std::vector<std::size_t> const logsPerTx{2, 0, 1};
+    std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    std::vector<protocol::Transaction::Ptr> transactions;
+    for (size_t i = 0; i < logsPerTx.size(); ++i)
+    {
+        transactions.push_back(m_blockFactory->transactionFactory()->createTransaction(i,
+            "0x1000000000000000000000000000000000000000", bcos::bytes{0x60},
+            std::to_string(3000 + i), 1000, "chain0", "group0", 0));
+        std::vector<protocol::LogEntry> logs;
+        for (size_t log = 0; log < logsPerTx[i]; ++log)
+        {
+            logs.emplace_back(bcos::bytes(20, 0x30),
+                bcos::h256s{bcos::h256("0xcafef00dcafef00dcafef00dcafef00dcafef00d"
+                                       "cafef00dcafef00dcafef00d")},
+                bcos::bytes(32, static_cast<bcos::byte>(0xc0 + log)));
+        }
+        receipts.push_back(m_blockFactory->receiptFactory()->createReceipt2(21000, "", logs, 0,
+            bcos::ref(bcos::bytes{}), 1, "1", protocol::TransactionVersion::V1_VERSION, true));
+    }
+
+    std::vector<bcos::bytes> noRawTransactions;
+    task::syncWait(ledger::mpt::computeEthereumRoots(
+        receipts, transactions | ::ranges::views::indirect, noRawTransactions));
+    for (size_t i = 0; i < receipts.size(); ++i)
+    {
+        block->appendTransaction(transactions[i]);
+        block->appendReceipt(receipts[i]);
+    }
+
+    std::promise<bool> prewritePromise;
+    m_ledger->asyncPrewriteBlock(
+        m_storage, nullptr, block,
+        [&](std::string, Error::Ptr&& error) {
+            BOOST_CHECK(!error);
+            prewritePromise.set_value(true);
+        },
+        true, std::nullopt, std::nullopt, true);
+    BOOST_REQUIRE(prewritePromise.get_future().get());
+
+    // Literal expectations, not values read off the block under test.
+    std::vector<std::size_t> const expectedLogIndex{0, 2, 2};
+
+    // TRANSACTIONS_HASH | RECEIPTS is the shape both EthEndpoint callers use. It carries no
+    // transaction bodies, which is exactly why comparing against transactionsSize() rejected it.
+    {
+        std::promise<protocol::Block::Ptr> blockPromise;
+        m_ledger->asyncGetBlockDataByNumber(4244,
+            bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::RECEIPTS,
+            [&](Error::Ptr error, protocol::Block::Ptr result) {
+                BOOST_CHECK(!error);
+                blockPromise.set_value(std::move(result));
+            });
+        auto hashOnly = blockPromise.get_future().get();
+        BOOST_REQUIRE(hashOnly != nullptr);
+        BOOST_REQUIRE_EQUAL(hashOnly->receiptsSize(), logsPerTx.size());
+        // The premise of the regression: the bodies are absent, the metadata is present.
+        BOOST_REQUIRE_EQUAL(hashOnly->transactionsSize(), 0U);
+        BOOST_REQUIRE_EQUAL(hashOnly->transactionsMetaDataSize(), logsPerTx.size());
+
+        for (size_t i = 0; i < logsPerTx.size(); ++i)
+        {
+            auto const hash = transactions[i]->hash();
+            auto const position = protocol::findReceiptPosition(*hashOnly, hash);
+            BOOST_REQUIRE_MESSAGE(position.has_value(),
+                "no derived position for transaction " << i << " on a TRANSACTIONS_HASH read");
+            BOOST_CHECK_EQUAL(position->transactionIndex, i);
+            BOOST_CHECK_EQUAL(position->logIndex, expectedLogIndex[i]);
+        }
+        // A hash the block does not list must still be refused, or a lookup miss would silently
+        // answer with some other transaction's position.
+        BOOST_CHECK(
+            !protocol::findReceiptPosition(*hashOnly, bcos::crypto::HashType(0x1234U)).has_value());
+    }
+
+    // TRANSACTIONS | RECEIPTS fills the bodies and leaves the metadata empty. No endpoint calls
+    // findReceiptPosition with that shape today, but the helper must not depend on which list a
+    // read happened to populate, so the other branch is pinned too. Built in memory: the ledger's
+    // block storage in this fixture does not persist transaction bodies, and this branch is about
+    // the block's own two lists, not about storage.
+    {
+        auto inMemory = m_blockFactory->createBlock();
+        for (size_t i = 0; i < logsPerTx.size(); ++i)
+        {
+            inMemory->appendTransaction(transactions[i]);
+            inMemory->appendReceipt(receipts[i]);
+        }
+        BOOST_REQUIRE_EQUAL(inMemory->transactionsSize(), logsPerTx.size());
+        BOOST_REQUIRE_EQUAL(inMemory->transactionsMetaDataSize(), 0U);
+
+        for (size_t i = 0; i < logsPerTx.size(); ++i)
+        {
+            auto const position = protocol::findReceiptPosition(*inMemory, transactions[i]->hash());
+            BOOST_REQUIRE_MESSAGE(position.has_value(),
+                "no derived position for transaction " << i << " on a TRANSACTIONS read");
+            BOOST_CHECK_EQUAL(position->transactionIndex, i);
+            BOOST_CHECK_EQUAL(position->logIndex, expectedLogIndex[i]);
+        }
+        BOOST_CHECK(
+            !protocol::findReceiptPosition(*inMemory, bcos::crypto::HashType(0x5678U)).has_value());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

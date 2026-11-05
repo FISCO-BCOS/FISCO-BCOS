@@ -1,5 +1,6 @@
 #include "bcos-rpc/filter/FilterSystem.h"
 #include "bcos-rpc/jsonrpc/Common.h"
+#include <bcos-framework/protocol/ReceiptBlockPosition.h>
 #include <utility>
 
 #define CPU_CORES (std::thread::hardware_concurrency() + 1)
@@ -318,6 +319,9 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         auto block = co_await ledger::getBlockData(*ledger, blockNumber,
             bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
         Json::Value jArray(Json::arrayValue);
+        // Derive the block position before matching: the matcher reads logIndex off the receipts,
+        // and a stored value is not authoritative (historical rows may predate the field).
+        protocol::stampReceiptBlockPositions(*block);
         matcher->matches(params, block, jArray);
         co_return jArray;
     }
@@ -362,6 +366,9 @@ task::Task<Json::Value> FilterSystem::getLogsInternal(
     {
         auto block = co_await ledger::getBlockData(ledger, number,
             bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
+        // Derive the block position before matching: the matcher reads logIndex off the receipts,
+        // and a stored value is not authoritative (historical rows may predate the field).
+        protocol::stampReceiptBlockPositions(*block);
         matcher->matches(params, block, jArray);
     }
     co_return jArray;
