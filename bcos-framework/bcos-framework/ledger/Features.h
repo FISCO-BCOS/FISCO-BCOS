@@ -95,9 +95,12 @@ public:
         feature_balance_precompiled = 44,
         feature_balance_policy1 = 45,
         feature_paillier_add_raw = 46,
-        // 47, 49 and 50 were feature_evm_eip2929 / feature_evm_prague / feature_evm_osaka,
-        // introduced on release-3.18.0 but never released. Do not reuse their names or values.
+        // 47 was feature_evm_eip2929, introduced on release-3.18.0 but never released.
+        // Do not reuse its name or value.
         feature_evm_cancun = 48,
+        feature_evm_prague = 49,  // EIP-7702、BLS12-381；依赖 feature_evm_cancun
+        feature_evm_osaka = 50,   // EIP-7212 p256verify、EIP-7823/EIP-7883 modexp；依赖
+                                  // feature_evm_prague
         feature_evm_timestamp = 51,
         feature_evm_address = 52,
         feature_rpbft_term_weight = 53,

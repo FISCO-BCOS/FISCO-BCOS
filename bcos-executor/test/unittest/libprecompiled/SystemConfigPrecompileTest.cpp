@@ -329,6 +329,22 @@ BOOST_AUTO_TEST_CASE(featureWithoutDependencyIsRefusedByGovernance)
         });
 }
 
+BOOST_AUTO_TEST_CASE(evmForkFlagWithoutPreviousForkIsRefusedByGovernance)
+{
+    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
+    auto setParameters = std::make_shared<PrecompiledExecResult>();
+    CodecWrapper codec(hashImpl);
+
+    auto setInput = codec.encodeWithSig(
+        "setValueByKey(string,string)", std::string("feature_evm_prague"), std::string("1"));
+    setParameters->m_input = bcos::ref(setInput);
+    BOOST_CHECK_EXCEPTION(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError,
+        [](PrecompiledError const& e) {
+            auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
+            return msg != nullptr && msg->find("feature_evm_cancun") != std::string::npos;
+        });
+}
+
 // The Ethereum lane (executor_version >= ledger::ETHEREUM_EXECUTOR_VERSION: L1 EL at 2, OP-Stack
 // at 3+) is chosen once at boot from the on-chain executor_version row: it decides the
 // account-table lane, the state-root scheme, the block producer and the fork schedule. This

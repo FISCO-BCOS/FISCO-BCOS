@@ -100,6 +100,23 @@ BOOST_AUTO_TEST_CASE(TE_FC_revision_cancun_only)
         EVMC_CANCUN);
 }
 
+BOOST_AUTO_TEST_CASE(TE_FC_revision_osaka_prague_chain)
+{
+    bcos::ledger::Features osaka;
+    osaka.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    osaka.set(bcos::ledger::Features::Flag::feature_evm_osaka);
+    BOOST_CHECK_EQUAL(bcos::executor::toRevision(
+                          osaka, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION)),
+        EVMC_OSAKA);
+
+    bcos::ledger::Features prague;
+    prague.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    prague.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    BOOST_CHECK_EQUAL(bcos::executor::toRevision(
+                          prague, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION)),
+        EVMC_PRAGUE);
+}
+
 BOOST_AUTO_TEST_CASE(TE_FC_access_always_cold)
 {
     bcos::ledger::Features features;

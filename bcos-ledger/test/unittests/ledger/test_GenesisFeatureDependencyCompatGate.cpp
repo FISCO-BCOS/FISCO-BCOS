@@ -120,7 +120,9 @@ BOOST_AUTO_TEST_CASE(V318GenesisRefusesMissingDependency)
         std::string_view missing;
     };
     for (auto const& [flag, missing] :
-        {Case{Features::Flag::feature_balance_precompiled, "feature_balance"},
+        {Case{Features::Flag::feature_evm_prague, "feature_evm_cancun"},
+            Case{Features::Flag::feature_evm_osaka, "feature_evm_prague"},
+            Case{Features::Flag::feature_balance_precompiled, "feature_balance"},
             Case{Features::Flag::feature_balance_policy1, "feature_balance_precompiled"}})
     {
         BOOST_TEST_CONTEXT("flag=" << magic_enum::enum_name(flag))

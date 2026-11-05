@@ -196,6 +196,8 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_balance_policy1",
         "feature_paillier_add_raw",
         "feature_evm_cancun",
+        "feature_evm_prague",
+        "feature_evm_osaka",
         "feature_evm_timestamp",
         "feature_evm_address",
         "feature_rpbft_term_weight",
@@ -249,6 +251,20 @@ BOOST_AUTO_TEST_CASE(featureDependenciesRequireEnabledFlag)
 
     features.set(Features::Flag::feature_balance_precompiled);
     BOOST_CHECK_NO_THROW(features.validate("feature_balance_policy1"));
+}
+
+BOOST_AUTO_TEST_CASE(evmForkFlagsRequireThePreviousFork)
+{
+    Features features;
+    BOOST_CHECK_THROW(features.validate("feature_evm_prague"), bcos::tool::InvalidSetFeature);
+    BOOST_CHECK_THROW(features.validate("feature_evm_osaka"), bcos::tool::InvalidSetFeature);
+
+    features.set(Features::Flag::feature_evm_cancun);
+    BOOST_CHECK_NO_THROW(features.validate("feature_evm_prague"));
+    BOOST_CHECK_THROW(features.validate("feature_evm_osaka"), bcos::tool::InvalidSetFeature);
+
+    features.set(Features::Flag::feature_evm_prague);
+    BOOST_CHECK_NO_THROW(features.validate("feature_evm_osaka"));
 }
 
 BOOST_AUTO_TEST_CASE(flagCountWithinReflectionRange)

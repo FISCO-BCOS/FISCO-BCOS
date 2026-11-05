@@ -35,6 +35,8 @@ struct Dependency
 constexpr std::array c_dependencies{
     Dependency{"feature_balance_precompiled", "feature_balance"},
     Dependency{"feature_balance_policy1", "feature_balance_precompiled"},
+    Dependency{"feature_evm_prague", "feature_evm_cancun"},
+    Dependency{"feature_evm_osaka", "feature_evm_prague"},
 };
 // Features::validate warns on this one: the account-table encoding is node-local now
 constexpr std::string_view c_deprecated = "feature_raw_address";

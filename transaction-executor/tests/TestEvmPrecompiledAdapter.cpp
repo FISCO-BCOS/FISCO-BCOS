@@ -480,6 +480,25 @@ BOOST_AUTO_TEST_CASE(swappedExecutorsEquivalentThroughManager)
     {
         checkManager(8, "alt_bn128_pairing_product", input);
     }
+
+    std::vector<bytes> blsCorpus = genericCorpus();
+    blsCorpus.push_back(zeroBytes(256));
+    blsCorpus.push_back(zeroBytes(512));
+    blsCorpus.push_back(zeroBytes(160));
+    blsCorpus.push_back(zeroBytes(288));
+    blsCorpus.push_back(zeroBytes(384));
+    blsCorpus.push_back(concat({zeroBytes(16), BLS12_P, zeroBytes(192)}));
+    for (auto const& input : blsCorpus)
+    {
+        checkManager(0x0b, "bls12_g1add", input);
+        checkManager(0x0c, "bls12_g1msm", input);
+        checkManager(0x0d, "bls12_g2add", input);
+        checkManager(0x0e, "bls12_g2msm", input);
+        checkManager(0x0f, "bls12_pairing_check", input);
+        checkManager(0x10, "bls12_map_fp_to_g1", input);
+        checkManager(0x11, "bls12_map_fp2_to_g2", input);
+        checkManager(0x0100, "p256verify", input);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

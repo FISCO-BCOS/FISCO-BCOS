@@ -21,6 +21,7 @@
 
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "vm/EvmPrecompiledAddress.h"
 #include "vm/Precompiled.h"
 #include "vm/VMInstance.h"
 #include <Common.h>
@@ -888,6 +889,21 @@ BOOST_AUTO_TEST_CASE(toRevisionMapping)
         s.enableCanCun = true;
         BOOST_CHECK_EQUAL(toRevision(s), EVMC_CANCUN);
     }
+    {
+        VMSchedule s;
+        s.enableCanCun = true;
+        s.enablePrague = true;
+        BOOST_CHECK_EQUAL(toRevision(s), EVMC_PRAGUE);
+    }
+    {
+        VMSchedule s;
+        s.enablePairs = true;
+        s.enableCanCun = true;
+        s.enablePrague = true;
+        s.enableOsaka = true;
+        BOOST_CHECK_EQUAL(toRevision(s), EVMC_OSAKA);
+        BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleOsaka), EVMC_OSAKA);
+    }
 }
 
 namespace
@@ -958,6 +974,328 @@ BOOST_AUTO_TEST_CASE(modexpCompatibility)
         BOOST_REQUIRE(r.first);
         BOOST_CHECK_EQUAL(r.second[0], 0);
     }
+}
+
+BOOST_AUTO_TEST_CASE(p256verify_short_input)
+{
+    bytes short_in(159, 0x00);
+    auto [ok, out] = exec("p256verify", short_in);
+    BOOST_CHECK(ok == true);
+    BOOST_CHECK(out.empty());
+}
+
+BOOST_AUTO_TEST_CASE(p256verify_long_input)
+{
+    bytes long_in(161, 0x00);
+    auto [ok, out] = exec("p256verify", long_in);
+    BOOST_CHECK(ok == true);
+    BOOST_CHECK(out.empty());
+}
+
+BOOST_AUTO_TEST_CASE(p256verify_all_zero)
+{
+    bytes zero_in(160, 0x00);
+    auto [ok, out] = exec("p256verify", zero_in);
+    BOOST_CHECK(ok == true);
+    BOOST_CHECK(out.empty());
+}
+
+BOOST_AUTO_TEST_CASE(p256verify_valid_signature)
+{
+    bytes input;
+    input += bcos::fromHex("bb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023");
+    input += bcos::fromHex("2ba3a8be6b94d5ec80a6d9d1190a436effe50d85a1eee859b8cc6af9bd5c2e18");
+    input += bcos::fromHex("4cd60b855d442f5b3c7b11eb6c4e0ae7525fe710fab9aa7c77a67f79e6fadd76");
+    input += bcos::fromHex("2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838");
+    input += bcos::fromHex("c7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513e");
+    BOOST_REQUIRE_EQUAL(input.size(), 160u);
+    auto [ok, out] = exec("p256verify", input);
+    BOOST_CHECK(ok);
+    BOOST_REQUIRE_EQUAL(out.size(), 32u);
+    for (size_t i = 0; i < 31; ++i)
+        BOOST_CHECK_EQUAL(out[i], 0);
+    BOOST_CHECK_EQUAL(out[31], 1);
+}
+
+BOOST_AUTO_TEST_CASE(p256verify_gas)
+{
+    auto pricer = executor::PrecompiledRegistrar::pricer("p256verify");
+    bytes empty;
+    BOOST_CHECK_EQUAL(pricer(ref(empty)), 6900);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(testEip7623)
+
+BOOST_AUTO_TEST_CASE(eip7623CallDataFloorCost)
+{
+    using namespace bcos::executor;
+    {
+        bytes dataEmpty;
+        BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(dataEmpty)), 0);
+    }
+
+    bytes data(100, 0x00);
+    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(data)), 1000);
+    bytes data2(100, 0xff);
+    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(data2)), 4000);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(testIsBLSPrecompileAddress)
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0b_no_prefix)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("000000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0c)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("000000000000000000000000000000000000000c"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0d)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("000000000000000000000000000000000000000d"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0e)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("000000000000000000000000000000000000000e"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0f)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("000000000000000000000000000000000000000f"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x10)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0000000000000000000000000000000000000010"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x11_no_prefix)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0000000000000000000000000000000000000011"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x_prefix_0b)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0x000000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x_prefix_0f)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0x000000000000000000000000000000000000000f"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x_prefix_11)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0x0000000000000000000000000000000000000011"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0a_below_range)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000000000000000000000000a"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x12_above_range)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000012"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x09_below_range)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000009"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_leading_byte)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("010000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_middle_byte)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000001000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_penultimate_nibble_nonzero)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000000000000000000000002b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_empty_string)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress(""));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_too_short)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("00000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_too_long)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_only_prefix)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0x"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_prefix_too_short)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0x00000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_ecrecover)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000001"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_p256verify)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000100"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_all_zeros)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000000"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x_prefix_all_zeros)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0x0000000000000000000000000000000000000000"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_uppercase_last_nibble)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000000000000000000000000B"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_uppercase_nibble_in_leading_section)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000A0000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_at_loop_position_37)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000000000000000000000010b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_at_loop_position_0)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("f00000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_at_loop_position_20)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000001000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_at_loop_position_19)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000010000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_40_zeros_hi1_lo0_is_0x10)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0x0000000000000000000000000000000000000010"));
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(testIsP256verifyPrecompileAddress)
+
+BOOST_AUTO_TEST_CASE(p256_exact_match_no_prefix)
+{
+    BOOST_CHECK(
+        executor::isP256verifyPrecompileAddress("0000000000000000000000000000000000000100"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_exact_match_with_prefix)
+{
+    BOOST_CHECK(
+        executor::isP256verifyPrecompileAddress("0x0000000000000000000000000000000000000100"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_empty_string)
+{
+    BOOST_CHECK(!executor::isP256verifyPrecompileAddress(""));
+}
+
+BOOST_AUTO_TEST_CASE(p256_only_prefix)
+{
+    BOOST_CHECK(!executor::isP256verifyPrecompileAddress("0x"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_too_short_39)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("000000000000000000000000000000000000100"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_too_long_41)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("00000000000000000000000000000000000000100"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_prefix_body_39_chars)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("0x000000000000000000000000000000000000100"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_all_zeros)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("0000000000000000000000000000000000000000"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_ecrecover)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("0000000000000000000000000000000000000001"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_bls_0x0b)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("000000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_near_miss_last_nibble)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("0000000000000000000000000000000000000101"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_near_miss_second_nibble)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("0000000000000000000000000000000000000110"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_uppercase_last_nibble)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("000000000000000000000000000000000000010A"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_uppercase_in_middle)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("000000000000000000000000000000000000A100"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_with_prefix_uppercase)
+{
+    BOOST_CHECK(
+        executor::isP256verifyPrecompileAddress("0X0000000000000000000000000000000000000100"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

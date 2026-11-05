@@ -40,6 +40,16 @@ BOOST_AUTO_TEST_CASE(FC_S_legacy_tx_no_prague_path)
     BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
 }
 
+BOOST_AUTO_TEST_CASE(FC_S_cancun_only_no_prague_precompile)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+    using compat::CompatFeatureProfile;
+
+    auto host = makeCompatHostContext(*this, CompatFeatureProfile::cancunOnly());
+    auto r = compatCallBuiltInPrecompiled(host, std::string(addr::BLS_G1ADD), bytes(256, 0));
+    BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
+}
+
 BOOST_AUTO_TEST_CASE(FC_S_access_always_cold)
 {
     auto host = makeCompatHostContext(*this, compat::CompatFeatureProfile::cancunOnly());

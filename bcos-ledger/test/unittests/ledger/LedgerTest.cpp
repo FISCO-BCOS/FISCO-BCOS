@@ -1894,6 +1894,9 @@ BOOST_AUTO_TEST_CASE(genesisFeaturesRequireDependencies)
                     .flag = magic_enum::enum_cast<Features::Flag>(missing).value(), .enable = 1});
             BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
         };
+        co_await refused({Features::Flag::feature_evm_prague}, "feature_evm_cancun");
+        co_await refused({Features::Flag::feature_evm_cancun, Features::Flag::feature_evm_osaka},
+            "feature_evm_prague");
         co_await refused({Features::Flag::feature_balance_precompiled}, "feature_balance");
         co_await refused({Features::Flag::feature_balance, Features::Flag::feature_balance_policy1},
             "feature_balance_precompiled");
