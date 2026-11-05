@@ -354,7 +354,12 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
 
     auto& sender_acc = state.get_or_insert(sender);
     assert(sender_acc.nonce < EthAccount::NonceMax);  // Required for valid tx.
-    ++sender_acc.nonce;                               // Bump sender nonce.
+    // A top-level CREATE derives its address from the nonce the transaction was validated
+    // against, i.e. the account nonce BEFORE this bump (prepare_message's
+    // `sender_acc.nonce - 1`). Capture it here so the receipt can report the same address
+    // evmone created the account at.
+    const auto senderNonce = sender_acc.nonce;
+    ++sender_acc.nonce;  // Bump sender nonce.
 
     // The NODE's chain id, never tx.chain_id: validate_transaction does not
     // check that field, so passing it would make EIP-7702 step 1 compare sender
@@ -419,9 +424,25 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
         txProps.min_gas_cost, gasLimit, result.gas_left, delegation_refund, result.gas_refund,
         tx_max_cost, effective_gas_price, priority_gas_price, sender_acc);
 
+    // A creation transaction records the to-be-created address in its receipt (op-geth
+    // state_processor.go MakeReceipt / ApplyTransactionWithEVM: CreateAddress(from, nonce)).
+    // The eth lane used to hand buildReceipt an empty address unconditionally, so
+    // eth_getTransactionReceipt answered contractAddress: null for every deployment while the
+    // same deployment on the OP lane reported one. RPC-only field: the receipts trie leaf
+    // (encodeReceiptLeaf) is [status, cumulativeGasUsed, logsBloom, logs], so this never moves
+    // receiptsRoot. Format matches the OP lane: 40 lowercase hex chars, no "0x" -- the RPC
+    // layer adds the prefix and EIP-55 checksums it.
+    std::string contractAddress;
+    if (!to.has_value())
+    {
+        const auto created = evm::compute_create_address(sender, senderNonce);
+        contractAddress = evmc::hex({created.bytes, sizeof(created.bytes)});
+    }
+
     // Dry runs (eth_call / eth_estimateGas) are the only callers that need the return data in
     // the receipt; they discard it, while a mined transaction's receipt would grow for nothing.
-    auto receipt = policy.buildReceipt(host, result, gas_used, rf, blockNumber, callParams.free);
+    auto receipt = policy.buildReceipt(
+        host, result, gas_used, rf, blockNumber, callParams.free, std::move(contractAddress));
 
     co_await state.applyToStorage(rev);
     co_return receipt;
