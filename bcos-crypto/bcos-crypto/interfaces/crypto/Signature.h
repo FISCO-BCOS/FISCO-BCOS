@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
+#include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/key/KeyImpl.h>
 #include <memory>
 #include <mutex>
@@ -40,7 +41,7 @@ public:
         bool _signatureWithPub = false) const = 0;
 
     // verify checks whether a signature is calculated from a given hash.
-    // The Public& overload returns false for an undersized key, while bytesConstRef throws
+    // The Public& overload returns false for an incorrectly sized key, while bytesConstRef throws
     // InvalidKey. Secp256k1 also throws InvalidSignature for malformed signatures and recovery
     // failure; the other implementations return false for short signatures.
     bool verify(const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
@@ -60,7 +61,8 @@ public:
         bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const = 0;
 
     // recover is intentionally closed to KeyImpl: SignatureCrypto does not support alternative
-    // key representations, so interfaces/crypto depends on signature/key by design.
+    // key representations, so interfaces/crypto depends on signature/key and
+    // signature/Exceptions.h by design.
     virtual KeyImpl recover(const HashType& _hash, bytesConstRef _signatureData) const = 0;
     virtual bytes recoverAddress(
         crypto::Hash& _hashImpl, const HashType& _hash, bytesConstRef _signatureData) const

@@ -78,7 +78,7 @@ bytes bcos::crypto::secp256k1Sign(const KeyPairInterface& _keyPair, const HashTy
 bool bcos::crypto::secp256k1Verify(
     bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData)
 {
-    if (_pubKeyBytes.size() < SECP256K1_PUBLICKEY_LEN)
+    if (_pubKeyBytes.size() != SECP256K1_PUBLICKEY_LEN)
     {
         BOOST_THROW_EXCEPTION(
             InvalidKey() << errinfo_comment(

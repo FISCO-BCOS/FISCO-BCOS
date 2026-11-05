@@ -95,7 +95,7 @@ KeyPairInterface::UniquePtr bcos::crypto::ed25519GenerateKeyPair()
 bool bcos::crypto::ed25519Verify(
     bytesConstRef _pubKeyBytes, const HashType& _messageHash, bytesConstRef _signatureData)
 {
-    if (_pubKeyBytes.size() < ED25519_PUBLIC_LEN)
+    if (_pubKeyBytes.size() != ED25519_PUBLIC_LEN)
     {
         BOOST_THROW_EXCEPTION(
             InvalidKey() << errinfo_comment(

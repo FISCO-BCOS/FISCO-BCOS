@@ -370,9 +370,8 @@ BOOST_AUTO_TEST_CASE(testSM2SignAndVerify)
     SM2SignAndVerifyTest(fastCrypto);
 }
 
-// fast_sm2_verify copies raw_public_key->len bytes into a fixed 65-byte stack buffer;
-// the verify entry points do not truncate oversized input, so a >64-byte public key must fail
-// cleanly (under ASan any residual overflow would abort the test binary)
+// fast_sm2_verify requires an exact 64-byte key before its fixed 65-byte stack copy;
+// both public-key overloads must reject oversized input cleanly
 BOOST_AUTO_TEST_CASE(testSM2VerifyOversizedPublicKey)
 {
     auto signatureCrypto = std::make_shared<SM2Crypto>();
@@ -386,15 +385,18 @@ BOOST_AUTO_TEST_CASE(testSM2VerifyOversizedPublicKey)
     auto oversizedPub = bytes(keyPair->publicKey()->constData(),
         keyPair->publicKey()->constData() + keyPair->publicKey()->size());
     oversizedPub.push_back(0x01);
+    BOOST_CHECK_THROW(signatureCrypto->verify(ref(oversizedPub), hashData,
+                          bytesConstRef(signature.data(), signature.size())),
+        InvalidKey);
     BOOST_CHECK(!signatureCrypto->verify(
-        ref(oversizedPub), hashData, bytesConstRef(signature.data(), signature.size())));
+        KeyImpl(oversizedPub), hashData, bytesConstRef(signature.data(), signature.size())));
     // short public key through the bytesConstRef overload is rejected explicitly
     auto shortPub = bytes(keyPair->publicKey()->constData(),
         keyPair->publicKey()->constData() + keyPair->publicKey()->size() - 1);
     BOOST_CHECK_THROW(signatureCrypto->verify(ref(shortPub), hashData,
                           bytesConstRef(signature.data(), signature.size())),
         InvalidKey);
-    // short public key reaching fast_sm2_verify directly (KeyImpl without the size ctor)
+    // the Public& overload maps an undersized key to false
     BOOST_CHECK(!signatureCrypto->verify(
         KeyImpl(bytes(63, 0x04)), hashData, bytesConstRef(signature.data(), signature.size())));
 }

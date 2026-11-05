@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(recoverAddressRejectsBadSignature)
     BOOST_CHECK_THROW(crypto.recoverAddress(hasher, hash, bcos::ref(badSig)), std::exception);
 }
 
-BOOST_AUTO_TEST_CASE(verifyBytesPublicKeyRejectsShortInput)
+BOOST_AUTO_TEST_CASE(verifyRejectsIncorrectPublicKeyLength)
 {
     Secp256k1Crypto crypto;
     auto keyPair = crypto.generateKeyPair();
@@ -65,6 +65,12 @@ BOOST_AUTO_TEST_CASE(verifyBytesPublicKeyRejectsShortInput)
     BOOST_CHECK(secp256k1Verify(ref(pubBytes), hash, ref(signature)));
 
     pubBytes.pop_back();
+    BOOST_CHECK(!crypto.verify(KeyImpl(pubBytes), hash, ref(signature)));
+    BOOST_CHECK_THROW(crypto.verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
+    BOOST_CHECK_THROW(secp256k1Verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
+
+    pubBytes = keyPair->publicKey()->data();
+    pubBytes.push_back(0);
     BOOST_CHECK(!crypto.verify(KeyImpl(pubBytes), hash, ref(signature)));
     BOOST_CHECK_THROW(crypto.verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
     BOOST_CHECK_THROW(secp256k1Verify(ref(pubBytes), hash, ref(signature)), InvalidKey);

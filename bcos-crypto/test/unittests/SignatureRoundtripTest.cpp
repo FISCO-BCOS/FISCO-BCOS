@@ -48,6 +48,11 @@ BOOST_AUTO_TEST_CASE(ed25519SignVerifyRecoverRoundtrip)
     BOOST_CHECK_THROW(ed25519Verify(ref(pubBytes), hash, ref(sig)), InvalidKey);
     BOOST_CHECK(!crypto.verify(KeyImpl(pubBytes), hash, ref(sig)));
     pubBytes = keyPair->publicKey()->data();
+    pubBytes.push_back(0);
+    BOOST_CHECK_THROW(crypto.verify(ref(pubBytes), hash, ref(sig)), InvalidKey);
+    BOOST_CHECK_THROW(ed25519Verify(ref(pubBytes), hash, ref(sig)), InvalidKey);
+    BOOST_CHECK(!crypto.verify(KeyImpl(pubBytes), hash, ref(sig)));
+    pubBytes = keyPair->publicKey()->data();
 
     // createKeyPair(secret) reproduces the same public key
     auto ownedSecret = std::make_shared<KeyImpl>(keyPair->secretKey()->data());

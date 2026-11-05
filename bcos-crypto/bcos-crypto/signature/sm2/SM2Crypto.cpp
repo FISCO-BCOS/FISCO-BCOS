@@ -39,7 +39,7 @@ SM2Crypto::SM2Crypto()
 bool SM2Crypto::verify(
     bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    if (_pubKeyBytes.size() < SM2_PUBLIC_KEY_LEN)
+    if (_pubKeyBytes.size() != SM2_PUBLIC_KEY_LEN)
     {
         BOOST_THROW_EXCEPTION(
             InvalidKey() << errinfo_comment(
