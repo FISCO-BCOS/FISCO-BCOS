@@ -4,8 +4,6 @@
  *  @brief FC-7*: EIP-7623 calldata floor (S2) — formula parity with PragueTest.
  *
  *  The calcEip7623CalldataGas pure function is fully testable without an executor.
- *  Integration-path tests (seq==0 deduction, internal-call skip, OOG) require the
- *  full TransactionExecutive stack and are documented below as deferred stubs.
  *
  *  @file CompatEip7623Test.cpp
  */
@@ -57,42 +55,6 @@ BOOST_AUTO_TEST_CASE(FC_7_calldata_floor_formula)
     BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(fourZeros)), 40);
     bytes oneOne{0x42, 0x00};
     BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(oneOne)), 50);
-}
-
-BOOST_AUTO_TEST_CASE(FC_7_document_no_21000_base)
-{
-    BOOST_TEST_MESSAGE(
-        "I2: FISCO-BCOS does not add unconditional Ethereum 21000 base gas to the EIP-7623 "
-        "floor; see TransactionExecutive.cpp and transaction-executor HostContext::execute().");
-    BOOST_CHECK(true);
-}
-
-BOOST_AUTO_TEST_CASE(FC_7_skipped_internal_call_documented)
-{
-    BOOST_TEST_MESSAGE(
-        "EIP-7623 calldata floor applies only at top-level (seq==0 / m_level==0); internal "
-        "calls skip the extra deduction. Verified in transaction-executor HostContext::execute() "
-        "via the m_level gate. Compat harness does not drive internal CALL paths.");
-    BOOST_CHECK(true);
-}
-
-BOOST_AUTO_TEST_CASE(FC_7_executive_deduct_seq0_oog)
-{
-    BOOST_TEST_MESSAGE(
-        "Executive-level seq==0 OOG branch requires a full contract-table setup. "
-        "Covered by transaction-executor EIP-7623 tests (cashRevert with explicit gasLimit). "
-        "Compat harness cannot test this path.");
-    BOOST_CHECK(true);
-}
-
-BOOST_AUTO_TEST_CASE(FC_7_executive_skipped_when_seq_nonzero)
-{
-    BOOST_TEST_MESSAGE(
-        "EIP-7623 floor in TransactionExecutive::execute is gated by callParameters->seq == 0. "
-        "seq>0 internal calls skip the branch. Verified in transaction-executor path.");
-    executor::CallParameters params{executor::CallParameters::MESSAGE};
-    params.seq = 1;
-    BOOST_CHECK(params.seq != 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()  // CompatEip7623

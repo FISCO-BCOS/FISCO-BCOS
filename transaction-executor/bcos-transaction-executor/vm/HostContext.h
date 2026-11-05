@@ -505,27 +505,6 @@ public:
 
             if (!evmResult)
             {
-                // EIP-7623 calldata floor cost (Prague+, top-level transactions only)
-                // Computes max(standard_calldata_gas, tokens*10) and deducts it upfront.
-                // The 21000 base cost sits outside this formula and is handled separately.
-                if (m_level == 0 && m_revision >= EVMC_PRAGUE)
-                {
-                    auto& msg = mutableMessage();
-                    const int64_t calldataGas = executor::calcEip7623CalldataGas(
-                        bcos::bytesConstRef(msg.input_data, msg.input_size));
-                    if (msg.gas < calldataGas)
-                    {
-                        evmResult.emplace(
-                            makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                                EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : msg.gas,
-                                "EIP-7623 calldata floor OOG", fixErrorHandling));
-                    }
-                    else
-                    {
-                        msg.gas -= calldataGas;
-                    }
-                }
-
                 // Transfer first, then proceed execute
                 if (m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_delegatecall_transfer))

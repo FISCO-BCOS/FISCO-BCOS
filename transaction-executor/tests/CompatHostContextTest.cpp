@@ -64,7 +64,7 @@ public:
         uint32_t blockHeaderVersion = static_cast<uint32_t>(
             bcos::protocol::BlockVersion::MAX_VERSION),
         evmc_address originIn = {}, evmc_address recipientIn = {},
-        evmc_call_kind kindIn = EVMC_CALL, int64_t gas = 1'000'000)
+        evmc_call_kind kindIn = EVMC_CALL, int64_t gas = 1'000'000, bytes const* input = nullptr)
     {
         ledgerConfig.setFeatures(features);
         blockHeader.setVersion(blockHeaderVersion);
@@ -75,11 +75,11 @@ public:
             .gas = gas,
             .recipient = recipientIn,
             .sender = {},
-            .input_data = nullptr,
-            .input_size = 0,
+            .input_data = input == nullptr ? nullptr : input->data(),
+            .input_size = input == nullptr ? 0 : input->size(),
             .value = {},
             .create2_salt = {},
-            .code_address = {},
+            .code_address = recipientIn,
             .code = nullptr,
             .code_size = 0};
         return HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>(
@@ -115,6 +115,29 @@ BOOST_AUTO_TEST_CASE(TE_FC_revision_osaka_prague_chain)
     BOOST_CHECK_EQUAL(bcos::executor::toRevision(
                           prague, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION)),
         EVMC_PRAGUE);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_no_calldata_floor_for_prague_or_osaka)
+{
+    bytes input(100, 0);
+    auto run = [this, &input](bcos::ledger::Features::Flag fork) {
+        bcos::ledger::Features features;
+        features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+        features.set(fork);
+        evmc_address recipient{};
+        recipient.bytes[19] = 4;
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION), {},
+                recipient, EVMC_CALL, 1'000'000, &input);
+        bcos::task::syncWait(host.prepare());
+        auto result = bcos::task::syncWait(host.execute());
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+        return result.gas_left;
+    };
+
+    auto const cancunGas = run(bcos::ledger::Features::Flag::feature_evm_cancun);
+    BOOST_CHECK_EQUAL(run(bcos::ledger::Features::Flag::feature_evm_prague), cancunGas);
+    BOOST_CHECK_EQUAL(run(bcos::ledger::Features::Flag::feature_evm_osaka), cancunGas);
 }
 
 BOOST_AUTO_TEST_CASE(TE_FC_access_always_cold)
