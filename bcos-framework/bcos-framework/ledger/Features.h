@@ -102,8 +102,8 @@ public:
         // BLS12-381 / p256verify precompile gates. They do not enable an EIP-2929 warm set,
         // the EIP-7623 calldata floor, or EIP-7823/EIP-7883 ModExp changes. A chain enabling
         // either flag must run a uniform node implementation. Full rules live in
-        // ethereum-executor (executor_version >= 2); the legacy lanes must either implement
-        // those rules in a follow-up or retire these flags.
+        // ethereum-executor (executor_version >= 2). The v1 legacy lanes target consortium-chain
+        // deployments and do not track these gas-related changes.
         feature_evm_prague = 49,  // Prague revision and BLS12-381; depends on feature_evm_cancun
         feature_evm_osaka = 50,   // Osaka revision and p256verify; depends on feature_evm_prague
         feature_evm_timestamp = 51,

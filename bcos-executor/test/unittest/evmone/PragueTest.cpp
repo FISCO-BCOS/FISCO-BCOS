@@ -13,8 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Unit tests for Prague EVM features: EIP-7702 placeholder,
- *        BLS12-381 precompile gas costs, p256verify gas cost.
+ * @brief Unit tests for Prague EVM features: BLS12-381 and p256verify precompile gas costs.
  * @file PragueTest.cpp
  */
 
@@ -27,12 +26,6 @@ namespace bcos::test
 {
 
 BOOST_AUTO_TEST_SUITE(PragueTest)
-
-BOOST_AUTO_TEST_CASE(eip7702_authorization_list_skipped)
-{
-    BOOST_TEST_MESSAGE("SKIP: EIP-7702 deferred — no authorization_list in bcos-protocol");
-    BOOST_CHECK(true);
-}
 
 BOOST_AUTO_TEST_CASE(bls_precompile_gas)
 {

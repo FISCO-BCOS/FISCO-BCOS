@@ -13,9 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Prague end-to-end test skeleton: schedule flag verification, precompile
- *        gas budget checks (EIP-2537 BLS, EIP-7212 p256verify), and stubs for
- *        tests that require a live executor stack.
+ * @brief Prague end-to-end tests for schedule flags and precompile gas budgets.
  * @file PragueE2ETest.cpp
  */
 
@@ -23,18 +21,11 @@
 #include "vm/Precompiled.h"
 #include <Common.h>
 #include <boost/test/unit_test.hpp>
-#include <vector>
 
 namespace bcos::test
 {
 
 BOOST_AUTO_TEST_SUITE(PragueE2ETest)
-
-BOOST_AUTO_TEST_CASE(full_block_execution_stub)
-{
-    BOOST_TEST_MESSAGE("SKIP: full_block_execution — requires live executor stack");
-    BOOST_CHECK(true);
-}
 
 BOOST_AUTO_TEST_CASE(prague_schedule_flags)
 {
@@ -88,27 +79,6 @@ BOOST_AUTO_TEST_CASE(prague_precompile_gas_budget)
     BOOST_CHECK_EQUAL(
         executor::PrecompiledRegistrar::pricer("bls12_pairing_check")(bytesConstRef(&two_pairs)),
         u256(37700 + 2 * 32600));
-}
-
-BOOST_AUTO_TEST_CASE(modexp_precompile_stub)
-{
-    BOOST_TEST_MESSAGE("INFO: modexp gas is tested in EvmPrecompiledTest::modexpCompatibility");
-    bytes empty;
-    auto gas = executor::PrecompiledRegistrar::pricer("modexp")(bytesConstRef(&empty));
-    BOOST_CHECK_GE(gas, 0);
-}
-
-BOOST_AUTO_TEST_CASE(prague_blob_transactions_stub)
-{
-    BOOST_TEST_MESSAGE("SKIP: blob_transactions — FISCO-BCOS PBFT does not support EIP-4844 blobs");
-    BOOST_CHECK(true);
-}
-
-BOOST_AUTO_TEST_CASE(eip7702_type4_transactions_stub)
-{
-    BOOST_TEST_MESSAGE(
-        "SKIP: EIP-7702 type-4 transactions — deferred until protocol layer adds support");
-    BOOST_CHECK(true);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
