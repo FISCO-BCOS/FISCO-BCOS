@@ -209,7 +209,7 @@ check_consensus()
         done
         if (( waited >= 90 )); then
             LOG_ERROR "chain ${chain}: $(basename "${node}") not in consensus after ${waited}s; cons lines:"
-            cat "${node}"/log/* 2>/dev/null | grep -i cons | tail -n 50
+            cat "${node}"/log/* 2>/dev/null | grep -ai cons | tail -n 50
             return 1
         fi
     done
@@ -289,7 +289,8 @@ print_chain_failure()
     for node in "$(chain_nodes_dir "${chain}")"/node*; do
         [[ -d "${node}" ]] || continue
         LOG_ERROR "============= chain ${chain} $(basename "${node}") error|warn lines ============="
-        cat "${node}"/log/* 2>/dev/null | grep -iE 'error|warn' | tail -n 100
+        # -a: one binary byte in a log makes grep print "binary file matches" and no lines
+        cat "${node}"/log/* 2>/dev/null | grep -aiE 'error|warn' | tail -n 100
         LOG_ERROR "============= chain ${chain} $(basename "${node}") nohup ============="
         cat "${node}/nohup.out" 2>/dev/null | tail -n 50
     done
