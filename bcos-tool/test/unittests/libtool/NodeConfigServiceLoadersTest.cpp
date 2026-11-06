@@ -10,6 +10,7 @@
 
 #include "NodeConfigLoaderProbe.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <unistd.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <fstream>
@@ -84,7 +85,9 @@ BOOST_AUTO_TEST_CASE(serviceConfigWithoutTars)
 
 BOOST_AUTO_TEST_CASE(tarsProxyConfigFromFile)
 {
-    auto path = std::filesystem::temp_directory_path() / "nc_tars_proxy_test.ini";
+    // per process: ctest -j can run this binary's cases as concurrent processes
+    auto path = std::filesystem::temp_directory_path() /
+                ("nc_tars_proxy_test-" + std::to_string(::getpid()) + ".ini");
     {
         std::ofstream out(path);
         out << "[front]\nproxy.0=127.0.0.1:1234\n"

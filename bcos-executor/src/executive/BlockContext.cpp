@@ -20,6 +20,7 @@
  */
 
 #include "BlockContext.h"
+#include "../Common.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
@@ -140,6 +141,10 @@ void BlockContext::setVMSchedule()
     else
     {
         m_schedule = FiscoBcosSchedule;
+    }
+    if (m_features.get(ledger::Features::Flag::bugfix_tx_intrinsic_gas))
+    {
+        m_schedule.createDataGas = ETHEREUM_CREATE_DATA_GAS;
     }
 }
 
