@@ -58,7 +58,7 @@ std::string layoutRender(std::string_view _format, LogLevel _level, std::string_
     auto layout = bcos::log::parseLineLayout(_format, error);
     BOOST_REQUIRE_MESSAGE(layout != nullptr, error);
     std::string out;
-    bcos::log::appendLayoutLine(out, *layout, _level, _message);
+    bcos::log::appendLayoutLine(out, *layout, bcos::log::sampleLineRecord(_level), _message);
     return out;
 }
 
@@ -116,9 +116,22 @@ struct LayoutGatedBackend
     {
         std::lock_guard lock(mutex);
         std::vector<std::string> out;
+        // The sink writes a batch per consumeLine call, joined by '\n'; expose
+        // individual lines to the assertions.
         for (auto const& [level, line] : lines)
         {
-            out.push_back(line);
+            std::size_t begin = 0;
+            while (true)
+            {
+                auto const end = line.find('\n', begin);
+                if (end == std::string::npos)
+                {
+                    out.emplace_back(line.substr(begin));
+                    break;
+                }
+                out.emplace_back(line.substr(begin, end - begin));
+                begin = end + 1;
+            }
         }
         return out;
     }
@@ -206,8 +219,8 @@ BOOST_AUTO_TEST_CASE(lineIdIncrements)
     auto layout = bcos::log::parseLineLayout("%LineID%|%Message%", error);
     BOOST_REQUIRE_MESSAGE(layout != nullptr, error);
     std::string first, second;
-    bcos::log::appendLayoutLine(first, *layout, LogLevel::INFO, "x");
-    bcos::log::appendLayoutLine(second, *layout, LogLevel::INFO, "x");
+    bcos::log::appendLayoutLine(first, *layout, bcos::log::sampleLineRecord(LogLevel::INFO), "x");
+    bcos::log::appendLayoutLine(second, *layout, bcos::log::sampleLineRecord(LogLevel::INFO), "x");
     auto const idOf = [](std::string const& s) { return std::stoull(s.substr(0, s.find('|'))); };
     BOOST_CHECK_EQUAL(idOf(first) + 1, idOf(second));
 }
@@ -230,7 +243,7 @@ BOOST_AUTO_TEST_CASE(lineIdStableWithinLine)
     auto layout = bcos::log::parseLineLayout("%LineID%|%LineID%", error);
     BOOST_REQUIRE_MESSAGE(layout != nullptr, error);
     std::string line;
-    bcos::log::appendLayoutLine(line, *layout, LogLevel::INFO, "x");
+    bcos::log::appendLayoutLine(line, *layout, bcos::log::sampleLineRecord(LogLevel::INFO), "x");
     // one id per rendered line, matching the boost LineID attribute semantics
     auto const sep = line.find('|');
     BOOST_REQUIRE(sep != std::string::npos);
@@ -388,7 +401,7 @@ BOOST_AUTO_TEST_CASE(droppedMarkerFollowsCustomLayout)
     BOOST_REQUIRE_EQUAL(lines.size(), 3u);
     BOOST_CHECK_EQUAL(lines[0], "MARK info one");
     BOOST_CHECK_EQUAL(lines[1], "MARK info two");
-    BOOST_CHECK_EQUAL(lines[2], "MARK warning [log] dropped 1 log line(s): slot pool exhausted");
+    BOOST_CHECK_EQUAL(lines[2], "MARK warning [log] dropped 1 log line(s): ring buffer full");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

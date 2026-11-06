@@ -92,74 +92,48 @@ namespace log
 {
 namespace
 {
-// Process-wide registry of whole-line sinks. std::atomic<std::shared_ptr> is
-// not portable (libc++ rejects it), so the slots are plain shared_ptrs
-// guarded by a shared_mutex: readers hold the shared lock across writeLine,
-// and unregisterLineSink takes the unique lock, so it waits for in-flight
-// producers before a sink can be destroyed. Register/unregister are rare
-// (initLog/stopLogging), so the lock is never contended in practice.
+// Process-wide registry of whole-line sinks.
+//
+// The slots are atomics holding raw pointers, and a sink is never destroyed
+// once registered: commitLine() walks the slots lock-free, so a producer may
+// still be holding a pointer it loaded just before unregisterLineSink() cleared
+// the slot. Keeping the object alive makes that read harmless; the sink's own
+// m_stop flag (set by stop()) then makes the late writeRecord() a no-op.
+//
+// Ownership is parked in s_leakedSinks, a process-lifetime list, so the
+// shared_ptr the initializer hands in never drops to zero. That is the same
+// deliberately-leaked lifetime as LineFeeder and the registry itself, and it
+// costs a few megabytes once at exit — after stopLogging() has already flushed
+// every line.
 constexpr std::size_t MaxLineSinks = 4;
 struct LineSinkRegistry
 {
-    std::array<std::shared_ptr<LineSinkWriter>, MaxLineSinks> sinks;
-    std::shared_mutex mutex;
+    std::array<std::atomic<LineSinkWriter*>, MaxLineSinks> sinks{};
     std::atomic<int> count{0};
 };
 
 // Leaked deliberately, the same lifetime contract as LineFeeder: when
 // stopLogging() has not run, a log statement from another TU's static
 // destructor can reach commitLine after this TU's statics are destroyed —
-// with a leaked registry that degrades to a no-op instead of taking a
-// shared lock on a destroyed std::shared_mutex.
+// with a leaked registry that degrades to a no-op instead of touching a
+// destroyed object.
 LineSinkRegistry& registry()
 {
     static auto* s_registry = new LineSinkRegistry();
     return *s_registry;
 }
 
+// Ownership of every sink ever registered; see the comment on LineSinkRegistry.
+// Bounded by the number of log initialisers plus test sinks, and written only
+// from registerLineSink(), which already serialises through the slot CAS.
+std::vector<std::shared_ptr<LineSinkWriter>>& leakedSinks()
+{
+    static auto* s_sinks = new std::vector<std::shared_ptr<LineSinkWriter>>();
+    return *s_sinks;
+}
+
 constexpr std::string_view c_severityNames[] = {
     "trace", "debug", "info", "warning", "error", "fatal"};
-
-// "0x<tid>" exactly as the ThreadID attribute formats it; invariant per
-// thread, so cached once.
-std::string_view threadTidHex()
-{
-    thread_local std::string const tid = [] {
-#ifdef _WIN32
-        char buf[16];
-        std::snprintf(
-            buf, sizeof(buf), "0x%08lx", static_cast<unsigned long>(::GetCurrentThreadId()));
-#else
-        char buf[24];
-        std::snprintf(buf, sizeof(buf), "0x%016llx",
-            static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(pthread_self())));
-#endif
-        return std::string(buf);
-    }();
-    return tid;
-}
-
-// "<threadName>-0x<tid>" exactly as the ThreadName/ThreadID attributes format
-// it; the value only changes when the thread is renamed, so cache it. Cache
-// validity is tracked separately from the cached name: an empty name is a
-// valid lookup result (unnamed threads on macOS, every thread on Windows)
-// and must still build the "Unnamed-0x..." fragment on the first call.
-std::string_view threadPart()
-{
-    thread_local bool initialized = false;
-    thread_local std::string cachedName;
-    thread_local std::string part;
-    auto const& name = bcos::pthread_getThreadNameRef();
-    if (!initialized || cachedName != name)
-    {
-        cachedName = name;
-        part = name.empty() ? "Unnamed" : name;
-        part += '-';
-        part += threadTidHex();
-        initialized = true;
-    }
-    return part;
-}
 
 // The wall clock as a broken-down local time plus the microsecond fraction.
 // localtime_r takes glibc's internal timezone lock, so the broken-down time
@@ -169,11 +143,12 @@ struct BrokenDownTime
     std::tm tm{};
     long fracMicros = 0;  // 0..999999
 };
-BrokenDownTime brokenDownNow()
+
+// Same broken-down time for a record whose timestamp was sampled earlier.
+// localtime_r runs at most once per second thanks to the thread_local cache.
+BrokenDownTime brokenDownFrom(LineRecord const& _record)
 {
-    auto const micros = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch());
-    std::time_t const secs = static_cast<std::time_t>(micros.count() / 1000000);
+    std::time_t const secs = static_cast<std::time_t>(_record.secs);
     thread_local std::time_t cachedSecs = 0;
     thread_local std::tm tm{};
     if (secs != cachedSecs)
@@ -185,7 +160,7 @@ BrokenDownTime brokenDownNow()
 #endif
         cachedSecs = secs;
     }
-    return {tm, static_cast<long>(micros.count() % 1000000)};
+    return {tm, static_cast<long>(_record.micros)};
 }
 
 // Zero-padded decimal append; no allocation, no locale.
@@ -208,6 +183,56 @@ void appendUnsigned(std::string& _out, std::uint64_t _value, unsigned _minWidth 
     }
     _out.append(p, static_cast<std::size_t>(end - p));
 }
+
+// Writes exactly _width digits of _value in base 10, zero padded. The digit
+// count is fixed so the loop has no data-dependent branches.
+char* appendFixedDecimal(char* _out, std::uint64_t _value, unsigned _width)
+{
+    for (unsigned i = 0; i < _width; ++i)
+    {
+        _out[_width - 1 - i] = static_cast<char>('0' + (_value % 10));
+        _value /= 10;
+    }
+    return _out + _width;
+}
+
+// Writes exactly _width lowercase hex digits, zero padded. Fixed trip count, so
+// no branch misprediction on the digit count (which the generic converters pay).
+char* appendFixedHex(char* _out, std::uint64_t _value, unsigned _width)
+{
+    static constexpr char c_digits[] = "0123456789abcdef";
+    for (unsigned i = 0; i < _width; ++i)
+    {
+        _out[_width - 1 - i] = c_digits[_value & 0xF];
+        _value >>= 4;
+    }
+    return _out + _width;
+}
+
+// Writes _value as zero-padded lowercase hex through a raw pointer, for the
+// cold layout path where the field width is not fixed.
+char* appendHexTo(char* _out, std::uint64_t _value, unsigned _minWidth)
+{
+    char tmp[16];
+    auto const result = std::to_chars(tmp, tmp + sizeof(tmp), _value, 16);
+    auto const len = static_cast<std::size_t>(result.ptr - tmp);
+    std::size_t const pad = _minWidth > len ? _minWidth - len : 0;
+    if (pad != 0)
+    {
+        std::memset(_out, '0', pad);
+    }
+    std::memcpy(_out + pad, tmp, len);
+    return _out + pad + len;
+}
+
+// Zero-padded lowercase hex append into a std::string. Only the custom
+// log.format layout uses this (cold path).
+void appendHex(std::string& _out, std::uint64_t _value, unsigned _minWidth = 1)
+{
+    char tmp[16];
+    char* const end = appendHexTo(tmp, _value, _minWidth);
+    _out.append(tmp, static_cast<std::size_t>(end - tmp));
+}
 }  // namespace
 
 // "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|", byte-identical to the
@@ -216,19 +241,103 @@ void appendUnsigned(std::string& _out, std::uint64_t _value, unsigned _minWidth 
 // "%Y-%m-%d %H:%M:%S.%f") << "|" << attr<std::string>("ThreadName") << "-"
 // << attr<current_thread_id>("ThreadID") << "|" << smessage), which this
 // pipeline reimplements without boost::log.
+//
+// The whole prefix is built in one stack buffer and appended in one call. The
+// date part only changes once a second, so it is formatted once per second and
+// cached; the microsecond field and the thread id are written with fixed-width
+// loops so the per-line work has no data-dependent branches.
+void appendRecordPrefix(std::string& _out, LineRecord const& _record)
+{
+    // severity(7) + '|' + date(19) + '.' + micros(6) + '|' + name(15) + '-' +
+    // "0x" + tid(16) + '|' = 70 bytes; 96 leaves headroom.
+    char buf[96];
+    char* p = buf;
+
+    auto const severity = c_severityNames[static_cast<int>(_record.level)];
+    std::memcpy(p, severity.data(), severity.size());
+    p += severity.size();
+    *p++ = '|';
+
+    thread_local std::int64_t cachedSecs = std::numeric_limits<std::int64_t>::min();
+    thread_local char dateBuf[19];
+    if (_record.secs != cachedSecs)
+    {
+        std::time_t const secs = static_cast<std::time_t>(_record.secs);
+        std::tm tm{};
+#ifdef _WIN32
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        auto const formatted = fmt::format_to_n(dateBuf, sizeof(dateBuf),
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+            tm.tm_hour, tm.tm_min, tm.tm_sec);
+        if (static_cast<std::size_t>(formatted.size) != sizeof(dateBuf))
+        {
+            // Defensive: an out-of-range year must not leave stale bytes behind.
+            std::memset(dateBuf, '0', sizeof(dateBuf));
+        }
+        cachedSecs = _record.secs;
+    }
+    std::memcpy(p, dateBuf, sizeof(dateBuf));
+    p += sizeof(dateBuf);
+    *p++ = '.';
+    p = appendFixedDecimal(p, _record.micros, 6);
+    *p++ = '|';
+
+    std::size_t nameLen = 0;
+    while (nameLen < sizeof(_record.threadName) && _record.threadName[nameLen] != '\0')
+    {
+        ++nameLen;
+    }
+    if (nameLen == 0)
+    {
+        std::memcpy(p, "Unnamed", 7);
+        p += 7;
+    }
+    else
+    {
+        std::memcpy(p, _record.threadName, nameLen);
+        p += nameLen;
+    }
+    *p++ = '-';
+    *p++ = '0';
+    *p++ = 'x';
+    p = appendFixedHex(p, _record.threadId, 16);
+    *p++ = '|';
+
+    _out.append(buf, static_cast<std::size_t>(p - buf));
+}
+
 void appendLinePrefix(std::string& _out, LogLevel _level)
 {
-    _out.append(c_severityNames[static_cast<int>(_level)]);
-    _out += '|';
-    auto const time = brokenDownNow();
-    char buf[40];
-    auto const formatted = fmt::format_to_n(buf, sizeof(buf),
-        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}", time.tm.tm_year + 1900, time.tm.tm_mon + 1,
-        time.tm.tm_mday, time.tm.tm_hour, time.tm.tm_min, time.tm.tm_sec, time.fracMicros);
-    _out.append(buf, formatted.size);
-    _out += '|';
-    _out.append(threadPart());
-    _out += '|';
+    appendRecordPrefix(_out, sampleLineRecord(_level));
+}
+
+LineRecord sampleLineRecord(LogLevel _level)
+{
+    LineRecord record;
+    record.level = _level;
+    auto const micros = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch());
+    record.secs = static_cast<std::int64_t>(micros.count() / 1000000);
+    record.micros = static_cast<std::uint32_t>(micros.count() % 1000000);
+#ifdef _WIN32
+    record.threadId = static_cast<std::uint64_t>(::GetCurrentThreadId());
+#else
+    record.threadId =
+        static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(pthread_self()));
+#endif
+    auto const& name = bcos::pthread_getThreadNameRef();
+    auto const copyLen = name.size() < (sizeof(record.threadName) - 1) ?
+                             name.size() :
+                             (sizeof(record.threadName) - 1);
+    if (copyLen != 0)
+    {
+        std::memcpy(record.threadName, name.data(), copyLen);
+    }
+    record.threadName[copyLen] = '\0';
+    return record;
 }
 
 namespace
@@ -601,10 +710,12 @@ LineLayout const* lineLayout() noexcept
 }
 
 void appendLayoutLine(
-    std::string& _out, LineLayout const& _layout, LogLevel _level, std::string_view _message)
+    std::string& _out, LineLayout const& _layout, LineRecord const& _record,
+    std::string_view _message)
 {
-    // The clock is read only when the layout actually prints a timestamp.
-    auto const time = _layout.usesTimeStamp ? brokenDownNow() : BrokenDownTime{};
+    // The clock is read only when the layout actually prints a timestamp, and
+    // only once per second thanks to the thread_local cache in brokenDownFrom.
+    auto const time = _layout.usesTimeStamp ? brokenDownFrom(_record) : BrokenDownTime{};
     // The line id is hoisted the same way: one increment per rendered line, so
     // a layout referencing %LineID% more than once prints the same id on that
     // line, matching the boost LineID attribute semantics.
@@ -618,7 +729,7 @@ void appendLayoutLine(
             _out.append(segment.literal);
             break;
         case LineLayout::Field::Severity:
-            _out.append(c_severityNames[static_cast<int>(_level)]);
+            _out.append(c_severityNames[static_cast<int>(_record.level)]);
             break;
         case LineLayout::Field::TimeStamp:
             appendTimeStamp(_out, segment.timeParts, time);
@@ -626,21 +737,21 @@ void appendLayoutLine(
         case LineLayout::Field::ThreadName:
         {
             // Same substitution as the legacy ThreadName attribute and the
-            // built-in layout's threadPart(): an empty name (unnamed threads
-            // on macOS, every thread on Windows) renders as "Unnamed".
-            auto const& threadName = bcos::pthread_getThreadNameRef();
-            if (threadName.empty())
+            // built-in layout's prefix: an empty name (unnamed threads on
+            // macOS, every thread on Windows) renders as "Unnamed".
+            if (_record.threadName[0] == '\0')
             {
                 _out.append("Unnamed");
             }
             else
             {
-                _out.append(threadName);
+                _out.append(_record.threadName);
             }
             break;
         }
         case LineLayout::Field::ThreadID:
-            _out.append(threadTidHex());
+            _out.append("0x");
+            appendHex(_out, _record.threadId, 16);
             break;
         case LineLayout::Field::LineID:
             appendUnsigned(_out, lineID);
@@ -660,7 +771,7 @@ std::string formatLogLine(LogLevel _level, std::string_view _message)
     std::string line;
     if (auto const* layout = lineLayout(); layout != nullptr)
     {
-        appendLayoutLine(line, *layout, _level, _message);
+        appendLayoutLine(line, *layout, sampleLineRecord(_level), _message);
     }
     else
     {
@@ -673,12 +784,15 @@ std::string formatLogLine(LogLevel _level, std::string_view _message)
 void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
 {
     auto& reg = registry();
-    std::unique_lock lock(reg.mutex);
     for (auto& slot : reg.sinks)
     {
-        if (!slot)
+        LineSinkWriter* expected = nullptr;
+        if (slot.compare_exchange_strong(expected, _sink.get(), std::memory_order_acq_rel,
+                std::memory_order_relaxed))
         {
-            slot = std::move(_sink);
+            // Park ownership for the rest of the process so a producer holding
+            // the pointer can never touch a destroyed sink.
+            leakedSinks().push_back(std::move(_sink));
             reg.count.fetch_add(1, std::memory_order_release);
             return;
         }
@@ -692,12 +806,15 @@ void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
 void unregisterLineSink(LineSinkWriter const* _sink)
 {
     auto& reg = registry();
-    std::unique_lock lock(reg.mutex);
     for (auto& slot : reg.sinks)
     {
-        if (slot.get() == _sink)
+        // Unpublish only: the object stays alive (see LineSinkRegistry). The
+        // caller's stop() has already set the sink's m_stop, so a producer that
+        // loaded the pointer before this clear writes nothing.
+        LineSinkWriter* expected = const_cast<LineSinkWriter*>(_sink);
+        if (slot.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel,
+                std::memory_order_relaxed))
         {
-            slot.reset();
             reg.count.fetch_sub(1, std::memory_order_release);
             return;
         }
@@ -712,11 +829,10 @@ bool hasLineSinks() noexcept
 std::uint64_t droppedLogLines() noexcept
 {
     auto& reg = registry();
-    std::shared_lock lock(reg.mutex);
     std::uint64_t total = 0;
-    for (auto const& sink : reg.sinks)
+    for (auto const& slot : reg.sinks)
     {
-        if (sink)
+        if (auto const* sink = slot.load(std::memory_order_acquire); sink != nullptr)
         {
             total += sink->droppedTotal();
         }
@@ -724,36 +840,40 @@ std::uint64_t droppedLogLines() noexcept
     return total;
 }
 
-// Fans the line out to every registered whole-line sink. The shared lock is
-// held across writeLine: normally that is only the sink's queue critical
-// section, so producers never block a reader on backend I/O. The FATAL path
-// is the exception: it can hold the shared lock for up to
-// 2 x FatalDrainTimeout (bounded drain + bounded backend acquisition), and a
-// throwing backend makes it return without aborting — so
-// register/unregister can stall up to two seconds against an in-flight
-// FATAL. register/unregister are rare by construction.
-void commitLine(LogLevel _level, std::string_view _message)
+// Fans the record out to every registered whole-line sink.
+//
+// Reading the slots is lock-free: unregisterLineSink() only unpublishes, it does
+// not destroy the sink, so a pointer loaded here stays valid for the call. That
+// removes the shared_mutex that every producer used to take on every line — with
+// a single registered sink (console XOR file) that lock had no writer at all in
+// steady state and only cost cache-line contention between producers.
+void commitLine(LineRecord const& _record, std::string_view _message)
 {
-    thread_local std::string prefix;
-    prefix.clear();
+    auto& reg = registry();
     if (auto const* layout = lineLayout(); layout != nullptr)
     {
-        // Custom log.format: the layout places the message freely, so the
-        // line is assembled whole and handed over as prefix + empty message.
-        appendLayoutLine(prefix, *layout, _level, _message);
-        _message = {};
-    }
-    else
-    {
-        appendLinePrefix(prefix, _level);
-    }
-    auto& reg = registry();
-    std::shared_lock lock(reg.mutex);
-    for (auto const& sink : reg.sinks)
-    {
-        if (sink)
+        // Custom log.format: the layout decides where the message appears, so
+        // the line is assembled whole here and handed over as prefix + no
+        // message. Rendering cannot be deferred past this point.
+        thread_local std::string line;
+        line.clear();
+        appendLayoutLine(line, *layout, _record, _message);
+        for (auto const& slot : reg.sinks)
         {
-            sink->writeLine(_level, prefix, _message);
+            if (auto* sink = slot.load(std::memory_order_acquire); sink != nullptr)
+            {
+                sink->writeLine(_record.level, line, {});
+            }
+        }
+        return;
+    }
+
+    // Built-in layout: prefix and message are simply concatenated.
+    for (auto const& slot : reg.sinks)
+    {
+        if (auto* sink = slot.load(std::memory_order_acquire); sink != nullptr)
+        {
+            sink->writeRecord(_record, _message);
         }
     }
 }
@@ -771,10 +891,10 @@ LogStream::~LogStream() noexcept
         // The line is committed to every registered whole-line sink; when
         // none is registered (before initLog / after stopLogging) it is
         // dropped, same as logging with no sinks attached used to behave.
-        // The count check avoids formatting the prefix when logging is down.
+        // The count check avoids formatting anything when logging is down.
         if (log::hasLineSinks())
         {
-            log::commitLine(m_level, view());
+            log::commitLine(m_record, view());
         }
     }
     catch (...)
@@ -1370,10 +1490,16 @@ public:
     //! The function updates storage restrictions
     void update(uintmax_t max_size, uintmax_t min_free_space, uintmax_t max_files);
 
-    //! The function checks if the directory is governed by this collector
+    //! The function checks if the directory is governed by this collector.
+    //! A directory that no longer exists (removed by the operator or a test)
+    //! cannot be governed by anything: equivalent() would throw, and that would
+    //! make make_collector() fail for an unrelated archive path. Treat any
+    //! filesystem error as "not the same directory".
     bool is_governed(boost::filesystem::path const& dir) const
     {
-        return boost::filesystem::equivalent(m_StorageDir, dir);
+        boost::system::error_code ec;
+        bool const same = boost::filesystem::equivalent(m_StorageDir, dir, ec);
+        return ec ? false : same;
     }
 
     void convert_tar_gz(bool ConvertTarGZ) { m_ConvertTarGZ = ConvertTarGZ; }

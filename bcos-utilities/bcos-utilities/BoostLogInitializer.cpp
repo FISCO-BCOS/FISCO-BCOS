@@ -32,6 +32,8 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <array>
+#include <chrono>
 #include <cstdio>
 #include <iostream>
 #include <mutex>
@@ -75,6 +77,25 @@ std::string BoostLogLevelResetHandler::configFile;
 /// handler to solve log rotate
 bool BoostLogInitializer::canRotate(size_t const& _index)
 {
+    // The file backend calls this predicate before EVERY line. Reading the wall
+    // clock through localtime() on that path costs two orders of magnitude more
+    // than the rest of a line's work, and the answer only changes once an hour,
+    // so consult the clock at most once per second. The per-sink timestamps are
+    // thread_local because the predicate only ever runs on the feeding thread.
+    constexpr size_t c_maxRotateSlots = 8;
+    thread_local std::array<std::chrono::steady_clock::time_point, c_maxRotateSlots> lastCheck{};
+
+    // Sinks beyond the slot count share the last slot; they are still checked,
+    // just throttled together.
+    size_t const slot = _index < c_maxRotateSlots ? _index : (c_maxRotateSlots - 1);
+    auto const nowSteady = std::chrono::steady_clock::now();
+    if (lastCheck[slot] != std::chrono::steady_clock::time_point{} &&
+        nowSteady - lastCheck[slot] < std::chrono::seconds(1))
+    {
+        return false;
+    }
+    lastCheck[slot] = nowSteady;
+
     const boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
     int hour = (int)now.time_of_day().hours();
     if (hour != m_currentHourVec[_index])
