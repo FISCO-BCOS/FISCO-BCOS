@@ -115,14 +115,21 @@ inline size_t compute_tx_data_tokens(evmc_revision rev, std::span<const uint8_t>
     return (nonzero_byte_multiplier * num_nonzero_bytes) + num_zero_bytes;
 }
 
-inline int64_t compute_access_list_cost(const Web3AccessList& access_list) noexcept
+/// The price of one access-list entry. Counts rather than an entry type: executor_version 1 prices
+/// the list its resolver recovered, which bcos-framework has no type for.
+inline int64_t compute_access_list_entry_cost(size_t storage_key_count) noexcept
 {
     static constexpr auto ADDRESS_COST = 2400;
     static constexpr auto STORAGE_KEY_COST = 1900;
 
+    return ADDRESS_COST + static_cast<int64_t>(storage_key_count) * STORAGE_KEY_COST;
+}
+
+inline int64_t compute_access_list_cost(const Web3AccessList& access_list) noexcept
+{
     int64_t cost = 0;
     for (const auto& entry : access_list)
-        cost += ADDRESS_COST + static_cast<int64_t>(entry.storageKeys.size()) * STORAGE_KEY_COST;
+        cost += compute_access_list_entry_cost(entry.storageKeys.size());
     return cost;
 }
 

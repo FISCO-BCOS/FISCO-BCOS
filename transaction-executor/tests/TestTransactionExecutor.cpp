@@ -593,13 +593,13 @@ BOOST_AUTO_TEST_CASE(buyGasFailsChargesIntrinsicPenalty)
         ledgerConfig.setFeatures(features);
         ledgerConfig.setGasPrice({"1", 0});
 
-        bcos::bytes helloworldBytecodeBinary;
-        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
-
-        // gasPrice=1, gasLimit=100000 → maxGasCost=100000; intrinsicCost=21000.
+        // gasPrice=1, gasLimit=100000 → maxGasCost=100000; an empty call's intrinsic gas is
+        // 21000 (a deployment's penalty under bugfix_tx_intrinsic_gas, on in MAX_VERSION, is
+        // pinned in Issue5772_IntrinsicGasTest).
         // balance=50000 >= intrinsicCost but < maxGasCost → penalty = 21000. Final=29000.
-        auto transaction = transactionFactory.createTransaction(1, "", helloworldBytecodeBinary,
-            "0x5", 0, "", "", 0, std::string{}, "0x0", "0x1", 100000, "0x0", "0x0");
+        auto transaction = transactionFactory.createTransaction(1,
+            "00000000000000000000000000000000000000ee", bcos::bytes{}, "0x5", 0, "", "", 0,
+            std::string{}, "0x0", "0x1", 100000, "0x0", "0x0");
         evmc_address senderAddress = unhexAddress("e0e794ca86d198042b64285c5ce667aee747509b"sv);
         transaction->forceSender(
             bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));

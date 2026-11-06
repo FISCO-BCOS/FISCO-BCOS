@@ -25,6 +25,8 @@
 * 此前 v0 lane 把交易的全部 gas 预算原样交给 EVM，只有带金额的顶层转账收 21000；v1 lane 只对顶层 CALL 收 21000；两条 lane 的代码存储费都是 20 gas/字节。结果是合约部署比转账便宜（实测一笔部署 7589 gas），calldata 不计费
 * 开关开启后，交易在顶层帧执行前先扣以太坊 intrinsic gas（`bcos-framework/protocol/TxGasModel.h` `compute_tx_upfront_cost()`）：基础 21000、创建 32000、calldata 零字节 4/非零字节 16、Shanghai 起 init code 每 32 字节 2、v1 lane 的 access list 每地址 2400/每 key 1900；Prague 起取它与 EIP-7623 下限（21000 + 10 × token）的较大值。代码存储费改为 200 gas/字节。v1 lane 原有的 21000 与 Prague calldata 扣费并入其中，不重复收
 * gas 预算低于 intrinsic gas 的交易不执行 EVM，回执状态为 `OutOfGas`，`gasUsed` 等于预算
+* v0 lane 上代码存储费付不起或代码超出 `maxEvmCodeSize` 的创建帧烧掉该帧的全部 gas，此前只收实际消耗；存储费付不起的结果与 v1 lane 一致，v1 lane 没有代码大小上限。嵌套创建只烧转发给子帧的 gas，父帧拿到地址 0 继续执行
+* v1 lane 上 Web3 交易在 `bugfix_gas_payment_balance_precheck` 开启且 gas price 大于 0 时，余额不足以预扣 gas 的罚金由固定 21000 gas 改为该交易的 `compute_tx_upfront_cost()`，不超过其 gas 预算
 * 同一开关下，DAG 路径退回（SEND_BACK）的交易由调度器从 seq 0 重新派发（`DmcExecutor::handleCreateMessage`）。此前这类交易的顶层帧以 seq 1 进入执行器，而执行器按 seq 0 识别顶层帧，结果是不收 intrinsic gas、不收顶层转账的 21000、不做 EIP-2929 预热；带 DAG 标记的部署交易其合约地址也由 seq 1 推导，开关开启后改为 seq 0，与不带 DAG 标记的部署一致
 * 该开关登记在 3.18.0 的升级列表中：`compatibility_version` 升到 3.18.0 即生效，3.18.0 新链的 genesis 自带。它改变 `gasUsed`、回执根和账户余额，属于硬分叉；以太坊 lane（`version>=2`）不受影响
 
@@ -61,7 +63,7 @@
 * v1 EVM 链（build_chain.sh 建的 AIR 链默认）：直接替换二进制，不需要改配置；genesis 字节不变（`NodeConfigV1GenesisPinGoldenTest` 钉住 3.0.0/3.1.0/3.6.0/3.17.0/3.18.0 × pbft/rpbft 的黄金值）
 * v0 EVM 链（genesis 无 `[executor] version`，含 BcosBuilder 建的 Pro 链）：同样直接替换二进制，但必须使用含 v0 lane IOServicePool 修复的构建
 * **WASM 链（genesis `[executor] is_wasm=true`）不能按上述方式升级**：3.18.0 已移除 WASM 执行器，`NodeConfig::loadExecutorConfig()` 读到 `executor.is_wasm=true` 即拒绝启动（`executor.is_wasm=true is not supported: WASM support was removed in FISCO-BCOS 3.18`），没有把 WASM 链迁到 EVM 的路径；这类链请留在 3.17.x
-* **把 `compatibility_version` 升到 3.18.0 之前先核对 gas 上限**：`bugfix_tx_intrinsic_gas` 生效后每笔交易至少多消耗 21000 gas，部署另加 32000、calldata 费用和 200 gas/字节的存储费（24KB 合约约 490 万）。gas 预算低于新费用的交易会以 `OutOfGas` 失败：v0 lane 的预算是链的 `tx_gas_limit`（交易自带的 gasLimit 不参与）；v1 lane 在 `bugfix_gas_payment_balance_precheck` 开启且交易带 gasLimit 时取它与 `tx_gas_limit` 的较小值，否则同样是 `tx_gas_limit`。`eth_call`/`eth_estimateGas` 走同一条路径，估算值包含 intrinsic gas。只替换二进制、不升 `compatibility_version` 的链行为不变
+* **把 `compatibility_version` 升到 3.18.0 之前先核对 gas 上限**：`bugfix_tx_intrinsic_gas` 生效后，交易在顶层帧运行前先付 intrinsic gas（基础 21000；部署再加 32000；calldata 零字节 4、非零字节 16；Shanghai 起部署再加 init code 每 32 字节 2；v1 lane 的 access list 每地址 2400、每 storage key 1900，v0 lane 不收；Prague 起取它与 21000 + 10 × calldata token 的较大值），部署的代码存储费由 20 改为 200 gas/字节（24KB 合约的存储费约 490 万，比旧规则多约 442 万）。相对旧规则的增量因 lane 而异。v0 lane：调用和部署多付上述 intrinsic gas；带 value 的顶层转账原本已付 21000，不重复收。v1 lane，Prague 之前：调用和转账原本已付 21000，只多 calldata 与 access list 费用，部署多付全部 intrinsic gas。v1 lane，Prague 起：原本已预扣 21000（仅调用）与 calldata 下限，部署与 access list 的增量会被下限吸收一部分，以上面的较大值为准。gas 预算低于新费用的交易会以 `OutOfGas` 失败：v0 lane 的预算是链的 `tx_gas_limit`（交易自带的 gasLimit 不参与）；v1 lane 在 `bugfix_gas_payment_balance_precheck` 开启且交易带 gasLimit 时取它与 `tx_gas_limit` 的较小值，否则同样是 `tx_gas_limit`。`eth_call`/`eth_estimateGas` 走同一条路径，估算值包含 intrinsic gas。只替换二进制、不升 `compatibility_version` 的链共识行为不变；可见差异只有一处：`feature_evm_*` 下一块才生效的那个高度上，`eth_call`/`eth_estimateGas` 的 schedule 与 EVM revision 按下一块取
 * 上表中的死键不改也能启动，只多几行 WARNING；`enable_single_node_consensus` 的单节点开发链若要继续自出块，须改写为 `[debug] enable=true`
 
 ---

@@ -1158,6 +1158,13 @@ CallParameters::UniquePtr TransactionExecutive::go(
             if (outputRef.size() > maxCodeSize)
             {
                 revert();
+                // #5772: an exceptional abort consumes the frame's budget, as on Ethereum.
+                // executor_version 1 has no code size limit, so this branch has no counterpart
+                // there.
+                if (m_blockContext.features().get(ledger::Features::Flag::bugfix_tx_intrinsic_gas))
+                {
+                    callResults->gas = 0;
+                }
                 callResults->type = CallParameters::REVERT;
                 callResults->status = (int32_t)TransactionStatus::OutOfGas;
                 callResults->message =
@@ -1196,6 +1203,13 @@ CallParameters::UniquePtr TransactionExecutive::go(
                         << LOG_KV("message", callResults->message)
                         << LOG_KV("number", m_blockContext.number())
                         << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
+                    // #5772: an exceptional abort consumes the frame's budget, as on Ethereum
+                    // and executor_version 1
+                    if (m_blockContext.features().get(
+                            ledger::Features::Flag::bugfix_tx_intrinsic_gas))
+                    {
+                        callResults->gas = 0;
+                    }
                     return callResults;
                 }
             }

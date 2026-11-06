@@ -22,6 +22,7 @@
 #include "../bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "TestMemoryStorage.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -221,8 +222,19 @@ BOOST_AUTO_TEST_CASE(accessListIsPricedPerAddressAndKey)
         "000000000000000000000000000000000000000007d694bb9bc244d798123fde783fcc1c72d3bb8c189413c080"
         "a036b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0a05edcc541b4741c5cc6dd34"
         "7c5ed9577ef293a62787b4510465fadbfe39ee4094";
-    for (bool flag : {false, true})
+    // What the signature covers is the envelope, so the Tars mirror of the list can be absent:
+    // kept, stripped with the kind still set (resolver path B), or stripped along with the kind
+    // (path C). The same signed transaction pays the same gas in all three.
+    enum class Mirror
     {
+        kept,
+        listStripped,
+        listAndKindStripped
+    };
+    for (auto [flag, mirror] : {std::pair{false, Mirror::kept}, std::pair{true, Mirror::kept},
+             std::pair{true, Mirror::listStripped}, std::pair{true, Mirror::listAndKindStripped}})
+    {
+        BOOST_TEST_INFO_SCOPE("flag " << flag << " mirror " << static_cast<int>(mirror));
         auto raw = fromHexWithPrefix(rawTx);
         auto rawRef = ref(raw);
         bcos::rpc::Web3Transaction web3Tx{};
@@ -230,9 +242,17 @@ BOOST_AUTO_TEST_CASE(accessListIsPricedPerAddressAndKey)
         auto inner = std::make_shared<bcostars::Transaction>(web3Tx.takeToTarsTransaction());
         auto const txHash = web3Tx.txHash();
         inner->extraTransactionHash.assign(txHash.begin(), txHash.end());
+        BOOST_REQUIRE_EQUAL(inner->data.accessList.size(), 2U);
+        if (mirror != Mirror::kept)
+        {
+            inner->data.accessList.clear();
+        }
+        if (mirror == Mirror::listAndKindStripped)
+        {
+            inner->web3TypedTxKind = 0;
+        }
         bcostars::protocol::TransactionImpl tx([inner]() { return inner.get(); });
         tx.forceSender(bytes(sender.bytes, sender.bytes + 20));
-        BOOST_REQUIRE_EQUAL(tx.web3AccessList().size(), 2U);
 
         auto lane = chain(flag);
         protocol::TransactionReceipt::Ptr receipt;
@@ -247,6 +267,89 @@ BOOST_AUTO_TEST_CASE(accessListIsPricedPerAddressAndKey)
         }
         BOOST_CHECK_NE(receipt->status(), c_ok);
         BOOST_CHECK_EQUAL(gasUsed(*receipt), flag ? 21000 + 16 * 16 + 2 * 2400 + 2 * 1900 : 21000);
+    }
+}
+
+// A budget that runs the init code but cannot pay the deposit fails with the whole budget gone
+// and nothing deployed. The cost is measured, then the budget is set one unit either side of it.
+BOOST_AUTO_TEST_CASE(depositTheBudgetCannotPayBurnsTheBudget)
+{
+    auto measured = chain(true);
+    auto measuredReceipt = measured.deploy();
+    BOOST_REQUIRE_EQUAL(measuredReceipt->status(), c_ok);
+    const auto cost = gasUsed(*measuredReceipt);
+
+    auto exact = chain(true);
+    exact.ledgerConfig.setGasLimit({static_cast<uint64_t>(cost), 0});
+    auto exactReceipt = exact.deploy();
+    BOOST_CHECK_EQUAL(exactReceipt->status(), c_ok);
+    BOOST_CHECK_EQUAL(gasUsed(*exactReceipt), cost);
+
+    auto short1 = chain(true);
+    short1.ledgerConfig.setGasLimit({static_cast<uint64_t>(cost - 1), 0});
+    auto shortReceipt = short1.deploy();
+    BOOST_CHECK_EQUAL(
+        shortReceipt->status(), static_cast<int32_t>(protocol::TransactionStatus::OutOfGas));
+    BOOST_CHECK_EQUAL(gasUsed(*shortReceipt), cost - 1);
+    BOOST_CHECK(shortReceipt->contractAddress().empty());
+}
+
+// A sender who cannot buy the gas pays the intrinsic gas of this transaction, not a fixed 21000
+// that a deployment's intrinsic gas left behind, and never more than the budget it signed for.
+BOOST_AUTO_TEST_CASE(buyGasPenaltyIsTheTransactionsIntrinsicGas)
+{
+    const auto runDeploy = [this](bool flag, int64_t gasLimit, std::string value,
+                               int64_t balance) -> std::pair<int64_t, u256> {
+        return task::syncWait(
+            [](Issue5772Fixture& self, bool flag, int64_t gasLimit, std::string value,
+                int64_t balance) -> task::Task<std::pair<int64_t, u256>> {
+                auto lane = self.chain(flag);
+                auto features = lane.ledgerConfig.features();
+                features.set(ledger::Features::Flag::feature_balance);
+                features.set(ledger::Features::Flag::bugfix_gas_payment_balance_precheck);
+                lane.ledgerConfig.setFeatures(features);
+                lane.ledgerConfig.setGasPrice({"1", 0});
+
+                bcos::bytes code;
+                boost::algorithm::unhex(c_initCode, std::back_inserter(code));
+                auto tx = self.transactionFactory.createTransaction(1, "", code, "0x5", 0, "", "",
+                    0, std::string{}, std::move(value), "0x1", gasLimit, "0x0", "0x0");
+                tx->forceSender(bytes(self.sender.bytes, self.sender.bytes + 20));
+                dynamic_cast<bcostars::protocol::TransactionImpl&>(*tx).mutableInner().type = 1;
+
+                ledger::account::EVMAccount account(
+                    lane.storage, self.sender, ledger::account::AddressTableMode::Hex);
+                co_await account.setBalance(u256(balance));
+                auto receipt = co_await self.executor.executeTransaction(
+                    lane.storage, self.blockHeader, *tx, 0, lane.ledgerConfig, false);
+                BOOST_CHECK_EQUAL(receipt->status(),
+                    static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
+                co_return std::pair{gasUsed(*receipt), co_await account.balance()};
+            }(*this, flag, gasLimit, std::move(value), balance));
+    };
+
+    // balance 60000 < budget 100000: flag off the fixed 21000, flag on the deployment's intrinsic
+    {
+        auto [used, balance] = runDeploy(false, 100000, "0x0", 60000);
+        BOOST_CHECK_EQUAL(used, 21000);
+        BOOST_CHECK_EQUAL(balance, u256(60000 - 21000));
+    }
+    {
+        auto [used, balance] = runDeploy(true, 100000, "0x0", 60000);
+        BOOST_CHECK_EQUAL(used, c_createIntrinsic);
+        BOOST_CHECK_EQUAL(balance, u256(60000 - c_createIntrinsic));
+    }
+    // budget 30000 < intrinsic, and the value makes the balance fall short: capped at the budget
+    {
+        auto [used, balance] = runDeploy(true, 30000, "0x9c40", 60000);
+        BOOST_CHECK_EQUAL(used, 30000);
+        BOOST_CHECK_EQUAL(balance, u256(60000 - 30000));
+    }
+    // a balance below the penalty is drained, and gasUsed reports what was actually taken
+    {
+        auto [used, balance] = runDeploy(true, 100000, "0x0", 500);
+        BOOST_CHECK_EQUAL(used, 500);
+        BOOST_CHECK_EQUAL(balance, u256(0));
     }
 }
 
