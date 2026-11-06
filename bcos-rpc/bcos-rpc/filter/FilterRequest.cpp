@@ -43,17 +43,13 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "toBlock is null"));
     }
 
-    if (!jParams.isMember("address") || jParams["address"].isNull())
-    {
-        FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("address is null");
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "address is null"));
-    }
-
-    if (!jParams.isMember("topics") || jParams["topics"].isNull())
-    {
-        FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("topics is null");
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "topics is null"));
-    }
+    // `address` and `topics` are optional in the Ethereum filter spec: an omitted (or null)
+    // field matches every address / every topic position. LogMatcher already treats an empty
+    // address set or an empty/absent topic position as "match all", so the only thing the old
+    // required-field check achieved was rejecting valid requests (eth_getLogs without a
+    // `topics` key is what most SDKs and `cast logs` send). Parse each field only when present.
+    auto const hasAddress = jParams.isMember("address") && !jParams["address"].isNull();
+    auto const hasTopics = jParams.isMember("topics") && !jParams["topics"].isNull();
 
     // prase fromBlock
     std::tie(m_fromBlock, m_fromIsLatest) =
@@ -66,46 +62,53 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
             forkchoiceSafe, forkchoiceFinalized, failClosedOnMissingForkchoice);
 
     // prase address
-    auto& jAddresses = jParams["address"];
-    if (jAddresses.isArray())
+    if (hasAddress)
     {
-        for (Json::Value::ArrayIndex index = 0; index < jAddresses.size(); ++index)
+        auto& jAddresses = jParams["address"];
+        if (jAddresses.isArray())
         {
-            addAddress(jAddresses[index].asString());
-        }
-    }
-    else
-    {
-        addAddress(jAddresses.asString());
-    }
-
-    // prase topics
-    auto& jTopics = jParams["topics"];
-    if (jTopics.size() > EVENT_LOG_TOPICS_MAX_INDEX)
-    {
-        FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("exceed max topics")
-                          << LOG_KV("topicsSize", jTopics.size());
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "exceed max topics"));
-    }
-    resizeTopic(jTopics.size());
-    for (Json::Value::ArrayIndex index = 0; index < jTopics.size(); ++index)
-    {
-        auto& jIndex = jTopics[index];
-        if (jIndex.isNull())
-        {
-            continue;
-        }
-
-        if (jIndex.isArray())
-        {  // array topics
-            for (Json::Value::ArrayIndex innerIndex = 0; innerIndex < jIndex.size(); ++innerIndex)
+            for (Json::Value::ArrayIndex index = 0; index < jAddresses.size(); ++index)
             {
-                addTopic(index, jIndex[innerIndex].asString());
+                addAddress(jAddresses[index].asString());
             }
         }
         else
-        {  // single topic, string value
-            addTopic(index, jIndex.asString());
+        {
+            addAddress(jAddresses.asString());
+        }
+    }
+
+    // prase topics
+    if (hasTopics)
+    {
+        auto& jTopics = jParams["topics"];
+        if (jTopics.size() > EVENT_LOG_TOPICS_MAX_INDEX)
+        {
+            FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("exceed max topics")
+                              << LOG_KV("topicsSize", jTopics.size());
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "exceed max topics"));
+        }
+        resizeTopic(jTopics.size());
+        for (Json::Value::ArrayIndex index = 0; index < jTopics.size(); ++index)
+        {
+            auto& jIndex = jTopics[index];
+            if (jIndex.isNull())
+            {
+                continue;
+            }
+
+            if (jIndex.isArray())
+            {  // array topics
+                for (Json::Value::ArrayIndex innerIndex = 0; innerIndex < jIndex.size();
+                    ++innerIndex)
+                {
+                    addTopic(index, jIndex[innerIndex].asString());
+                }
+            }
+            else
+            {  // single topic, string value
+                addTopic(index, jIndex.asString());
+            }
         }
     }
 
