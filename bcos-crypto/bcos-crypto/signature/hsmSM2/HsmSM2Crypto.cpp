@@ -154,7 +154,9 @@ bool HsmSM2Crypto::verify(
                             << LOG_KV("message", provider.GetErrorMessage(code));
         return false;
     }
-    return true;
+    // SDFCryptoProvider reports the native verification status in code; verifyResult carries
+    // the equivalent boolean verdict.
+    return verifyResult;
 }
 
 KeyImpl HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const

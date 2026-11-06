@@ -83,12 +83,20 @@ public:
                 throwTrace(
                     InvalidSignatureList() << errinfo_comment("signature index out of range"));
             }
-            if (!signatureImpl.verify(ref((sealers)[sealerIndex]), hash(),
-                    bytesConstRef(signatureData.data(), signatureData.size())))
+            try
             {
-                throwTrace(InvalidSignatureList() << errinfo_comment(
-                               "Invalid signatureList for verify failed, signatureData:" +
-                               toHex(signatureData)));
+                if (!signatureImpl.verify(ref((sealers)[sealerIndex]), hash(),
+                        bytesConstRef(signatureData.data(), signatureData.size())))
+                {
+                    throwTrace(InvalidSignatureList() << errinfo_comment(
+                                   "Invalid signatureList for verify failed, signatureData:" +
+                                   toHex(signatureData)));
+                }
+            }
+            catch (const crypto::InvalidKey&)
+            {
+                throwTrace(
+                    InvalidSignatureList() << errinfo_comment("invalid sealer public key length"));
             }
         }
     }

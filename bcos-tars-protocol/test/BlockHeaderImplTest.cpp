@@ -64,5 +64,20 @@ BOOST_AUTO_TEST_CASE(verifySignatureListRejectsOutOfRangeSealerIndex)
         header.verifySignatureList(hashImpl, signatureImpl), bcos::protocol::InvalidSignatureList);
 }
 
+BOOST_AUTO_TEST_CASE(verifySignatureListRejectsIncorrectSealerKeyLength)
+{
+    bcos::crypto::Keccak256 hashImpl;
+    bcos::crypto::Secp256k1Crypto signatureImpl;
+    BlockHeaderImpl header;
+    header.setSealerList(std::vector<bcos::bytes>(1, bcos::bytes(63, 0)));
+
+    bcos::protocol::SignatureList signatures(1);
+    signatures[0].index = 0;
+    header.setSignatureList(signatures);
+    header.calculateHash(hashImpl);
+    BOOST_CHECK_THROW(
+        header.verifySignatureList(hashImpl, signatureImpl), bcos::protocol::InvalidSignatureList);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
