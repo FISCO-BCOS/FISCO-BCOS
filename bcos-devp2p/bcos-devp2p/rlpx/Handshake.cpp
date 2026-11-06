@@ -196,16 +196,16 @@ bcos::bytes AuthAckMessage::serialize() const
 // ---------------------------------------------------------------------------
 // Handshake orchestration
 // ---------------------------------------------------------------------------
-AuthKeys Handshake::execute(Socket& _socket)
+AuthKeys Handshake::execute(IoChannel const& _io)
 {
     if (m_isInitiator)
     {
-        return authInitiator(_socket);
+        return authInitiator(_io);
     }
-    return authRecipient(_socket);
+    return authRecipient(_io);
 }
 
-AuthKeys Handshake::authInitiator(Socket& _socket)
+AuthKeys Handshake::authInitiator(IoChannel const& _io)
 {
     if (m_recipientPublicKey.size() != 64)
     {
@@ -216,16 +216,16 @@ AuthKeys Handshake::authInitiator(Socket& _socket)
     AuthMessage authMessage(m_keyPair,
         bytesConstRef(m_recipientPublicKey.data(), m_recipientPublicKey.size()), ephemeralKeyPair);
     auto authData = authMessage.serialize();
-    _socket.sendAll(bytesConstRef(authData.data(), authData.size()));
+    _io.sendAll(bytesConstRef(authData.data(), authData.size()));
 
     // Read the ack: 2-byte size || encrypted body.
-    auto sizeData = _socket.recvFixed(2);
+    auto sizeData = _io.recvFixed(2);
     size_t size = deserializeSize(bytesConstRef(sizeData.data(), sizeData.size()));
     if (size > 2048)
     {
         throw std::runtime_error("Handshake: ack message too big");
     }
-    auto ackData = _socket.recvFixed(size);
+    auto ackData = _io.recvFixed(size);
 
     AuthAckMessage ackMessage(
         bytesConstRef(ackData.data(), ackData.size()), ref(m_keyPair.privateKey()));
@@ -243,16 +243,16 @@ AuthKeys Handshake::authInitiator(Socket& _socket)
     return keys;
 }
 
-AuthKeys Handshake::authRecipient(Socket& _socket)
+AuthKeys Handshake::authRecipient(IoChannel const& _io)
 {
     // Read the auth: 2-byte size || encrypted body.
-    auto sizeData = _socket.recvFixed(2);
+    auto sizeData = _io.recvFixed(2);
     size_t size = deserializeSize(bytesConstRef(sizeData.data(), sizeData.size()));
     if (size > 2048)
     {
         throw std::runtime_error("Handshake: auth message too big");
     }
-    auto authData = _socket.recvFixed(size);
+    auto authData = _io.recvFixed(size);
 
     AuthMessage authMessage(
         bytesConstRef(authData.data(), authData.size()), ref(m_keyPair.privateKey()));
@@ -263,7 +263,7 @@ AuthKeys Handshake::authRecipient(Socket& _socket)
     AuthAckMessage ackMessage(ephemeralKeyPair, ref(authMessage.initiatorPublicKey()),
         bytesConstRef(recipientNonce.data(), recipientNonce.size()));
     auto ackData = ackMessage.serialize();
-    _socket.sendAll(bytesConstRef(ackData.data(), ackData.size()));
+    _io.sendAll(bytesConstRef(ackData.data(), ackData.size()));
 
     AuthKeys keys;
     keys.peerEphemeralPublicKey = authMessage.ephemeralPublicKey();

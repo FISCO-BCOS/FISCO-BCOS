@@ -5,12 +5,15 @@
 
 #pragma once
 
+#include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/SessionFace.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
+#include "bcos-network/Common.h"
 #include <boost/asio/steady_timer.hpp>
+#include <cstdint>
 #include <memory>
+#include <range/v3/range/concepts.hpp>
 #include <utility>
 
 
@@ -28,14 +31,14 @@ public:
     virtual ~P2PSession();
 
     virtual void start();
-    virtual void stop(DisconnectReason reason);
+    virtual void stop(bcos::network::DisconnectReason reason);
     virtual bool active();
     virtual void heartBeat();
 
-    virtual SessionFace::Ptr session();
-    virtual void setSession(std::shared_ptr<SessionFace> session);
+    virtual Session::Ptr session();
+    virtual void setSession(Session::Ptr session);
 
-    virtual P2pID p2pID();
+    virtual bcos::network::P2pID p2pID();
     virtual std::string printP2pID();
     // Note: the p2pInfo must be setted after session setted
     virtual void setP2PInfo(P2PInfo const& p2pInfo);
@@ -49,11 +52,22 @@ public:
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const;
 
+    // Unique connection generation used only for cancelling this connection's pending acquisitions.
+    std::uint64_t dispatchOwner() const { return m_dispatchOwner; }
+    void setDispatchOwner(std::uint64_t _owner) { m_dispatchOwner = _owner; }
+
+    // Send a P2P message (header + zero-copy payload views); with Options::response, co_await the
+    // peer's response. payloads is a plain range (no any_view type erasure) taken by value — views
+    // are cheap to copy and a by-value parameter is moved into the coroutine frame. Defined at the
+    // bottom of Service.h: the body drives Service (compression policy, resetP2pID, the pre-send
+    // rate-limit hook), and that header completes both types.
+    template <::ranges::input_range Payloads>
+        requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
     task::Task<std::optional<Message>> fastSendP2PMessage(
-        Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
+        Message& message, Payloads payloads, bcos::network::Options options);
 
 private:
-    SessionFace::Ptr m_session;
+    Session::Ptr m_session;
     /// gateway p2p info
     std::shared_ptr<P2PInfo> m_p2pInfo;
     std::weak_ptr<Service> m_service;
@@ -63,6 +77,7 @@ private:
 
     bcos::protocol::ProtocolInfo::Ptr m_protocolInfo = nullptr;
     mutable bcos::SharedMutex x_protocolInfo;
+    std::uint64_t m_dispatchOwner = 0;
 };
 
 }  // namespace bcos::gateway

@@ -73,7 +73,7 @@ public:
     // thread, so it fails exactly when heartBeat still holds x_nodes(shared). Then throw to abort
     // heartBeat before its host-dependent tail (asioInterface()->newTimer()), which no test host
     // provides.
-    bool isConnected(P2pID const& /*nodeID*/) const override
+    bool isConnected(bcos::network::P2pID const& /*nodeID*/) const override
     {
         bool acquiredExclusive = false;
         std::thread probe([this, &acquiredExclusive]() {

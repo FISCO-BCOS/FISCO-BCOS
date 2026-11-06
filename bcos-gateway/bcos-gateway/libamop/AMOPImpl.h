@@ -21,9 +21,9 @@
 #include "bcos-framework/protocol/AMOPRequest.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libamop/TopicManager.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/Timer.h"
 #include <bcos-task/Task.h>
@@ -40,7 +40,7 @@ public:
     using Ptr = std::shared_ptr<AMOPImpl>;
     AMOPImpl(TopicManager::Ptr _topicManager, AMOPMessageFactory::Ptr _messageFactory,
         bcos::protocol::AMOPRequestFactory::Ptr _requestFactory,
-        bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID,
+        bcos::gateway::Service::Ptr _network, bcos::network::P2pID const& _p2pNodeID,
         boost::asio::io_context& _ioContext, bcos::IOServicePool::Ptr _ioServicePool);
     virtual ~AMOPImpl();
 
@@ -69,13 +69,13 @@ public:
     virtual task::Task<void> sendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data);
 
-    virtual void onAMOPMessage(bcos::gateway::NetworkException const& _e,
+    virtual void onAMOPMessage(
         bcos::gateway::P2PSession::Ptr _session, bcos::gateway::Message _message);
 
     virtual TopicManager::Ptr topicManager();
 
 protected:
-    virtual void dispatcherAMOPMessage(bcos::gateway::NetworkException const& _e,
+    virtual void dispatcherAMOPMessage(
         bcos::gateway::P2PSession::Ptr _session, bcos::gateway::Message _message);
     /**
      * @brief: periodically send topicSeq to all other nodes
@@ -91,7 +91,7 @@ protected:
      * @return void
      */
     virtual void onReceiveTopicSeqMessage(
-        bcos::gateway::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
+        bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
 
     /**
      * @brief: receive request topic message from other nodes
@@ -100,7 +100,7 @@ protected:
      * @param _msg: message
      * @return void
      */
-    void onReceiveRequestTopicMessage(bcos::gateway::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
+    void onReceiveRequestTopicMessage(bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
 
     /**
      * @brief: receive topic response message from other nodes
@@ -110,7 +110,7 @@ protected:
      * @return void
      */
     virtual void onReceiveResponseTopicMessage(
-        bcos::gateway::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
+        bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
 
     /**
      * @brief: receive amop request message from the given node and dispatch it to the local
@@ -120,7 +120,7 @@ protected:
      * @return {responseData, responseType}: the response to send back to the sender
      */
     virtual task::Task<std::tuple<bytesPointer, int16_t>> onReceiveAMOPMessage(
-        bcos::gateway::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
+        bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
 
     /**
      * @brief: receive broadcast message
@@ -130,12 +130,12 @@ protected:
      * @return void
      */
     virtual void onReceiveAMOPBroadcastMessage(
-        bcos::gateway::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
+        bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg);
 
 private:
     bcos::bytes buildAndEncodeMessage(uint32_t _type, bcos::bytesConstRef _data);
     virtual task::Task<std::tuple<bytesPointer, int16_t>> onReceiveAMOPMessage(
-        bcos::gateway::P2pID const& _nodeID, std::string const& _topic, bytesConstRef _data);
+        bcos::network::P2pID const& _nodeID, std::string const& _topic, bytesConstRef _data);
     /**
      * @brief: send the topic message to a local client subscribed to _topic
      * @return {error, responseType, responseData}, or nullopt when no local client subscribes
@@ -148,8 +148,8 @@ private:
     std::shared_ptr<AMOPMessageFactory> m_messageFactory;
     std::shared_ptr<bcos::protocol::AMOPRequestFactory> m_requestFactory;
     std::shared_ptr<Timer> m_timer;
-    bcos::gateway::P2PInterface::Ptr m_network;
-    bcos::gateway::P2pID m_p2pNodeID;
+    bcos::gateway::Service::Ptr m_network;
+    bcos::network::P2pID m_p2pNodeID;
     bcos::Strand m_strand;
 
     unsigned const TOPIC_SYNC_PERIOD = 2000;
