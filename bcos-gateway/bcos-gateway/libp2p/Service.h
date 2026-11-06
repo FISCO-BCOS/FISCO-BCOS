@@ -143,6 +143,10 @@ protected:
 
     friend class ServiceV2;
 
+private:
+    task::Task<void> acceptPump();
+
+protected:
     using SessionsType = std::map<std::string, P2PSession::Ptr>;
     std::vector<std::function<void(NetworkException, P2PSession::Ptr)>> m_disconnectionHandlers;
 
