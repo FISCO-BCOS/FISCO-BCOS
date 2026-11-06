@@ -94,20 +94,17 @@ public:
         // file's mocks historically produced.
         BOOST_REQUIRE(mockScheduler.m_receiptsWithLogs);
 
-        // Ledger: asyncPrewriteBlock => invoke callback(success)
-        fakeit::When(Method(mockLedger, asyncPrewriteBlock))
+        // Ledger: prewriteBlock => successful coroutine, or the configured exception
+        fakeit::When(Method(mockLedger, prewriteBlock))
             .AlwaysDo([this](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
-                          protocol::Block::ConstPtr,
-                          std::function<void(std::string, Error::Ptr&&)> callback, bool,
-                          std::optional<ledger::Features>, std::optional<bcos::crypto::HashType>,
-                          bool) {
+                          protocol::Block::ConstPtr, bool, std::optional<bcos::crypto::HashType>,
+                          bool) -> task::Task<std::string> {
                 if (prewriteBlockFails)
                 {
-                    callback({},
-                        BCOS_ERROR_PTR(scheduler::SchedulerError::UnknownError, prewriteFailure));
-                    return;
+                    BOOST_THROW_EXCEPTION(
+                        BCOS_ERROR(scheduler::SchedulerError::UnknownError, prewriteFailure));
                 }
-                callback({}, nullptr);
+                co_return std::string{};
             });
         // FIB-104: storeTransactionsAndReceipts is no longer called by coCommitBlock
         // (the unified prewriteBlockToBuffer path writes txs/receipts directly into
@@ -129,7 +126,7 @@ public:
     void writeBlock(std::shared_ptr<bcostars::protocol::BlockImpl> block)
     {
         auto bh = block->blockHeader();
-        task::syncWait(ledger::prewriteBlock(mockLedger.get(),
+        task::syncWait(ledger::prewriteBlockRows(mockLedger.get(),
             std::make_shared<protocol::ConstTransactions>(), block, false, backendStorage));
         bytes headerBuffer;
         bh->encode(headerBuffer);
