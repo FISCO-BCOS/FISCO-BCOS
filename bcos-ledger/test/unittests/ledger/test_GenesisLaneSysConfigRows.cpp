@@ -75,6 +75,7 @@ const std::set<std::string> c_v1BaselineKeys = {
     "bugfix_eoa_match_failed",
     "bugfix_event_log_order",
     "bugfix_evm_create2_delegatecall_staticcall_codecopy",
+    "bugfix_evm2929_created_address_warm",
     "bugfix_evm_exception_gas_used",
     "bugfix_evm_storage_status",
     "bugfix_gas_payment_balance_precheck",

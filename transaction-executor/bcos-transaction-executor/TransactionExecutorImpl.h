@@ -255,7 +255,6 @@ public:
                 failResult.output_data = nullptr;
                 failResult.output_size = 0;
                 failResult.release = nullptr;
-                failResult.create_address = {};
                 m_data->m_evmcResult.emplace(
                     EVMCResult(failResult, protocol::TransactionStatus::NotEnoughCash));
                 // gasUsed reflects what was actually charged as penalty (in gas units).
@@ -345,7 +344,6 @@ public:
                         evmcResult.output_data = nullptr;
                         evmcResult.output_size = 0;
                         evmcResult.release = nullptr;
-                        evmcResult.create_address = {};
                         co_await m_data->m_rollbackableStorage.rollback(m_data->m_startSavepoint);
                     }
                     else
@@ -364,9 +362,12 @@ public:
             std::string newContractAddress;
             if (evmcMessage.kind == EVMC_CREATE && evmcResult.status_code == EVMC_SUCCESS)
             {
-                newContractAddress.reserve(sizeof(evmcResult.create_address) * 2);
-                boost::algorithm::hex_lower(evmcResult.create_address.bytes,
-                    evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
+                // evmc ABI 19: evmc_result::create_address is gone; the created
+                // address rides on the prepared message's recipient (set by
+                // getMessage() for transaction-level creates).
+                newContractAddress.reserve(sizeof(evmcMessage.recipient) * 2);
+                boost::algorithm::hex_lower(evmcMessage.recipient.bytes,
+                    evmcMessage.recipient.bytes + sizeof(evmcMessage.recipient.bytes),
                     std::back_inserter(newContractAddress));
             }
 

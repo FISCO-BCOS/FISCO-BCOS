@@ -1260,8 +1260,9 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
         std::move(tx), [&](bcos::Error::Ptr err, bcos::protocol::TransactionReceipt::Ptr) {
             called = true;
             BOOST_REQUIRE(err != nullptr);  // Error (JSON-RPC), never a status-0 receipt
-            // maxFeePerGas=1 below the block base fee → FEE_CAP_LESS_THAN_BLOCKS. The
-            // OpConsensusError is classified by the call path's exception ladder: the
+            // maxFeePerGas=1 below the block base fee → INSUFFICIENT_MAX_FEE_PER_GAS
+            // (the evmone 0.24 name for the retired FEE_CAP_LESS_THAN_BLOCKS entry).
+            // The OpConsensusError is classified by the call path's exception ladder: the
             // catch(...) arm now classifies like the catch(std::exception) arm already did.
             BOOST_CHECK_EQUAL(
                 err->errorCode(), (int)bcos::scheduler::SchedulerError::OpConsensusRejected);
@@ -1485,7 +1486,7 @@ BOOST_AUTO_TEST_CASE(CallUnfundedSenderSucceedsViaFakeBalance)
 
 /// eth_call maxGasPriceFloor (OpEthExecutor's call=true arm): a pricing-less call (no gasPrice,
 /// no maxFeePerGas) gets its fee cap floored to the block base fee, so validation neither
-/// rejects (FEE_CAP_LESS_THAN_BLOCKS on an unfloored 0) nor overprices — effectiveGasPrice is
+/// rejects (INSUFFICIENT_MAX_FEE_PER_GAS on an unfloored 0) nor overprices — effectiveGasPrice is
 /// exactly baseFee. CallInvalidReturnsError pins the other arm (an explicit cap below baseFee
 /// still rejects).
 BOOST_AUTO_TEST_CASE(CallWithoutPricingIsFlooredToBaseFee)

@@ -294,6 +294,8 @@ public:
 
         /// callback to create context
         result2->setSeq(1000);
+        // Mirror the scheduler hand-back after sequence 1001 has been consumed.
+        result2->setSchedulerSeq(1001);
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(

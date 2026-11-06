@@ -152,8 +152,14 @@ std::string newLegacyEVMAddressString(bytesConstRef sender, std::string const& n
 std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl, const std::string_view& _sender,
     bytesConstRef _init, u256 const& _salt)
 {
-    auto hash = _hashImpl->hash(
-        bytes{0xff} + fromHex(_sender) + toBigEndian(_salt) + _hashImpl->hash(_init));
+    return newCreate2EVMAddress(*_hashImpl, _sender, _init, _salt);
+}
+
+std::string newCreate2EVMAddress(bcos::crypto::Hash const& _hashImpl,
+    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
+{
+    auto hash =
+        _hashImpl.hash(bytes{0xff} + fromHex(_sender) + toBigEndian(_salt) + _hashImpl.hash(_init));
 
     std::string hexAddress;
     hexAddress.reserve(40);

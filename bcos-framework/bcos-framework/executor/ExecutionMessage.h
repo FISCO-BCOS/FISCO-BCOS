@@ -126,6 +126,16 @@ public:
     virtual int64_t seq() const = 0;
     virtual void setSeq(int64_t seq) = 0;
 
+    /// DMC scheduler -> executor: the tx-context's last-consumed seq at the moment the
+    /// parent frame this message resumes (ExecutiveState::currentSeq - 1). The DMC
+    /// coroutine lane's CREATE hook derives the nested-create address from this counter
+    /// so it reproduces the scheduler-side f(currentSeq) the pre-upgrade binary produced.
+    /// Implementations default to -1, meaning "producer never set it" (serial lane, EL
+    /// lanes, old peers): on the DMC lane an unset value is NOT benign — it marks the
+    /// resumed frame and makes the next createDerivationSeq() fail loudly.
+    virtual int64_t schedulerSeq() const = 0;
+    virtual void setSchedulerSeq(int64_t schedulerSeq) = 0;
+
     virtual std::string_view origin() const = 0;  // readable format
     virtual void setOrigin(std::string origin) = 0;
 
@@ -198,6 +208,12 @@ public:
     virtual void setStaticCall(bool staticCall) = 0;
 
     // for evm
+    // A legacy producer (the pre-EIP-1014 DMC/serial create path) hands the CREATE2
+    // salt down this field; both scheduler consumers (DmcExecutor,
+    // SerialBlockExecutive) derive the address through bcos::newCreate2EVMAddress so
+    // the stored account is the EIP-1014 one. ABI 19 removed
+    // evmc_message::create2_salt, so the salt no longer crosses the VM boundary;
+    // it stays on this protocol interface for the scheduler-side derivation.
     virtual std::optional<u256> createSalt() const = 0;
     virtual void setCreateSalt(u256 createSalt) = 0;
 

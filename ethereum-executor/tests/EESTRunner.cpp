@@ -607,7 +607,9 @@ evmc_revision forkNameToRevision(std::string const& forkName)
     if (lower == "byzantium")
         return EVMC_BYZANTIUM;
     if (lower == "constantinople")
-        return EVMC_CONSTANTINOPLE;
+        // evmc 0.24 (ABI 19) merged Constantinople into Petersburg; the corpus's
+        // "Constantinople" fixtures execute under the Petersburg alias here.
+        return EVMC_PETERSBURG;
     if (lower == "constantinoplefix" || lower == "petersburg")
         return EVMC_PETERSBURG;
     if (lower == "istanbul")
