@@ -9,8 +9,9 @@ import {TransparentUpgradeableProxy} from
 /// @title ProxyAuthorityTest
 /// @notice Proves the two-authority split THROUGH a live proxy: the EIP-1967
 ///         admin can only upgrade (it cannot reach the implementation's
-///         functions at all), while `Ownable.owner` writes config but cannot
-///         upgrade. The genesis overlay materializes exactly this end state
+///         functions at all), while `Ownable.owner` reaches the config path
+///         (today an empty whitelist) but cannot upgrade. The genesis overlay
+///         materializes exactly this end state
 ///         (admin slot = ProxyAdmin, owner slot = governance entity), so
 ///         these tests pin the runtime semantics that state implies.
 /// @dev    Uses OZ v4.7 TransparentUpgradeableProxy as the ERC-1967 stand-in;
@@ -24,7 +25,9 @@ contract ProxyAuthorityTest is Test {
     address admin = address(0xAD);   // upgrade authority (ProxyAdmin stand-in)
     address owner = address(0xCAFE); // governance entity (config authority)
 
-    string constant WRITABLE_KEY = "block_tx_count_limit";
+    // A genesis-seeded key; `_config` base slot as pinned by storage-layout/SystemConfig.json.
+    string constant GENESIS_KEY = "chain_id";
+    uint256 constant CONFIG_BASE_SLOT = 101;
 
     function setUp() public {
         impl = new SystemConfig();
@@ -33,13 +36,19 @@ contract ProxyAuthorityTest is Test {
         cfg = SystemConfig(address(proxy));
     }
 
-    /// The governance owner writes config through the proxy.
-    function test_OwnerWritesConfig_ThroughProxy() public {
+    /// Genesis writes the Entry slot into the PROXY account (build-allocs.py); the proxy
+    /// delegates reads to the implementation. vm.store stands in for the genesis tooling.
+    function seedEntry(string memory key, uint192 value, uint64 enableNumber) internal {
+        bytes32 slot = keccak256(abi.encodePacked(key, CONFIG_BASE_SLOT));
+        vm.store(address(proxy), slot, bytes32((uint256(enableNumber) << 192) | uint256(value)));
+    }
+
+    /// The governance owner reaches setValueByKey through the proxy: the call is delegated
+    /// and passes onlyOwner, then stops at the (empty) key whitelist, not at the proxy.
+    function test_OwnerReachesConfig_ThroughProxy() public {
         vm.prank(owner);
-        cfg.setValueByKey(WRITABLE_KEY, 1000, 5);
-        (uint192 v, uint64 e) = cfg.getValueByKey(WRITABLE_KEY);
-        assertEq(uint256(v), 1000);
-        assertEq(uint256(e), 5);
+        vm.expectRevert("SystemConfig: key not runtime-writable");
+        cfg.setValueByKey(GENESIS_KEY, 1000, 5);
         assertEq(cfg.owner(), owner);
     }
 
@@ -48,7 +57,7 @@ contract ProxyAuthorityTest is Test {
     function test_AdminCannotWriteConfig() public {
         vm.prank(admin);
         vm.expectRevert("TransparentUpgradeableProxy: admin cannot fallback to proxy target");
-        cfg.setValueByKey(WRITABLE_KEY, 1, 0);
+        cfg.setValueByKey(GENESIS_KEY, 1, 0);
     }
 
     /// The governance owner cannot upgrade: its upgradeTo call is delegated
@@ -64,14 +73,16 @@ contract ProxyAuthorityTest is Test {
     /// entries) survives because state lives in the proxy account — exactly
     /// the property the genesis overlay relies on.
     function test_AdminUpgrades_StateSurvives() public {
-        vm.prank(owner);
-        cfg.setValueByKey(WRITABLE_KEY, 1000, 5);
+        seedEntry(GENESIS_KEY, 1000, 5);
+        (uint192 v0, uint64 e0) = cfg.getValueByKey(GENESIS_KEY);
+        assertEq(uint256(v0), 1000);
+        assertEq(uint256(e0), 5);
 
         SystemConfig newImpl = new SystemConfig();
         vm.prank(admin);
         TransparentUpgradeableProxy(payable(address(proxy))).upgradeTo(address(newImpl));
 
-        (uint192 v, uint64 e) = cfg.getValueByKey(WRITABLE_KEY);
+        (uint192 v, uint64 e) = cfg.getValueByKey(GENESIS_KEY);
         assertEq(uint256(v), 1000);
         assertEq(uint256(e), 5);
         assertEq(cfg.owner(), owner);

@@ -837,18 +837,20 @@ jobs:
 
       # The e2e harness lives in FISCO-BCOS/op-stack-e2e-tests; pinned ref — bump it
       # in lockstep with node changes (its CI gates the harness itself).
+      # The pin lives in tools/.ci/op-e2e-harness.pin (also read by tools/op-genesis-repro.sh).
+      - name: Read the op-e2e harness pin
+        id: harness-pin
+        # An empty ref would make actions/checkout fall back to the default branch: fail instead.
+        run: |
+          commit=$(sed -n 's/^commit=//p' tools/.ci/op-e2e-harness.pin)
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::bad commit= in op-e2e-harness.pin"; exit 1; }
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+
       - name: Check out the op-e2e harness (op-stack-e2e-tests)
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          # FISCO-BCOS/op-stack-e2e-tests#13 moves the harness to the 3.18 config surface
-          # ([engine_rpc], no [op_fork_schedule], separate config.ini / config.genesis, no
-          # SystemConfig feature_flags slot). This is that PR's head commit, reachable through
-          # refs/pull/13/head; re-pin to its merge commit on the default branch once it merges.
-          # It descends from the previous pin 5a2ad071a, so it keeps the kona native replay
-          # phase 3.6 and setup_c2.sh's [web3_rpc] enable_debug_api=true (kona-host's preimage
-          # oracle).
-          ref: dac984d09777de634279025b6f6013106ae42b5c
+          ref: ${{ steps.harness-pin.outputs.commit }}
           path: .ci-op-e2e-tests
 
       - name: Download fisco-bcos artifact from the build job

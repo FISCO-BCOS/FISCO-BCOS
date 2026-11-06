@@ -104,3 +104,6 @@ CLAUDE.local.md
 
 # Local build_chain.sh output
 tools/nodes/
+
+# op-stack-e2e-tests checkout (CI and tools/op-genesis-repro.sh)
+/.ci-op-e2e-tests/
