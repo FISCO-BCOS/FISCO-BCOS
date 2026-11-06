@@ -28,6 +28,7 @@
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
 #include <range/v3/view/any_view.hpp>
@@ -97,6 +98,10 @@ public:
             {
                 throwTrace(
                     InvalidSignatureList() << errinfo_comment("invalid sealer public key length"));
+            }
+            catch (const crypto::InvalidSignature&)
+            {
+                throwTrace(InvalidSignatureList() << errinfo_comment("invalid sealer signature"));
             }
         }
     }

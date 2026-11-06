@@ -154,8 +154,8 @@ bool HsmSM2Crypto::verify(
                             << LOG_KV("message", provider.GetErrorMessage(code));
         return false;
     }
-    // SDFCryptoProvider reports the native verification status in code; verifyResult carries
-    // the equivalent boolean verdict.
+    // hsm-crypto 1.1.0 (5d23a56) sets verifyResult to (code == SDR_OK) in
+    // hsm/SDFCryptoProvider.cpp:362-371 and returns the native verification status in code.
     return verifyResult;
 }
 
