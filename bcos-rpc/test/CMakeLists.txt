@@ -38,6 +38,9 @@ set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUIL
 # keep the attach-channel tests standalone (FakeTxPool.h is namespace-fragile in a unity merge)
 set_source_files_properties("unittests/rpc/IpcServerTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/rpc/AdminMethodsTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# DebugRawReceiptsTest drives the same FullChainFixture harness (real Ledger + RocksDB), so it
+# inherits the same name-collision risk in a unity merge.
+set_source_files_properties("unittests/rpc/DebugRawReceiptsTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 #add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")
 enable_testing()

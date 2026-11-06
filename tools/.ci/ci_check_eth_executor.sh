@@ -89,10 +89,10 @@ GENESIS_EOF
 
 # Pre-fund the fixture sender (secretKey below) via genesis alloc. The alloc
 # parser requires a `code` key; an empty value means "no code" (a plain EOA).
-# Sender is from fixtures/state_tests/berlin/eip2930_access_list/test_transaction_intrinsic_gas_cost.json
+# Sender is from fixtures/state_tests/for_berlin/berlin/eip2930_access_list/acl/transaction_intrinsic_gas_cost.json
 cat >> config.genesis <<'GENESIS_EOF'
 [alloc.0]
-    address=0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0
+    address=0xf6c3a9edc1afa0ad5b720e4d42e1437c43d3b3ff
     balance=1000000000000000000000
     nonce=0
     code=
@@ -107,10 +107,10 @@ GENESIS_EOF
 #
 # Values below are the standard empty-chain defaults from
 # the harness's tools/opstack-genesis/gen_eth_header_fixture.py, EXCEPT:
-#   state_root = 0x6ea0c8bc... — the genesis MPT root for the single alloc
+#   state_root = 0x37a9d625... — the genesis MPT root for the single alloc
 #     above, computed with the node's own Ledger::computeGenesisStateTrie;
 #     MUST be regenerated if [alloc.0] changes (a stale root fails genesis).
-#   hash       = 0xf66beef7... — keccak256(rlp(header)) over the 21 fields,
+#   hash       = 0xd0fb7c30... — keccak256(rlp(header)) over the 21 fields,
 #     from gen_eth_header_fixture.py with the state_root override above.
 cat >> config.genesis <<'GENESIS_EOF'
 
@@ -118,7 +118,7 @@ cat >> config.genesis <<'GENESIS_EOF'
 parent_hash=0x0000000000000000000000000000000000000000000000000000000000000000
 sha3_uncles=0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
 miner=0x4200000000000000000000000000000000000011
-state_root=0x6ea0c8bc0a9b451c2bab98df63d4be058d3b82b9b3a2e5e02cbf0122ef95e5a5
+state_root=0x37a9d6257f3959e43b768b3c66b8e48ab0effa6889491c8a286e51513c6ec97e
 transactions_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
 receipts_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
 logs_bloom=0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -136,7 +136,7 @@ blob_gas_used=0x0
 excess_blob_gas=0x0
 parent_beacon_block_root=0x0000000000000000000000000000000000000000000000000000000000000000
 requests_hash=0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-hash=0xf66beef79256c0b3f1fd2852040413c5dffa1ff44f0f78421ae17cf8f397a1a5
+hash=0xd0fb7c3039065951c175e83d68d717971166d8764fee1ece85ec5c85254fa98e
 GENESIS_EOF
 
 # enable web3_rpc (eth_*) on port 8545
@@ -171,9 +171,9 @@ python3 "${REPO_ROOT}/tools/.ci/eth_executor_rpc_test.py" \
     --rpc "${RPC_URL}" \
     --fixture-dir "${FIXTURE_DIR}" \
     --require-fixture \
-    --secret "0xa4e7ea6dc542e6de38bf1229c3ea744aa6b9f501386aa167ad42f49e3787066f" \
-    --to "0xc3ea744aa6b9f501386aa167ad42f49e3787066f" \
-    --sender "0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0" \
+    --secret "0x1ad604b3d94e06ec50b27732ec677f3d857c4d588f082f0016317697dd3a2d92" \
+    --to "0x35904c2cd4457856fb508b8cd8d4ed43e5d2d3ba" \
+    --sender "0xf6c3a9edc1afa0ad5b720e4d42e1437c43d3b3ff" \
     || fail "eth_executor_rpc_test.py failed"
 
 # ---- 5. pin the fork the blocks are built under ----

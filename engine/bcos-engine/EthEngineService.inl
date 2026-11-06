@@ -23,7 +23,9 @@
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/indirect.hpp>
+#include <range/v3/view/reverse.hpp>
 #include <range/v3/view/transform.hpp>
+#include <span>
 
 #include <bcos-framework/protocol/BlobSchedule.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
@@ -265,6 +267,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         l1Input->parentHeader = bcos::protocol::EthBlockHeader(*parentBlock->blockHeader()).data();
         l1Input->l1Context = co_await m_externalPayloadVerifier->deriveL1Context(
             l1Input->parentHeader, payloadAttributes->timestamp / 1000);
+        l1Input->gasLimit = co_await deriveL1GasLimit(view, l1Input->parentHeader);
     }
 
     std::vector<protocol::Transaction::Ptr> sealedTxs;
@@ -272,30 +275,49 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     if (!payloadAttributes->noTxPool.value_or(false))
     {
         m_memPool.remove(view);
+        // The seal fills what the forced envelopes leave of the gas limit the header will
+        // carry (buildPayload prepends them to the sealed list): the derived L1 limit, or
+        // on the v1 lane the tx_gas_limit row buildPayload stamps. allowDeposit=false as
+        // in buildPayload: a 0x7e envelope is invalid on this lane.
+        int64_t blockGasLimit = 0;
         if (l1Input.has_value())
         {
-            m_memPool.seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs),
-                l1Input->l1Context.baseFee);
+            blockGasLimit = l1Input->gasLimit.template convert_to<int64_t>();
         }
         else
         {
-            m_memPool.seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+            blockGasLimit = co_await engine_common::legacyBlockGasLimit(
+                view, *headBlockNumber, *m_blockFactory);
+        }
+        auto const poolBudget = engine_common::poolGasBudget(blockGasLimit, decodedForcedTxs,
+            *m_blockFactory->cryptoSuite()->hashImpl(), /*allowDeposit=*/false);
+        if (l1Input.has_value())
+        {
+            m_memPool.seal(
+                poolBudget, view, std::back_inserter(sealedTxs), l1Input->l1Context.baseFee);
+        }
+        else
+        {
+            m_memPool.seal(poolBudget, view, std::back_inserter(sealedTxs));
         }
     }
 
     if (l1Input.has_value() && !sealedTxs.empty())
     {
-        // EL mode: two blob-transaction exclusions, each leaving the transaction pooled
-        // for a later block and skipping the rest of the sender's nonce suffix with it
-        // (the executor would reject the nonce gap):
+        // EL mode: exclusions for what only this block cannot take, each leaving the
+        // transaction pooled for a later block and skipping the rest of the sender's nonce
+        // suffix with it (the executor would reject the nonce gap). Execution would refuse
+        // them, and buildL1Payload evicts what execution refuses, so they stop here:
+        //  * the fee cap is below this block's base fee, or the blob fee cap below its blob
+        //    base fee — the price can fall back, and the seal only sorts them last;
         //  * the EIP-4844 sidecar never arrived — the transaction cannot be assembled
         //    into a blobsBundle, so it is unbuildable;
         //  * the block's blob budget is spent — the EIP-7844 schedule's per-block blob
         //    maximum at the block's timestamp. The executor's block-level blob gas
         //    budget (EthereumExecutor::BlockContext) is the backstop, not the filter:
-        //    without this skip an over-budget transaction would enter the block with a
-        //    validation-failure receipt instead of staying pooled.
-        std::unordered_set<std::string> blobSkippedSenders;
+        //    without this skip an over-budget transaction would be evicted instead of
+        //    staying pooled.
+        std::unordered_set<std::string> skippedSenders;
         auto const maxBlobs = m_memPool.maxBlobsPerBlock(payloadAttributes->timestamp / 1000);
         std::size_t sealedBlobs = 0;
         std::vector<protocol::Transaction::Ptr> buildableTxs;
@@ -303,8 +325,22 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         for (auto& sealedTx : sealedTxs)
         {
             std::string sender{sealedTx->sender()};
-            if (blobSkippedSenders.contains(sender))
+            if (skippedSenders.contains(sender))
             {
+                continue;
+            }
+            if (sealedTx->type() ==
+                    static_cast<std::uint8_t>(protocol::TransactionType::Web3Transaction) &&
+                (protocol::effectiveGasPrice(*sealedTx) < l1Input->l1Context.baseFee ||
+                    (!sealedTx->blobVersionedHashes().empty() &&
+                        sealedTx->maxFeePerBlobGas().value_or(0) < l1Input->l1Context.blobBaseFee)))
+            {
+                skippedSenders.insert(std::move(sender));
+                BCOS_LOG(INFO) << LOG_BADGE("EthEngineService")
+                               << LOG_DESC(
+                                      "seal: fee cap below this block's price; leaving "
+                                      "transaction pooled")
+                               << LOG_KV("hash", sealedTx->hash().hexPrefixed());
                 continue;
             }
             if (sealedTx->type() ==
@@ -313,7 +349,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             {
                 if (!m_memPool.hasBlobSidecar(sealedTx->hash()))
                 {
-                    blobSkippedSenders.insert(std::move(sender));
+                    skippedSenders.insert(std::move(sender));
                     BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService")
                                       << LOG_DESC("seal: skipping blob transaction without sidecar")
                                       << LOG_KV("hash", sealedTx->hash().hexPrefixed());
@@ -321,7 +357,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
                 }
                 if (sealedBlobs + sealedTx->blobVersionedHashes().size() > maxBlobs)
                 {
-                    blobSkippedSenders.insert(std::move(sender));
+                    skippedSenders.insert(std::move(sender));
                     BCOS_LOG(INFO)
                         << LOG_BADGE("EthEngineService")
                         << LOG_DESC(
@@ -366,8 +402,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     }
     catch (OpExecutionInternalError const& e)
     {
-        // An envelope the CL submitted but this service cannot decode is a payload-content
-        // fault: answer a terminal INVALID (same contract as the OP lane's
+        // An envelope the CL submitted but this service cannot decode or execute is a
+        // payload-content fault: answer a terminal INVALID (same contract as the OP lane's
         // fcuInvalidIfUndecodable), never a retryable -32603. Every other internal fault
         // keeps propagating so the endpoint maps it to -32603.
         if (auto invalid = detail::fcuInvalidIfUndecodable(e))
@@ -1019,6 +1055,13 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
         m_ledgerConfigState->set(std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
     }
+    // The block's transactions are executed now: drop them from the pool so the sender's
+    // per-sender count and pending-cost budget stop charging for them before the next
+    // build (which would prune them itself).
+    {
+        auto committed = m_globalStateStorage.fork();
+        m_memPool.remove(committed);
+    }
 
     co_return engine_common::makeStatus(
         PayloadValidationStatus::Valid, cached->executionPayload.blockHash, std::nullopt);
@@ -1130,6 +1173,14 @@ task::Task<PayloadStatus> EthEngineService<MemPoolType, GlobalStateStorageType, 
             auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
             m_ledgerConfigState->set(
                 std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
+        }
+        // ...and drops the block's transactions from the pool. Only buildPayload pruned
+        // before, so on a node that never builds (an EL whose CL rarely elects it, a pure
+        // RPC node) executed transactions stayed pooled until expiry, and the pool's
+        // per-sender count and pending-cost budget kept charging the sender for them.
+        {
+            auto committed = m_globalStateStorage.fork();
+            m_memPool.remove(committed);
         }
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
@@ -1443,19 +1494,10 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
              scheduler_v1::TransactionScheduler<SchedulerType,
                  typename GlobalStateStorageType::ViewType, ExecutorType,
                  std::vector<protocol::Transaction::Ptr>>
-task::Task<typename EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
-    SchedulerType>::BuildPayloadResult>
-EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildL1Payload(
-    const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
-    bcos::protocol::BlockNumber nextBlockNumber, std::vector<EngineTransaction> engineTransactions,
-    ViewType& view, L1BuildInput const& l1Input) const
+task::Task<u256> EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+    SchedulerType>::deriveL1GasLimit(ViewType& view,
+    bcos::protocol::EthBlockHeaderData const& parentHeader) const
 {
-    auto const& l1Context = l1Input.l1Context;
-    auto const forkVersion = l1Context.forkVersion;
-
-    ledger::LedgerConfig ledgerConfig;
-    co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
-
     // Block gas limit: inherit the PARENT header's limit by default (delta 0). The
     // chain's gas limit is a consensus property the parent-relative header validation
     // bounds to |delta| < parent/1024 per block; tx_gas_limit (a single-transaction
@@ -1463,7 +1505,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     // SYS_CONFIG row engine_common::c_l1GasLimitTargetKey (decimal) — pulls the limit
     // toward it by strictly less than parent/1024 per block, clamped to the 5000
     // consensus minimum. PayloadAttributes.gasLimit (the OP extension) is ignored on L1.
-    u256 gasLimit = l1Input.parentHeader.gasLimit;
+    u256 gasLimit = parentHeader.gasLimit;
     if (auto targetEntry =
             co_await ledger::getSystemConfig(view, engine_common::c_l1GasLimitTargetKey);
         targetEntry.has_value())
@@ -1480,7 +1522,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                                       std::string(engine_common::c_l1GasLimitTargetKey) +
                                       " SYS_CONFIG value: " + e.what()});
         }
-        u256 const parentLimit = l1Input.parentHeader.gasLimit;
+        u256 const parentLimit = parentHeader.gasLimit;
         u256 const bound = parentLimit / protocol::kGasLimitBoundDivisor;
         if (bound > 1)
         {
@@ -1496,6 +1538,29 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             gasLimit = u256(protocol::kMinGasLimit);
         }
     }
+    co_return gasLimit;
+}
+
+template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
+    requires executor_v1::TransactionExecutor<ExecutorType,
+                 typename GlobalStateStorageType::ViewType> &&
+             scheduler_v1::TransactionScheduler<SchedulerType,
+                 typename GlobalStateStorageType::ViewType, ExecutorType,
+                 std::vector<protocol::Transaction::Ptr>>
+task::Task<typename EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+    SchedulerType>::BuildPayloadResult>
+EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildL1Payload(
+    const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
+    bcos::protocol::BlockNumber nextBlockNumber, std::vector<EngineTransaction> engineTransactions,
+    ViewType& view, L1BuildInput const& l1Input) const
+{
+    auto const& l1Context = l1Input.l1Context;
+    auto const forkVersion = l1Context.forkVersion;
+
+    ledger::LedgerConfig ledgerConfig;
+    co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
+
+    u256 const gasLimit = l1Input.gasLimit;
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
         !payloadAttributes.parentBeaconBlockRoot.has_value())
@@ -1590,12 +1655,70 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                   .parentHeader = l1Input.parentHeader,
                   .rawTransactions = rawTransactions,
                   .rawWithdrawals = rawWithdrawals});
+    // A pooled transaction can stop being executable after admission (its sender spent the
+    // balance elsewhere, and the pool only prunes by nonce). Like geth's builder, leave it out
+    // and rebuild instead of failing every forkchoiceUpdated until the pool's lifetime evicts
+    // it. Each pass removes at least one transaction, and invalid transactions write nothing,
+    // so the rest execute the same and one rebuild is the normal case. Only a sender's first
+    // failure is evicted: its later nonces fail on the gap it leaves, not on their own, and
+    // the seal does not pick them while the gap stands. Failures that are only about this
+    // block's price never get here (updateForkchoice leaves them pooled), and a storage fault
+    // throws out of execution before any verdict.
+    while (!built.ok && !built.invalidTransactions.empty())
+    {
+        auto const forcedCount =
+            payloadAttributes.transactions ? payloadAttributes.transactions->size() : 0;
+        if (built.invalidTransactions.front() < forcedCount)
+        {
+            // The CL asked for this transaction, so dropping it would build a different block
+            // than requested: a payload-content fault, terminal INVALID for the CL.
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{}
+                << OpPayloadUndecodable{true}
+                << OpPayloadInvalidReason{"forced payload transaction is invalid: " + built.error});
+        }
+        std::vector<bcos::crypto::HashType> evicted;
+        std::unordered_set<std::string> failedSenders;
+        for (auto const index : built.invalidTransactions)
+        {
+            auto const& decoded = engineTransactions[index].decoded;
+            if (failedSenders.emplace(decoded->sender()).second)
+            {
+                evicted.push_back(decoded->hash());
+                BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService")
+                                  << LOG_DESC("buildL1Payload: evicting invalid pooled transaction")
+                                  << LOG_KV("hash", decoded->hash().hexPrefixed())
+                                  << LOG_KV("firstFailure", built.error);
+            }
+        }
+        m_memPool.removeByHash(std::span<bcos::crypto::HashType const>(evicted));
+        // Back to front: the positions are ascending and stay valid while erasing.
+        for (auto const index : built.invalidTransactions | ::ranges::views::reverse)
+        {
+            auto const position = static_cast<std::ptrdiff_t>(index);
+            auto const& decoded = engineTransactions[index].decoded;
+            blobGasUsed -= decoded->blobVersionedHashes().size() * protocol::BLOB_GAS_PER_BLOB;
+            engineTransactions.erase(engineTransactions.begin() + position);
+            rawTransactions.erase(rawTransactions.begin() + position);
+        }
+        if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN)
+        {
+            ethHeader.blobGasUsed = blobGasUsed;
+        }
+        // Discard what the failed pass wrote and stay on the same snapshot: a new fork could
+        // see a block committed meanwhile, and this block's parent is already fixed.
+        view.m_mutableStorage.reset();
+        view.newMutable();
+        built = co_await m_externalPayloadVerifier->buildL1Block(
+            view, engine_common::ExternalBuildBlock{.ethHeader = ethHeader,
+                      .parentHeader = l1Input.parentHeader,
+                      .rawTransactions = rawTransactions,
+                      .rawWithdrawals = rawWithdrawals});
+    }
     if (!built.ok)
     {
-        // A transaction the pool admitted but the block cannot execute (a decode or
-        // execution fault) fails the whole build — the CL gets an internal error, never
-        // a silently truncated block. (geth's builder would drop the offender and
-        // rebuild; this lane builds once and fails loudly.)
+        // A decode or execution fault fails the whole build: the CL gets an internal error,
+        // never a silently truncated block.
         BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
                                   "EngineService: L1 payload build failed: " + built.error});
     }

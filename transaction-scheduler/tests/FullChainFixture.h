@@ -361,27 +361,36 @@ public:
             std::string(reinterpret_cast<char const*>(value.data()), h256::SIZE)};
     }
 
-    std::tuple<Error::Ptr, protocol::BlockHeader::Ptr> executeBlockRaw(protocol::BlockNumber number)
+    std::tuple<Error::Ptr, protocol::BlockHeader::Ptr> executeBlockRaw(
+        protocol::BlockNumber number, std::size_t txCount = 1)
     {
         auto block = std::make_shared<bcostars::protocol::BlockImpl>();
         auto blockHeader = block->blockHeader();
         blockHeader->setNumber(number);
         blockHeader->setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION));
         blockHeader->calculateHash(*m_hashImpl);
-        // One inline transaction: getTransactions serves the block's own transactions, so the
+        // Inline transactions: getTransactions serves the block's own transactions, so the
         // FakeTxPool is never consulted, and the real Ledger prewrite has something to store.
         // Ethereum-lane chains (executor_version >= 2) commit txsRoot over EIP-2718 wire bytes
         // (finishExecute's calculateEthereumTransactionRoot throws on a FISCO-shaped payload),
-        // so the filler transaction is Web3-shaped there.
+        // so the filler transaction is Web3-shaped there. Each transaction gets a distinct nonce so
+        // a multi-transaction block has distinct hashes (SYS_HASH_2_RECEIPT is keyed by hash).
         if (m_executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            block->appendTransaction(makeWeb3FillerTx(static_cast<uint64_t>(number), *m_hashImpl));
+            for (std::size_t i = 0; i < txCount; ++i)
+            {
+                block->appendTransaction(
+                    makeWeb3FillerTx(static_cast<uint64_t>(number) * 100 + i, *m_hashImpl));
+            }
         }
         else
         {
-            bytes input;
-            block->appendTransaction(m_transactionFactory->createTransaction(
-                0, "to", input, std::to_string(number), 100, "chain", "group", 0));
+            for (std::size_t i = 0; i < txCount; ++i)
+            {
+                bytes input;
+                block->appendTransaction(m_transactionFactory->createTransaction(
+                    0, "to", input, std::to_string(number * 100 + i), 100, "chain", "group", 0));
+            }
         }
 
         Error::Ptr execError;
@@ -394,9 +403,10 @@ public:
         return {std::move(execError), std::move(executedHeader)};
     }
 
-    protocol::BlockHeader::Ptr executeOneBlock(protocol::BlockNumber number)
+    protocol::BlockHeader::Ptr executeOneBlock(
+        protocol::BlockNumber number, std::size_t txCount = 1)
     {
-        auto [error, header] = executeBlockRaw(number);
+        auto [error, header] = executeBlockRaw(number, txCount);
         BOOST_REQUIRE_MESSAGE(
             !error, "executeBlock failed: " + (error ? error->errorMessage() : ""));
         BOOST_REQUIRE(header);
@@ -413,9 +423,9 @@ public:
     }
 
     /// Execute + commit one block; returns the executed header (stateRoot readable).
-    protocol::BlockHeader::Ptr runBlock(protocol::BlockNumber number)
+    protocol::BlockHeader::Ptr runBlock(protocol::BlockNumber number, std::size_t txCount = 1)
     {
-        auto header = executeOneBlock(number);
+        auto header = executeOneBlock(number, txCount);
         commitOneBlock(header);
         return header;
     }

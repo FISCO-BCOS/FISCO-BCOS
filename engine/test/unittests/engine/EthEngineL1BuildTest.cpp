@@ -39,6 +39,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-transaction-scheduler/EthereumBlockVerifier.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <ethereum-executor/EthStorageErrorGuard.h>
 #include <ethereum-executor/EthereumExecutor.h>
 #include <boost/test/unit_test.hpp>
@@ -229,8 +230,8 @@ struct EL1BFixture
                 nodeA.verifier, nodeA.fakeLedger, nodeA.blockFactory, el1bCancunForks(),
                 /*chainId=*/1, /*mergeBlock=*/0)),
         service(memPool, nodeA.storage, stubExecutor, stubScheduler, nodeA.blockFactory,
-            /*ledger=*/nullptr, engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+            /*ledger=*/nullptr, static_cast<std::uint32_t>(ApiVersion::V4),
+            /*commitObserver=*/nullptr,
             /*ledgerConfigState=*/nullptr, externalVerifier,
             /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>())
     {}
@@ -268,13 +269,13 @@ struct EL1BReorgFixture
                 nodeB.verifier, nodeB.fakeLedger, nodeB.blockFactory, el1bCancunForks(),
                 /*chainId=*/1, /*mergeBlock=*/0)),
         serviceA(memPoolA, nodeA.storage, stubExecutor, stubScheduler, nodeA.blockFactory,
-            /*ledger=*/nodeA.fakeLedger, engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+            /*ledger=*/nodeA.fakeLedger, static_cast<std::uint32_t>(ApiVersion::V4),
+            /*commitObserver=*/nullptr,
             /*ledgerConfigState=*/nullptr, externalVerifierA,
             /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>()),
         serviceB(memPoolB, nodeB.storage, stubExecutor, stubScheduler, nodeB.blockFactory,
-            /*ledger=*/nodeB.fakeLedger, engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+            /*ledger=*/nodeB.fakeLedger, static_cast<std::uint32_t>(ApiVersion::V4),
+            /*commitObserver=*/nullptr,
             /*ledgerConfigState=*/nullptr, externalVerifierB,
             /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>())
     {}
@@ -362,6 +363,9 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
 {
     std::shared_ptr<std::atomic<int>> accountReadThrowRemaining =
         std::make_shared<std::atomic<int>>(0);
+    /// Account reads to let through before accountReadThrowRemaining starts counting.
+    std::shared_ptr<std::atomic<int>> accountReadSkipRemaining =
+        std::make_shared<std::atomic<int>>(0);
     std::shared_ptr<std::atomic<bool>> accountReadGate = std::make_shared<std::atomic<bool>>(false);
     std::shared_ptr<std::atomic<bool>> accountReadGateOpen =
         std::make_shared<std::atomic<bool>>(true);
@@ -388,6 +392,11 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
             {
                 std::this_thread::yield();
             }
+        }
+        if (accountReadSkipRemaining->load(std::memory_order_acquire) > 0)
+        {
+            accountReadSkipRemaining->fetch_sub(1, std::memory_order_acq_rel);
+            return;
         }
         int remaining = accountReadThrowRemaining->load(std::memory_order_acquire);
         while (remaining > 0 && !accountReadThrowRemaining->compare_exchange_weak(
@@ -598,8 +607,8 @@ struct EL1BFaultFixture
                 nodeA.verifier, nodeA.fakeLedger, nodeA.blockFactory, el1bCancunForks(),
                 /*chainId=*/1, /*mergeBlock=*/0)),
         serviceA(memPool, nodeA.storage, stubExecutor, stubScheduler, nodeA.blockFactory,
-            /*ledger=*/ledgerA, engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+            /*ledger=*/ledgerA, static_cast<std::uint32_t>(ApiVersion::V4),
+            /*commitObserver=*/nullptr,
             /*ledgerConfigState=*/nullptr, externalVerifierA,
             /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>())
     {}
@@ -1051,8 +1060,7 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadParentRelativeConsensusChecks, EL1BFixtur
             nodeB.verifier, nodeB.fakeLedger, nodeB.blockFactory, el1bCancunForks(),
             /*chainId=*/1, /*mergeBlock=*/0);
     EL1BService serviceB(memPoolB, nodeB.storage, stubExecutor, stubScheduler, nodeB.blockFactory,
-        /*ledger=*/nullptr, engine::c_defaultBlockTxCountLimit,
-        static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+        /*ledger=*/nullptr, static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
         /*ledgerConfigState=*/nullptr, externalVerifierB,
         /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>());
 
@@ -1482,6 +1490,73 @@ BOOST_FIXTURE_TEST_CASE(buildLaneStorageFaultFailsBuildWithoutCommit, EL1BFaultF
     BOOST_CHECK_EQUAL(task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(0));
 }
 
+// A failed account read during execution looks like nonce 0, balance 0: the transaction would
+// read as invalid. Whichever read fails, the build must fail and the transaction stay pooled,
+// so a disk hiccup cannot empty the pool. The sweep fails each account read in turn until a
+// build gets through; at least one of them must have been execution's (EthStorageError), the
+// earlier ones are the pool's own nonce reads.
+BOOST_FIXTURE_TEST_CASE(buildLaneStorageFaultKeepsPooledTransaction, EL1BFaultFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto key = secp.generateKeyPair();
+    auto const recipient = el1bEvmcAddress(0x2b);
+    bcos::rpc::Web3Transaction tx;
+    tx.type = bcos::rpc::TransactionType::EIP1559;
+    tx.chainId = 1;
+    tx.nonce = 0;
+    tx.maxPriorityFeePerGas = u256(100000000);
+    tx.maxFeePerGas = u256(2000000000);
+    tx.gasLimit = 21000;
+    tx.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    tx.value = u256(1);
+    auto const raw = el1bSign(tx, *key);
+    auto const hash =
+        bcos::rpc::decodeWeb3RawTransaction(bcos::bytesConstRef(raw.data(), raw.size()), hashImpl)
+            ->hash();
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {{el1bEvmcAddress(key->address(nodeA.cryptoSuite->hashImpl())),
+                                  u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, raw);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    int executionFaults = 0;
+    bool built = false;
+    std::optional<PayloadID> payloadId;
+    for (int skip = 0; skip < 200 && !built; ++skip)
+    {
+        nodeA.backendStorage.accountReadSkipRemaining->store(skip);
+        nodeA.backendStorage.accountReadThrowRemaining->store(1);
+        try
+        {
+            payloadId = task::syncWait(serviceA.updateForkchoice(state, &attributes, 3)).payloadId;
+            built = payloadId.has_value();
+        }
+        catch (executor_v1::eth::EthStorageError const&)
+        {
+            ++executionFaults;
+        }
+        catch (std::runtime_error const&)
+        {
+            // The pool's own read failed before execution started.
+        }
+        BOOST_CHECK(memPool.get(std::vector{hash}).front());
+    }
+    // The build that got through saw no fault at all (none was swallowed), and it kept the
+    // transaction: a fault that reached it would have ended the sweep early.
+    BOOST_CHECK(built);
+    BOOST_CHECK_EQUAL(nodeA.backendStorage.accountReadThrowRemaining->load(), 1);
+    nodeA.backendStorage.accountReadSkipRemaining->store(0);
+    nodeA.backendStorage.accountReadThrowRemaining->store(0);
+    BOOST_REQUIRE(payloadId.has_value());
+    auto data = task::syncWait(serviceA.getPayload(*payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_CHECK_EQUAL(data->executionPayload.transactions.size(), 1);
+    BOOST_CHECK_GT(executionFaults, 0);
+}
+
 // R6 (verify lane): the same swallowed fault during verifyAndCommit must THROW
 // EthStorageError out of the verifier — mapped by the caller to SYNCING / a failed sync
 // round — and never surface as `result.valid == false`: a storage fault must not judge
@@ -1528,8 +1603,8 @@ BOOST_FIXTURE_TEST_CASE(verifyLaneStorageFaultThrowsInsteadOfInvalid, EL1BFaultF
 // R7 (seal side): the L1 seal filter enforces the fork schedule's per-block blob
 // maximum — the static pool falls back to the Cancun cap of 6. Seven pooled one-blob
 // transactions from one sender build a block with exactly six; the seventh stays
-// pooled (with its sidecar) for a later block instead of entering the block with a
-// validation-failure receipt, and the capped block still verifies.
+// pooled (with its sidecar) for a later block instead of being evicted by the build,
+// and the capped block still verifies.
 BOOST_FIXTURE_TEST_CASE(sealCapsBlockBlobsAtScheduleMaximum, EL1BFixture)
 {
     auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
@@ -1614,6 +1689,535 @@ BOOST_FIXTURE_TEST_CASE(sealCapsBlockBlobsAtScheduleMaximum, EL1BFixture)
         /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0, decoder, stateRootCalc));
     BOOST_CHECK(result.valid);
     BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+}
+
+// Committing a self-built payload drops its transactions from the pool: the real executor
+// advances the sender's nonce, and newPayload's VALID answer leaves the pool without the
+// transfer the block carried.
+BOOST_FIXTURE_TEST_CASE(selfBuiltCommitDropsExecutedTransactions, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto senderKey = secp.generateKeyPair();
+    auto const sender = el1bEvmcAddress(senderKey->address(nodeA.cryptoSuite->hashImpl()));
+    auto const recipient = el1bEvmcAddress(0x21);
+
+    bcos::rpc::Web3Transaction transfer;
+    transfer.type = bcos::rpc::TransactionType::EIP1559;
+    transfer.chainId = 1;
+    transfer.nonce = 0;
+    transfer.maxPriorityFeePerGas = u256(100000000);
+    transfer.maxFeePerGas = u256(2000000000);
+    transfer.gasLimit = 21000;
+    transfer.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    transfer.value = u256(1);
+    auto raw = el1bSign(transfer, *senderKey);
+    auto const txHash =
+        bcos::rpc::decodeWeb3RawTransaction(bcos::bytesConstRef(raw.data(), raw.size()), hashImpl)
+            ->hash();
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {{sender, u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, raw);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_REQUIRE_EQUAL(data->executionPayload.transactions.size(), 1);
+    // Sealed, but still pooled until the block is committed.
+    BOOST_CHECK(memPool.get(std::vector{txHash}).front());
+
+    NewPayloadRequest request;
+    request.executionPayload = data->executionPayload;
+    request.parentBeaconBlockRoot = data->parentBeaconBlockRoot;
+    auto committed = task::syncWait(service.newPayload(request, 3));
+    BOOST_REQUIRE(committed.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK(!memPool.get(std::vector{txHash}).front());
+}
+
+// A pooled transaction whose sender can no longer pay must not fail every forkchoiceUpdated
+// until the pool evicts it: the builder leaves it and the sender's later nonce out, evicts
+// the first (the later one only failed on the gap, and waits behind it) and rebuilds. The
+// funded transaction stays, and the block
+// round-trips through newPayload, which recomputes the state root: the failed pass's writes
+// were discarded, or the funded transfer would apply twice.
+BOOST_FIXTURE_TEST_CASE(buildDropsInvalidPooledTransactionAndRebuilds, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto funded = secp.generateKeyPair();
+    auto broke = secp.generateKeyPair();
+    auto const fundedAddress = el1bEvmcAddress(funded->address(nodeA.cryptoSuite->hashImpl()));
+    auto const recipient = el1bEvmcAddress(0x23);
+
+    auto transfer = [&](uint64_t nonce, u256 tip, auto const& key) {
+        bcos::rpc::Web3Transaction tx;
+        tx.type = bcos::rpc::TransactionType::EIP1559;
+        tx.chainId = 1;
+        tx.nonce = nonce;
+        tx.maxPriorityFeePerGas = tip;
+        tx.maxFeePerGas = u256(2000000000);
+        tx.gasLimit = 21000;
+        tx.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+        tx.value = u256(1);
+        return el1bSign(tx, key);
+    };
+    auto hashOf = [&](bcos::bytes const& raw) {
+        return bcos::rpc::decodeWeb3RawTransaction(
+            bcos::bytesConstRef(raw.data(), raw.size()), hashImpl)
+            ->hash();
+    };
+    auto const fundedRaw = transfer(0, u256(100000000), *funded);
+    // A higher tip seals the broke sender ahead of the funded one.
+    auto const brokeRaw0 = transfer(0, u256(200000000), *broke);
+    auto const brokeRaw1 = transfer(1, u256(200000000), *broke);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {{fundedAddress, u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, fundedRaw);
+    el1bPoolAdd(memPool, hashImpl, brokeRaw0);
+    el1bPoolAdd(memPool, hashImpl, brokeRaw1);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_REQUIRE_EQUAL(data->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(data->executionPayload.transactions.front().raw == fundedRaw);
+    BOOST_CHECK_EQUAL(data->executionPayload.gasUsed, u256(21000));
+
+    BOOST_CHECK(!memPool.get(std::vector{hashOf(brokeRaw0)}).front());
+    BOOST_CHECK(memPool.get(std::vector{hashOf(brokeRaw1)}).front());
+    BOOST_CHECK(memPool.get(std::vector{hashOf(fundedRaw)}).front());
+
+    NewPayloadRequest request;
+    request.executionPayload = data->executionPayload;
+    request.parentBeaconBlockRoot = data->parentBeaconBlockRoot;
+    auto committed = task::syncWait(service.newPayload(request, 3));
+    BOOST_CHECK(committed.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK_EQUAL(task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(1));
+}
+
+// Only invalid transactions pooled: the rebuild leaves an empty block, not a failed build.
+BOOST_FIXTURE_TEST_CASE(buildWithOnlyInvalidPooledTransactionsIsEmpty, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto broke = secp.generateKeyPair();
+    bcos::rpc::Web3Transaction tx;
+    tx.type = bcos::rpc::TransactionType::EIP1559;
+    tx.chainId = 1;
+    tx.nonce = 0;
+    tx.maxPriorityFeePerGas = u256(100000000);
+    tx.maxFeePerGas = u256(2000000000);
+    tx.gasLimit = 21000;
+    auto const recipient = el1bEvmcAddress(0x24);
+    tx.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    tx.value = u256(1);
+    auto const raw = el1bSign(tx, *broke);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {});
+    el1bPoolAdd(memPool, hashImpl, raw);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_CHECK(data->executionPayload.transactions.empty());
+
+    NewPayloadRequest request;
+    request.executionPayload = data->executionPayload;
+    request.parentBeaconBlockRoot = data->parentBeaconBlockRoot;
+    BOOST_CHECK(
+        task::syncWait(service.newPayload(request, 3)).status == PayloadValidationStatus::Valid);
+}
+
+// A transaction the CL forced into the attributes is not the pool's to drop: the build must
+// not silently differ from the request, and INVALID is terminal where -32603 is resubmitted.
+BOOST_FIXTURE_TEST_CASE(buildAnswersInvalidForForcedInvalidTransaction, EL1BFixture)
+{
+    crypto::Secp256k1Crypto secp;
+    auto broke = secp.generateKeyPair();
+    bcos::rpc::Web3Transaction tx;
+    tx.type = bcos::rpc::TransactionType::EIP1559;
+    tx.chainId = 1;
+    tx.nonce = 0;
+    tx.maxPriorityFeePerGas = u256(100000000);
+    tx.maxFeePerGas = u256(2000000000);
+    tx.gasLimit = 21000;
+    auto const recipient = el1bEvmcAddress(0x25);
+    tx.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    tx.value = u256(1);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {});
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    attributes.transactions =
+        std::vector<std::string>{bcos::toHexStringWithPrefix(el1bSign(tx, *broke))};
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_CHECK(fcu.payloadStatus.status == PayloadValidationStatus::Invalid);
+    BOOST_CHECK(!fcu.payloadId.has_value());
+    BOOST_REQUIRE(fcu.payloadStatus.validationError.has_value());
+    BOOST_CHECK(fcu.payloadStatus.validationError->find("forced payload transaction is invalid") !=
+                std::string::npos);
+}
+
+// A forced transaction shifts the pool's positions: the broke pooled transaction is position 1
+// in the block, and the eviction must hit it, not a neighbour, and keep the forced one.
+BOOST_FIXTURE_TEST_CASE(buildEvictsThePooledTransactionBehindAForcedOne, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto forcedKey = secp.generateKeyPair();
+    auto brokeKey = secp.generateKeyPair();
+    auto fundedKey = secp.generateKeyPair();
+    auto const recipient = el1bEvmcAddress(0x26);
+    auto transfer = [&](auto const& key) {
+        bcos::rpc::Web3Transaction tx;
+        tx.type = bcos::rpc::TransactionType::EIP1559;
+        tx.chainId = 1;
+        tx.nonce = 0;
+        tx.maxPriorityFeePerGas = u256(100000000);
+        tx.maxFeePerGas = u256(2000000000);
+        tx.gasLimit = 21000;
+        tx.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+        tx.value = u256(1);
+        return el1bSign(tx, key);
+    };
+    auto hashOf = [&](bcos::bytes const& raw) {
+        return bcos::rpc::decodeWeb3RawTransaction(
+            bcos::bytesConstRef(raw.data(), raw.size()), hashImpl)
+            ->hash();
+    };
+    auto const forcedRaw = transfer(*forcedKey);
+    auto const brokeRaw = transfer(*brokeKey);
+    auto const fundedRaw = transfer(*fundedKey);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(
+        parent, {{el1bEvmcAddress(forcedKey->address(nodeA.cryptoSuite->hashImpl())),
+                     u256(1000000000000000000ULL)},
+                    {el1bEvmcAddress(fundedKey->address(nodeA.cryptoSuite->hashImpl())),
+                        u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, brokeRaw);
+    el1bPoolAdd(memPool, hashImpl, fundedRaw);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    attributes.transactions = std::vector<std::string>{bcos::toHexStringWithPrefix(forcedRaw)};
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_REQUIRE_EQUAL(data->executionPayload.transactions.size(), 2);
+    BOOST_CHECK(data->executionPayload.transactions[0].raw == forcedRaw);
+    BOOST_CHECK(data->executionPayload.transactions[1].raw == fundedRaw);
+    BOOST_CHECK(!memPool.get(std::vector{hashOf(brokeRaw)}).front());
+    BOOST_CHECK(memPool.get(std::vector{hashOf(fundedRaw)}).front());
+}
+
+// A fee cap below this block's base fee is about the price, not the transaction: the base fee
+// can fall back, so it stays pooled and out of the block rather than being evicted.
+BOOST_FIXTURE_TEST_CASE(buildLeavesFeeCapBelowBaseFeePooled, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto key = secp.generateKeyPair();
+    auto const recipient = el1bEvmcAddress(0x27);
+    bcos::rpc::Web3Transaction tx;
+    tx.type = bcos::rpc::TransactionType::EIP1559;
+    tx.chainId = 1;
+    tx.nonce = 0;
+    tx.maxPriorityFeePerGas = u256(1);
+    tx.maxFeePerGas = u256(1000);  // the parent's 1 gwei base fee only falls to 0.875 gwei
+    tx.gasLimit = 21000;
+    tx.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    tx.value = u256(1);
+    auto const raw = el1bSign(tx, *key);
+    auto const hash =
+        bcos::rpc::decodeWeb3RawTransaction(bcos::bytesConstRef(raw.data(), raw.size()), hashImpl)
+            ->hash();
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {{el1bEvmcAddress(key->address(nodeA.cryptoSuite->hashImpl())),
+                                  u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, raw);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_CHECK(data->executionPayload.transactions.empty());
+    BOOST_CHECK(memPool.get(std::vector{hash}).front());
+}
+
+// A price-excluded head keeps its sender's later nonce out too. Executed, that nonce would fail
+// on the gap as the sender's first failure and be evicted, with nothing wrong with either.
+BOOST_FIXTURE_TEST_CASE(buildLeavesLaterNonceBehindPriceExcludedHeadPooled, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto key = secp.generateKeyPair();
+    auto const recipient = el1bEvmcAddress(0x2c);
+    auto transfer = [&](uint64_t nonce, u256 feeCap) {
+        bcos::rpc::Web3Transaction tx;
+        tx.type = bcos::rpc::TransactionType::EIP1559;
+        tx.chainId = 1;
+        tx.nonce = nonce;
+        tx.maxPriorityFeePerGas = u256(1);
+        tx.maxFeePerGas = feeCap;
+        tx.gasLimit = 21000;
+        tx.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+        tx.value = u256(1);
+        return el1bSign(tx, *key);
+    };
+    auto hashOf = [&](bcos::bytes const& raw) {
+        return bcos::rpc::decodeWeb3RawTransaction(
+            bcos::bytesConstRef(raw.data(), raw.size()), hashImpl)
+            ->hash();
+    };
+    auto const head = transfer(0, u256(1000));
+    auto const next = transfer(1, u256(2000000000));
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {{el1bEvmcAddress(key->address(nodeA.cryptoSuite->hashImpl())),
+                                  u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, head);
+    el1bPoolAdd(memPool, hashImpl, next);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_CHECK(data->executionPayload.transactions.empty());
+    BOOST_CHECK(memPool.get(std::vector{hashOf(head)}).front());
+    BOOST_CHECK(memPool.get(std::vector{hashOf(next)}).front());
+}
+
+// The same for the blob price: the blob stays pooled with its sidecar.
+BOOST_FIXTURE_TEST_CASE(buildLeavesBlobFeeCapBelowBlobBaseFeePooled, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto key = secp.generateKeyPair();
+    auto sidecar = el1bMakeSidecar(0x31);
+    auto const recipient = el1bEvmcAddress(0x28);
+    bcos::rpc::Web3Transaction blob;
+    blob.type = bcos::rpc::TransactionType::EIP4844;
+    blob.chainId = 1;
+    blob.nonce = 0;
+    blob.maxPriorityFeePerGas = u256(100000000);
+    blob.maxFeePerGas = u256(2000000000);
+    blob.gasLimit = 21000;
+    blob.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    blob.value = u256(1);
+    blob.maxFeePerBlobGas = u256(1);
+    blob.blobVersionedHashes = {
+        crypto::kzg::versionedHashFromCommitment(bcos::ref(sidecar.commitments.front()))};
+    auto const raw = el1bSign(blob, *key);
+    auto const hash =
+        bcos::rpc::decodeWeb3RawTransaction(bcos::bytesConstRef(raw.data(), raw.size()), hashImpl)
+            ->hash();
+
+    // This excess prices blob gas well above the 1 wei the transaction bids.
+    auto parent = el1bParentHeader(u256(0), u256(30000000), u256(0));
+    nodeA.seedGenesis(parent, {{el1bEvmcAddress(key->address(nodeA.cryptoSuite->hashImpl())),
+                                  u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, raw, sidecar);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_CHECK(data->executionPayload.transactions.empty());
+    BOOST_CHECK(memPool.get(std::vector{hash}).front());
+    BOOST_CHECK(memPool.hasBlobSidecar(hash));
+}
+
+// An evicted blob transaction takes its blob gas and sidecar with it: the rebuilt header and
+// payload count no blob gas, and the block still verifies.
+BOOST_FIXTURE_TEST_CASE(buildEvictingBlobTransactionReleasesItsBlobGas, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto brokeKey = secp.generateKeyPair();
+    auto fundedKey = secp.generateKeyPair();
+    auto sidecar = el1bMakeSidecar(0x32);
+    auto const recipient = el1bEvmcAddress(0x29);
+    bcos::rpc::Web3Transaction blob;
+    blob.type = bcos::rpc::TransactionType::EIP4844;
+    blob.chainId = 1;
+    blob.nonce = 0;
+    blob.maxPriorityFeePerGas = u256(100000000);
+    blob.maxFeePerGas = u256(2000000000);
+    blob.gasLimit = 21000;
+    blob.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    blob.value = u256(1);
+    blob.maxFeePerBlobGas = u256(1000000000);
+    blob.blobVersionedHashes = {
+        crypto::kzg::versionedHashFromCommitment(bcos::ref(sidecar.commitments.front()))};
+    auto const blobRaw = el1bSign(blob, *brokeKey);
+    auto const blobHash = bcos::rpc::decodeWeb3RawTransaction(
+        bcos::bytesConstRef(blobRaw.data(), blobRaw.size()), hashImpl)
+                              ->hash();
+
+    bcos::rpc::Web3Transaction transfer;
+    transfer.type = bcos::rpc::TransactionType::EIP1559;
+    transfer.chainId = 1;
+    transfer.nonce = 0;
+    transfer.maxPriorityFeePerGas = u256(100000000);
+    transfer.maxFeePerGas = u256(2000000000);
+    transfer.gasLimit = 21000;
+    transfer.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    transfer.value = u256(1);
+    auto const transferRaw = el1bSign(transfer, *fundedKey);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {{el1bEvmcAddress(fundedKey->address(nodeA.cryptoSuite->hashImpl())),
+                                  u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, blobRaw, sidecar);
+    el1bPoolAdd(memPool, hashImpl, transferRaw);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_REQUIRE_EQUAL(data->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(data->executionPayload.transactions.front().raw == transferRaw);
+    BOOST_REQUIRE(data->executionPayload.blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*data->executionPayload.blobGasUsed, u256(0));
+    BOOST_CHECK(!memPool.get(std::vector{blobHash}).front());
+    BOOST_CHECK(!memPool.hasBlobSidecar(blobHash));
+
+    NewPayloadRequest request;
+    request.executionPayload = data->executionPayload;
+    request.parentBeaconBlockRoot = data->parentBeaconBlockRoot;
+    BOOST_CHECK(
+        task::syncWait(service.newPayload(request, 3)).status == PayloadValidationStatus::Valid);
+}
+
+// The pool fills the block against the header's gasLimit, not a transaction count: with a
+// 42000-gas parent (inherited limit) and three 21000-gas transfers pooled, the built payload
+// carries exactly two and uses the whole limit; the third is left for the next block instead
+// of being executed and evicted.
+BOOST_FIXTURE_TEST_CASE(sealStopsAtBlockGasLimit, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto senderKey = secp.generateKeyPair();
+    auto const sender = el1bEvmcAddress(senderKey->address(nodeA.cryptoSuite->hashImpl()));
+    auto const recipient = el1bEvmcAddress(0x21);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    parent.gasLimit = u256(42000);
+    nodeA.seedGenesis(parent, {{sender, u256(1000000000000000000ULL)}});
+
+    for (uint64_t nonce = 0; nonce < 3; ++nonce)
+    {
+        bcos::rpc::Web3Transaction transfer;
+        transfer.type = bcos::rpc::TransactionType::EIP1559;
+        transfer.chainId = 1;
+        transfer.nonce = nonce;
+        transfer.maxPriorityFeePerGas = u256(100000000);
+        transfer.maxFeePerGas = u256(2000000000);
+        transfer.gasLimit = 21000;
+        transfer.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+        transfer.value = u256(1);
+        el1bPoolAdd(memPool, hashImpl, el1bSign(transfer, *senderKey));
+    }
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+
+    BOOST_CHECK_EQUAL(data->executionPayload.gasLimit, u256(42000));
+    BOOST_CHECK_EQUAL(data->executionPayload.transactions.size(), 2);
+    BOOST_CHECK_EQUAL(data->executionPayload.gasUsed, u256(42000));
+}
+
+// A forced (payloadAttributes.transactions) envelope is prepended to the sealed list and
+// executes first, so its gas comes out of the pool's seal budget: with a 42000-gas limit, one
+// forced 21000-gas transfer and two pooled 21000-gas transfers, the built payload carries the
+// forced transfer plus one pooled transfer at exactly the limit. Before the budget subtracted
+// the forced gas the payload carried all three and used 63000 gas against a 42000 header
+// limit — a block every other L1 node rejects.
+BOOST_FIXTURE_TEST_CASE(forcedEnvelopeGasComesOutOfTheSealBudget, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto poolKey = secp.generateKeyPair();
+    auto forcedKey = secp.generateKeyPair();
+    auto const poolSender = el1bEvmcAddress(poolKey->address(nodeA.cryptoSuite->hashImpl()));
+    auto const forcedSender = el1bEvmcAddress(forcedKey->address(nodeA.cryptoSuite->hashImpl()));
+    auto const recipient = el1bEvmcAddress(0x21);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    parent.gasLimit = u256(42000);
+    nodeA.seedGenesis(parent,
+        {{poolSender, u256(1000000000000000000ULL)}, {forcedSender, u256(1000000000000000000ULL)}});
+
+    auto const makeTransfer = [&](uint64_t nonce) {
+        bcos::rpc::Web3Transaction transfer;
+        transfer.type = bcos::rpc::TransactionType::EIP1559;
+        transfer.chainId = 1;
+        transfer.nonce = nonce;
+        transfer.maxPriorityFeePerGas = u256(100000000);
+        transfer.maxFeePerGas = u256(2000000000);
+        transfer.gasLimit = 21000;
+        transfer.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+        transfer.value = u256(1);
+        return transfer;
+    };
+    auto forced = makeTransfer(0);
+    auto const rawForced = el1bSign(forced, *forcedKey);
+    std::vector<bcos::bytes> rawPooled;
+    for (uint64_t nonce = 0; nonce < 2; ++nonce)
+    {
+        auto pooled = makeTransfer(nonce);
+        rawPooled.push_back(el1bSign(pooled, *poolKey));
+        el1bPoolAdd(memPool, hashImpl, rawPooled.back());
+    }
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    attributes.transactions = std::vector<std::string>{bcos::toHexStringWithPrefix(rawForced)};
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+
+    BOOST_CHECK_EQUAL(data->executionPayload.gasLimit, u256(42000));
+    BOOST_REQUIRE_EQUAL(data->executionPayload.transactions.size(), 2);
+    BOOST_CHECK(data->executionPayload.transactions[0].raw == rawForced);
+    BOOST_CHECK(data->executionPayload.transactions[1].raw == rawPooled[0]);
+    BOOST_CHECK_EQUAL(data->executionPayload.gasUsed, u256(42000));
+    // The second pooled transfer waits for the next block instead of being dropped.
+    auto const retained = memPool.get(std::vector{crypto::keccak256Hash(bcos::ref(rawPooled[1]))});
+    BOOST_REQUIRE_EQUAL(retained.size(), 1);
+    BOOST_CHECK(retained[0]);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

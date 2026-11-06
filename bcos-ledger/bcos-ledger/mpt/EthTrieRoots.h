@@ -85,6 +85,11 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 [[nodiscard]] bcos::bytes encodeReceiptLeaf(
     bcos::protocol::TransactionReceipt const& receipt, std::uint8_t txType);
 
+/// The type byte for a receipt leaf lives in bcos::engine::receiptLeafTypeByte
+/// (bcos-framework/engine/RawTransactionDispatch.h), next to rawTransactionTypeByte: envelope
+/// classification is that module's decision, and the committed root and the debug preimage have to
+/// reach it the same way.
+
 /// Block-level logs bloom: bitwise OR of the per-receipt 256-byte blooms (each computed from its
 /// logs via bcos::getLogsBloom). Returns a zero bloom for an empty input. Forwarding reference:
 /// the range is only read, never copied (a bcos::Bloom is 256 bytes, so a by-value parameter

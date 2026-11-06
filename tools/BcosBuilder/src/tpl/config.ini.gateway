@@ -34,6 +34,9 @@
     ; tars_proxy_conf = conf/tars_proxy.ini
 
 [cert]
+    ; Accept legacy TASSL certificate-chain ordering during rolling upgrades (default: false)
+    ; Keep enabled until all peers and SDKs no longer send legacy chains
+    ;enable_legacy_sm_cert_chain=false
     ; directory the certificates located in
     ca_path=./conf
     ; the ca certificate file

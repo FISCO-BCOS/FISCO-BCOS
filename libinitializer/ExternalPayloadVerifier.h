@@ -135,14 +135,21 @@ public:
         // — the same loud failure the number-keyed derivation had.
         context.forkVersion = engine::detail::ethBlockVersionFor(revision);
         context.baseFee = devp2p::sync::computeNextBaseFee(parentHeader);
+        auto const blobSchedule = protocol::blobScheduleForTimestamp(
+            protocol::BlobForkTimes{.cancunTime = m_forkSchedule.cancunTime,
+                .pragueTime = m_forkSchedule.pragueTime,
+                .bpo1Time = m_forkSchedule.bpo1Time,
+                .bpo2Time = m_forkSchedule.bpo2Time},
+            static_cast<uint64_t>(timestampSeconds));
         context.excessBlobGas = devp2p::sync::computeNextExcessBlobGas(parentHeader,
-            devp2p::sync::toGasSchedule(protocol::blobScheduleForTimestamp(
-                protocol::BlobForkTimes{.cancunTime = m_forkSchedule.cancunTime,
-                    .pragueTime = m_forkSchedule.pragueTime,
-                    .bpo1Time = m_forkSchedule.bpo1Time,
-                    .bpo2Time = m_forkSchedule.bpo2Time},
-                static_cast<uint64_t>(timestampSeconds))),
+            devp2p::sync::toGasSchedule(blobSchedule),
             /*_osakaActive=*/revision >= EVMC_OSAKA);
+        if (revision >= EVMC_CANCUN)
+        {
+            context.blobBaseFee = executor_v1::eth::evm::compute_blob_gas_price(
+                executor_v1::eth::toEvmBlobParams(blobSchedule),
+                context.excessBlobGas.template convert_to<uint64_t>());
+        }
         co_return context;
     }
 
@@ -168,6 +175,7 @@ public:
         {
             ExternalBuildResult failure;
             failure.error = std::move(*execution.error);
+            failure.invalidTransactions = std::move(execution.invalidTransactions);
             co_return failure;
         }
         ExternalBuildResult result;

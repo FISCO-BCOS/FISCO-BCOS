@@ -215,8 +215,33 @@ check_consensus()
     done
 }
 
+# wait_sync_caught_up <node_dir> <seconds> [target_height]: an expanded observer must finish
+# syncing before it can be added as a sealer; otherwise the chain raises the quorum before the
+# node can vote. knownHighestNumber can be stale, so also require the actual height when given
+wait_sync_caught_up()
+{
+    local node_dir="${1}"
+    local limit="${2}"
+    local target_height="${3:-0}"
+    local waited=0 status rc
+    while (( waited < limit )); do
+        status=$("${fisco_bcos_path}" status --node-dir "${node_dir}" --json 2>/dev/null) && rc=0 || rc=$?
+        if (( rc == 0 || rc == 2 )) &&
+            jq -e --argjson target "${target_height}" \
+                '([.checks[] | select(.name == "sync_caught_up" and .state == "ok")] | length == 1) and .sync.lag == 0 and .chain.blockNumber >= $target' \
+                >/dev/null <<<"${status}"; then
+            LOG_INFO "$(basename "${node_dir}"): sync caught up after ${waited}s (height $(jq -r '.chain.blockNumber' <<<"${status}"))"
+            return 0
+        fi
+        sleep 2
+        waited=$((waited + 2))
+    done
+    LOG_ERROR "$(basename "${node_dir}"): sync not caught up after ${limit}s: $(head -c 600 <<<"${status}")"
+    return 1
+}
+
 # expand_node <chain>: one more node (node<N>) from node0's config, ports +3 / web3 +1, then
-# wait until node0 lists it as a peer
+# wait until node0 lists it as a peer and the new node has caught up with the chain
 expand_node()
 {
     local chain="${1}"
@@ -245,6 +270,7 @@ expand_node()
         peers=$("${fisco_bcos_path}" attach getPeers --node-dir "${node0}" --json 2>/dev/null | jq '.peers | length' 2>/dev/null || echo 0)
         if (( peers >= expected )); then
             LOG_INFO "chain ${chain}: node${index} connected after ${waited}s (${peers} peers on node0)"
+            wait_sync_caught_up "$(chain_node_dir "${chain}" "${index}")" 180 || return 1
             return 0
         fi
         sleep 2

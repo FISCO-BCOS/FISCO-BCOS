@@ -696,6 +696,198 @@ BOOST_FIXTURE_TEST_CASE(verifyAndCommitValidExternalBlock, EEBVFixture)
 }
 
 // Tampering a header commitment (transactionsRoot) must be rejected without commit.
+// A transaction that fails pre-execution validation (here: a sender with no balance) must
+// invalidate the block, not ride in with a zero-gas failure receipt — Ethereum has no such
+// receipt and every other client refuses the block. The rule is checked on the receipt
+// shape (status != 0 && gasUsed == 0), so the assertion names that status rather than a bool.
+BOOST_FIXTURE_TEST_CASE(invalidTransactionInvalidatesBlock, EEBVFixture)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEBVInvalidTx");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender = EEBVAddress(7);
+        auto recipient = EEBVAddress(0x21);
+        co_await EEBVFundAccount(backendStorage, sender, 0);  // cannot pay gas * maxFee
+        co_await EEBVFundAccount(backendStorage, recipient, 0);
+
+        auto genesisHash = cryptoSuite->hashImpl()->hash(std::string("genesis"));
+        co_await EEBVWriteBlockHash(backendStorage, 0, genesisHash);
+        co_await EEBVWriteCurrentNumber(backendStorage, 0);
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
+
+        auto tx = EEBVMakeWeb3TransferTx(sender, recipient, 100, "0");
+        auto raw = bcostars::protocol::reassembleWeb3RawTransaction(
+            tx->extraTransactionBytes(), tx->signatureData());
+
+        const int64_t kTimestamp = 12345;
+        const uint64_t kGasLimit = 30000000;
+        const u256 kBaseFee(1000000000);
+        auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
+        parentHeader.gasUsed = kGasLimit / 2;
+        parentHeader.stateRoot = ledger::mpt::emptyRootHash();
+        parentHeader.txsRoot = ledger::mpt::emptyRootHash();
+        parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+        parentHeader.blobGasUsed = u256(0);
+        parentHeader.excessBlobGas = u256(0);
+        auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        ethHeader.withdrawalsHash = ledger::mpt::emptyRootHash();
+        ethHeader.prevRandao = bcos::h256{};
+        ethHeader.coinbase = bcos::Address{};
+        ethHeader.nonce = bcos::h64{};
+
+        auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
+            scheduler, *executor, *blockFactory);
+        scheduler_v1::EvmcForkTimestamps forks;
+        forks.londonTime = 0;
+        forks.parisTime = 0;
+        forks.shanghaiTime = 0;
+        forks.cancunTime = std::numeric_limits<uint64_t>::max();
+        forks.pragueTime = std::numeric_limits<uint64_t>::max();
+        forks.osakaTime = std::numeric_limits<uint64_t>::max();
+        auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
+        using ViewType = EEBVMultiLayerStorage::ViewType;
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::StateRootCalculator<ViewType>
+            stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"legacy fold must not run"});
+        };
+
+        auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {},
+            0, decoder, stateRootCalc);
+
+        BOOST_CHECK(!result.valid);
+        // The verdict names the transaction and its validation status (NotEnoughCash), and is
+        // reached before any root comparison: the header roots above are deliberately bogus.
+        BOOST_CHECK_MESSAGE(result.error.find("transaction 0 is invalid (validation status " +
+                                              std::to_string(static_cast<int>(
+                                                  protocol::TransactionStatus::NotEnoughCash)) +
+                                              ")") != std::string::npos,
+            result.error);
+    }());
+}
+
+// Before London a header carries no baseFee and the schedule may describe pre-London history:
+// the header era is PRE_LONDON, and the revision ladder resolves each early fork by timestamp.
+BOOST_AUTO_TEST_CASE(preLondonHeaderEraAndRevisionLadder)
+{
+    auto cryptoSuite = bcos::test::createNormalCryptoSuite();
+    auto blockFactory = bcos::test::createBlockFactory(cryptoSuite);
+
+    bcos::protocol::EthBlockHeaderData h;
+    h.number = 1;
+    h.timestamp = 100;
+    h.parentInfo.blockNumber = 0;
+    h.gasLimit = 30000000;
+    h.difficulty = 1;  // PoW era header, no baseFee
+
+    scheduler_v1::EvmcForkTimestamps preLondon;
+    preLondon.frontierTime = 0;
+    preLondon.homesteadTime = 50;
+    preLondon.tangerineWhistleTime = 60;
+    preLondon.spuriousDragonTime = 70;
+    preLondon.byzantiumTime = 80;
+    preLondon.constantinopleTime = 90;
+    preLondon.petersburgTime = 90;
+    preLondon.istanbulTime = 110;
+    preLondon.berlinTime = 120;
+    preLondon.londonTime = 130;
+    using V = protocol::EthBlockVersion;
+    BOOST_CHECK(
+        scheduler_v1::makeExecutionBlockHeader(h, *blockFactory, 0, preLondon)->ethBlockVersion() ==
+        V::PRE_LONDON);
+    // A baseFee is the header's own London signal, whatever the schedule says.
+    h.baseFee = bcos::u256(7);
+    BOOST_CHECK(
+        scheduler_v1::makeExecutionBlockHeader(h, *blockFactory, 0, preLondon)->ethBlockVersion() ==
+        V::LONDON);
+
+    auto rev = [&](uint64_t timestamp) {
+        return scheduler_v1::evmcRevisionForTimestamp(preLondon, timestamp, /*difficulty=*/1);
+    };
+    BOOST_CHECK(rev(0) == EVMC_FRONTIER);
+    BOOST_CHECK(rev(55) == EVMC_HOMESTEAD);
+    BOOST_CHECK(rev(65) == EVMC_TANGERINE_WHISTLE);
+    BOOST_CHECK(rev(75) == EVMC_SPURIOUS_DRAGON);
+    BOOST_CHECK(rev(85) == EVMC_BYZANTIUM);
+    BOOST_CHECK(rev(95) == EVMC_PETERSBURG);
+    BOOST_CHECK(rev(115) == EVMC_ISTANBUL);
+    BOOST_CHECK(rev(125) == EVMC_BERLIN);
+    BOOST_CHECK(rev(135) == EVMC_LONDON);
+    // A schedule that starts at London (every configured chain today) keeps the old fallback.
+    scheduler_v1::EvmcForkTimestamps londonOnly;
+    londonOnly.londonTime = 0;
+    BOOST_CHECK(scheduler_v1::evmcRevisionForTimestamp(londonOnly, 0, 1) == EVMC_LONDON);
+}
+
+// PoW block rewards by era (geth accumulateRewards): 5 ETH to Byzantium, 3 ETH to
+// Constantinople, 2 ETH after — paid to the coinbase through accumulatePoWBlockRewards.
+BOOST_FIXTURE_TEST_CASE(powBlockRewardFollowsTheEra, EEBVFixture)
+{
+    using scheduler_v1::powBlockRewardFor;
+    const u256 eth(1000000000000000000ULL);
+    BOOST_CHECK_EQUAL(powBlockRewardFor(EVMC_FRONTIER), 5 * eth);
+    BOOST_CHECK_EQUAL(powBlockRewardFor(EVMC_SPURIOUS_DRAGON), 5 * eth);
+    BOOST_CHECK_EQUAL(powBlockRewardFor(EVMC_BYZANTIUM), 3 * eth);
+    BOOST_CHECK_EQUAL(powBlockRewardFor(EVMC_PETERSBURG), 2 * eth);
+    BOOST_CHECK_EQUAL(powBlockRewardFor(EVMC_LONDON), 2 * eth);
+
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto coinbase = EEBVAddress(0x31);
+        ledger::LedgerConfig config;
+        config.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+        config.setEVMCRevision(EVMC_FRONTIER);
+        bcos::protocol::EthBlockHeaderData header;
+        header.number = 1;
+        header.difficulty = 1;
+        std::copy(std::begin(coinbase.bytes), std::end(coinbase.bytes), header.coinbase.begin());
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        co_await scheduler_v1::accumulatePoWBlockRewards(
+            view, header, std::vector<bcos::bytes>{}, config, EVMC_FRONTIER);
+        BOOST_CHECK_EQUAL(co_await EEBVReadBalance(view, coinbase), 5 * eth);
+    }());
+}
+
+// computeMptStateRoot's revision switch: a touched account left at {0, 0, keccak256("")} is a
+// leaf before Spurious Dragon and nothing from that fork on; a caller that passes no revision
+// (every producer whose chain starts at London or later) keeps the clearing.
+BOOST_FIXTURE_TEST_CASE(mptStateRootKeepsEmptyAccountOnlyBeforeSpuriousDragon, EEBVFixture)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto touched = EEBVAddress(0x01);
+        ledger::LedgerConfig config;
+        config.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+        auto rootFor = [&](std::optional<evmc_revision> revision) -> task::Task<crypto::HashType> {
+            // The builder reads the block's delta layer, so the touch is written into each
+            // build's own view: the rows EthereumState::applyToStorage writes for a
+            // pre-Spurious-Dragon touch of a fresh address.
+            auto view = multiLayerStorage.fork();
+            view.newMutable();
+            using namespace bcos::ledger::account;
+            EVMAccount<decltype(view)> acc(view, touched, AddressTableMode::Hex);
+            co_await acc.create();
+            co_await acc.setNonce("0");
+            co_await acc.setBalance(0);
+            co_await acc.setCode(bcos::bytes{}, std::string{}, ledger::mpt::emptyCodeHash());
+            co_return co_await ledger::mpt::computeMptStateRoot(
+                view, ledger::mpt::emptyRootHash(), config, revision);
+        };
+        auto const frontier = co_await rootFor(EVMC_FRONTIER);
+        auto const spuriousDragon = co_await rootFor(EVMC_SPURIOUS_DRAGON);
+        auto const unspecified = co_await rootFor(std::nullopt);
+        BOOST_CHECK(frontier != ledger::mpt::emptyRootHash());
+        BOOST_CHECK(spuriousDragon == ledger::mpt::emptyRootHash());
+        BOOST_CHECK(unspecified == ledger::mpt::emptyRootHash());
+    }());
+}
+
 BOOST_FIXTURE_TEST_CASE(verifyRejectsTamperedTxsRoot, EEBVFixture)
 {
     task::syncWait([&, this]() -> task::Task<void> {
@@ -1579,8 +1771,8 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         // then pin the header's requestsHash to the assembled value so the block verifies.
         auto probeView = multiLayerStorage.fork();
         probeView.newMutable();
-        auto blockEnd =
-            co_await applyBlockEndSystemCalls(probeView, executor->vm(), ethHeader, EVMC_PRAGUE);
+        evmc::VM vm{evmc_create_evmone()};
+        auto blockEnd = co_await applyBlockEndSystemCalls(probeView, vm, ethHeader, EVMC_PRAGUE);
         BOOST_REQUIRE(!blockEnd.error.has_value());
         BOOST_REQUIRE_EQUAL(blockEnd.requests.size(), 2u);
         BOOST_CHECK(blockEnd.requests[0].type() == EthRequests::Type::withdrawal);

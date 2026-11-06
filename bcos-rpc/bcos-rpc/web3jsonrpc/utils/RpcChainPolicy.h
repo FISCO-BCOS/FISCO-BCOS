@@ -46,8 +46,8 @@ inline bool usesEthereumFeeSemantics(int executorVersion)
     return executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
 }
 
-/// True on the OP lane (executor_version >= OPSTACK_EXECUTOR_VERSION): the only lane that
-/// serves the challenger data plane (debug_getRawHeader / debug_dbGet, ADR 0007).
+/// True on the OP lane (executor_version >= OPSTACK_EXECUTOR_VERSION): the lane whose state
+/// carries OP block metadata. NOT the debug data plane's gate -- that is requireEthereumLane.
 inline bool isOpStackLane(int executorVersion)
 {
     return executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION;
@@ -111,5 +111,30 @@ inline task::Task<int> requireEthereumLane(
         BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
     }
     co_return executorVersion;
+}
+
+/// Stricter than requireEthereumLane: the pure-Ethereum executor only (v2), MethodNotFound on
+/// the OP lane as well as on the legacy one.
+///
+/// debug_getRawReceipts returns the byte string the receipts-trie leaf holds, and on the OP lane
+/// that leaf is deliberately NOT the receipt's own consensus encoding inside one fork window:
+/// mpt/EthTrieRoots.cpp omits depositNonce for post-Regolith pre-Canyon deposit receipts "to
+/// preserve backwards compatibility of receipt-root hash computation". Serving those bytes as a
+/// receipt would hand kona-host an encoding that is missing a field. The OP-aware encoding is a
+/// follow-up; until it lands the method is scoped to the lane this change targets.
+///
+/// Expressed as "the lenient gate, then narrow" so the two cannot drift: a lane the lenient gate
+/// refuses is refused here too, and the version it already read is reused rather than reading
+/// SYS_CONFIG again.
+inline task::Task<void> requireEthereumExecutorLane(
+    bcos::ledger::LedgerInterface& ledger, std::string_view method)
+{
+    auto const executorVersion = co_await requireEthereumLane(ledger, method);
+    if (executorVersion != bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        WEB3_LOG(DEBUG) << LOG_DESC("Ethereum-executor-only method on another lane")
+                        << LOG_KV("method", method) << LOG_KV("executorVersion", executorVersion);
+        BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
+    }
 }
 }  // namespace bcos::rpc

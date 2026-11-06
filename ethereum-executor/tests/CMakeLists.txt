@@ -2,9 +2,11 @@
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(Boost REQUIRED unit_test_framework)
 add_executable(eest-runner EESTRunner.cpp)
+target_include_directories(eest-runner PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(eest-runner
-    ethereum-executor executor ledger protocol-tars bcos-framework rpc
-    evmone::evmone jsoncpp_static TBB::tbb)
+    ethereum-executor executor transaction-scheduler engine mempool bcos-devp2p ledger protocol-tars
+    bcos-framework rpc
+    evmone::evmone jsoncpp_static TBB::tbb Boost::unit_test_framework)
 add_dependencies(eest-runner executor)
 set_target_properties(eest-runner PROPERTIES UNITY_BUILD OFF)
 set_target_properties(eest-runner PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
@@ -35,7 +37,8 @@ add_test(NAME test-ethereum-state-smoke COMMAND test-ethereum-state-smoke)
 # authorization rejection pin).
 add_executable(test-ethereum-authorization-list
     TestMain.cpp
-    TestEthereumAuthorizationList.cpp)
+    TestEthereumAuthorizationList.cpp
+    TestEthereumValidationRules.cpp)
 target_include_directories(test-ethereum-authorization-list PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(test-ethereum-authorization-list PRIVATE
     ethereum-executor protocol-tars bcos-framework bcos-task bcos-crypto codec
