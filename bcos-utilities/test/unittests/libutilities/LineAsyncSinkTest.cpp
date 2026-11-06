@@ -86,9 +86,22 @@ struct FakeBackend
         std::lock_guard lock(mutex);
         std::vector<std::string> out;
         out.reserve(lines.size());
+        // The sink hands the backend a batch of lines joined by '\n' (one write
+        // per batch), so expose individual lines to the assertions.
         for (auto const& [level, line] : lines)
         {
-            out.push_back(line);
+            std::size_t begin = 0;
+            while (true)
+            {
+                auto const end = line.find('\n', begin);
+                if (end == std::string::npos)
+                {
+                    out.emplace_back(line.substr(begin));
+                    break;
+                }
+                out.emplace_back(line.substr(begin, end - begin));
+                begin = end + 1;
+            }
         }
         return out;
     }
@@ -130,7 +143,8 @@ BOOST_AUTO_TEST_CASE(prefixLayoutMatchesDocumentedFormat)
     auto sink = std::make_shared<FakeSink>(backend);
     bcos::log::registerLineSink(sink);
 
-    bcos::log::commitLine(LogLevel::WARNING, "prefixLayoutMessage");
+    bcos::log::commitLine(
+        bcos::log::sampleLineRecord(LogLevel::WARNING), "prefixLayoutMessage");
     sink->flush();
     bcos::log::unregisterLineSink(sink.get());
 
@@ -158,7 +172,8 @@ BOOST_AUTO_TEST_CASE(unnamedThreadKeepsUnnamedThreadField)
 
     std::thread worker([]() {
         bcos::pthread_setThreadName("");  // unnamed thread (always the case on Windows)
-        bcos::log::commitLine(LogLevel::INFO, "unnamedThreadMessage");
+        bcos::log::commitLine(
+            bcos::log::sampleLineRecord(LogLevel::INFO), "unnamedThreadMessage");
     });
     worker.join();
     sink->flush();
@@ -246,23 +261,22 @@ BOOST_AUTO_TEST_CASE(overflowDropsAreCountedReportedAndFatalSurvives)
 BOOST_AUTO_TEST_CASE(throwingBackendNeverKillsFeedingThread)
 {
     auto backend = boost::make_shared<FakeBackend>();
-    backend->throwOnConsume = 2;
+    // The sink writes a batch per consumeLine call, so flush after each line to
+    // keep "one throwing call loses one line" meaningful.
+    backend->throwOnConsume = 1;
     backend->throwOnFlush = 1;
     auto sinkPtr = std::make_shared<FakeSink>(backend);
     auto& sink = *sinkPtr;
 
-    for (int i = 0; i < 3; ++i)
-    {
-        sink.writeLine(LogLevel::INFO, "p|", "msg" + std::to_string(i));
-    }
-    sink.flush();                                       // the flush throw is swallowed as well
-    BOOST_CHECK_EQUAL(backend->snapshot().size(), 1u);  // two consumeLine throws swallowed
+    sink.writeLine(LogLevel::INFO, "p|", "msg0");  // this consumeLine throws
+    sink.flush();                                  // the flush throw is swallowed as well
+    BOOST_CHECK_EQUAL(backend->snapshot().size(), 0u);
 
     // the feeding thread is still alive and draining
     sink.writeLine(LogLevel::INFO, "p|", "afterThrow");
     sink.flush();
     auto lines = backend->snapshot();
-    BOOST_REQUIRE_EQUAL(lines.size(), 2u);
+    BOOST_REQUIRE_EQUAL(lines.size(), 1u);
     BOOST_CHECK(lines.back().find("afterThrow") != std::string::npos);
     sink.stop();
 }
@@ -278,8 +292,19 @@ BOOST_AUTO_TEST_CASE(fatalDeliveredAfterStop)
     sink.writeLine(LogLevel::FATAL, "p|", "fatalAfterStop");
 
     auto lines = backend->snapshot();
-    BOOST_REQUIRE_EQUAL(lines.size(), 1u);
-    BOOST_CHECK(lines.front().find("fatalAfterStop") != std::string::npos);
+    // The post-stop INFO is dropped, counted, and reported as a marker line, so
+    // the payload line is the FATAL one.
+    std::vector<std::string> payload;
+    for (auto const& line : lines)
+    {
+        if (line.find("[log] dropped ") == std::string::npos)
+        {
+            payload.push_back(line);
+        }
+    }
+    BOOST_REQUIRE_EQUAL(payload.size(), 1u);
+    BOOST_CHECK(payload.front().find("fatalAfterStop") != std::string::npos);
+    BOOST_CHECK_EQUAL(sink.droppedTotal(), 1u);
 }
 
 // The drain branch must flush unconditionally: a line that lands inside the
