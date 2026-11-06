@@ -85,6 +85,15 @@ public:
     std::optional<HeaderWithHash> requestHeaderByHash(
         rlpx::Session& _session, bcos::h256 const& _hash);
 
+    // Prove the chain from a trusted tip down to the local anchor before any of it is
+    // executed: walks the parent links from `_tipHash` (block `_tipNumber`) to nextNumber,
+    // checking every header against the hash its child committed to. Returns the block
+    // hashes in ascending order, nextNumber first. An untrusted peer can then only serve
+    // these exact blocks or fail. Throws ParentHashMismatch when an authentic chain does
+    // not build on the anchor, runtime_error on anything a peer can get wrong.
+    std::vector<bcos::h256> requestPinnedHashes(
+        rlpx::Session& _session, bcos::h256 const& _tipHash, uint64_t _tipNumber);
+
     // Per-header validation policy: (header, parent) -> result. Defaults to the
     // Ethereum PoS rules (validateHeaderPoS over m_config); OP Stack sync injects
     // makeOpHeaderValidator (sync/OpHeaderValidator.h) instead. Only consulted when

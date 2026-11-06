@@ -49,7 +49,7 @@ BOOST_AUTO_TEST_CASE(downloadChainFromFakePeer)
         try
         {
             auto established = server.accept();
-            devp2p::test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established, chain);
             serverDone = true;
         }
         catch (std::exception const& e)
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(brokenParentChainRejected)
         try
         {
             auto established = server.accept();
-            devp2p::test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established, chain);
         }
         catch (...)
         {}
@@ -159,7 +159,7 @@ BOOST_AUTO_TEST_CASE(downloadChainWithPoSValidation)
         try
         {
             auto established = server.accept();
-            devp2p::test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established, chain);
         }
         catch (...)
         {}
@@ -227,7 +227,7 @@ BOOST_AUTO_TEST_CASE(posValidationRejectsBadBaseFee)
         try
         {
             auto established = server.accept();
-            devp2p::test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established, chain);
         }
         catch (...)
         {}
@@ -289,7 +289,7 @@ BOOST_AUTO_TEST_CASE(firstHeaderParentMismatchThrowsTyped)
         try
         {
             auto established = server.accept();
-            devp2p::test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established, chain);
         }
         catch (...)
         {}
@@ -383,7 +383,7 @@ void runOpRound(std::vector<sync::Block> const& chain, F&& download)
         try
         {
             auto established = server.accept();
-            devp2p::test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established, chain);
         }
         catch (...)
         {

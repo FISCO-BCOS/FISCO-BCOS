@@ -75,7 +75,7 @@ void pollWithRemaining(int _fd, short _events,
             std::chrono::duration_cast<std::chrono::milliseconds>(_deadline - now).count();
         if (remaining <= 0)
         {
-            throw std::runtime_error(
+            throw SocketTimeout(
                 _what + " timed out after " + std::to_string(_totalTimeoutMs) + "ms");
         }
         struct pollfd pfd;
@@ -95,8 +95,7 @@ void pollWithRemaining(int _fd, short _events,
             }
             throw std::runtime_error(_what + " failed: " + std::string(strerror(errno)));
         }
-        throw std::runtime_error(
-            _what + " timed out after " + std::to_string(_totalTimeoutMs) + "ms");
+        throw SocketTimeout(_what + " timed out after " + std::to_string(_totalTimeoutMs) + "ms");
     }
 }
 }  // namespace
@@ -218,6 +217,14 @@ void Socket::close()
     {
         ::close(m_fd);
         m_fd = -1;
+    }
+}
+
+void Socket::shutdown() noexcept
+{
+    if (m_fd >= 0)
+    {
+        ::shutdown(m_fd, SHUT_RDWR);
     }
 }
 

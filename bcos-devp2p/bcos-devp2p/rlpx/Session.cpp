@@ -38,7 +38,7 @@ bcos::codec::rlp::RlpResult<Message> Session::recvMessage()
 {
     auto header = m_socket.recvFixed(FramingCipher::headerSize());
     size_t frameSize = m_cipher.decryptHeader(bytesConstRef(header.data(), header.size()));
-    if (frameSize > MessageCodec::kMaxFrameSize)
+    if (frameSize > m_maxFrameSize)
     {
         throw std::runtime_error("Session: frame too large");
     }

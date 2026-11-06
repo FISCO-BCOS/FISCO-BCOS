@@ -73,14 +73,25 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
                                response.data.data(), std::min<size_t>(response.data.size(), 100)));
         if (response.id == rlpx::baseMsg::Ping)
         {
-            // RLPx base protocol: Ping (id 0x02) is answered with Pong (id 0x03).
+            // RLPx base protocol: Ping (id 0x02) is answered with Pong (id 0x03). It counts
+            // against the same limit as broadcasts: each frame restarts the socket timeout,
+            // so a peer pinging forever would otherwise never have to answer the request.
             _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, {}});
             BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain") << "answered Ping with Pong";
+            if (++ignoredBroadcasts > 64)
+            {
+                throw std::runtime_error("HeaderChain: too many frames before BlockHeaders");
+            }
             continue;
         }
         if (response.id == rlpx::baseMsg::Pong)
         {
-            continue;  // answer to a Ping we (currently) never send; ignore
+            // answer to a Ping we (currently) never send; ignore
+            if (++ignoredBroadcasts > 64)
+            {
+                throw std::runtime_error("HeaderChain: too many frames before BlockHeaders");
+            }
+            continue;
         }
         if (response.id != eth::frameId(eth::msg::BlockHeaders))
         {
@@ -252,6 +263,63 @@ std::optional<HeaderWithHash> HeaderChain::requestHeaderByHash(
             "HeaderChain: peer returned a header for the wrong hash (fork or reorg)");
     }
     return header;
+}
+
+std::vector<bcos::h256> HeaderChain::requestPinnedHashes(
+    rlpx::Session& _session, bcos::h256 const& _tipHash, uint64_t _tipNumber)
+{
+    if (_tipNumber < m_nextNumber)
+    {
+        throw std::invalid_argument("HeaderChain: pinned tip is below the next block");
+    }
+    std::vector<bcos::h256> hashes(_tipNumber - m_nextNumber + 1);
+    auto expectedHash = _tipHash;
+    auto expectedNumber = _tipNumber;
+    size_t remaining = hashes.size();
+    while (remaining > 0)
+    {
+        eth::GetBlockHeadersMessage request;
+        request.requestId = ++m_requestId;
+        request.originHash = expectedHash;
+        request.amount = std::min<uint64_t>(remaining, m_maxHeadersPerRequest);
+        request.reverse = true;
+        _session.sendMessage(
+            rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
+                eth::encodeGetBlockHeaders(request)});
+        auto const wireHeaders = recvBlockHeadersReply(_session, request.requestId, request.amount);
+        if (wireHeaders.empty())
+        {
+            throw std::runtime_error("HeaderChain: peer cannot serve the pinned chain");
+        }
+        for (auto const& rlp : wireHeaders)
+        {
+            bcos::protocol::EthBlockHeader header;
+            try
+            {
+                header.rlpDecode(bytesConstRef(rlp.data(), rlp.size()));
+            }
+            catch (bcos::codec::rlp::RlpDecodeException const& e)
+            {
+                throw std::runtime_error("HeaderChain: header RLP decode failed: " +
+                                         bcos::codec::rlp::rlpErrorMessage(e, "malformed header"));
+            }
+            if (bcos::crypto::keccak256Hash(bytesConstRef(rlp.data(), rlp.size())) !=
+                    expectedHash ||
+                static_cast<uint64_t>(header.data().number) != expectedNumber)
+            {
+                throw std::runtime_error("HeaderChain: header does not match the pinned chain");
+            }
+            --remaining;
+            hashes[remaining] = expectedHash;
+            expectedHash = header.data().parentInfo.blockHash;
+            --expectedNumber;
+        }
+    }
+    if (expectedHash != m_anchorHash)
+    {
+        throw ParentHashMismatch("HeaderChain: the pinned chain does not build on the anchor");
+    }
+    return hashes;
 }
 
 void HeaderChain::advance(uint64_t _count, HeaderWithHash const& _lastHeader)
