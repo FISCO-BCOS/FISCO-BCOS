@@ -26,6 +26,7 @@
 #include <bcos-utilities/LogStream.h>
 #include <openssl/evp.h>
 #include <memory>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -36,7 +37,7 @@ using EvpPkeyPtr = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
 using EvpMdCtxPtr = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 }  // namespace
 
-std::shared_ptr<bytes> bcos::crypto::ed25519Sign(
+bytes bcos::crypto::ed25519Sign(
     const KeyPairInterface& _keyPair, const HashType& _messageHash, bool _signatureWithPub)
 {
     EvpPkeyPtr key(EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr,
@@ -54,11 +55,10 @@ std::shared_ptr<bytes> bcos::crypto::ed25519Sign(
         BOOST_THROW_EXCEPTION(SignException() << errinfo_comment(
                                   "ed25519Sign exception, messageHash: " + _messageHash.hex()));
     }
-    auto signatureData = std::make_shared<bytes>();
-    *signatureData = signatureArray.asBytes();
+    auto signatureData = signatureArray.asBytes();
     if (_signatureWithPub)
     {
-        signatureData->insert(signatureData->end(), _keyPair.publicKey()->mutableData(),
+        signatureData.insert(signatureData.end(), _keyPair.publicKey()->mutableData(),
             _keyPair.publicKey()->mutableData() + _keyPair.publicKey()->size());
     }
     return signatureData;
@@ -93,11 +93,18 @@ KeyPairInterface::UniquePtr bcos::crypto::ed25519GenerateKeyPair()
 }
 
 bool bcos::crypto::ed25519Verify(
-    PublicPtr _pubKey, const HashType& _messageHash, bytesConstRef _signatureData)
+    bytesConstRef _pubKeyBytes, const HashType& _messageHash, bytesConstRef _signatureData)
 {
+    if (_pubKeyBytes.size() != ED25519_PUBLIC_LEN)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidKey() << errinfo_comment(
+                "invalidKey, the key size: " + std::to_string(_pubKeyBytes.size()) +
+                ", expected size:" + std::to_string(ED25519_PUBLIC_LEN)));
+    }
     EvpPkeyPtr key(
         EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, nullptr,
-            reinterpret_cast<const unsigned char*>(_pubKey->constData()), _pubKey->size()),
+            reinterpret_cast<const unsigned char*>(_pubKeyBytes.data()), _pubKeyBytes.size()),
         &EVP_PKEY_free);
     EvpMdCtxPtr ctx(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
     if (!key || !ctx || EVP_DigestVerifyInit(ctx.get(), nullptr, nullptr, nullptr, key.get()) != 1)
@@ -115,11 +122,11 @@ bool bcos::crypto::ed25519Verify(
                _messageHash.data(), HashType::SIZE) == 1;
 }
 
-PublicPtr bcos::crypto::ed25519Recover(const HashType& _messageHash, bytesConstRef _signatureData)
+KeyImpl bcos::crypto::ed25519Recover(const HashType& _messageHash, bytesConstRef _signatureData)
 {
     auto signature = std::make_shared<SignatureDataWithPub>(_signatureData);
-    auto ed25519Pub = std::make_shared<KeyImpl>(ED25519_PUBLIC_LEN, ref(signature->pub()));
-    if (!ed25519Verify(ed25519Pub, _messageHash, _signatureData))
+    KeyImpl ed25519Pub(ED25519_PUBLIC_LEN, ref(signature->pub()));
+    if (!ed25519Verify(ref(ed25519Pub.data()), _messageHash, _signatureData))
     {
         BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
                                   "invalid signature: ed25519 recover failed, msgHash : " +
@@ -128,7 +135,7 @@ PublicPtr bcos::crypto::ed25519Recover(const HashType& _messageHash, bytesConstR
     return ed25519Pub;
 }
 
-std::pair<bool, bytes> bcos::crypto::ed25519Recover(Hash::Ptr _hashImpl, bytesConstRef _input)
+std::pair<bool, bytes> bcos::crypto::ed25519Recover(Hash& _hashImpl, bytesConstRef _input)
 {
     struct
     {
@@ -147,9 +154,9 @@ std::pair<bool, bytes> bcos::crypto::ed25519Recover(Hash::Ptr _hashImpl, bytesCo
     try
     {
         auto encodedData = signatureData->encode();
-        auto ed25519Pub = std::make_shared<KeyImpl>(ED25519_PUBLIC_LEN, ref(signatureData->pub()));
-        if (ed25519Verify(
-                ed25519Pub, in.hash, bytesConstRef(encodedData->data(), encodedData->size())))
+        KeyImpl ed25519Pub(ED25519_PUBLIC_LEN, ref(signatureData->pub()));
+        if (ed25519Verify(ref(ed25519Pub.data()), in.hash,
+                bytesConstRef(encodedData->data(), encodedData->size())))
         {
             auto address = calculateAddress(_hashImpl, ed25519Pub);
             return {true, address.asBytes()};
@@ -164,14 +171,13 @@ std::pair<bool, bytes> bcos::crypto::ed25519Recover(Hash::Ptr _hashImpl, bytesCo
 }
 
 
-bool Ed25519Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
-    bytesConstRef _signatureData) const
+bool Ed25519Crypto::verify(
+    bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    return ed25519Verify(
-        std::make_shared<KeyImpl>(ED25519_PUBLIC_LEN, _pubKeyBytes), _hash, _signatureData);
+    return ed25519Verify(_pubKeyBytes, _hash, _signatureData);
 }
 
 KeyPairInterface::UniquePtr Ed25519Crypto::createKeyPair(SecretPtr _secretKey) const
 {
-    return std::make_unique<Ed25519KeyPair>(_secretKey);
+    return std::make_unique<Ed25519KeyPair>(std::move(_secretKey));
 }

@@ -22,6 +22,8 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
+#include <bcos-crypto/signature/Exceptions.h>
+#include <bcos-crypto/signature/key/KeyImpl.h>
 #include <memory>
 #include <mutex>
 namespace bcos::crypto
@@ -35,35 +37,49 @@ public:
     virtual ~SignatureCrypto() = default;
 
     // sign returns a signature of a given hash
-    virtual std::shared_ptr<bytes> sign(const KeyPairInterface& _keyPair, const HashType& _hash,
+    virtual bytes sign(const KeyPairInterface& _keyPair, const HashType& _hash,
         bool _signatureWithPub = false) const = 0;
 
-    // verify checks whether a signature is calculated from a given hash
+    // verify checks whether a signature is calculated from a given hash.
+    // The Public& overload returns false for an incorrectly sized key, while bytesConstRef throws
+    // InvalidKey. Secp256k1 also throws InvalidSignature for malformed signatures and recovery
+    // failure; the other implementations return false for short signatures.
+    bool verify(const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
+    {
+        try
+        {
+            return verify(
+                bytesConstRef(reinterpret_cast<const byte*>(_pubKey.constData()), _pubKey.size()),
+                _hash, _signatureData);
+        }
+        catch (const InvalidKey&)
+        {
+            return false;
+        }
+    }
     virtual bool verify(
-        PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const = 0;
-    virtual bool verify(std::shared_ptr<const bytes> _pubKeyBytes, const HashType& _hash,
-        bytesConstRef _signatureData) const = 0;
+        bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const = 0;
 
-    // recover recovers the public key from the given signature
-    virtual PublicPtr recover(const HashType& _hash, bytesConstRef _signatureData) const = 0;
-    virtual std::pair<bool, bytes> recoverAddress(
+    // recover is intentionally closed to KeyImpl: SignatureCrypto does not support alternative
+    // key representations, so interfaces/crypto depends on signature/key and
+    // signature/Exceptions.h by design.
+    virtual KeyImpl recover(const HashType& _hash, bytesConstRef _signatureData) const = 0;
+    virtual bytes recoverAddress(
         crypto::Hash& _hashImpl, const HashType& _hash, bytesConstRef _signatureData) const
     {
         auto pubKey = recover(_hash, _signatureData);
-        if (!pubKey)
-        {
-            return std::make_pair(false, bytes());
-        }
-        auto address = calculateAddress(_hashImpl, pubKey);
-        return {true, address.asBytes()};
+        return calculateAddress(_hashImpl, pubKey).asBytes();
     }
 
     // generateKeyPair generates keyPair
     virtual std::unique_ptr<KeyPairInterface> generateKeyPair() const = 0;
 
     // recoverAddress recovers address from a signature(for precompiled)
-    virtual std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) const = 0;
-    virtual std::unique_ptr<KeyPairInterface> createKeyPair(
-        std::shared_ptr<KeyInterface> _secretKey) const = 0;
+    virtual std::pair<bool, bytes> recoverAddress(Hash& _hashImpl, bytesConstRef _in) const = 0;
+    virtual std::unique_ptr<KeyPairInterface> createKeyPair(SecretPtr _secretKey) const = 0;
+    std::unique_ptr<KeyPairInterface> createKeyPair(const Secret& _secretKey) const
+    {
+        return createKeyPair(std::make_shared<KeyImpl>(_secretKey.data()));
+    }
 };
 }  // namespace bcos::crypto

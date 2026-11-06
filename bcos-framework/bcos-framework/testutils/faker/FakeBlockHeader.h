@@ -196,7 +196,7 @@ inline SignatureList fakeSignatureList(SignatureCrypto::Ptr _signImpl,
         auto signature = _signImpl->sign(*keyPair, _hash);
         Signature sig;
         sig.index = sealerIndex++;
-        sig.signature = *signature;
+        sig.signature = signature;
         signatureList.push_back(sig);
     }
     return signatureList;

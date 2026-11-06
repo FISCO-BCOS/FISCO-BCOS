@@ -51,10 +51,10 @@ bytesPointer PBFTCodec::encode(PBFTBaseMessageInterface::Ptr _pbftMessage, int32
             bytesConstRef(payLoad->data(), payLoad->size()), m_cryptoSuite->hashImpl());
         // sign for the payload
         auto signatureData = m_cryptoSuite->signatureImpl()->sign(*m_keyPair, hash, false);
-        pbMessage->set_signaturedata(signatureData->data(), signatureData->size());
+        pbMessage->set_signaturedata(signatureData.data(), signatureData.size());
         {
             _pbftMessage->setSignatureDataHash(hash);
-            _pbftMessage->setSignatureData(*signatureData);
+            _pbftMessage->setSignatureData(signatureData);
         }
     }
     // set version

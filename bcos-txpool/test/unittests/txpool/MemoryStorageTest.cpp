@@ -202,7 +202,7 @@ struct MemoryStorageFixture
             cryptoSuite->signatureImpl()->generateKeyPair();
         auto sigHash = bcos::crypto::keccak256Hash(bcos::ref(envelope));
         auto signature = cryptoSuite->signatureImpl()->sign(*keyPair, sigHash, true);
-        tx.setSignatureData(*signature);
+        tx.setSignatureData(signature);
         tx.mutableInner().extraTransactionHash.clear();
         tx.calculateHash(*cryptoSuite->hashImpl());
         tx.forceSender(keyPair->address(cryptoSuite->hashImpl()).asBytes());
@@ -695,7 +695,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         };
 
         // Positive control: the canonical low-s signature passes the full chain.
-        bcos::bytes lowS(signedLowS->begin(), signedLowS->end());
+        bcos::bytes lowS(signedLowS.begin(), signedLowS.end());
         auto baseline = makeSignedWeb3Tx(lowS);
         auto const baselineResult =
             storageWithSig.verifyAndSubmitTransaction(baseline, nullptr, false, false);

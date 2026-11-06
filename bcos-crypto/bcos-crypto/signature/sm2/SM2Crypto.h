@@ -33,21 +33,20 @@ class SM2Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<SM2Crypto>;
+    using SignatureCrypto::createKeyPair;
+    using SignatureCrypto::verify;
     SM2Crypto();
     ~SM2Crypto() = default;
-    std::shared_ptr<bytes> sign(const KeyPairInterface& _keyPair, const HashType& _hash,
+    bytes sign(const KeyPairInterface& _keyPair, const HashType& _hash,
         bool _signatureWithPub = false) const override;
 
-    bool verify(
-        PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const override;
-
-    bool verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
+    bool verify(bytesConstRef _pubKeyBytes, const HashType& _hash,
         bytesConstRef _signatureData) const override;
 
-    PublicPtr recover(const HashType& _hash, bytesConstRef _signatureData) const override;
+    KeyImpl recover(const HashType& _hash, bytesConstRef _signatureData) const override;
     KeyPairInterface::UniquePtr generateKeyPair() const override;
 
-    std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) const override;
+    std::pair<bool, bytes> recoverAddress(Hash& _hashImpl, bytesConstRef _in) const override;
 
     KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
 

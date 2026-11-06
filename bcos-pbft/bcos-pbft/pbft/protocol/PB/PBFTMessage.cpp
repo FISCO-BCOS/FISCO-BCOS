@@ -113,7 +113,7 @@ void PBFTMessage::generateAndSetSignatureData(
     m_signatureDataHash = getHashFieldsDataHash(_cryptoSuite);
     auto signature = _cryptoSuite->signatureImpl()->sign(*_keyPair, m_signatureDataHash, false);
     // set the signature data
-    m_pbftRawMessage->set_signaturedata(signature->data(), signature->size());
+    m_pbftRawMessage->set_signaturedata(signature.data(), signature.size());
 }
 
 void PBFTMessage::setProposals(PBFTProposalList const& _proposals)
