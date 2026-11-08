@@ -76,7 +76,16 @@ public:
     virtual std::string const& nodeID() const = 0;
     virtual void setUnreachableDistance(int _unreachableDistance) = 0;
     virtual std::string getNextHop(std::string const& _nodeID) = 0;
-    virtual std::set<std::string> getAllReachableNode() = 0;
+    /// Reachable node ids.
+    ///
+    /// The returned set is immutable and owned by the implementation's snapshot, so it may be handed
+    /// out as a borrowed pointer: it stays valid for at least the implementation's grace period after
+    /// being superseded, which is what makes a cheaper return type than a copy or shared ownership
+    /// possible. Callers must not retain it across a suspension point or beyond the current
+    /// operation.
+    virtual std::set<std::string> const* getAllReachableNode() = 0;
+    /// Whether a single node is reachable, without materialising the whole set.
+    virtual bool isReachableNode(std::string const& _nodeID) = 0;
 
     virtual void encode(bcos::bytes& _encodedData) = 0;
     virtual void decode(bcos::bytesConstRef _decodedData) = 0;
