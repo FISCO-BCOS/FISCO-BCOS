@@ -38,6 +38,11 @@ if (TESTS)
     add_subdirectory(test)
 endif()
 
+# write-path benchmark (opt-in: -DGATEWAY_BENCH=ON)
+if (GATEWAY_BENCH)
+    add_subdirectory(benchmark)
+endif()
+
 # for doxygen
 # include(BuildDocs)
 
