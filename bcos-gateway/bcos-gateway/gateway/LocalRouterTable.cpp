@@ -39,16 +39,15 @@ LocalRouterTable::~LocalRouterTable() = default;
 
 LocalRouterTable::GroupNodeListType LocalRouterTable::nodeList() const
 {
-    ReadGuard guard(x_nodeList);
-    return m_nodeList;
+    return *m_nodeList.read();
 }
 
 FrontServiceInfo::Ptr LocalRouterTable::getFrontService(
     const std::string& _groupID, NodeIDPtr _nodeID) const
 {
-    ReadGuard l(x_nodeList);
-    auto it = m_nodeList.find(_groupID);
-    if (it == m_nodeList.end())
+    auto const* nodeList = m_nodeList.read();
+    auto it = nodeList->find(_groupID);
+    if (it == nodeList->end())
     {
         return nullptr;
     }
@@ -64,9 +63,9 @@ std::vector<FrontServiceInfo::Ptr> LocalRouterTable::getGroupFrontServiceList(
     const std::string& _groupID) const
 {
     std::vector<FrontServiceInfo::Ptr> nodeServiceList;
-    ReadGuard l(x_nodeList);
-    auto it = m_nodeList.find(_groupID);
-    if (it == m_nodeList.end())
+    auto const* nodeList = m_nodeList.read();
+    auto it = nodeList->find(_groupID);
+    if (it == nodeList->end())
     {
         return nodeServiceList;
     }
@@ -81,9 +80,9 @@ std::vector<FrontServiceInfo::Ptr> LocalRouterTable::getGroupFrontServiceList(
 void LocalRouterTable::getGroupNodeInfoList(
     GroupNodeInfo::Ptr _groupNodeInfo, const std::string& _groupID) const
 {
-    ReadGuard l(x_nodeList);
-    auto it = m_nodeList.find(_groupID);
-    if (it == m_nodeList.end())
+    auto const* nodeList = m_nodeList.read();
+    auto it = nodeList->find(_groupID);
+    if (it == nodeList->end())
     {
         return;
     }
@@ -97,8 +96,8 @@ void LocalRouterTable::getGroupNodeInfoList(
 std::map<std::string, std::map<std::string, uint32_t>> LocalRouterTable::nodeListInfo() const
 {
     std::map<std::string, std::map<std::string, uint32_t>> nodeList;
-    ReadGuard l(x_nodeList);
-    for (auto const& it : m_nodeList)
+    auto const* nodeListPtr = m_nodeList.read();
+    for (auto const& it : *nodeListPtr)
     {
         auto groupID = it.first;
         auto it2 = nodeList.find(groupID);
@@ -129,23 +128,31 @@ bool LocalRouterTable::insertNode(const std::string& _groupID, NodeIDPtr _nodeID
     bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
 {
     auto nodeIDStr = _nodeID->hex();
-    UpgradableGuard l(x_nodeList);
-    if (m_nodeList.count(_groupID) && m_nodeList[_groupID].count(nodeIDStr))
-    {
-        auto nodeType = (m_nodeList.at(_groupID).at(nodeIDStr))->nodeType();
-        if (_type == nodeType)
-        {
-            ROUTER_LOG(INFO) << LOG_DESC("insertNode: the node has already existed")
-                             << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", nodeIDStr)
-                             << LOG_KV("nodeType", _type);
-            return false;
-        }
-    }
     auto frontServiceInfo =
         std::make_shared<FrontServiceInfo>(nodeIDStr, _frontService, _type, nullptr);
     frontServiceInfo->setProtocolInfo(_protocolInfo);
-    UpgradeGuard ul(l);
-    m_nodeList[_groupID][nodeIDStr] = frontServiceInfo;
+
+    bool inserted = true;
+    m_nodeList.update([&](GroupNodeListType& nodeList) {
+        auto groupIt = nodeList.find(_groupID);
+        if (groupIt != nodeList.end())
+        {
+            auto nodeIt = groupIt->second.find(nodeIDStr);
+            if (nodeIt != groupIt->second.end() && nodeIt->second->nodeType() == _type)
+            {
+                inserted = false;
+                return;
+            }
+        }
+        nodeList[_groupID][nodeIDStr] = frontServiceInfo;
+    });
+    if (!inserted)
+    {
+        ROUTER_LOG(INFO) << LOG_DESC("insertNode: the node has already existed")
+                         << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", nodeIDStr)
+                         << LOG_KV("nodeType", _type);
+        return false;
+    }
     ROUTER_LOG(INFO) << LOG_DESC("insertNode") << LOG_KV("groupID", _groupID)
                      << LOG_KV("minVersion", _protocolInfo->minVersion())
                      << LOG_KV("maxVersion", _protocolInfo->maxVersion())
@@ -160,19 +167,25 @@ bool LocalRouterTable::insertNode(const std::string& _groupID, NodeIDPtr _nodeID
  */
 bool LocalRouterTable::removeNode(const std::string& _groupID, std::string const& _nodeID)
 {
-    UpgradableGuard l(x_nodeList);
-    if (!m_nodeList.count(_groupID) || !m_nodeList[_groupID].count(_nodeID))
+    bool removed = false;
+    m_nodeList.update([&](GroupNodeListType& nodeList) {
+        auto groupIt = nodeList.find(_groupID);
+        if (groupIt == nodeList.end() || groupIt->second.find(_nodeID) == groupIt->second.end())
+        {
+            return;
+        }
+        removed = true;
+        groupIt->second.erase(_nodeID);
+        if (groupIt->second.empty())
+        {
+            nodeList.erase(groupIt);
+        }
+    });
+    if (!removed)
     {
         ROUTER_LOG(INFO) << LOG_DESC("removeNode: the node is not registered")
                          << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", _nodeID);
         return false;
-    }
-    // erase the node from m_nodeList
-    UpgradeGuard ul(l);
-    (m_nodeList[_groupID]).erase(_nodeID);
-    if (m_nodeList.at(_groupID).empty())
-    {
-        m_nodeList.erase(_groupID);
     }
     ROUTER_LOG(INFO) << LOG_DESC("removeNode") << LOG_KV("groupID", _groupID)
                      << LOG_KV("nodeID", _nodeID);
@@ -181,84 +194,100 @@ bool LocalRouterTable::removeNode(const std::string& _groupID, std::string const
 
 bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupInfo)
 {
-    UpgradableGuard l(x_nodeList);
     auto const& groupID = _groupInfo->groupID();
     auto const& nodeInfos = _groupInfo->nodeInfos();
-    bool frontServiceUpdated = false;
-    for (auto const& it : nodeInfos)
+
+    // Decide what to insert OUTSIDE the write critical section: building a front-service proxy is
+    // not cheap, and with a snapshot table the mutation itself is a short clone-and-publish.
+    std::vector<std::pair<std::string, FrontServiceInfo::Ptr>> pending;
     {
-        auto const& nodeInfo = it.second;
-        auto const& nodeID = nodeInfo->nodeID();
-        // the node is registered
-        if (m_nodeList.count(groupID) && m_nodeList[groupID].count(nodeID))
+        auto const* nodeList = m_nodeList.read();
+        for (auto const& it : nodeInfos)
         {
-            auto currentNodeInfo = m_nodeList.at(groupID).at(nodeID);
-            auto nodeType = currentNodeInfo->nodeType();
-            auto protocol = nodeInfo->nodeProtocol();
-            auto currentProtocol = currentNodeInfo->protocolInfo();
-            if (nodeType == nodeInfo->nodeType() &&
-                (protocol->minVersion() == currentProtocol->minVersion()) &&
-                (protocol->maxVersion() == currentProtocol->maxVersion()))
+            auto const& nodeInfo = it.second;
+            auto const& nodeID = nodeInfo->nodeID();
+            // already registered with the same type and protocol range
+            auto groupIt = nodeList->find(groupID);
+            if (groupIt != nodeList->end())
+            {
+                auto nodeIt = groupIt->second.find(nodeID);
+                if (nodeIt != groupIt->second.end())
+                {
+                    auto const& current = nodeIt->second;
+                    auto protocol = nodeInfo->nodeProtocol();
+                    auto currentProtocol = current->protocolInfo();
+                    if (current->nodeType() == nodeInfo->nodeType() &&
+                        protocol->minVersion() == currentProtocol->minVersion() &&
+                        protocol->maxVersion() == currentProtocol->maxVersion())
+                    {
+                        continue;
+                    }
+                }
+            }
+
+            auto serviceName = nodeInfo->serviceName(bcos::protocol::FRONT);
+            if (serviceName.empty())
             {
                 continue;
             }
-        }
-        // insert the new node
-        auto serviceName = nodeInfo->serviceName(bcos::protocol::FRONT);
-        if (serviceName.empty())
-        {
-            continue;
-        }
 
-        // TODO:: tars
-        auto frontPrx = bcostars::createServantProxy<bcostars::FrontServicePrx>(serviceName);
-        auto frontClient = std::make_shared<bcostars::FrontServiceClient>(frontPrx, m_keyFactory);
-
-        UpgradeGuard ul(l);
-        auto frontServiceInfo = std::make_shared<FrontServiceInfo>(
-            nodeInfo->nodeID(), frontClient, nodeInfo->nodeType(), frontPrx);
-        frontServiceInfo->setProtocolInfo(nodeInfo->nodeProtocol());
-        m_nodeList[groupID][nodeID] = frontServiceInfo;
-        ROUTER_LOG(INFO) << LOG_DESC("updateGroupNodeInfos: insert frontService for the node")
-                         << LOG_KV("nodeID", nodeInfo->nodeID())
-                         << LOG_KV("minVersion", nodeInfo->nodeProtocol()->minVersion())
-                         << LOG_KV("maxVersion", nodeInfo->nodeProtocol()->maxVersion())
-                         << LOG_KV("serviceName", serviceName) << printNodeInfo(nodeInfo);
-        frontServiceUpdated = true;
+            // TODO:: tars
+            auto frontPrx = bcostars::createServantProxy<bcostars::FrontServicePrx>(serviceName);
+            auto frontClient =
+                std::make_shared<bcostars::FrontServiceClient>(frontPrx, m_keyFactory);
+            auto frontServiceInfo = std::make_shared<FrontServiceInfo>(
+                nodeInfo->nodeID(), frontClient, nodeInfo->nodeType(), frontPrx);
+            frontServiceInfo->setProtocolInfo(nodeInfo->nodeProtocol());
+            pending.emplace_back(nodeID, std::move(frontServiceInfo));
+        }
     }
-    return frontServiceUpdated;
+
+    if (pending.empty())
+    {
+        return false;
+    }
+
+    m_nodeList.update([&](GroupNodeListType& nodeList) {
+        for (auto& [nodeID, info] : pending)
+        {
+            nodeList[groupID][nodeID] = info;
+            ROUTER_LOG(INFO) << LOG_DESC("updateGroupNodeInfos: insert frontService for the node")
+                             << LOG_KV("nodeID", nodeID)
+                             << LOG_KV("minVersion", info->protocolInfo()->minVersion())
+                             << LOG_KV("maxVersion", info->protocolInfo()->maxVersion());
+        }
+    });
+    return true;
 }
 
 bool LocalRouterTable::eraseUnreachableNodes()
 {
     bool updated = false;
-    UpgradableGuard l(x_nodeList);
-    for (auto it = m_nodeList.begin(); it != m_nodeList.end();)
-    {
-        auto& nodesInfo = it->second;
-        for (auto pFrontService = nodesInfo.begin(); pFrontService != nodesInfo.end();)
+    m_nodeList.update([&](GroupNodeListType& nodeList) {
+        for (auto it = nodeList.begin(); it != nodeList.end();)
         {
-            auto frontService = pFrontService->second;
-            if (frontService->unreachable())
+            auto& nodesInfo = it->second;
+            for (auto pFrontService = nodesInfo.begin(); pFrontService != nodesInfo.end();)
             {
-                ROUTER_LOG(INFO) << LOG_DESC("remove FrontService for unreachable")
-                                 << LOG_KV("node", pFrontService->first);
-                UpgradeGuard ul(l);
-                pFrontService = nodesInfo.erase(pFrontService);
+                if (pFrontService->second->unreachable())
+                {
+                    ROUTER_LOG(INFO) << LOG_DESC("remove FrontService for unreachable")
+                                     << LOG_KV("node", pFrontService->first);
+                    pFrontService = nodesInfo.erase(pFrontService);
+                    updated = true;
+                    continue;
+                }
+                pFrontService++;
+            }
+            if (nodesInfo.empty())
+            {
+                it = nodeList.erase(it);
                 updated = true;
                 continue;
             }
-            pFrontService++;
+            it++;
         }
-        if (nodesInfo.empty())
-        {
-            UpgradeGuard ul(l);
-            it = m_nodeList.erase(it);
-            updated = true;
-            continue;
-        }
-        it++;
-    }
+    });
     return updated;
 }
 

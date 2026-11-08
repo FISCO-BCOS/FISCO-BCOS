@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "FrontServiceInfo.h"
+#include "bcos-gateway/libnetwork/RcuSnapshot.h"
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-framework/gateway/GatewayInterface.h"
@@ -68,8 +69,9 @@ public:
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // groupID => nodeID => FrontServiceInfo
-    GroupNodeListType m_nodeList;
-    mutable SharedMutex x_nodeList;
+    // Read on every inbound dispatch, written only when a node registers/unregisters, so the read
+    // path is a lock-free snapshot load instead of a shared_mutex acquisition.
+    RcuSnapshot<GroupNodeListType> m_nodeList;
 };
 }  // namespace gateway
 }  // namespace bcos

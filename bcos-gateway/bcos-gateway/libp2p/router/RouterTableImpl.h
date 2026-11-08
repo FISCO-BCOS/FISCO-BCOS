@@ -20,6 +20,7 @@
 #pragma once
 
 #include "RouterTableInterface.h"
+#include "bcos-gateway/libnetwork/RcuSnapshot.h"
 #include "bcos-tars-protocol/tars/RouterTable.h"
 #include <memory>
 
@@ -37,6 +38,17 @@ public:
     RouterTableEntry& operator=(const RouterTableEntry&) = delete;
     RouterTableEntry& operator=(RouterTableEntry&&) = delete;
     ~RouterTableEntry() override = default;
+
+    /// Deep copy, including the tars entry the inner accessor points at. The copy constructor is
+    /// deleted (the inner tars object is owned by the accessor lambda), so the snapshot tables need
+    /// an explicit deep clone for copy-on-write.
+    std::shared_ptr<RouterTableEntry> clone() const
+    {
+        auto copy = std::make_shared<RouterTableEntry>([inner = *(m_inner())]() mutable {
+            return &inner;
+        });
+        return copy;
+    }
 
     void setDstNode(std::string const& _dstNode) override;
     void setNextHop(std::string const& _nextHop) override;
@@ -99,16 +111,33 @@ public:
     std::string getNextHop(std::string const& _nodeID) override;
     std::set<std::string> getAllReachableNode() override;
 
+    using Entries = std::map<std::string, RouterTableEntryInterface::Ptr>;
+
+    bool updateDstNodeEntry(
+        Entries& entries, std::string const& _generatedFrom, RouterTableEntryInterface::Ptr _entry);
+    /// Convenience overload: apply the entry update in its own snapshot publish.
     bool updateDstNodeEntry(
         std::string const& _generatedFrom, RouterTableEntryInterface::Ptr _entry);
     void updateDistanceForAllRouterEntries(std::set<std::string>& _unreachableNodes,
         std::string const& _nextHop, int32_t _newDistance);
+    void updateDistanceForAllRouterEntries(std::set<std::string>& _unreachableNodes,
+        std::string const& _nextHop, int32_t _newDistance, Entries& entries);
 
 private:
+    /// Deep copy: the concrete entries are tars-backed and neither copyable nor movable, so a
+    /// snapshot clone has to rebuild each one.
+    static Entries cloneEntries(Entries const& entries);
+
     std::string m_nodeID;
     std::function<bcostars::RouterTable*()> m_inner;
-    std::map<std::string, RouterTableEntryInterface::Ptr> m_routerEntries;
-    mutable SharedMutex x_routerEntries;
+
+    // Read-mostly routing table: every forwarded message reads it, topology changes write it.
+    // Copy-on-write with a grace period removes the read-side lock (see RcuSnapshot.h).
+    RcuSnapshot<Entries> m_entries;
+
+    // encode() materialises m_inner from the snapshot; it is the only user of m_inner and is not
+    // called concurrently with itself, but guard it anyway since it mutates shared state
+    std::mutex x_encode;
 
     int m_unreachableDistance = 10;
 };

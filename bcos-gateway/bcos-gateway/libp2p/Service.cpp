@@ -94,14 +94,20 @@ void Service::stop()
         m_host->stop();
 
         /// disconnect sessions
-        std::unique_lock lock(x_sessions);
-        for (auto& session : m_sessions)
+        // snapshot the sessions first: stopping a session can call back into the service (teardown
+        // notification -> onDisconnect -> erase), which must not run while we iterate the table
+        std::vector<P2PSession::Ptr> sessions;
+        for (auto const& it : *m_sessions.read())
         {
-            session.second->stop(ClientQuit);
+            sessions.push_back(it.second);
+        }
+        for (auto& session : sessions)
+        {
+            session->stop(ClientQuit);
         }
 
         /// clear sessions
-        m_sessions.clear();
+        m_sessions.update([](SessionsType& table) { table.clear(); });
     }
 }
 
@@ -164,10 +170,10 @@ void Service::heartBeat()
             }(shared_from_this(), it.first));
     }
 
-    std::shared_lock sessionLock(x_sessions);
+    auto const* sessions = m_sessions.read();
     SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
-                      << LOG_KV("connected count", m_sessions.size());
-    for (auto const& it : m_sessions)
+                      << LOG_KV("connected count", sessions->size());
+    for (auto const& it : *sessions)
     {
         auto session = it.second;
         auto queueSize = session->session()->writeQueueSize();
@@ -184,7 +190,6 @@ void Service::heartBeat()
                                << LOG_KV("write queue size", queueSize);
         }
     }
-    sessionLock.unlock();
 
     auto self = std::weak_ptr<Service>(shared_from_this());
     m_timer.emplace(m_host->asioInterface()->newTimer(CHECK_INTERVAL));
@@ -277,12 +282,23 @@ void Service::onConnect(
             return onBeforeMessage(session, message, wireLength);
         });
 
-    // Note: the lock must be here, otherwise there will be more than one started sessions,
-    // and a session not maintained in m_sessions will be choosed when send messages in some cases
-    // which will cause coredump
-    std::unique_lock lock(x_sessions);
-    auto existedSession = getP2PSessionByNodeIdWithoutLock(p2pID);
-    if (existedSession && existedSession->active())
+    // The duplicate check and the insert must be one atomic step, otherwise two connects for the
+    // same peer could both pass the check and leave a session in the table that was never started.
+    // The clone-modify-publish update serialises writers; readers never see the intermediate copy.
+    bool duplicate = false;
+    bool replaced = false;
+    m_sessions.update([&](SessionsType& table) {
+        auto it = table.find(p2pID);
+        if (it != table.end() && it->second && it->second->active())
+        {
+            duplicate = true;
+            return;
+        }
+        replaced = (it != table.end());
+        table[p2pID] = p2pSession;
+    });
+
+    if (duplicate)
     {
         SERVICE_LOG(DEBUG) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortP2pID(p2pID))
                            << LOG_KV("endpoint", peer);
@@ -290,19 +306,13 @@ void Service::onConnect(
         session->disconnect(DuplicatePeer);
         return;
     }
+
     p2pSession->start();
     sendProtocol(p2pSession);
     updateStaticNodes(session->socket(), p2pID);
 
-    if (existedSession)
+    if (!replaced)
     {
-        m_sessions[p2pID] = p2pSession;
-        lock.unlock();
-    }
-    else
-    {
-        m_sessions.insert(std::make_pair(p2pID, p2pSession));
-        lock.unlock();
         callNewSessionHandlers(p2pSession);
     }
     // accepted sockets are bound to the listen port, dialled ones to an ephemeral port
@@ -320,16 +330,20 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
     {
         handler(e, p2pSession);
     }
-    auto session = getP2PSessionByNodeId(p2pSession->p2pID());
-    if (session && session == p2pSession)
-    {
-        SERVICE_LOG(TRACE) << "Service onDisconnect and remove from sessions"
-                           << LOG_KV("p2pid", p2pSession->printP2pID())
-                           << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint());
+    // remove only if the table still maps this p2pID to THIS session: a reconnected peer installs
+    // a new session under the same id, and erasing it here would drop the live one
+    auto p2pID = p2pSession->p2pID();
+    bool erased = false;
+    m_sessions.update([&](SessionsType& table) {
+        auto it = table.find(p2pID);
+        if (it != table.end() && it->second == p2pSession)
         {
-            std::unique_lock l(x_sessions);
-            m_sessions.erase(p2pSession->p2pID());
+            table.erase(it);
+            erased = true;
         }
+    });
+    if (erased)
+    {
         callDeleteSessionHandlers(p2pSession);
 
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
@@ -505,9 +519,10 @@ bcos::task::Task<void> Service::broadcastMessageToAll(Message::Ptr message,
 {
     std::vector<P2pID> nodeIDs;
     {
-        std::shared_lock lock(x_sessions);
-        nodeIDs.reserve(m_sessions.size());
-        for (auto const& session : m_sessions)
+        // snapshot read: no lock, so a broadcast never blocks a concurrent connect/disconnect
+        auto const* sessions = m_sessions.read();
+        nodeIDs.reserve(sessions->size());
+        for (auto const& session : *sessions)
         {
             nodeIDs.push_back(session.first);
         }
@@ -546,9 +561,10 @@ bcos::task::Task<void> Service::broadcastMessageToNeighbors(Message::Ptr message
     // neighbors, propagated hop-by-hop" gossip model used by broadcastRouterSeq.
     std::vector<P2pID> nodeIDs;
     {
-        std::shared_lock lock(x_sessions);
-        nodeIDs.reserve(m_sessions.size());
-        for (auto const& session : m_sessions)
+        // snapshot read: no lock, so a broadcast never blocks a concurrent connect/disconnect
+        auto const* sessions = m_sessions.read();
+        nodeIDs.reserve(sessions->size());
+        for (auto const& session : *sessions)
         {
             nodeIDs.push_back(session.first);
         }
@@ -581,8 +597,7 @@ bcos::task::Task<void> Service::broadcastMessageToNeighbors(Message::Ptr message
 
 P2PInfos Service::sessionInfos()
 {
-    std::shared_lock lock(x_sessions);
-    return ::ranges::views::values(m_sessions) |
+    return ::ranges::views::values(*m_sessions.read()) |
            ::ranges::views::transform([](auto const& session) { return session->p2pInfo(); }) |
            ::ranges::to<P2PInfos>();
 }
@@ -739,10 +754,14 @@ void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const b
     // disconnect nodes in the blacklist
     if (_enable)
     {
-        std::shared_lock lock(x_sessions);
-        for (const auto& session : m_sessions)
+        std::vector<P2PSession::Ptr> sessions;
+        for (auto const& it : *m_sessions.read())
         {
-            auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
+            sessions.push_back(it.second);
+        }
+        for (const auto& p2pSession : sessions)
+        {
+            auto p2pIdWithoutExtInfo = p2pSession->p2pInfo().p2pIDWithoutExtInfo;
             if (_strList.end() == _strList.find(p2pIdWithoutExtInfo))
             {
                 continue;
@@ -751,8 +770,8 @@ void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const b
             SERVICE_LOG(INFO) << LOG_DESC("updatePeerBlacklist, disconnect peer in blacklist")
                               << LOG_KV("peer", p2pIdWithoutExtInfo);
 
-            updateStaticNodes(session.second->session()->socket(), session.second->p2pID());
-            session.second->session()->disconnect(DisconnectReason::InBlacklistReason);
+            updateStaticNodes(p2pSession->session()->socket(), p2pSession->p2pID());
+            p2pSession->session()->disconnect(DisconnectReason::InBlacklistReason);
         }
     }
 }
@@ -764,10 +783,14 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
     // disconnect nodes not in the whitelist
     if (_enable)
     {
-        std::shared_lock lock(x_sessions);
-        for (auto const& session : m_sessions)
+        std::vector<P2PSession::Ptr> sessions;
+        for (auto const& it : *m_sessions.read())
         {
-            auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
+            sessions.push_back(it.second);
+        }
+        for (const auto& p2pSession : sessions)
+        {
+            auto p2pIdWithoutExtInfo = p2pSession->p2pInfo().p2pIDWithoutExtInfo;
             if (_strList.end() != _strList.find(p2pIdWithoutExtInfo))
             {
                 continue;
@@ -776,8 +799,8 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
             SERVICE_LOG(INFO) << LOG_DESC("updatePeerWhitelist, disconnect peer not in whitelist")
                               << LOG_KV("peer", p2pIdWithoutExtInfo);
 
-            updateStaticNodes(session.second->session()->socket(), session.second->p2pID());
-            session.second->session()->disconnect(DisconnectReason::NotInWhitelistReason);
+            updateStaticNodes(p2pSession->session()->socket(), p2pSession->p2pID());
+            p2pSession->session()->disconnect(DisconnectReason::NotInWhitelistReason);
         }
     }
 }
@@ -868,7 +891,10 @@ void bcos::gateway::Service::registerDisconnectHandler(
 std::shared_ptr<P2PSession> bcos::gateway::Service::getP2PSessionByNodeIdWithoutLock(
     P2pID const& _nodeID) const
 {
-    if (auto it = m_sessions.find(_nodeID); it != m_sessions.end())
+    // kept for source compatibility with the lock-based call sites that predate the snapshot; the
+    // snapshot read is already lock-free, so "without lock" and the public lookup are identical
+    auto const* sessions = m_sessions.read();
+    if (auto it = sessions->find(_nodeID); it != sessions->end())
     {
         return it->second;
     }
