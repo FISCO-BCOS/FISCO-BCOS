@@ -20,6 +20,7 @@
 #pragma once
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-utilities/Common.h"
+#include <functional>
 #include <memory>
 #include <set>
 
@@ -77,6 +78,25 @@ public:
     virtual void setUnreachableDistance(int _unreachableDistance) = 0;
     virtual std::string getNextHop(std::string const& _nodeID) = 0;
     virtual std::set<std::string> getAllReachableNode() = 0;
+
+    /// Visit every reachable node without materialising the whole set.
+    ///
+    /// getAllReachableNode() copies every id into a fresh std::set, which a broadcast pays for
+    /// nothing: it only needs to fan out. Implementations may override this; the default keeps other
+    /// implementations working.
+    virtual void forEachReachableNode(std::function<void(std::string const&)> const& fn)
+    {
+        for (auto const& node : getAllReachableNode())
+        {
+            fn(node);
+        }
+    }
+
+    /// Whether a single node is reachable, without materialising the set.
+    virtual bool isReachableNode(std::string const& _nodeID)
+    {
+        return getAllReachableNode().contains(_nodeID);
+    }
 
     virtual void encode(bcos::bytes& _encodedData) = 0;
     virtual void decode(bcos::bytesConstRef _decodedData) = 0;
