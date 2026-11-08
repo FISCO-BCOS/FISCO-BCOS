@@ -448,6 +448,15 @@ bcos::task::Task<void> ServiceV2::broadcastMessageToAll(Message::Ptr message,
 {
     auto reachableNodes = m_routerTable->getAllReachableNode();
     auto selfV2 = std::static_pointer_cast<ServiceV2>(shared_from_this());
+
+    // Compress the fan-out payload once for every peer. Per-peer compression would repeat the whole
+    // zstd pass N times for the identical bytes.
+    auto prepared = prepareFanoutPayload(payloads, m_enableCompressForBroadcast.load());
+    if (prepared)
+    {
+        options.prepared = prepared;
+    }
+
     // Fan out one independent coroutine per peer (see Service::broadcastMessageToAll).
     for (auto const& node : reachableNodes)
     {
