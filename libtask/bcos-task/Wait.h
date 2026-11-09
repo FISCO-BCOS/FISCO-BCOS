@@ -33,19 +33,9 @@ constexpr inline struct Wait
     template <IsAwaitable Task>
     void operator()(Task&& task) const
     {
-        auto asyncTask = executeTask(std::forward<Task>(task));
-        try
-        {
-            asyncTask.start();
-        }
-        catch (...)
-        {
-            // The exception escaped the detached chain: its top frame is stranded at its final
-            // suspend point (see AsyncTask::promise_type::unhandled_exception). Reclaim it —
-            // and the frames its parameter copies own — before the caller catches.
-            detail::reclaimEscapedFrames();
-            throw;
-        }
+        // start() reclaims the chain's stranded frames if an exception escapes it (see
+        // AsyncTask::promise_type::unhandled_exception and detail::resumeDetached).
+        executeTask(std::forward<Task>(task)).start();
     }
 } wait{};
 

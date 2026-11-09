@@ -237,20 +237,22 @@ void requireNewPayloadV4ParamShape(Json::Value const& params)
     }
 }
 
-/// ExecutionPayloadV4 required fields. op-geth's NewPayloadV4 rejects a nil
-/// withdrawals / blobGasUsed / excessBlobGas with -32602 (eth/catalyst/api.go:745-750).
-/// withdrawalsRoot is required by Isthmus, where op-geth reports it as an INVALID payload
-/// status instead (beacon/engine/types.go:320-323, reached via ExecutableDataToBlock);
-/// this implementation is deliberately one notch stricter and answers -32602 for all four,
-/// because a V4 payload missing any of them is malformed rather than merely unacceptable.
-/// The engine service still carries its own INVALID-status withdrawalsRoot rule for
-/// in-process callers (EngineServiceImpl.cpp validateExecutionPayload).
+/// ExecutionPayloadV4 required fields. op-geth's NewPayloadV4 rejects a nil withdrawals
+/// with -32602 (eth/catalyst/api.go:745-750; the blob gas pair is the V3 rule below).
+/// withdrawalsRoot is the OP Isthmus dialect: the L1 newPayloadV4 (execution-apis
+/// prague.md) carries ExecutionPayloadV3, which has no such field, so its presence is a
+/// lane question, not a shape one. Absent is accepted here; the OP lane answers INVALID
+/// for it (EngineServiceCommon.cpp validateExecutionPayload, as op-geth does in
+/// beacon/engine/types.go:320-323) and the L1 lane never reads it. Present, it must be a
+/// hex string.
 ///
 /// Types are checked, not just presence. Both matter and neither is theoretical:
 /// jsoncpp iterates a non-array value as an EMPTY range, so a string `withdrawals` would
 /// parse into a valid-looking empty list (fail open on the one field Isthmus constrains);
 /// and asString() on an array/object throws Json::LogicError, which would leave the parse
-/// as -32603 InternalError rather than naming the offending field.
+/// as -32603 InternalError rather than naming the offending field. The engine service keeps
+/// its own INVALID-status copy of the blob gas rule for in-process callers
+/// (EngineServiceCommon.cpp validateExecutionPayload); RPC callers no longer reach it.
 /// The caller has already run requireObject on `ep`.
 void requireExecutionPayloadV4Fields(Json::Value const& ep)
 {
@@ -260,15 +262,14 @@ void requireExecutionPayloadV4Fields(Json::Value const& ep)
             "executionPayload.withdrawals must be an array for ExecutionPayloadV4"));
     }
     // Emptiness of `withdrawals` is a payload-validity question judged by the engine
-    // service; only its presence and type are shape questions and belong here.
-    for (auto const* field : {"blobGasUsed", "excessBlobGas", "withdrawalsRoot"})
+    // service; only its presence and type are shape questions and belong here. The blob gas
+    // pair is ExecutionPayloadV3's and is checked once, per method version, in
+    // parseNewPayloadRequest.
+    if (ep.isMember("withdrawalsRoot") && !ep["withdrawalsRoot"].isNull() &&
+        !ep["withdrawalsRoot"].isString())
     {
-        if (!ep.isMember(field) || !ep[field].isString())
-        {
-            BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(
-                bcos::rpc::InvalidParams, std::string("executionPayload.") + field +
-                                              " must be a hex string for ExecutionPayloadV4"));
-        }
+        BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(bcos::rpc::InvalidParams,
+            "executionPayload.withdrawalsRoot must be a hex string when present"));
     }
 }
 
@@ -389,22 +390,42 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         }
         payload.withdrawals = std::move(withdrawals);
     }
-    if (ep.isMember("blobGasUsed"))
+    // The blob gas pair is ExecutionPayloadV3's: geth's NewPayloadV3 answers -32602 for a nil
+    // excessBlobGas / blobGasUsed ("nil ... post-cancun") and NewPayloadV1/V2 for a non-nil one
+    // ("non-nil ... pre-cancun") — eth/catalyst/api.go — so the presence rule is a shape
+    // question judged here, not an INVALID payload status (EEST
+    // test_excess_blob_gas_fork_transition pins both directions through the Engine API).
+    for (auto const* field : {"blobGasUsed", "excessBlobGas"})
+    {
+        bool const present = ep.isMember(field) && !ep[field].isNull();
+        if (version >= engine::ApiVersion::V3 && !present)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, std::string("executionPayload.") + field +
+                                   " must be a hex string for ExecutionPayloadV3 and later"));
+        }
+        if (version < engine::ApiVersion::V3 && present)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, std::string("executionPayload.") + field +
+                                                    " is not a field of ExecutionPayloadV1/V2"));
+        }
+    }
+    if (version >= engine::ApiVersion::V3)
     {
         payload.blobGasUsed = parseBigQuantity(ep["blobGasUsed"], "executionPayload.blobGasUsed");
-    }
-    if (ep.isMember("excessBlobGas"))
-    {
         payload.excessBlobGas =
             parseBigQuantity(ep["excessBlobGas"], "executionPayload.excessBlobGas");
     }
-    // withdrawalsRoot is an ExecutionPayloadV4+ field (Isthmus), required there. For
+    // withdrawalsRoot is the OP Isthmus ExecutionPayloadV4 field; the L1 V4 payload
+    // (ExecutionPayloadV3 + executionRequests) has none, so at V4 it is read when present
+    // and left unset otherwise (requireExecutionPayloadV4Fields checked its type). For
     // V1-V3 requests it is ignored rather than rejected: the Isthmus spec leaves pre-V4
     // handling unspecified and op-geth's NewPayloadV3 (eth/catalyst/api.go) performs no
     // withdrawalsRoot validation, so rejecting here would diverge from op-geth.
-    if (version >= engine::ApiVersion::V4)
+    if (version >= engine::ApiVersion::V4 && ep.isMember("withdrawalsRoot") &&
+        !ep["withdrawalsRoot"].isNull())
     {
-        // Presence and string-ness were already enforced by requireExecutionPayloadV4Fields.
         payload.withdrawalsRoot = parseH256(ep["withdrawalsRoot"].asString());
     }
 
@@ -446,8 +467,25 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         executionRequests.reserve(params[3].size());
         for (Json::ArrayIndex i = 0; i < params[3].size(); ++i)
         {
-            executionRequests.push_back(
-                parseHexBytesField(params[3][i], "executionRequests[" + std::to_string(i) + "]"));
+            auto const field = "executionRequests[" + std::to_string(i) + "]";
+            auto element = parseHexBytesField(params[3][i], field);
+            // execution-apis prague.md engine_newPayloadV4: every element is
+            // request_type || request_data with non-empty request_data, and the list is
+            // sorted by request_type, ascending, without duplicates; anything else is
+            // -32602 (geth's NewPayloadV4 validateRequests). A shape question, so it is
+            // judged here and never reaches the engine service as a payload verdict.
+            if (element.size() < 2)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidParams, field + " must carry a request type byte and request data"));
+            }
+            if (!executionRequests.empty() && element[0] <= executionRequests.back()[0])
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+                    "executionRequests must be sorted by request type, ascending, without "
+                    "duplicates"));
+            }
+            executionRequests.push_back(std::move(element));
         }
         request.executionRequests = std::move(executionRequests);
     }

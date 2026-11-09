@@ -83,6 +83,19 @@ namespace bcos::scheduler_v1
 struct EvmcForkTimestamps
 {
     static constexpr uint64_t kForkDisabled = std::numeric_limits<uint64_t>::max();
+    // Pre-London forks, as timestamps, for chains whose history starts before London
+    // (conformance fixtures, offline imports). All disabled = the schedule describes a
+    // London-or-later chain and the pre-Paris fallback stays LONDON, as every configured
+    // chain today. frontierTime active marks "this schedule describes pre-London history".
+    uint64_t frontierTime{kForkDisabled};
+    uint64_t homesteadTime{kForkDisabled};
+    uint64_t tangerineWhistleTime{kForkDisabled};  // EIP-150
+    uint64_t spuriousDragonTime{kForkDisabled};    // EIP-155/158/161
+    uint64_t byzantiumTime{kForkDisabled};
+    uint64_t constantinopleTime{kForkDisabled};
+    uint64_t petersburgTime{kForkDisabled};  // ConstantinopleFix
+    uint64_t istanbulTime{kForkDisabled};
+    uint64_t berlinTime{kForkDisabled};
     uint64_t londonTime{kForkDisabled};    // EIP-1559
     uint64_t parisTime{kForkDisabled};     // The Merge (PoS)
     uint64_t shanghaiTime{kForkDisabled};  // EIP-4895 withdrawals
@@ -147,7 +160,48 @@ inline evmc_revision evmcRevisionForTimestamp(
     }
     // Pre-Paris (PoW phase, e.g. Sepolia before 2022-08-22): London is the
     // latest pre-merge revision on these chains (london_time is 0 = genesis).
-    return EVMC_LONDON;  // pre-Paris fallback
+    if (isForkActive(schedule.londonTime, timestamp))
+    {
+        return EVMC_LONDON;
+    }
+    // Pre-London history, only on a schedule that describes it (see EvmcForkTimestamps).
+    if (isForkActive(schedule.berlinTime, timestamp))
+    {
+        return EVMC_BERLIN;
+    }
+    if (isForkActive(schedule.istanbulTime, timestamp))
+    {
+        return EVMC_ISTANBUL;
+    }
+    if (isForkActive(schedule.petersburgTime, timestamp))
+    {
+        return EVMC_PETERSBURG;
+    }
+    if (isForkActive(schedule.constantinopleTime, timestamp))
+    {
+        return EVMC_CONSTANTINOPLE;
+    }
+    if (isForkActive(schedule.byzantiumTime, timestamp))
+    {
+        return EVMC_BYZANTIUM;
+    }
+    if (isForkActive(schedule.spuriousDragonTime, timestamp))
+    {
+        return EVMC_SPURIOUS_DRAGON;
+    }
+    if (isForkActive(schedule.tangerineWhistleTime, timestamp))
+    {
+        return EVMC_TANGERINE_WHISTLE;
+    }
+    if (isForkActive(schedule.homesteadTime, timestamp))
+    {
+        return EVMC_HOMESTEAD;
+    }
+    if (isForkActive(schedule.frontierTime, timestamp))
+    {
+        return EVMC_FRONTIER;
+    }
+    return EVMC_LONDON;  // pre-Paris fallback on a London-or-later schedule
 }
 
 /// u256 -> "0x"-prefixed lowercase hex string (the format buildBlockInfo parses).
@@ -228,7 +282,13 @@ inline protocol::BlockHeader::Ptr makeExecutionBlockHeader(
     // EthBlockVersion tops out at PRAGUE (Osaka/BPO add no header fields;
     // tryEthBlockVersionFor likewise maps EVMC_OSAKA to PRAGUE). This lane is London+
     // only, so the floor is LONDON.
-    auto ethVersion = bcos::protocol::EthBlockVersion::LONDON;
+    // A header before London carries no baseFee (EthBlockVersion::PRE_LONDON); the field's
+    // presence is the header's own era signal, the schedule the chain's.
+    auto ethVersion =
+        (ethHeader.baseFee.has_value() ||
+            bcos::protocol::isForkActive(forkSchedule.londonTime, ethHeader.timestamp)) ?
+            bcos::protocol::EthBlockVersion::LONDON :
+            bcos::protocol::EthBlockVersion::PRE_LONDON;
     if (bcos::protocol::isForkActive(forkSchedule.pragueTime, ethHeader.timestamp))
     {
         ethVersion = bcos::protocol::EthBlockVersion::PRAGUE;
@@ -313,10 +373,26 @@ inline void fillExecutionLedgerConfig(protocol::EthBlockHeaderData const& ethHea
 /// API block builder (EngineServiceImpl::buildPayload).
 using EthereumBlockComputation = ledger::mpt::EthereumBlockComputation;
 
-// PoW (pre-merge) block reward: 2 ETH per block (Constantinople+), plus 1/32 ETH
-// per included uncle for the coinbase, and (uncle.number + 8 - block.number) * 2
-// ETH / 8 for each uncle's miner (geth's accumulateRewards).
-inline constexpr u256 kPoWBlockReward{2000000000000000000ull};  // 2 * 10^18 wei
+// PoW (pre-merge) block reward per era (geth's accumulateRewards: FrontierBlockReward 5 ETH,
+// ByzantiumBlockReward 3 ETH, ConstantinopleBlockReward 2 ETH), plus 1/32 of it per included
+// uncle for the coinbase, and (uncle.number + 8 - block.number) * reward / 8 for each uncle's
+// miner.
+inline constexpr u256 kPoWBlockReward{2000000000000000000ull};  // 2 * 10^18 wei, Constantinople+
+inline constexpr u256 kPoWBlockRewardByzantium{3000000000000000000ull};
+inline constexpr u256 kPoWBlockRewardFrontier{5000000000000000000ull};
+
+inline u256 powBlockRewardFor(evmc_revision revision)
+{
+    if (revision < EVMC_BYZANTIUM)
+    {
+        return kPoWBlockRewardFrontier;
+    }
+    if (revision < EVMC_CONSTANTINOPLE)
+    {
+        return kPoWBlockRewardByzantium;
+    }
+    return kPoWBlockReward;
+}
 
 // EIP-4844: blob gas per blob (2**17). Mirrors GAS_PER_BLOB in
 // ethereum-executor/EVMSupport.h and kGasPerBlob in devp2p's HeaderValidator.h.
@@ -328,7 +404,7 @@ inline constexpr u256 kBlobGasPerBlob{131072};
 template <class ViewType>
 task::Task<void> accumulatePoWBlockRewards(ViewType& view,
     protocol::EthBlockHeaderData const& ethHeader, std::vector<bcos::bytes> const& rawUncles,
-    ledger::LedgerConfig const& ledgerConfig)
+    ledger::LedgerConfig const& ledgerConfig, evmc_revision blockRevision)
 {
     using namespace bcos::ledger::account;
 
@@ -355,7 +431,8 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
     // Uncle inclusion rewards: the miner of each uncle gets
     // (uncle.number + 8 - block.number) * blockReward / 8; the coinbase gets
     // blockReward / 32 per included uncle.
-    u256 coinbaseReward = kPoWBlockReward;
+    auto const blockReward = powBlockRewardFor(blockRevision);
+    u256 coinbaseReward = blockReward;
     for (auto const& uncleRlp : rawUncles)
     {
         protocol::EthBlockHeader uncle;
@@ -387,9 +464,9 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
                 std::to_string(uncleHeader.number) + ", block " + std::to_string(ethHeader.number) +
                 ")"});
         }
-        u256 uncleReward = u256(static_cast<uint64_t>(8 - depth)) * kPoWBlockReward / 8;
+        u256 uncleReward = u256(static_cast<uint64_t>(8 - depth)) * blockReward / 8;
         co_await addBalance(uncleHeader.coinbase, uncleReward);
-        coinbaseReward += kPoWBlockReward / 32;
+        coinbaseReward += blockReward / 32;
     }
     co_await addBalance(ethHeader.coinbase, coinbaseReward);
 }
@@ -441,6 +518,10 @@ struct EthereumBlockVerificationResult
 struct EthereumBlockExecution
 {
     std::optional<std::string> error;
+    /// With `error`: the positions of the transactions that failed pre-execution validation.
+    /// They wrote nothing, so a builder that leaves them out gets the same execution for the
+    /// rest. Empty for every other failure.
+    std::vector<std::size_t> invalidTransactions;
     protocol::BlockHeader::Ptr header;  ///< the FISCO execution header
     std::vector<protocol::Transaction::Ptr> transactions;
     std::vector<protocol::TransactionReceipt::Ptr> receipts;
@@ -543,6 +624,15 @@ public:
     ///         storage read anywhere in the block failed (the EthStorageErrorGuard
     ///         fail-loud channel) — the block is poisoned: the builder must not
     ///         commit it, the verifier must not judge it INVALID.
+    /// What a block execution applies besides its transactions. The defaults are a real
+    /// block; EEST state tests (a single transaction over a synthetic block, filled by t8n
+    /// with no block reward and no system calls) turn both off.
+    struct BlockExecutionOptions
+    {
+        bool systemCalls = true;  ///< EIP-4788/2935 block-start, EIP-7002/7251 block-end
+        bool powRewards = true;   ///< pre-merge coinbase/uncle rewards
+    };
+
     template <class ViewType>
     task::Task<EthereumBlockExecution> executeEthereumBlock(ViewType& view,
         protocol::EthBlockHeaderData const& ethHeader,
@@ -551,7 +641,8 @@ public:
         std::optional<std::vector<bcos::bytes>> const& rawWithdrawals,
         EvmcForkTimestamps const& forkSchedule, uint64_t chainId,
         std::vector<bcos::bytes> const& rawUncles, uint64_t mergeBlock,
-        TransactionDecoder const& decoder, StateRootCalculator<ViewType> const& stateRootCalculator)
+        TransactionDecoder const& decoder, StateRootCalculator<ViewType> const& stateRootCalculator,
+        BlockExecutionOptions options = {})
     {
         EthereumBlockExecution execution;
 
@@ -609,7 +700,7 @@ public:
         // EIPs. evmone gates each contract by revision internally, so a Shanghai block
         // (rev < CANCUN) must not even call in — the gate below keeps pre-Cancun
         // behavior byte-identical to before this change.
-        if (blockRevision >= EVMC_CANCUN)
+        if (options.systemCalls && blockRevision >= EVMC_CANCUN)
         {
             // A VM of its own for the system-call round: it runs on this thread only, and
             // nothing is gained by sharing one with transaction execution.
@@ -730,6 +821,27 @@ public:
         {
             co_return co_await fail("EthereumBlockVerifier: execution failed: " + executeDiag);
         }
+        // A transaction that failed pre-execution validation (intrinsic gas, funds, nonce,
+        // chain id, sender code, blob rules: EthereumExecutor::validationErrorReceipt) leaves
+        // a zero-gas failure receipt — no EVM step ran, while an executed transaction always
+        // burns at least its intrinsic gas. Ethereum has no such receipt: the transaction is
+        // invalid and so is the block (geth's ApplyTransaction returns the error and
+        // Process fails). The builder reads invalidTransactions and rebuilds without them.
+        for (std::size_t i = 0; i < receipts.size(); ++i)
+        {
+            auto const& receipt = receipts[i];
+            if (receipt && receipt->status() != 0 && receipt->gasUsed() == 0)
+            {
+                execution.invalidTransactions.push_back(i);
+            }
+        }
+        if (!execution.invalidTransactions.empty())
+        {
+            auto const first = execution.invalidTransactions.front();
+            co_return co_await fail("EthereumBlockVerifier: transaction " + std::to_string(first) +
+                                    " is invalid (validation status " +
+                                    std::to_string(receipts[first]->status()) + ")");
+        }
 
         // Finalize the block (EIP-4895 withdrawals, Shanghai+). geth applies the CL's
         // validator withdrawals to the recipients' balances AFTER the block's
@@ -793,8 +905,8 @@ public:
         // reached (no more mining), so those zero-difficulty pre-merge blocks pay NO
         // block reward. We gate on difficulty != 0 to match — a nonzero-difficulty
         // pre-merge block is always mined.
-        if (mergeBlock > 0 && static_cast<uint64_t>(ethHeader.number) < mergeBlock &&
-            ethHeader.difficulty != 0)
+        if (options.powRewards && mergeBlock > 0 &&
+            static_cast<uint64_t>(ethHeader.number) < mergeBlock && ethHeader.difficulty != 0)
         {
             // A malformed uncle throws (its reward is part of the world state, so it
             // cannot be skipped) — the block is invalid, not partially rewarded.
@@ -802,7 +914,8 @@ public:
             std::string rewardsDiag;
             try
             {
-                co_await accumulatePoWBlockRewards(view, ethHeader, rawUncles, ledgerConfig);
+                co_await accumulatePoWBlockRewards(
+                    view, ethHeader, rawUncles, ledgerConfig, blockRevision);
             }
             catch (...)
             {
@@ -843,7 +956,7 @@ public:
         // the header in verifyAndCommit; STAMPED into the header by the block
         // builder), assembled with the EIP-6110 deposit requests collected from the
         // receipts (deposit-contract address is per-chain: forkSchedule carries it).
-        if (blockRevision >= EVMC_PRAGUE)
+        if (options.systemCalls && blockRevision >= EVMC_PRAGUE)
         {
             evmc::VM vm{evmc_create_evmone()};
             auto blockEnd = co_await applyBlockEndSystemCalls(
@@ -909,8 +1022,9 @@ public:
         // read.
         if (ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            execution.mptDelta = co_await ledger::mpt::computeMptStateDelta(view,
-                parentHeader.stateRoot, ledgerConfig, m_commitObserver->needsRefCountDeltas());
+            execution.mptDelta =
+                co_await ledger::mpt::computeMptStateDelta(view, parentHeader.stateRoot,
+                    ledgerConfig, m_commitObserver->needsRefCountDeltas(), blockRevision);
             execution.stateRoot = execution.mptDelta->stateRoot;
         }
         else

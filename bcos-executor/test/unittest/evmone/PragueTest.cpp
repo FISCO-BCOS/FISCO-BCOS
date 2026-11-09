@@ -13,7 +13,8 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Unit tests for Prague EVM features: BLS12-381 and p256verify precompile gas costs.
+ * @brief Unit tests for Prague EVM features: EIP-7623 calldata floor,
+ *        BLS12-381 and p256verify precompile gas costs.
  * @file PragueTest.cpp
  */
 
@@ -21,11 +22,34 @@
 #include "vm/Precompiled.h"
 #include <Common.h>
 #include <boost/test/unit_test.hpp>
+#include <vector>
 
 namespace bcos::test
 {
 
 BOOST_AUTO_TEST_SUITE(PragueTest)
+
+BOOST_AUTO_TEST_CASE(eip7623_calldata_cost)
+{
+    using namespace bcos::executor;
+
+    auto calcCalldataGas = [](const std::vector<uint8_t>& data) -> int64_t {
+        return calcEip7623CalldataGas(ref(data));
+    };
+
+    BOOST_CHECK_EQUAL(calcCalldataGas({}), 0);
+    BOOST_CHECK_EQUAL(calcCalldataGas(std::vector<uint8_t>(100, 0x00)), 1000);
+    BOOST_CHECK_EQUAL(calcCalldataGas(std::vector<uint8_t>(100, 0xff)), 4000);
+
+    std::vector<uint8_t> mixed(100);
+    for (int i = 0; i < 50; ++i)
+        mixed[i] = 0x00;
+    for (int i = 50; i < 100; ++i)
+        mixed[i] = 0x42;
+    BOOST_CHECK_EQUAL(calcCalldataGas(mixed), 2500);
+    BOOST_CHECK_EQUAL(calcCalldataGas({0x01}), 40);
+    BOOST_CHECK_EQUAL(calcCalldataGas({0x00}), 10);
+}
 
 BOOST_AUTO_TEST_CASE(bls_precompile_gas)
 {

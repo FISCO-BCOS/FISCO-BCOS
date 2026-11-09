@@ -97,7 +97,10 @@ public:
         // the awaiting coroutine to let it unwind through its own error path.
         try
         {
-            m_handle.resume();
+            // resumeDetached, not a bare resume: when the awaiting chain is detached and escapes
+            // with an exception, its stranded frames are reclaimed before the catch below
+            // swallows it. A bare resume would leave them registered until this thread exits.
+            detail::resumeDetached(m_handle);
         }
         catch (...)
         {
@@ -124,7 +127,8 @@ public:
         *m_result = std::make_tuple(std::move(error), std::move(results)...);
         try
         {
-            m_handle.resume();
+            // resumeDetached: see ~FireCompletion
+            detail::resumeDetached(m_handle);
         }
         catch (...)
         {

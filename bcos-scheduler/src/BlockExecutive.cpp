@@ -1639,6 +1639,8 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
         {
             dmcExecutor->setEnablePreFinishType(true);
         }
+        dmcExecutor->setRestartSeqOnSendBack(m_scheduler->ledgerConfig().features().get(
+            ledger::Features::Flag::bugfix_tx_intrinsic_gas));
 
         m_dmcExecutors.emplace(contractAddress, dmcExecutor);
 

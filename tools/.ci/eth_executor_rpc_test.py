@@ -27,7 +27,7 @@ import eth_utils
 import requests
 from eth_account import Account
 
-DEFAULT_FIXTURE_REL = "state_tests/berlin/eip2930_access_list/test_transaction_intrinsic_gas_cost.json"
+DEFAULT_FIXTURE_REL = "state_tests/for_berlin/berlin/eip2930_access_list/acl/transaction_intrinsic_gas_cost.json"
 
 
 def load_fixture_params(fixture_dir, secret, to, sender, require_fixture=False):
@@ -76,9 +76,9 @@ def main():
     ap.add_argument("--fixture-dir", default="fixtures")
     ap.add_argument("--require-fixture", action="store_true",
                     help="fail if the EEST fixture is missing (CI: the fixtures step runs first)")
-    ap.add_argument("--secret", default="0xa4e7ea6dc542e6de38bf1229c3ea744aa6b9f501386aa167ad42f49e3787066f")
-    ap.add_argument("--to", default="0xc3ea744aa6b9f501386aa167ad42f49e3787066f")
-    ap.add_argument("--sender", default="0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0")
+    ap.add_argument("--secret", default="0x1ad604b3d94e06ec50b27732ec677f3d857c4d588f082f0016317697dd3a2d92")
+    ap.add_argument("--to", default="0x35904c2cd4457856fb508b8cd8d4ed43e5d2d3ba")
+    ap.add_argument("--sender", default="0xf6c3a9edc1afa0ad5b720e4d42e1437c43d3b3ff")
     args = ap.parse_args()
 
     secret, to, sender = load_fixture_params(

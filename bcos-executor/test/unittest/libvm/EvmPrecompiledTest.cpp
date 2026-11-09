@@ -1031,6 +1031,24 @@ BOOST_AUTO_TEST_CASE(p256verify_gas)
 
 BOOST_AUTO_TEST_SUITE_END()
 
+BOOST_AUTO_TEST_SUITE(testEip7623)
+
+BOOST_AUTO_TEST_CASE(eip7623CallDataFloorCost)
+{
+    using namespace bcos::executor;
+    {
+        bytes dataEmpty;
+        BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(dataEmpty)), 0);
+    }
+
+    bytes data(100, 0x00);
+    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(data)), 1000);
+    bytes data2(100, 0xff);
+    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(data2)), 4000);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
 BOOST_AUTO_TEST_SUITE(testIsBLSPrecompileAddress)
 
 BOOST_AUTO_TEST_CASE(bls_addr_0x0b_no_prefix)

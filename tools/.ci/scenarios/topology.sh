@@ -63,12 +63,48 @@ wait_status_ok()
     return 1
 }
 
+# consensus_write_settled <node_dir> <add-observer|add-sealer|remove> <nodeId> [weight]: whether
+# `consensus list` already shows the state the write asks for
+consensus_write_settled()
+{
+    local node_dir="${1}" action="${2}" id="${3}" weight="${4:-0}" list
+    list=$(ops "${node_dir}" consensus list) || return 1
+    case "${action}" in
+        add-observer)
+            jq -e --arg id "${id}" 'any(.[]; .nodeId == $id and .role == "observer")' <<<"${list}" ;;
+        add-sealer)
+            jq -e --arg id "${id}" --argjson weight "${weight}" \
+                'any(.[]; .nodeId == $id and .role == "sealer" and .weight == $weight)' <<<"${list}" ;;
+        remove)
+            jq -e --arg id "${id}" 'all(.[]; .nodeId != $id)' <<<"${list}" ;;
+        *)
+            false ;;
+    esac >/dev/null 2>&1
+}
+
+# consensus_write_timed_out <exit code> <stdout>: the node answered 10010 TransactionPoolTimeout
+# (exit 2 with the error JSON), or the CLI gave up waiting on the socket (exit 1, nothing on
+# stdout; ops shows its stderr)
+consensus_write_timed_out()
+{
+    jq -e '.error.code == 10010' >/dev/null 2>&1 <<<"${2}" && return 0
+    [[ "${1}" == "1" && -z "${2}" ]]
+}
+
 # consensus_write <node_dir> <expect: ok|<codeName>> <args...>: a consensus write through the
 # preset table; on the auth chain the write is a committee proposal (single governor, rates
 # 0/0: executed in the creating transaction) and the precompiled code sits in the proposal's
-# execResult; the plain chains call the precompiled directly. Successful writes retry a 10010
-# TransactionPoolTimeout after consensus recovers; that error means the pool swept the transaction
-# without executing it (MemoryStorage::removeInvalidTxs)
+# execResult; the plain chains call the precompiled directly.
+#
+# An expect-ok write that fails is read back before it is judged or retried (#5757). A timeout
+# says the answer was late, not that the transaction was dropped: a 10010 TransactionPoolTimeout
+# or the CLI's own "response timed out" (exit 1, no JSON) can both be followed by the commit, as
+# when the chain stalls on a view change. The writes are not idempotent (a second `remove`
+# answers NODE_NOT_EXIST), so a write whose target state is already in `consensus list` counts as
+# done, and only a timeout whose write is still absent is retried. Every expect-ok caller changes
+# the state it asks for, so "the state is there" can only mean one of its attempts committed.
+# A write accepted this way has no result document, so the result-shape assertions below (ok,
+# direct or proposal mode) are skipped for it; the caller's own read-back still follows.
 consensus_write()
 {
     local node_dir="${1}"
@@ -81,12 +117,16 @@ consensus_write()
             if (( rc == 0 )); then
                 break
             fi
-            if (( attempt == 3 )) || ! jq -e '.error.code == 10010' >/dev/null 2>&1 <<<"${result}"; then
+            wait_status_ok "${node_dir}" 90 >/dev/null || { echo "${result}"; return 1; }
+            if consensus_write_settled "${node_dir}" "$@"; then
+                echo "consensus $*: attempt ${attempt} exited ${rc}, but the write is committed; continuing" >&2
+                return 0
+            fi
+            if (( attempt == 3 )) || ! consensus_write_timed_out "${rc}" "${result}"; then
                 echo "${result}"
                 return 1
             fi
-            echo "consensus $*: attempt ${attempt} got TransactionPoolTimeout; waiting for consensus before retry" >&2
-            wait_status_ok "${node_dir}" 90 >/dev/null || { echo "${result}"; return 1; }
+            echo "consensus $*: attempt ${attempt} timed out and the write is not committed; retrying" >&2
         done
         assert_jq "${result}" '.ok == true' "consensus $*" || return 1
     else

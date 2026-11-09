@@ -280,6 +280,7 @@ public:
 
     constexpr evmc_message const& message() const& { return m_message; }
     constexpr evmc_message& mutableMessage() & { return m_message; }
+    constexpr evmc_revision revision() const noexcept { return m_revision; }
     constexpr ledger::LedgerConfig const& ledgerConfig() const& { return m_ledgerConfig.get(); }
 
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
@@ -505,6 +506,29 @@ public:
 
             if (!evmResult)
             {
+                // EIP-7623 calldata floor cost (Prague+, top-level transactions only)
+                // Computes max(standard_calldata_gas, tokens*10) and deducts it upfront.
+                // The 21000 base cost sits outside this formula and is handled separately.
+                // Under bugfix_tx_intrinsic_gas the whole intrinsic charge, this floor
+                // included, is taken by TransactionExecutorImpl before this frame runs.
+                if (m_level == 0 && m_revision >= EVMC_PRAGUE && !intrinsicGasCharged())
+                {
+                    auto& msg = mutableMessage();
+                    const int64_t calldataGas = executor::calcEip7623CalldataGas(
+                        bcos::bytesConstRef(msg.input_data, msg.input_size));
+                    if (msg.gas < calldataGas)
+                    {
+                        evmResult.emplace(
+                            makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                                EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : msg.gas,
+                                "EIP-7623 calldata floor OOG", fixErrorHandling));
+                    }
+                    else
+                    {
+                        msg.gas -= calldataGas;
+                    }
+                }
+
                 // Transfer first, then proceed execute
                 if (m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_delegatecall_transfer))
@@ -692,7 +716,11 @@ private:
             {
                 co_await m_recipientAccount.setNonce("1");
             }
-            result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
+            // A deposit the frame cannot pay leaves gas_left negative; execute() turns that
+            // into an out-of-gas failure and rolls the creation back.
+            result.gas_left -= static_cast<int64_t>(result.output_size) *
+                               (intrinsicGasCharged() ? bcos::executor::ETHEREUM_CREATE_DATA_GAS :
+                                                        bcos::executor::VMSchedule().createDataGas);
             result.create_address = ref.code_address;
 
             // Clear the output
@@ -708,9 +736,18 @@ private:
         co_return result;
     }
 
+    // #5772: with bugfix_tx_intrinsic_gas on, TransactionExecutorImpl charges a transaction's
+    // intrinsic gas before the top-level frame runs, which replaces the two level-0 charges of
+    // this class (the 21000 of consumeTransferGas and the Prague calldata floor) and moves the
+    // code deposit to Ethereum's 200 gas per byte.
+    bool intrinsicGasCharged() const
+    {
+        return m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_tx_intrinsic_gas);
+    }
+
     void consumeTransferGas(evmc_message& ref)
     {
-        if (m_level == 0)
+        if (m_level == 0 && !intrinsicGasCharged())
         {
             if (ref.gas < executor::BALANCE_TRANSFER_GAS)
             {

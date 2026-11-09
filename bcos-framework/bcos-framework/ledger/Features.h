@@ -96,12 +96,12 @@ public:
         feature_balance_policy1,
         feature_paillier_add_raw,
         feature_evm_cancun,
-        // On executor_version 0/1 these flags only select the evmone revision and open the
-        // BLS12-381 / p256verify precompile gates. They do not enable an EIP-2929 warm set,
-        // the EIP-7623 calldata floor, or EIP-7823/EIP-7883 ModExp changes. A chain enabling
-        // either flag must run a uniform node implementation. Full rules live in
-        // ethereum-executor (executor_version >= 2). The v1 legacy lanes target consortium-chain
-        // deployments and do not track these gas-related changes.
+        // On executor_version 0/1 these flags select the evmone revision and open the
+        // BLS12-381 / p256verify precompile gates. They do not enable an EIP-2929 warm set or
+        // EIP-7823/EIP-7883 ModExp changes. Intrinsic gas and the EIP-7623 calldata floor follow
+        // the current upstream bugfix_tx_intrinsic_gas implementation. A chain enabling either
+        // flag must run a uniform node implementation. Full rules also live in ethereum-executor
+        // (executor_version >= 2).
         feature_evm_prague,  // Prague revision and BLS12-381; depends on feature_evm_cancun
         feature_evm_osaka,   // Osaka revision and p256verify; depends on feature_evm_prague
         feature_evm_timestamp,
@@ -126,6 +126,12 @@ public:
                                                // hasher's hash("") (keccak on a non-SM
                                                // chain) for a code-less live account, 0 for
                                                // an absent/empty one; was true / 0.
+        bugfix_tx_intrinsic_gas,  // #5772: executor_version 0 and 1 take Ethereum's intrinsic
+                                  // gas (protocol/TxGasModel.h) off a transaction's budget
+                                  // before its top-level frame runs, and charge 200 gas per
+                                  // byte of deployed code; was nothing up front on v0 (21000
+                                  // for a value transfer only), 21000 for a top-level call
+                                  // only on v1, and 20 gas per byte on both.
     };
 
     // magic_enum reflects values in its default range [-128, 127]; a flag past it would drop out

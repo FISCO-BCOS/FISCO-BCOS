@@ -117,29 +117,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_revision_osaka_prague_chain)
         EVMC_PRAGUE);
 }
 
-BOOST_AUTO_TEST_CASE(TE_FC_no_calldata_floor_for_prague_or_osaka)
-{
-    bytes input(100, 0);
-    auto run = [this, &input](bcos::ledger::Features::Flag fork) {
-        bcos::ledger::Features features;
-        features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
-        features.set(fork);
-        evmc_address recipient{};
-        recipient.bytes[19] = 4;
-        auto host =
-            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION), {},
-                recipient, EVMC_CALL, 1'000'000, &input);
-        bcos::task::syncWait(host.prepare());
-        auto result = bcos::task::syncWait(host.execute());
-        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
-        return result.gas_left;
-    };
-
-    auto const cancunGas = run(bcos::ledger::Features::Flag::feature_evm_cancun);
-    BOOST_CHECK_EQUAL(run(bcos::ledger::Features::Flag::feature_evm_prague), cancunGas);
-    BOOST_CHECK_EQUAL(run(bcos::ledger::Features::Flag::feature_evm_osaka), cancunGas);
-}
-
 BOOST_AUTO_TEST_CASE(TE_FC_access_always_cold)
 {
     bcos::ledger::Features features;

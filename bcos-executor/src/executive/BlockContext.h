@@ -107,7 +107,15 @@ public:
 
     const ledger::Features& features() const;
     const ledger::SystemConfigs& configs() const;
-    void setFeatures(ledger::Features features) { m_features = std::move(features); }
+    // the VM schedule derives from the features, so it is recomputed with them: the call path
+    // (createBlockContextForCall) swaps in the features of the next block after construction,
+    // and an eth_call therefore runs under that block's schedule and EVM revision. Block
+    // execution reads its features in the constructor and does not come through here.
+    void setFeatures(ledger::Features features)
+    {
+        m_features = std::move(features);
+        setVMSchedule();
+    }
     void setConfigs(ledger::SystemConfigs configs) { m_configs = std::move(configs); }
     storage::EntryCachePtr getCodeCache() const { return m_codeCache; }
     storage::EntryCachePtr getCodeHashCache() const { return m_codeHashCache; }
