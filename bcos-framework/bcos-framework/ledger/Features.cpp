@@ -86,7 +86,9 @@ std::set<Features::Flag> Features::getFeatureDependencies(Flag flag)
     case Flag::feature_balance_policy1:
         return {Flag::feature_balance_precompiled};
     case Flag::feature_evm_prague:
-        return {Flag::feature_evm_cancun};
+        // the bugfix fixes CREATE2, STATICCALL and DELEGATECALL on executor_version 0
+        return {
+            Flag::feature_evm_cancun, Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy};
     case Flag::feature_evm_osaka:
         return {Flag::feature_evm_prague};
     default:
