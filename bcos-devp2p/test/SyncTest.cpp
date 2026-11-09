@@ -23,8 +23,10 @@
 #include <bcos-devp2p/sync/BlockExchange.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <exception>
 #include <limits>
 #include <stdexcept>
+#include <string_view>
 #include <thread>
 
 using namespace bcos;
@@ -311,6 +313,118 @@ BOOST_AUTO_TEST_CASE(firstHeaderParentMismatchThrowsTyped)
     }  // close the client connection
 
     serverThread.join();
+}
+
+namespace
+{
+// One RLPx round against a fake peer that pushes `update` as a BlockRangeUpdate frame
+// before every reply (an eth/69+ geth announces its served range on each head advance,
+// also while our request is outstanding).
+template <typename F>
+void runRangeAnnouncingRound(
+    std::vector<sync::Block> const& chain, eth::BlockRangeUpdateMessage const& update, F&& download)
+{
+    rlpx::EccKeyPair serverKey;
+    rlpx::PeerConfig serverConfig;
+    serverConfig.clientId = "fake-peer";
+    rlpx::RlpxServer server(serverKey, 0, serverConfig);
+    uint16_t port = server.port();
+
+    std::thread serverThread([&] {
+        try
+        {
+            auto established = server.accept();
+            devp2p::test::serveRequestsAnnouncingRange(established, chain, update);
+        }
+        catch (...)
+        {
+            // The client disconnects at the end; that's a normal exit path.
+        }
+    });
+
+    rlpx::PeerConfig clientConfig;
+    clientConfig.host = "127.0.0.1";
+    clientConfig.port = port;
+    clientConfig.peerPublicKey = serverKey.publicKey();
+    // A download that throws must still close the connection and join the server
+    // thread (a joinable std::thread destructor would terminate the test binary).
+    std::exception_ptr failure;
+    {
+        rlpx::EccKeyPair clientKey;
+        rlpx::RlpxClient client(std::move(clientKey), clientConfig);
+        auto established = client.connect();
+        try
+        {
+            BOOST_REQUIRE_GE(established.peerStatus.protocolVersion, 69u);  // range updates exist
+            download(established.session);
+        }
+        catch (...)
+        {
+            failure = std::current_exception();
+        }
+    }  // close the client connection
+
+    serverThread.join();
+    if (failure)
+    {
+        std::rethrow_exception(failure);
+    }
+}
+
+bool mentions(std::exception const& e, std::string_view text)
+{
+    return std::string_view(e.what()).find(text) != std::string_view::npos;
+}
+}  // namespace
+
+// A BlockRangeUpdate (eth/69+, EIP-7642) arriving while GetBlockHeaders or GetBlockBodies
+// is outstanding is skipped like gossip: both requests still return their reply. geth
+// sends one on every >= 32-block head advance, so a long sync session would otherwise
+// abort every few minutes with "expected BlockHeaders, got message id=33".
+BOOST_AUTO_TEST_CASE(blockRangeUpdateBeforeReplyIsSkipped)
+{
+    auto chain = devp2p::test::makeTestChain(4);
+    eth::BlockRangeUpdateMessage update;
+    update.earliestBlock = 0;
+    update.latestBlock = chain.size() - 1;
+    update.latestBlockHash = chain.back().hash;
+    runRangeAnnouncingRound(chain, update, [&](rlpx::Session& session) {
+        sync::HeaderChain headers(0, h256{});
+        auto downloaded = headers.requestHeaders(session, chain.size());
+        BOOST_REQUIRE_EQUAL(downloaded.size(), chain.size());
+        BOOST_CHECK(downloaded.back().hash == chain.back().hash);
+        sync::BodySequence bodies;
+        auto blocks = bodies.requestBodies(session, downloaded);
+        BOOST_REQUIRE_EQUAL(blocks.size(), chain.size());
+        BOOST_CHECK(blocks[0].transactions == chain[0].transactions);
+        BOOST_CHECK(blocks.back().withdrawals == chain.back().withdrawals);
+    });
+}
+
+// The EIP-7642 disconnect rule still holds inside both reply loops: an inverted range
+// (earliest > latest) is a protocol breach, not a frame to wait through.
+BOOST_AUTO_TEST_CASE(invertedBlockRangeUpdateBeforeReplyThrows)
+{
+    auto chain = devp2p::test::makeTestChain(2);
+    eth::BlockRangeUpdateMessage inverted;
+    inverted.earliestBlock = 5;
+    inverted.latestBlock = 1;
+    inverted.latestBlockHash = chain.back().hash;
+    runRangeAnnouncingRound(chain, inverted, [&](rlpx::Session& session) {
+        sync::HeaderChain headers(0, h256{});
+        BOOST_CHECK_EXCEPTION(headers.requestHeaders(session, chain.size()), std::runtime_error,
+            [](std::runtime_error const& e) { return mentions(e, "earliest > latest"); });
+    });
+    runRangeAnnouncingRound(chain, inverted, [&](rlpx::Session& session) {
+        std::vector<sync::HeaderWithHash> known;
+        for (auto const& block : chain)
+        {
+            known.push_back({block.header, block.hash, block.headerRlp});
+        }
+        sync::BodySequence bodies;
+        BOOST_CHECK_EXCEPTION(bodies.requestBodies(session, known), std::runtime_error,
+            [](std::runtime_error const& e) { return mentions(e, "earliest > latest"); });
+    });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

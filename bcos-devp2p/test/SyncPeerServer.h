@@ -369,4 +369,34 @@ inline sync::PeerServer::ExitReason serveRequests(
     sync::PeerServer server(source);
     return server.serve(_established, nullptr);
 }
+
+// Like serveRequests, but every reply is preceded by `_update` as a BlockRangeUpdate
+// frame — what an eth/69+ geth does on a head advance while our request is outstanding.
+// Built on PeerServer::handle: PeerServer::serve only announces a range AFTER its reply.
+// Returns when the peer disconnects, breaches, or the connection breaks (throws).
+inline void serveRequestsAnnouncingRange(rlpx::EstablishedSession& _established,
+    std::vector<sync::Block> const& _chain, eth::BlockRangeUpdateMessage const& _update)
+{
+    using Kind = sync::PeerServer::Outcome::Kind;
+    InMemoryBlockSource source(_chain);
+    sync::PeerServer server(source);
+    auto const ethVersion = static_cast<uint8_t>(_established.peerStatus.protocolVersion);
+    while (true)
+    {
+        auto frame =
+            unwrapOrThrow(_established.session.recvMessage(), "test server: undecodable frame: ");
+        auto outcome = server.handle(ethVersion, frame);
+        if (outcome.kind == Kind::Reply)
+        {
+            _established.session.sendMessage(
+                rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::BlockRangeUpdate)),
+                    eth::encodeBlockRangeUpdate(_update)});
+            _established.session.sendMessage(outcome.reply);
+        }
+        else if (outcome.kind != Kind::Ignore)
+        {
+            return;
+        }
+    }
+}
 }  // namespace bcos::devp2p::test

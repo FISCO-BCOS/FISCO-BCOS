@@ -55,8 +55,9 @@ namespace
 // Shared reply loop: wait for the BlockHeaders reply carrying `_requestId`,
 // answering Ping along the way (ignoring a Ping makes geth mark us "useless")
 // and discarding peer broadcasts (NewBlockHashes/Transactions/NewBlock/
-// NewPooledTransactionHashes) that arrive while we wait. Throws on any protocol
-// violation (request-id mismatch, more headers than requested, disconnect).
+// NewPooledTransactionHashes) and valid BlockRangeUpdate announcements that
+// arrive while we wait. Throws on any protocol violation (request-id mismatch,
+// more headers than requested, inverted block range, disconnect).
 // Returns the raw wire encodings of the replied headers (0.._amount).
 std::vector<bcos::bytes> recvBlockHeadersReply(
     rlpx::Session& _session, uint64_t _requestId, uint64_t _amount)
@@ -117,6 +118,26 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
                 {
                     throw std::runtime_error(
                         "HeaderChain: too many broadcast messages before BlockHeaders");
+                }
+                continue;
+            }
+            // BlockRangeUpdate (0x11, eth/69+): the peer announces its served range on
+            // every head advance, also while our request is outstanding (geth: each
+            // >= 32 blocks). A malformed or inverted range is a breach (EIP-7642:
+            // disconnect); a valid one is skipped like the broadcasts above.
+            if (response.id == eth::frameId(eth::msg::BlockRangeUpdate))
+            {
+                auto update = unwrapOrThrow(eth::decodeBlockRangeUpdate(bytesConstRef(
+                                                response.data.data(), response.data.size())),
+                    "HeaderChain: malformed BlockRangeUpdate: ");
+                if (!update.valid())
+                {
+                    throw std::runtime_error(
+                        "HeaderChain: BlockRangeUpdate with earliest > latest");
+                }
+                if (++ignoredBroadcasts > 64)
+                {
+                    throw std::runtime_error("HeaderChain: too many frames before BlockHeaders");
                 }
                 continue;
             }
