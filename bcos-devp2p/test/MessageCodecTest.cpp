@@ -214,4 +214,32 @@ BOOST_AUTO_TEST_CASE(decodeFailsClosed)
     BOOST_CHECK(!codec.decode(bytesConstRef(badPast.data(), badPast.size())).has_value());
 }
 
+// The session's frame limit must bound the DECOMPRESSED size too: raw snappy inflates up
+// to ~21x, so a 64 KiB handshake frame could otherwise expand to ~1.4 MiB before Hello
+// is even decoded. Under the default 16 MiB budget the same 100 KiB frame decodes fine.
+BOOST_AUTO_TEST_CASE(decompressedSizeHonoursTheSessionLimit)
+{
+    Message msg;
+    msg.id = 0x10;
+    msg.data.assign(100 * 1024, static_cast<byte>('x'));
+    MessageCodec sender;
+    sender.enableCompression();
+    auto frame = sender.encode(msg);  // RLP(id) || uvarint(102400) || literal block
+
+    MessageCodec receiver;
+    receiver.enableCompression();
+    auto decoded = receiver.decode(bytesConstRef(frame.data(), frame.size()));
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(decoded->data == msg.data);
+
+    receiver.setMaxDecompressedSize(64 * 1024);
+    auto bounded = receiver.decode(bytesConstRef(frame.data(), frame.size()));
+    BOOST_REQUIRE(!bounded.has_value());
+    BOOST_CHECK_EQUAL(
+        bounded.error().message, "MessageCodec: snappy declared length exceeds limits");
+    // Restored after the handshake (Session::setMaxFrameSize): the frame decodes again.
+    receiver.setMaxDecompressedSize(MessageCodec::kMaxFrameSize);
+    BOOST_CHECK(receiver.decode(bytesConstRef(frame.data(), frame.size())).has_value());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

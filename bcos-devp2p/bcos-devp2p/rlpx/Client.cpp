@@ -281,7 +281,13 @@ EstablishedSession RlpxClient::connect()
     auto authKeys = handshake.execute(socket);
 
     auto session = makeSession(std::move(socket), authKeys, /* isInitiator = */ true);
-    return performHandshake(std::move(session), authKeys, m_keyPair, m_config, m_options);
+    // A dialed discovered peer is as much a stranger as an inbound one: the same 64 KiB
+    // cap on Hello/Status frames (and their decompressed size) as in acceptHandshake.
+    session.setMaxFrameSize(c_maxHandshakeFrameSize);
+    auto established =
+        performHandshake(std::move(session), authKeys, m_keyPair, m_config, m_options);
+    established.session.setMaxFrameSize(MessageCodec::kMaxFrameSize);
+    return established;
 }
 
 RlpxServer::RlpxServer(EccKeyPair _keyPair, uint16_t _port, PeerConfig _config)

@@ -43,7 +43,19 @@ bcos::codec::rlp::RlpResult<Message> Session::recvMessage()
         throw std::runtime_error("Session: frame too large");
     }
 
-    auto encrypted = m_socket.recvFixed(FramingCipher::frameSize(frameSize));
+    bcos::bytes encrypted;
+    try
+    {
+        encrypted = m_socket.recvFixed(FramingCipher::frameSize(frameSize));
+    }
+    catch (SocketTimeout const& e)
+    {
+        // The header is consumed: a caller that treats SocketTimeout as "idle" and calls
+        // recvMessage again would read the body as a header and die on its MAC. The peer
+        // stalled mid-frame, which is a broken connection, not idleness.
+        throw std::runtime_error(
+            std::string("Session: frame body ") + e.what() + " (header already consumed)");
+    }
     auto frameData =
         m_cipher.decryptFrame(bytesConstRef(encrypted.data(), encrypted.size()), frameSize);
     return m_codec.decode(bytesConstRef(frameData.data(), frameData.size()));
