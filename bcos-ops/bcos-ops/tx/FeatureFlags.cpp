@@ -19,26 +19,13 @@
 #include "bcos-ops/OpsError.h"
 #include <bcos-framework/ledger/Features.h>
 #include <algorithm>
+#include <magic_enum/magic_enum.hpp>
 #include <set>
 
 namespace bcos::ops
 {
 namespace
 {
-// Features::validate (bcos-framework/bcos-framework/ledger/Features.cpp) rejects a flag whose
-// prerequisite is off; these are the only two it enforces. feature_evm_prague / feature_evm_osaka
-// are documented as "depends on cancun / prague" in Features.h, but nothing validates that:
-// the executor picks the EVM revision from whichever flag is on (bcos-executor/src/vm/
-// VMInstance.cpp), so they are not listed here.
-struct Dependency
-{
-    std::string_view flag;
-    std::string_view prerequisite;
-};
-constexpr std::array c_dependencies{
-    Dependency{"feature_balance_precompiled", "feature_balance"},
-    Dependency{"feature_balance_policy1", "feature_balance_precompiled"},
-};
 // Features::validate warns on this one: the account-table encoding is node-local now
 constexpr std::string_view c_deprecated = "feature_raw_address";
 
@@ -123,13 +110,16 @@ std::vector<std::string> featureNames()
 
 std::vector<std::string> featureDependencies(std::string const& _name)
 {
+    // the same table Features::validate enforces on the governance path
     std::vector<std::string> required;
-    for (auto const& dependency : c_dependencies)
+    auto flag = magic_enum::enum_cast<ledger::Features::Flag>(_name);
+    if (!flag)
     {
-        if (dependency.flag == _name)
-        {
-            required.emplace_back(dependency.prerequisite);
-        }
+        return required;
+    }
+    for (auto dependency : ledger::Features::getFeatureDependencies(*flag))
+    {
+        required.emplace_back(magic_enum::enum_name(dependency));
     }
     return required;
 }

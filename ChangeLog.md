@@ -30,6 +30,12 @@
 * 同一开关下，DAG 路径退回（SEND_BACK）的交易由调度器从 seq 0 重新派发（`DmcExecutor::handleCreateMessage`）。此前这类交易的顶层帧以 seq 1 进入执行器，而执行器按 seq 0 识别顶层帧，结果是不收 intrinsic gas、不收顶层转账的 21000、不做 EIP-2929 预热；带 DAG 标记的部署交易其合约地址也由 seq 1 推导，开关开启后改为 seq 0，与不带 DAG 标记的部署一致
 * 该开关登记在 3.18.0 的升级列表中：`compatibility_version` 升到 3.18.0 即生效，3.18.0 新链的 genesis 自带。它改变 `gasUsed`、回执根和账户余额，属于硬分叉；以太坊 lane（`version>=2`）不受影响
 
+**FISCO lane（`version=0`）Prague 下 CALL 改写调用方合约代码**：
+
+* evmone 0.21 从 Prague 起对每条 CALL/CALLCODE/DELEGATECALL/STATICCALL 探测目标是否为 EIP-7702 委托：用未初始化的 23 字节栈缓冲区调用宿主 `copy_code`（evmone `lib/evmone/delegation.cpp` `get_delegate_address()`）。`bugfix_evm_create2_delegatecall_staticcall_codecopy` 未开启时，宿主 `copyCode`（`bcos-executor/src/vm/EVMHostInterface.cpp`）走旧逻辑，把该缓冲区写成调用方合约的代码：合约第一次调用之后即不可用，缓冲区内容未定义，各节点写入不同内容时状态根分叉。genesis 为 3.0.x–3.2.3（`compatibility_version` 未升过 3.2.4）或 3.3–3.5（未升过 3.6）、又开启了 `feature_evm_prague` 的链受影响
+* 修复后 EVM 版本为 Prague 或更高时，`copyCode` 一律只读目标代码，EXTCODECOPY 在该开关未开启时同样改为只读；Prague 之前的版本仍走旧逻辑，旧区块重放结果不变。`feature_evm_prague` 与 evmone 0.21 均自 3.18.0 引入，正式版本中不存在受影响的链；用 3.18.0 预发布构建在上述链上开启过 Prague 的测试链需要重建
+* `feature_evm_prague` 的治理依赖增加 `bugfix_evm_create2_delegatecall_staticcall_codecopy`（`Features::getFeatureDependencies()`）：该开关修复 v0 lane 的 CREATE2、STATICCALL 与 DELEGATECALL 语义，未开启它的链须先开启它，才能开启 Prague。3.18.0 新链的 genesis 自带该开关。运维工具 `bcos-ops` 的 feature 启用顺序改为直接读取同一张依赖表
+
 **配置项变更：`enable_single_node_consensus` 由 `[debug]` 段替代**：
 
 * config.ini `[consensus] enable_single_node_consensus=true` 改写为 `[debug] enable=true`；原 `[consensus]` 下的 `block_interval`、`produce_empty_blocks`、`fee_recipient`、`prev_randao`、`fixed_timestamp` 搬到 `[debug]`，只在 `[debug] enable=true` 时读取（`[debug] enable` 未开时这些键按死键告警）

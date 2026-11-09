@@ -172,8 +172,15 @@ size_t copyCode(evmc_host_context* _context, const evmc_address* _addr, size_t _
     uint8_t* _bufferData, size_t _bufferSize)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
+    // From Prague on, evmone probes every CALL-family target for an EIP-7702 delegation through
+    // copy_code with an uninitialized stack buffer (evmone lib/evmone/delegation.cpp), so the
+    // legacy branch below would store that garbage as the caller's code. The revision check
+    // stays even though governance makes Prague depend on the bugfix flag: a genesis below
+    // compatibility_version 3.18.0 skips that dependency check. Before Prague, evmone reaches
+    // copy_code only through EXTCODECOPY, which keeps its legacy behaviour.
     if (hostContext.features().get(
-            ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+            ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy) ||
+        hostContext.revision() >= EVMC_PRAGUE)
     {
         auto addr = fromEvmC(*_addr);
         bytes const& code = hostContext.codeAt(addr);

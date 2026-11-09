@@ -247,11 +247,37 @@ BOOST_AUTO_TEST_CASE(evmForkFlagsRequireThePreviousFork)
     BOOST_CHECK_THROW(features.validate("feature_evm_osaka"), bcos::tool::InvalidSetFeature);
 
     features.set(Features::Flag::feature_evm_cancun);
+    features.set(Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
     BOOST_CHECK_NO_THROW(features.validate("feature_evm_prague"));
     BOOST_CHECK_THROW(features.validate("feature_evm_osaka"), bcos::tool::InvalidSetFeature);
 
     features.set(Features::Flag::feature_evm_prague);
     BOOST_CHECK_NO_THROW(features.validate("feature_evm_osaka"));
+}
+
+// A chain whose genesis predates 3.2.4 (or is 3.3 to 3.5) and never upgraded past 3.2.4 / 3.6
+// lacks bugfix_evm_create2_delegatecall_staticcall_codecopy, so its CREATE2, STATICCALL and
+// DELEGATECALL still run the pre-3.2.4 semantics; it must enable the bugfix before Prague.
+BOOST_AUTO_TEST_CASE(pragueRequiresTheCodecopyBugfix)
+{
+    Features features;
+    features.set(Features::Flag::feature_evm_cancun);
+    BOOST_CHECK_EXCEPTION(features.validate("feature_evm_prague"), bcos::tool::InvalidSetFeature,
+        [](bcos::tool::InvalidSetFeature const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr &&
+                   comment->find("bugfix_evm_create2_delegatecall_staticcall_codecopy") !=
+                       std::string::npos;
+        });
+
+    features.set(Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
+    BOOST_CHECK_NO_THROW(features.validate("feature_evm_prague"));
+
+    // a 3.18.0 genesis carries the flag already
+    Features genesis;
+    genesis.setGenesisFeatures(bcos::protocol::BlockVersion::V3_18_0_VERSION);
+    genesis.set(Features::Flag::feature_evm_cancun);
+    BOOST_CHECK_NO_THROW(genesis.validate("feature_evm_prague"));
 }
 
 BOOST_AUTO_TEST_CASE(flagCountWithinReflectionRange)
