@@ -31,10 +31,6 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/Common.h"
-#include "bcos-executor/src/vm/Eip2929AccessState.h"
-#include "bcos-executor/src/vm/Eip2929CheckpointGuard.h"
-#include "bcos-executor/src/vm/Eip2929TransactionPrewarm.h"
-#include "bcos-executor/src/vm/Eip2929Util.h"
 #include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -228,10 +224,6 @@ private:
     bool m_enableTransfer = false;
     int64_t m_level;
     bool m_web3Tx;
-    // EIP-2929/2930 access tracking (shared Eip2929AccessState; see accessAccount/accessStorage)
-    std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
-    std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
-    uint8_t m_web3TypedTxKindForAccessList = 0;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -278,10 +270,7 @@ private:
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce,
-        const evmc_host_interface* hostInterface,
-        std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
-        uint8_t web3TypedTxKind = 0,
-        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
+        const evmc_host_interface* hostInterface)
       : m_hostInterface(hostInterface),
         m_rollbackableStorage(storage),
         m_rollbackableTransientStorage(transientStorage),
@@ -303,30 +292,18 @@ private:
             std::max(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version()),
                 EVMC_CANCUN)),
         m_level(seq),
-        m_web3Tx(web3Tx),
-        m_eip2929Access(std::move(eip2929Access)),
-        m_eip2930AccessList(std::move(accessList)),
-        m_web3TypedTxKindForAccessList(web3TypedTxKind)
-    {
-        // W1 warm at top-level construction (sync). Nested HostContext (m_level>0) skips.
-        // prepare() handles prepareCall/Create only; see TransactionExecutorImpl prepare().
-        warmEip2929AtTransactionEntry();
-        assert(!executor::eip2929Enabled(m_revision, m_ledgerConfig.get()) || m_eip2929Access);
-    }
+        m_web3Tx(web3Tx)
+    {}
 
 public:
     HostContext(Storage& storage, TransientStorage& transientStorage,
         protocol::BlockHeader const& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
-        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator,
-        std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
-        uint8_t web3TypedTxKind = 0,
-        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
+        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator)
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
             contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
-            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)),
-            std::move(accessList), web3TypedTxKind, std::move(eip2929Access))
+            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
     {}
 
     ~HostContext() noexcept = default;
@@ -385,23 +362,6 @@ public:
         return out;
     }
 
-    void pinLegacyCreatedAddress(evmc_address const& address)
-    {
-        // 0.21 warmed only in the child checkpoint, whose pin survived creator rollback.
-        // Pin a cold address before 0.24's access to retain historical v2 behavior.
-        // An ordinary creator access already in its journal must remain revertible.
-        // With the fix enabled, the creator journals the access and can revert it.
-        if (m_eip2929Access && executor::eip2929Enabled(m_revision, m_ledgerConfig.get()) &&
-            !m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::bugfix_evm2929_created_address_warm))
-        {
-            if (!m_eip2929Access->containsAddress(address))
-            {
-                m_eip2929Access->setCreateRollbackPin(address);
-            }
-        }
-    }
-
     // Same fault translation as the data callbacks: derivation and the legacy
     // warm-state pin may allocate, so a throw is an allocation/crypto-level fault; the
     // zero address is a fail-closed answer that never commits — throwIfHostFault()
@@ -412,9 +372,7 @@ public:
         auto& hostContext = *reinterpret_cast<HostContext*>(context);
         try
         {
-            auto address = hostContext.createAddressForOpcode(*sender, nonce);
-            hostContext.pinLegacyCreatedAddress(address);
-            return address;
+            return hostContext.createAddressForOpcode(*sender, nonce);
         }
         catch (...)
         {
@@ -429,10 +387,8 @@ public:
         auto& hostContext = *reinterpret_cast<HostContext*>(context);
         try
         {
-            auto address = hostContext.create2AddressForOpcode(
+            return hostContext.create2AddressForOpcode(
                 *sender, *salt, bytesConstRef(init_code, init_code_size));
-            hostContext.pinLegacyCreatedAddress(address);
-            return address;
         }
         catch (...)
         {
@@ -653,13 +609,6 @@ public:
         auto savepoint = m_rollbackableStorage.get().current();
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
 
-        std::optional<bcos::executor::Eip2929CheckpointGuard> topCheckpointGuard;
-        if (m_level == 0 && m_eip2929Access &&
-            executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
-        {
-            topCheckpointGuard.emplace(m_eip2929Access);
-        }
-
         std::optional<EVMCResult> evmResult;
         std::exception_ptr hostFailure;
         // FIB-76~92 (bugfix_v1_error_handling): read once, gates all receipt-affecting
@@ -824,10 +773,6 @@ public:
 
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
                                 << " level: " << m_level << " seq: " << m_seq << " " << *evmResult;
-        if (topCheckpointGuard && evmResult->status_code == EVMC_SUCCESS)
-        {
-            topCheckpointGuard->commit();
-        }
         co_return std::move(*evmResult);
     }
 
@@ -840,36 +785,10 @@ public:
         auto nonceStr = co_await senderAccount.nonce();
         auto nonce = u256(nonceStr.value_or(std::string("0")));
 
-        std::optional<bcos::executor::Eip2929CheckpointGuard> checkpointGuard;
-        if (m_eip2929Access && executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
-        {
-            std::optional<evmc_address> createdAddress;
-            bool const fixedWarmth = m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::bugfix_evm2929_created_address_warm);
-            if (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2)
-            {
-                auto const resolved = getMessage(m_web3Tx, message, m_blockHeader.get().number(),
-                    m_contextID, m_seq, nonce, m_hashImpl);
-                createdAddress = resolved.code_address;
-                if (fixedWarmth)
-                {
-                    // Direct host calls need the same creator-scope insertion as the opcode.
-                    // Do not pin the child: a successful initcode must not propagate a pin
-                    // into the creator and defeat its later rollback.
-                    m_eip2929Access->warmUpAddress(*createdAddress);
-                }
-            }
-            checkpointGuard.emplace(m_eip2929Access);
-            if (createdAddress && !fixedWarmth)
-            {
-                m_eip2929Access->setCreateRollbackPin(*createdAddress);
-            }
-        }
-
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            m_hostInterface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access);
+            m_hostInterface);
 
         co_await hostcontext.prepare();
         // Parent-frame propagation (review R3 MEDIUM): a child host fault must land on
@@ -888,13 +807,6 @@ public:
                 m_logs.reserve(m_logs.size() + ::ranges::size(logs));
                 ::ranges::move(logs, std::back_inserter(m_logs));
             }
-            if (checkpointGuard)
-            {
-                if (result.status_code == EVMC_SUCCESS)
-                {
-                    checkpointGuard->commit();
-                }
-            }
             co_return result;
         }
         catch (...)
@@ -909,54 +821,16 @@ public:
 
     std::vector<protocol::LogEntry>& logs() & { return m_logs; }
 
-    evmc_access_status accessAccount(const evmc_address& addr) noexcept
-    {
-        if (!m_eip2929Access ||
-            !executor::eip2929Enabled(m_revision, m_ledgerConfig.get().features()))
-        {
-            return EVMC_ACCESS_COLD;
-        }
-        return m_eip2929Access->warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
-    }
+    // #5430 removed the FISCO-lane EIP-2929 layer: no access state, no warm/cold
+    // metering. Cold unconditionally, like the v1 lane's stubs.
+    evmc_access_status accessAccount(const evmc_address&) noexcept { return EVMC_ACCESS_COLD; }
 
-    evmc_access_status accessStorage(const evmc_address& addr, const evmc_bytes32& key) noexcept
+    evmc_access_status accessStorage(const evmc_address&, const evmc_bytes32&) noexcept
     {
-        if (!m_eip2929Access ||
-            !executor::eip2929Enabled(m_revision, m_ledgerConfig.get().features()))
-        {
-            return EVMC_ACCESS_COLD;
-        }
-        return m_eip2929Access->warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        return EVMC_ACCESS_COLD;
     }
 
 private:
-    void warmEip2929AtTransactionEntry() noexcept
-    {
-        auto const& ref = message();
-        if (!executor::eip2929TransactionEntryWarmEnabled(
-                m_level, m_revision, m_ledgerConfig.get().features(), m_eip2929Access.get()))
-        {
-            return;
-        }
-
-        executor::Eip2929TxPrewarmInput input;
-        input.revision = m_revision;
-        input.origin = m_origin;
-        if (ref.kind != EVMC_CREATE && ref.kind != EVMC_CREATE2)
-        {
-            input.callee = ref.recipient;
-        }
-        if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
-        {
-            input.createCodeAddress = ref.code_address;
-        }
-        // TODO(EIP-3651): set input.coinbase from block sealer at revision >= EVMC_SHANGHAI.
-        input.web3TypedTxKind = m_web3TypedTxKindForAccessList;
-        input.accessList = m_eip2930AccessList.get();
-        executor::warmEip2929AtTransactionEntry(
-            *m_eip2929Access, input, [](bcos::Address const& addr) { return toEvmC(addr); });
-    }
-
     void prepareCreate()
     {
         auto& ref = message();

@@ -75,58 +75,6 @@ struct ExecutiveStateFixture
 
 BOOST_FIXTURE_TEST_SUITE(TestExecutiveState, ExecutiveStateFixture)
 
-// [R5 F2] The v1 created-address warm-up sequence under feature_evm_eip2929:
-// flag OFF reproduces the 0.21 metering exactly — the creation-time query (evmone
-// 0.24's access_account on msg.recipient) answers cold WITHOUT inserting, so the
-// first genuine touch pays the cold fee (2600) and only then the address turns warm;
-// flag ON keeps 0.24/geth behaviour — warm from the creation query on. The cold/warm
-// answers are the gas discriminators evmone meters 2600/100 from.
-BOOST_AUTO_TEST_CASE(createdAddressWarmupSequenceFollowsFlag)
-{
-    evmc_address sender{};
-    sender.bytes[19] = 0x2a;
-    const uint64_t nonce = 7;
-    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-    bcos::executor::BlockContext localContext(
-        nullptr, ledgerCache, hashImpl, 0, h256(), 0, 0, false);
-
-    auto hostOf = [&](ledger::Features features, int64_t contextID) {
-        auto exec = std::make_shared<MockTransactionExecutive>(localContext, "0x00", contextID, 41);
-        localContext.setFeatures(features);
-        auto params = std::make_unique<bcos::executor::CallParameters>(
-            bcos::executor::CallParameters::Type::MESSAGE);
-        params->staticCall = false;
-        params->codeAddress = "aabbccddee";
-        params->receiveAddress = "aabbccddee";
-        params->contextID = 0;
-        params->seq = 41;
-        return bcos::executor::HostContext(std::move(params), exec, std::string("aabbccddee"));
-    };
-
-    ledger::Features base;
-    base.set(ledger::Features::Flag::feature_evm_eip2929);
-    base.set(ledger::Features::Flag::feature_evm_address);
-
-    {  // flag OFF: base metering — cold (skip insert), cold (insert), warm.
-        auto host = hostOf(base, 0);  // contextID 0: its own Eip2929AccessState
-        auto created = host.createAddressForOpcode(sender, nonce);  // marks the address
-        BOOST_CHECK_EQUAL(host.accessAccount(created, EVMC_BERLIN), EVMC_ACCESS_COLD);
-        BOOST_CHECK_EQUAL(host.accessAccount(created, EVMC_BERLIN), EVMC_ACCESS_COLD);
-        BOOST_CHECK_EQUAL(host.accessAccount(created, EVMC_BERLIN), EVMC_ACCESS_WARM);
-    }
-
-    {  // flag ON: 0.24/geth — warm from the creation query on.
-        auto features = base;
-        features.set(ledger::Features::Flag::bugfix_evm2929_created_address_warm);
-        auto host = hostOf(features, 1);  // fresh state: the OFF case warmed contextID 0
-        auto created = host.createAddressForOpcode(sender, nonce);
-        BOOST_CHECK_EQUAL(host.accessAccount(created, EVMC_BERLIN), EVMC_ACCESS_COLD);
-        BOOST_CHECK_EQUAL(host.accessAccount(created, EVMC_BERLIN), EVMC_ACCESS_WARM);
-    }
-}
-
-// CREATE hooks follow address ownership: the DMC lane keeps its historical
-// formula, while serial execution follows feature_evm_address.
 BOOST_AUTO_TEST_CASE(createHookLaneGateFollowsSchedulerRule)
 {
     evmc_address sender{};

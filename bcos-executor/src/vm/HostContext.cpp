@@ -106,11 +106,6 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     m_tableName(std::move(tableName))
 {
     hostInterface = getHostInterface();
-
-    if (m_executive->blockContext().features().get(ledger::Features::Flag::feature_evm_eip2929))
-    {
-        m_eip2929Access = m_executive->getEip2929AccessState(m_executive->contextID());
-    }
 }
 
 std::string HostContext::get(const std::string_view& _key)
@@ -924,11 +919,6 @@ evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uin
         const auto addrStr = bcos::newLegacyEVMAddressString(
             bytesConstRef{sender.bytes, sizeof(sender.bytes)}, u256(nonce));
         boost::algorithm::unhex(addrStr, out.bytes);
-        if (m_eip2929Access && !exec.blockContext().features().get(
-                                   ledger::Features::Flag::bugfix_evm2929_created_address_warm))
-        {
-            m_eip2929Access->markAddressCreatedByHook(out);
-        }
         return out;
     }
     // Mirror the historical owner: synchronous execution uses m_seq + 1, while
@@ -937,11 +927,6 @@ evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uin
     const auto addrStr = bcos::newEVMAddress(exec.blockContext().hashHandler(),
         exec.blockContext().number(), exec.contextID(), exec.createDerivationSeq() + 1);
     boost::algorithm::unhex(addrStr, out.bytes);
-    if (m_eip2929Access && !exec.blockContext().features().get(
-                               ledger::Features::Flag::bugfix_evm2929_created_address_warm))
-    {
-        m_eip2929Access->markAddressCreatedByHook(out);
-    }
     return out;
 }
 
@@ -957,18 +942,6 @@ evmc_address HostContext::create2AddressForOpcode(
     if (!m_executive->blockContext().features().get(
             ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
     {
-        // R6 F7: 0.24's patched create_impl still calls access_account on the
-        // rejected CREATE2's pushed recipient (the zero address) for rev >= Berlin;
-        // 0.21 never warmed it. Mark it so the creation-time query answers cold
-        // without inserting, exactly like the other three derivation sites. The mark
-        // is gated on the warm flag like everywhere else: flag-ON chains warm it
-        // normally and never consume a marker.
-        if (m_eip2929Access && !m_executive->blockContext().features().get(
-                                   ledger::Features::Flag::bugfix_evm2929_created_address_warm))
-        {
-            evmc_address zero{};
-            m_eip2929Access->markAddressCreatedByHook(zero);
-        }
         return {};
     }
     // The exact formula TransactionExecutive::externalCall's CREATE2 branch stored
@@ -981,11 +954,6 @@ evmc_address HostContext::create2AddressForOpcode(
     const auto addrStr = bcos::newCreate2EVMAddress(
         exec.blockContext().hashHandler(), evmAddress2String(sender), initCode, fromEvmC(salt));
     boost::algorithm::unhex(addrStr, out.bytes);
-    if (m_eip2929Access && !exec.blockContext().features().get(
-                               ledger::Features::Flag::bugfix_evm2929_created_address_warm))
-    {
-        m_eip2929Access->markAddressCreatedByHook(out);
-    }
     return out;
 }
 

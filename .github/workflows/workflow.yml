@@ -93,6 +93,11 @@ jobs:
         id: vcpkg-revision
         shell: bash
         run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Bootstrap vcpkg through GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: bash tools/.ci/bootstrap-vcpkg.sh
       - uses: lukka/get-cmake@latest
         with:
           cmakeVersion: 3.28.3
@@ -378,15 +383,18 @@ jobs:
           done
       - name: Download EEST fixtures
         if: matrix.os != 'windows-2025'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd ${{ github.workspace }}
           # execution-spec-tests is archived; mainnet fixture releases are the
           # `tests@vX.Y.Z` tags of ethereum/execution-specs (one fixtures.tar.gz,
           # every fork up to the latest mainnet one). The tag is pinned: a bump is
           # a reviewed change, together with tools/eest/known-failures.txt.
-          # --fail: a 404 would otherwise write the error page into the tarball
-          # and surface as a confusing tar error; --retry handles release hiccups.
-          curl --fail --retry 3 -L -o fixtures.tar.gz https://github.com/ethereum/execution-specs/releases/download/tests%40v20.0.2/fixtures.tar.gz
+          # gh downloads through the release-asset API, avoiding intermittent 504s
+          # from the github.com release download redirect.
+          gh release download 'tests@v20.0.2' --repo ethereum/execution-specs \
+            --pattern fixtures.tar.gz --dir "${PWD}" --clobber
           tar -xzf fixtures.tar.gz
           test -d fixtures/state_tests
       - name: Run EEST fixture tests
@@ -589,6 +597,11 @@ jobs:
         id: vcpkg-revision
         shell: bash
         run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Bootstrap vcpkg through GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: bash tools/.ci/bootstrap-vcpkg.sh
       - name: Restore vcpkg cache
         uses: actions/cache/restore@v4
         id: vcpkg-cache

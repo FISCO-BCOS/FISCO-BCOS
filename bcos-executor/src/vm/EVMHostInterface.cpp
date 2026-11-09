@@ -328,25 +328,23 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
     });
 }
 
+// #5430 removed the FISCO-lane EIP-2929 layer: no access state, no warm/cold
+// metering (FISCO revisions never reach Berlin, so evmone never consults these
+// for gas). Answer cold unconditionally like upstream's stubs.
 evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
 {
-    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-    // WARM mirrors the v2 lane: the frame is about to fail, so the cold/warm gas
-    // distinction this answer feeds is moot — pick the cheaper, neutral value.
-    return translateHostFault(
-        hostContext, [&] { return hostContext.accessAccount(*_addr, hostContext.revision()); },
-        EVMC_ACCESS_WARM);
+    std::ignore = _context;
+    std::ignore = _addr;
+    return EVMC_ACCESS_COLD;
 }
-
 
 evmc_access_status access_storage(
     evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
 {
-    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-    return translateHostFault(
-        hostContext,
-        [&] { return hostContext.accessStorage(*_addr, *_key, hostContext.revision()); },
-        EVMC_ACCESS_WARM);
+    std::ignore = _context;
+    std::ignore = _addr;
+    std::ignore = _key;
+    return EVMC_ACCESS_COLD;
 }
 
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept

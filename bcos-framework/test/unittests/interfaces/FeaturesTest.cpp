@@ -195,7 +195,6 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_balance_precompiled",
         "feature_balance_policy1",
         "feature_paillier_add_raw",
-        "feature_evm_eip2929",
         "feature_evm_cancun",
         "feature_evm_prague",
         "feature_evm_osaka",
@@ -208,9 +207,6 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_mpt_state_root",
         "bugfix_nonce_ordering",
         "bugfix_eip161_1052_account_semantics",
-        // bugfix_evm2929_created_address_warm: v1 lane; ON keeps evmone 0.24's
-        // created-address warmth, OFF reproduces the 0.21 cold-then-first-touch metering.
-        "bugfix_evm2929_created_address_warm",
         "bugfix_tx_intrinsic_gas",
     };
     // clang-format on
@@ -241,6 +237,21 @@ BOOST_AUTO_TEST_CASE(retiredNamesAreRejected)
         BOOST_CHECK(!Features::contains(name));
         BOOST_CHECK_THROW(Features::string2Flag(name), NoSuchFeatureError);
     }
+}
+
+BOOST_AUTO_TEST_CASE(featureDependenciesRequireEnabledFlag)
+{
+    Features features;
+    BOOST_CHECK_THROW(
+        features.validate("feature_balance_precompiled"), bcos::tool::InvalidSetFeature);
+    BOOST_CHECK_THROW(features.validate("feature_balance_policy1"), bcos::tool::InvalidSetFeature);
+
+    features.set(Features::Flag::feature_balance);
+    BOOST_CHECK_NO_THROW(features.validate("feature_balance_precompiled"));
+    BOOST_CHECK_THROW(features.validate("feature_balance_policy1"), bcos::tool::InvalidSetFeature);
+
+    features.set(Features::Flag::feature_balance_precompiled);
+    BOOST_CHECK_NO_THROW(features.validate("feature_balance_policy1"));
 }
 
 BOOST_AUTO_TEST_CASE(evmForkFlagsRequireThePreviousFork)
@@ -446,8 +457,8 @@ BOOST_AUTO_TEST_CASE(upgrade)
     Features features17;
     features17.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION,
         bcos::protocol::BlockVersion::V3_18_0_VERSION);
-    auto expect17 = std::to_array<std::string_view>({"bugfix_eip161_1052_account_semantics",
-        "bugfix_tx_intrinsic_gas", "bugfix_evm2929_created_address_warm"});
+    auto expect17 = std::to_array<std::string_view>(
+        {"bugfix_eip161_1052_account_semantics", "bugfix_tx_intrinsic_gas"});
     BOOST_CHECK_EQUAL(validFlags(features17).size(), expect17.size());
     for (auto feature : expect17)
     {
@@ -656,16 +667,5 @@ BOOST_AUTO_TEST_CASE(testDependenciesFeatures)
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_cancun));
 }
 
-
-BOOST_AUTO_TEST_CASE(newestVersionSetActivatesCreatedAddressWarmth)
-{
-    Features features;
-    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
-    BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_evm2929_created_address_warm), true);
-
-    Features older;
-    older.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION);
-    BOOST_CHECK_EQUAL(older.get(Features::Flag::bugfix_evm2929_created_address_warm), false);
-}
 
 BOOST_AUTO_TEST_SUITE_END()

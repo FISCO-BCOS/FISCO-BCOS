@@ -26,10 +26,7 @@ namespace bcos::ops
 namespace
 {
 // Features::validate (bcos-framework/bcos-framework/ledger/Features.cpp) rejects a flag whose
-// prerequisite is off; these are the only two it enforces. feature_evm_prague / feature_evm_osaka
-// are documented as "depends on cancun / prague" in Features.h, but nothing validates that:
-// the executor picks the EVM revision from whichever flag is on (bcos-executor/src/vm/
-// VMInstance.cpp), so they are not listed here.
+// prerequisite is off; this table mirrors its dependencies.
 struct Dependency
 {
     std::string_view flag;
@@ -38,6 +35,8 @@ struct Dependency
 constexpr std::array c_dependencies{
     Dependency{"feature_balance_precompiled", "feature_balance"},
     Dependency{"feature_balance_policy1", "feature_balance_precompiled"},
+    Dependency{"feature_evm_prague", "feature_evm_cancun"},
+    Dependency{"feature_evm_osaka", "feature_evm_prague"},
 };
 // Features::validate warns on this one: the account-table encoding is node-local now
 constexpr std::string_view c_deprecated = "feature_raw_address";

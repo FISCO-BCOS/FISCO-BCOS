@@ -24,8 +24,6 @@
 #include "../Common.h"
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
-#include "Eip2929AccessState.h"
-#include "Eip2929Util.h"
 #include "VMInstance.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-framework/executor/HostContextFault.h>
@@ -200,34 +198,16 @@ public:
 
     evmc_revision revision() const { return toRevision(m_executive->blockContext().vmSchedule()); }
 
-    evmc_access_status accessAccount(const evmc_address& addr, evmc_revision rev)
+    // #5430 removed the FISCO-lane EIP-2929 layer: no access state, no warm/cold
+    // metering (FISCO revisions never reach Berlin). Cold unconditionally.
+    evmc_access_status accessAccount(const evmc_address&, evmc_revision)
     {
-        if (!eip2929Enabled(rev, m_executive->blockContext().features()))
-        {
-            return EVMC_ACCESS_COLD;
-        }
-        auto& accessState = eip2929AccessState();
-        // R5 F2, flag off: 0.24's create_impl warms the just-derived address; 0.21
-        // never did. Answer the creation warm-up query cold WITHOUT inserting, so
-        // the first genuine touch pays the cold fee exactly like the base.
-        if (!m_executive->blockContext().features().get(
-                ledger::Features::Flag::bugfix_evm2929_created_address_warm) &&
-            accessState.consumeCreationWarmupQuery(addr))
-        {
-            return EVMC_ACCESS_COLD;
-        }
-        return accessState.warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        return EVMC_ACCESS_COLD;
     }
 
-    evmc_access_status accessStorage(
-        const evmc_address& addr, const evmc_bytes32& key, evmc_revision rev)
+    evmc_access_status accessStorage(const evmc_address&, const evmc_bytes32&, evmc_revision)
     {
-        if (!eip2929Enabled(rev, m_executive->blockContext().features()))
-        {
-            return EVMC_ACCESS_COLD;
-        }
-        auto& accessState = eip2929AccessState();
-        return accessState.warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        return EVMC_ACCESS_COLD;
     }
 
     std::string getContractTableName(const std::string_view& _address);
@@ -253,19 +233,6 @@ private:
     std::string m_hostFault;
     bool m_hasHostFault = false;
     bool m_hostFaultHalting = false;
-
-    /// Per-transaction warm set; cached at construction to avoid BucketMap lookup on every
-    /// accessAccount/accessStorage (same pattern as TE HostContext::m_eip2929Access).
-    std::shared_ptr<Eip2929AccessState> m_eip2929Access;
-
-    Eip2929AccessState& eip2929AccessState()
-    {
-        if (!m_eip2929Access)
-        {
-            m_eip2929Access = m_executive->getEip2929AccessState(m_executive->contextID());
-        }
-        return *m_eip2929Access;
-    }
     struct EVMCAddrHash
     {
         size_t operator()(const evmc_address& a) const noexcept
