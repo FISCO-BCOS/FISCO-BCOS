@@ -40,8 +40,8 @@ DERIVE_BCOS_EXCEPTION(NoSuchFeatureError);
 class Features
 {
 public:
-    // Flags persist by NAME only (SYS_CONFIG keys and the genesis pin), so never rename one.
-    // A retired flag keeps its name while existing genesis files may still carry it.
+    // Flags persist by NAME only (SYS_CONFIG keys and the genesis pin), so never rename a
+    // recognized flag. Removed names stay rejected so stale genesis and governance keys fail.
     enum class Flag
     {
         bugfix_revert,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
@@ -95,12 +95,15 @@ public:
         feature_balance_precompiled,
         feature_balance_policy1,
         feature_paillier_add_raw,
-        feature_evm_eip2929,  // EIP-2929 冷热访问 gas 折扣（Berlin+）；影响全局
-                              // gas，需治理层显式启用
         feature_evm_cancun,
-        feature_evm_prague,  // EIP-7702、BLS12-381；依赖 feature_evm_cancun
-        feature_evm_osaka,   // EIP-7212 p256verify、EIP-7823/EIP-7883 modexp；依赖
-                             // feature_evm_prague
+        // On executor_version 0/1 these flags select the evmone revision and open the
+        // BLS12-381 / p256verify precompile gates. They do not enable an EIP-2929 warm set or
+        // EIP-7823/EIP-7883 ModExp changes. Intrinsic gas and the EIP-7623 calldata floor follow
+        // the current upstream bugfix_tx_intrinsic_gas implementation. A chain enabling either
+        // flag must run a uniform node implementation. Full rules also live in ethereum-executor
+        // (executor_version >= 2).
+        feature_evm_prague,  // Prague revision and BLS12-381; depends on feature_evm_cancun
+        feature_evm_osaka,   // Osaka revision and p256verify; depends on feature_evm_prague
         feature_evm_timestamp,
         feature_evm_address,
         feature_rpbft_term_weight,
