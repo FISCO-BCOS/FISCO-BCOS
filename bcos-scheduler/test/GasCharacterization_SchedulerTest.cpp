@@ -252,11 +252,14 @@ struct GasCharacterizationSchedulerFixture
         {
             auto receipt = block->receipts()[i];
             recorder.add(config, c_txs[i].name + ".budget",
-                {.status = 0, .gasUsed = executor->budget(static_cast<int64_t>(i))});
+                {.status = 0, .gasUsed = executor->budget(static_cast<int64_t>(i)), .digest = ""});
             recorder.add(config, c_txs[i].name,
-                {.status = receipt->status(), .gasUsed = lowBits(receipt->gasUsed())});
+                {.status = receipt->status(),
+                    .gasUsed = lowBits(receipt->gasUsed()),
+                    .digest = ""});
         }
-        recorder.add(config, "block", {.status = 0, .gasUsed = lowBits(header->gasUsed())});
+        recorder.add(
+            config, "block", {.status = 0, .gasUsed = lowBits(header->gasUsed()), .digest = ""});
         blockExecutive.reset();
         scheduler.reset();
     }

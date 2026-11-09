@@ -139,7 +139,8 @@ struct GasCharacterizationV1Fixture
         }
         // the header's gasUsed: BaselineScheduler sums the block's receipts this way
         auto total = protocol::normalizeReceipts(receipts);
-        recorder.add(config.name, "block", {.gasUsed = static_cast<int64_t>(total)});
+        recorder.add(config.name, "block",
+            {.status = 0, .gasUsed = static_cast<int64_t>(total), .digest = ""});
     }
 };
 
