@@ -1,7 +1,6 @@
 #pragma once
 
 #include "RollbackableStorage.h"
-#include "bcos-executor/src/Web3AccessListResolver.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
@@ -86,7 +85,6 @@ public:
             int64_t m_seq = 0;
             evmc_address m_origin;
             u256 m_nonce;
-            executor::Web3AccessListResolved m_web3AccessListResolved;
             hostcontext::HostContext<decltype(m_rollbackableStorage),
                 decltype(m_rollbackableTransientStorage)>
                 m_hostContext;
@@ -110,7 +108,6 @@ public:
                              *(evmc_address*)m_transaction.get().sender().data() :
                              evmc_address{}),
                 m_nonce(hex2u(transaction.nonce())),
-                m_web3AccessListResolved(executor::resolveWeb3AccessList(transaction)),
                 m_hostContext(m_rollbackableStorage, m_rollbackableTransientStorage, blockHeader,
                     newEVMCMessage(m_blockHeader.get().number(), transaction, m_gasLimit, m_origin),
                     m_origin, transaction.abi(), contextID, m_seq, executor.m_precompiledManager,
@@ -159,28 +156,15 @@ public:
             }
         }
 
-        // #5772: what the top-level frame pays before it runs. The access list is the one the
-        // frame warms, not the Tars field: the signature binds only extraTransactionBytes, so
-        // that field can be empty on a transaction whose signed envelope carries a list (the
-        // resolver's paths B and C), and the same signed transaction would then pay less.
-        // A non-empty field that disagrees with the envelope (path A) is priced as it is warmed;
-        // txvalidator::normalize rebuilds it from the envelope on the pool ingresses.
+        // #5772: what the top-level frame pays before it runs. Access-list transactions are
+        // accepted on consortium v1, but their lists are not parsed or priced separately.
         int64_t upfrontGas() const
         {
-            int64_t accessListCost = 0;
-            if (auto const& accessList = m_data->m_web3AccessListResolved.accessList)
-            {
-                for (auto const& [address, storageKeys] : *accessList)
-                {
-                    accessListCost +=
-                        protocol::gas::compute_access_list_entry_cost(storageKeys.size());
-                }
-            }
             auto const& hostContext = m_data->m_hostContext;
             auto const& message = hostContext.message();
             return protocol::gas::compute_tx_upfront_cost(hostContext.revision(),
                 message.kind == EVMC_CREATE,
-                std::span<const uint8_t>{message.input_data, message.input_size}, accessListCost);
+                std::span<const uint8_t>{message.input_data, message.input_size}, 0);
         }
 
         // #5772 (bugfix_tx_intrinsic_gas): the transaction pays its intrinsic gas before the

@@ -9,9 +9,6 @@
 
 namespace bcos::executor
 {
-/// EIP-2930 access list (execution layer): 20-byte address + storage keys (h256).
-using Eip2930AccessList = std::vector<std::pair<bcos::Address, std::vector<h256>>>;
-
 struct CallParameters
 {
     using UniquePtr = std::unique_ptr<CallParameters>;
