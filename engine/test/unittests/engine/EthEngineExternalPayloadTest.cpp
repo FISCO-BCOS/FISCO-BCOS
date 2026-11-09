@@ -553,7 +553,8 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadCommitDropsExecutedTransactions, External
     storageFixture.setNonce(sender, "1");
 
     auto request = makeExternalRequestV2(c_headHash, c_headNumber + 1);
-    // The mock answers the fixture default era for the V2 payload; the prune runs after Valid.
+    mockVerifier->l1Context.revision = EVMC_SHANGHAI;  // a V2 payload is Shanghai-era
+    // The prune runs after Valid.
     auto status = task::syncWait(service.newPayload(request, 2));
     BOOST_REQUIRE(status.status == PayloadValidationStatus::Valid);
 
