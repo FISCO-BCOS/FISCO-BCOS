@@ -158,11 +158,11 @@ static std::string makeForcedEnvelopeHex(uint64_t nonce, uint64_t gasLimit = 210
     Secp256k1Crypto secp;
     auto keyPair = secp.generateKeyPair();
     auto const sig = secp.sign(*keyPair, w3.hashForSign(), false);
-    BOOST_REQUIRE(sig);
-    BOOST_REQUIRE_EQUAL(sig->size(), 65);
-    w3.signatureR.assign(sig->begin(), sig->begin() + 32);
-    w3.signatureS.assign(sig->begin() + 32, sig->begin() + 64);
-    w3.signatureV = (*sig)[64];
+    BOOST_REQUIRE(!sig.empty());
+    BOOST_REQUIRE_EQUAL(sig.size(), 65);
+    w3.signatureR.assign(sig.begin(), sig.begin() + 32);
+    w3.signatureS.assign(sig.begin() + 32, sig.begin() + 64);
+    w3.signatureV = sig[64];
     return bcos::toHexStringWithPrefix(w3.encode());
 }
 

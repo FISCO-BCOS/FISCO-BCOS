@@ -27,14 +27,14 @@ BOOST_AUTO_TEST_CASE(recoverFromInputRejectsBad)
 
     // v outside the accepted 27..28 range: rejected before any recovery.
     bcos::bytes input(128, 0);
-    auto [okZero, addrZero] = secp256k1Recover(hashImpl, bcos::ref(input));
+    auto [okZero, addrZero] = secp256k1Recover(*hashImpl, bcos::ref(input));
     BOOST_CHECK(!okZero);
     BOOST_CHECK(addrZero.empty());
 
     // v == 27 but zero r/s: recovery fails internally and is caught.
     bcos::bytes withV(128, 0);
     withV[63] = 27;  // low byte of the big-endian h256 v field
-    auto [okBadSig, addrBadSig] = secp256k1Recover(hashImpl, bcos::ref(withV));
+    auto [okBadSig, addrBadSig] = secp256k1Recover(*hashImpl, bcos::ref(withV));
     BOOST_CHECK(!okBadSig);
 }
 
@@ -51,6 +51,29 @@ BOOST_AUTO_TEST_CASE(recoverAddressRejectsBadSignature)
 
     bcos::bytes badSig(SECP256K1_SIGNATURE_LEN, 0);
     BOOST_CHECK_THROW(crypto.recoverAddress(hasher, hash, bcos::ref(badSig)), std::exception);
+}
+
+BOOST_AUTO_TEST_CASE(verifyRejectsIncorrectPublicKeyLength)
+{
+    Secp256k1Crypto crypto;
+    auto keyPair = crypto.generateKeyPair();
+    HashType hash;
+    auto signature = crypto.sign(*keyPair, hash, false);
+    auto pubBytes = keyPair->publicKey()->data();
+
+    BOOST_CHECK(crypto.verify(ref(pubBytes), hash, ref(signature)));
+    BOOST_CHECK(secp256k1Verify(ref(pubBytes), hash, ref(signature)));
+
+    pubBytes.pop_back();
+    BOOST_CHECK(!crypto.verify(KeyImpl(pubBytes), hash, ref(signature)));
+    BOOST_CHECK_THROW(crypto.verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
+    BOOST_CHECK_THROW(secp256k1Verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
+
+    pubBytes = keyPair->publicKey()->data();
+    pubBytes.push_back(0);
+    BOOST_CHECK(!crypto.verify(KeyImpl(pubBytes), hash, ref(signature)));
+    BOOST_CHECK_THROW(crypto.verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
+    BOOST_CHECK_THROW(secp256k1Verify(ref(pubBytes), hash, ref(signature)), InvalidKey);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

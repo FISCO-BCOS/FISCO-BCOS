@@ -26,36 +26,33 @@ namespace crypto
 {
 const int ED25519_SIGNATURE_LEN = 64;
 
-std::shared_ptr<bytes> ed25519Sign(
+bytes ed25519Sign(
     const KeyPairInterface& _keyPair, const HashType& _messageHash, bool _signatureWithPub = false);
 KeyPairInterface::UniquePtr ed25519GenerateKeyPair();
-bool ed25519Verify(PublicPtr _pubKey, const HashType& _messageHash, bytesConstRef _signatureData);
-PublicPtr ed25519Recover(const HashType& _messageHash, bytesConstRef _signatureData);
+bool ed25519Verify(
+    bytesConstRef _pubKeyBytes, const HashType& _messageHash, bytesConstRef _signatureData);
+KeyImpl ed25519Recover(const HashType& _messageHash, bytesConstRef _signatureData);
 
-std::pair<bool, bytes> ed25519Recover(Hash::Ptr _hashImpl, bytesConstRef _in);
+std::pair<bool, bytes> ed25519Recover(Hash& _hashImpl, bytesConstRef _in);
 
 class Ed25519Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<Ed25519Crypto>;
+    using SignatureCrypto::createKeyPair;
+    using SignatureCrypto::verify;
     Ed25519Crypto() = default;
     ~Ed25519Crypto() override {}
-    std::shared_ptr<bytes> sign(const KeyPairInterface& _keyPair, const HashType& _messageHash,
+    bytes sign(const KeyPairInterface& _keyPair, const HashType& _messageHash,
         bool _signatureWithPub = false) const override
     {
         return ed25519Sign(_keyPair, _messageHash, _signatureWithPub);
     }
 
-    bool verify(PublicPtr _pubKey, const HashType& _messageHash,
-        bytesConstRef _signatureData) const override
-    {
-        return ed25519Verify(_pubKey, _messageHash, _signatureData);
-    }
-
-    bool verify(std::shared_ptr<const bytes> _pubKeyBytes, const HashType& _hash,
+    bool verify(bytesConstRef _pubKeyBytes, const HashType& _hash,
         bytesConstRef _signatureData) const override;
 
-    PublicPtr recover(const HashType& _messageHash, bytesConstRef _signatureData) const override
+    KeyImpl recover(const HashType& _messageHash, bytesConstRef _signatureData) const override
     {
         return ed25519Recover(_messageHash, _signatureData);
     }
@@ -65,7 +62,7 @@ public:
         return ed25519GenerateKeyPair();
     }
 
-    std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) const override
+    std::pair<bool, bytes> recoverAddress(Hash& _hashImpl, bytesConstRef _in) const override
     {
         return ed25519Recover(_hashImpl, _in);
     }

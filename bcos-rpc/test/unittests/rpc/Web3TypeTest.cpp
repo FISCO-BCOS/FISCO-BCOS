@@ -199,12 +199,12 @@ BOOST_AUTO_TEST_CASE(testConstructTx)
     auto keyPair = std::make_unique<Secp256k1KeyPair>(key);
 
     auto signature = signatureImpl.sign(*keyPair, newHash, false);
-    auto [_, addr] = signatureImpl.recoverAddress(*hashImpl, newHash, ref(*signature));
+    auto addr = signatureImpl.recoverAddress(*hashImpl, newHash, ref(signature));
     auto newAddr = toHex(addr);
     BOOST_CHECK_EQUAL(newAddr, Address("C96aAa54E2d44c299564da76e1cD3184A2386B8D").hex());
-    testTx.signatureR = {signature->begin(), signature->begin() + 32};
-    testTx.signatureS = {signature->begin() + 32, signature->begin() + 64};
-    testTx.signatureV = signature->back();
+    testTx.signatureR = {signature.begin(), signature.begin() + 32};
+    testTx.signatureS = {signature.begin() + 32, signature.begin() + 64};
+    testTx.signatureV = signature.back();
     bcos::bytes toData;
     bcos::codec::rlp::encode(toData, testTx);
     auto const newTx = toHexStringWithPrefix(toData);
@@ -449,9 +449,9 @@ BOOST_AUTO_TEST_CASE(highSsignatureRejectedAtDecode)
     auto signatureImpl = bcos::crypto::Secp256k1Crypto();
     auto keyPair = std::make_unique<Secp256k1KeyPair>(key);
     auto signature = signatureImpl.sign(*keyPair, newHash, false);
-    tx.signatureR = {signature->begin(), signature->begin() + 32};
-    tx.signatureS = {signature->begin() + 32, signature->begin() + 64};
-    tx.signatureV = signature->back();
+    tx.signatureR = {signature.begin(), signature.begin() + 32};
+    tx.signatureS = {signature.begin() + 32, signature.begin() + 64};
+    tx.signatureV = signature.back();
 
     // Guard: libsecp256k1 signs canonical low-s — confirm before flipping, so a future
     // libsecp256k1 behavior change fails loudly instead of silently weakening the test.
@@ -544,8 +544,7 @@ BOOST_AUTO_TEST_CASE(recoverAddress)
     auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
     auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
-    auto [re, addr] = signatureImpl->recoverAddress(*hashImpl, hash, ref(sign));
-    BOOST_CHECK(re);
+    auto addr = signatureImpl->recoverAddress(*hashImpl, hash, ref(sign));
     auto address = toHexStringWithPrefix(addr);
     BOOST_CHECK_EQUAL(address, "0xec5e7dec9d2d6bfa1f2221ace01ae3deb6906fb0");
 }
@@ -588,8 +587,7 @@ BOOST_AUTO_TEST_CASE(EIP1559Recover)
     auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
     auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
-    auto [re, addr] = signatureImpl->recoverAddress(*hashImpl, hash, ref(sign));
-    BOOST_CHECK(re);
+    auto addr = signatureImpl->recoverAddress(*hashImpl, hash, ref(sign));
     auto address = toHexStringWithPrefix(addr);
     BOOST_CHECK_EQUAL(address, "0x595063172c85b1e8ac2fe74fcb6b7dc26844cc2d");
 }
@@ -660,8 +658,7 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
     auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
-    auto [re, addr] = signatureImpl->recoverAddress(*hashImpl, hash, ref(sign));
-    BOOST_CHECK(re);
+    auto addr = signatureImpl->recoverAddress(*hashImpl, hash, ref(sign));
     auto address = toHexStringWithPrefix(addr);
     BOOST_CHECK_EQUAL(address, "0xc1b634853cb333d3ad8663715b08f41a3aec47cc");
 }

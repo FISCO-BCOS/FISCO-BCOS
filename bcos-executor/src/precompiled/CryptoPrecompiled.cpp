@@ -172,19 +172,11 @@ void CryptoPrecompiled::sm2Verify(const std::shared_ptr<executor::TransactionExe
         auto signatureData = std::make_shared<SignatureDataWithPub>(
             fromString32(r), fromString32(s), ref(inputPublicKey));
         auto publicKey = crypto::sm2Recover(msgHash, ref(*(signatureData->encode())));
-        if (!publicKey)
-        {
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_DESC("CryptoPrecompiled: sm2Verify failed for recover public key failed");
-            _callResult->setExecResult(codec.encode(false, account));
-            return;
-        }
-
         account = right160(
-            crypto::sm3Hash(bytesConstRef(publicKey->data().data(), publicKey->data().size())));
+            crypto::sm3Hash(bytesConstRef(publicKey.data().data(), publicKey.data().size())));
         PRECOMPILED_LOG(TRACE) << LOG_DESC("CryptoPrecompiled: sm2Verify")
                                << LOG_KV("verifySuccess", verifySuccess)
-                               << LOG_KV("publicKey", publicKey->hex())
+                               << LOG_KV("publicKey", publicKey.hex())
                                << LOG_KV("account", account);
         _callResult->setExecResult(codec.encode(verifySuccess, account));
     }

@@ -21,6 +21,7 @@
 #pragma once
 #include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
+#include <utility>
 
 namespace bcos
 {
@@ -31,7 +32,7 @@ class FastSM2KeyPair : public SM2KeyPair
 public:
     using Ptr = std::shared_ptr<FastSM2KeyPair>;
     FastSM2KeyPair() : SM2KeyPair() { m_publicKeyDeriver = fast_sm2_derive_public_key; }
-    explicit FastSM2KeyPair(SecretPtr _secretKey) : SM2KeyPair(_secretKey) {}
+    explicit FastSM2KeyPair(SecretPtr _secretKey) : SM2KeyPair(std::move(_secretKey)) {}
 };
 }  // namespace crypto
 }  // namespace bcos

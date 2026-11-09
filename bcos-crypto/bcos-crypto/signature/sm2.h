@@ -22,18 +22,19 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
+#include <bcos-crypto/signature/key/KeyImpl.h>
 #include <bcos-utilities/Common.h>
 namespace bcos
 {
 namespace crypto
 {
-std::shared_ptr<bytes> sm2Sign(
+bytes sm2Sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub = false);
-bool sm2Verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData);
+bool sm2Verify(const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData);
 KeyPairInterface::UniquePtr sm2GenerateKeyPair();
-PublicPtr sm2Recover(const HashType& _hash, bytesConstRef _signData);
+KeyImpl sm2Recover(const HashType& _hash, bytesConstRef _signData);
 
-std::pair<bool, bytes> sm2Recover(Hash::Ptr _hashImpl, bytesConstRef _in);
+std::pair<bool, bytes> sm2Recover(Hash& _hashImpl, bytesConstRef _in);
 PublicPtr sm2PriToPub(SecretPtr _secret);
 }  // namespace crypto
 }  // namespace bcos

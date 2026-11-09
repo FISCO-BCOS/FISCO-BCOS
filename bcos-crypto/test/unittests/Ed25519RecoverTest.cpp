@@ -26,7 +26,7 @@ BOOST_AUTO_TEST_CASE(recoverFromInputRejectsInvalid)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     bcos::bytes input(128, 0);
-    auto [ok, addr] = ed25519Recover(hashImpl, bcos::ref(input));
+    auto [ok, addr] = ed25519Recover(*hashImpl, bcos::ref(input));
     BOOST_CHECK(!ok);
     BOOST_CHECK(addr.empty());
 }

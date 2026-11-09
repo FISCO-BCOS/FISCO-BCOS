@@ -28,6 +28,7 @@
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
 #include <range/v3/view/any_view.hpp>
@@ -78,13 +79,29 @@ public:
         {
             auto sealerIndex = signature.index;
             auto signatureData = signature.signature;
-            if (!signatureImpl.verify(
-                    std::shared_ptr<const bytes>(&((sealers)[sealerIndex]), [](const bytes*) {}),
-                    hash(), bytesConstRef(signatureData.data(), signatureData.size())))
+            if (sealerIndex < 0 || static_cast<size_t>(sealerIndex) >= sealers.size())
             {
-                throwTrace(InvalidSignatureList() << errinfo_comment(
-                               "Invalid signatureList for verify failed, signatureData:" +
-                               toHex(signatureData)));
+                throwTrace(
+                    InvalidSignatureList() << errinfo_comment("signature index out of range"));
+            }
+            try
+            {
+                if (!signatureImpl.verify(ref((sealers)[sealerIndex]), hash(),
+                        bytesConstRef(signatureData.data(), signatureData.size())))
+                {
+                    throwTrace(InvalidSignatureList() << errinfo_comment(
+                                   "Invalid signatureList for verify failed, signatureData:" +
+                                   toHex(signatureData)));
+                }
+            }
+            catch (const crypto::InvalidKey&)
+            {
+                throwTrace(
+                    InvalidSignatureList() << errinfo_comment("invalid sealer public key length"));
+            }
+            catch (const crypto::InvalidSignature&)
+            {
+                throwTrace(InvalidSignatureList() << errinfo_comment("invalid sealer signature"));
             }
         }
     }

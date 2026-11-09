@@ -511,7 +511,7 @@ bool PBFTConfig::verifyProposalQuorumSignatures(PBFTProposalInterface::Ptr const
             return false;
         }
         if (!m_cryptoSuite->signatureImpl()->verify(
-                nodeInfo->nodeID, _proposal->hash(), proof.second))
+                *nodeInfo->nodeID, _proposal->hash(), proof.second))
         {
             return false;
         }

@@ -94,7 +94,7 @@ public:
         if (_needSign)
         {
             auto signatureData = _cryptoSuite->signatureImpl()->sign(*_keyPair, _proposal->hash());
-            signedProposal->setSignature(*signatureData);
+            signedProposal->setSignature(signatureData);
         }
         pbftMessage->setConsensusProposal(signedProposal);
         return pbftMessage;
