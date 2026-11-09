@@ -46,7 +46,8 @@ struct BootnodeUri
 
 /// Parse a geth-style enode URI.
 /// Format: enode://<64-byte-hex-pubkey>@<ip>:<tcp-port>[?discport=<udp-port>]
-/// Without ?discport the discovery port equals the TCP port (geth enode semantics).
+/// Without ?discport the discovery port equals the TCP port (geth enode semantics);
+/// `?discport=0` marks a TCP-only bootnode (geth --nodiscover) that discovery skips.
 /// Throws std::invalid_argument on malformed input.
 inline BootnodeUri parseEnodeUri(std::string const& enode)
 {
@@ -111,8 +112,11 @@ inline BootnodeUri parseEnodeUri(std::string const& enode)
             value = value.substr(0, value.find('&'));
             try
             {
+                // 0 is valid here (unlike the TCP port): geth writes `?discport=0` for a
+                // --nodiscover node. Discovery drops a zero UDP port (Discv4Service::addSeen),
+                // so such a bootnode is dialed over TCP only.
                 auto parsed = std::stoul(std::string(value));
-                if (parsed == 0 || parsed > 65535)
+                if (parsed > 65535)
                 {
                     BOOST_THROW_EXCEPTION(std::out_of_range("discport"));
                 }

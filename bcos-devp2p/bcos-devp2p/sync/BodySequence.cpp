@@ -43,8 +43,9 @@ std::vector<Block> BodySequence::requestBodies(
     _session.sendMessage(rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockBodies)),
         eth::encodeGetBlockBodies(request)});
 
-    // Peers freely broadcast transactions/new blocks while we wait for the
-    // BlockBodies reply — ignore them (and answer Ping) and keep waiting.
+    // Peers freely broadcast transactions/new blocks (and, on eth/69+, their served
+    // block range) while we wait for the BlockBodies reply — ignore them (and answer
+    // Ping) and keep waiting.
     int ignoredBroadcasts = 0;
     std::vector<Block> out;
     while (true)
@@ -89,6 +90,24 @@ std::vector<Block> BodySequence::requestBodies(
                 {
                     throw std::runtime_error(
                         "BodySequence: too many broadcast messages before BlockBodies");
+                }
+                continue;
+            }
+            // BlockRangeUpdate (0x11, eth/69+), same handling as HeaderChain: a malformed
+            // or inverted range is a breach, a valid one is skipped like a broadcast.
+            if (response.id == eth::frameId(eth::msg::BlockRangeUpdate))
+            {
+                auto update = unwrapOrThrow(eth::decodeBlockRangeUpdate(bytesConstRef(
+                                                response.data.data(), response.data.size())),
+                    "BodySequence: malformed BlockRangeUpdate: ");
+                if (!update.valid())
+                {
+                    throw std::runtime_error(
+                        "BodySequence: BlockRangeUpdate with earliest > latest");
+                }
+                if (++ignoredBroadcasts > 64)
+                {
+                    throw std::runtime_error("BodySequence: too many frames before BlockBodies");
                 }
                 continue;
             }
