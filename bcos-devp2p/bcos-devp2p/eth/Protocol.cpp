@@ -694,19 +694,12 @@ RlpResult<ReceiptsMessage> decodeReceipts(bytesConstRef _data, uint8_t _version)
         std::vector<bcos::bytes> block;
         while (!receipts.empty())
         {
-            if (_version >= 69)
-            {
-                // eth/69+: every receipt is a bare 4-item list.
-                RLP_TRY(auto receipt, takeRlpItem(receipts));
-                block.push_back(std::move(receipt));
-            }
-            else
-            {
-                // eth/68: legacy receipts are lists, typed ones string-wrapped
-                // 0xNN || rlp(...) — the same element rules as transactions.
-                RLP_TRY(auto receipt, takeTx(receipts));
-                block.push_back(std::move(receipt));
-            }
+            // Each receipt is kept as the OPAQUE wire element of `_version` (what
+            // encodeReceipts splices back verbatim): on eth/69+ the bare 4-item list, on
+            // eth/68 a legacy receipt's list or a typed receipt's RLP STRING of 0xNN ||
+            // rlp(...) — the string wrapper included; decodeReceiptElement(68) unwraps it.
+            RLP_TRY(auto receipt, takeRlpItem(receipts));
+            block.push_back(std::move(receipt));
         }
         msg.receipts.push_back(std::move(block));
     }

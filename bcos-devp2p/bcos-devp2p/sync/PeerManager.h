@@ -103,8 +103,9 @@ public:
     // The operator's bootnodes (re-read by the dial loop each round); never penalised.
     void setStaticPeers(std::vector<rlpx::PeerConfig> _peers);
     // Discovery hand-off (thread-safe, any thread): a dialable peer learned at runtime.
-    // Deduped by node id against static and discovered peers; oldest discovered entry
-    // is dropped past maxCandidates. Entries without a 64-byte key are ignored.
+    // Deduped by node id: a static id is ignored, a known discovered id has its endpoint
+    // refreshed in place; the oldest discovered entry is dropped past maxCandidates.
+    // Entries without a 64-byte key are ignored.
     void addCandidate(rlpx::PeerConfig _peer);
     // Static peers first, then up to _maxDiscovered discovered ones (rotating between calls),
     // minus banned nodes and nodes we already dialed. The dial loop walks this list.

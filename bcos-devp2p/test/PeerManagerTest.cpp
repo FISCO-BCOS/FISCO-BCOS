@@ -212,4 +212,32 @@ BOOST_AUTO_TEST_CASE(dialCandidates)
     BOOST_CHECK_EQUAL(manager.dialCandidates().back().host, "10.0.0.1");
 }
 
+// Discovery re-announces a known id with the endpoint its latest pong proved: the
+// candidate follows it in its own queue slot, instead of dialing the stale address until
+// the failures accumulate into a ban by id. A static (operator) entry is never rewritten.
+BOOST_AUTO_TEST_CASE(rediscoveredCandidateRefreshesItsEndpoint)
+{
+    sync::PeerManager manager;
+    manager.setStaticPeers({peer(1)});
+    manager.addCandidate(peer(10));
+    manager.addCandidate(peer(11));
+    auto moved = peer(10);
+    moved.host = "192.168.7.7";
+    moved.port = 30399;
+    manager.addCandidate(moved);
+    BOOST_CHECK_EQUAL(manager.candidateCount(), 3u);
+    auto candidates = manager.dialCandidates();
+    BOOST_REQUIRE_EQUAL(candidates.size(), 3u);
+    BOOST_CHECK(candidates[1].peerPublicKey == nodeId(10));  // same index as before
+    BOOST_CHECK_EQUAL(candidates[1].host, "192.168.7.7");
+    BOOST_CHECK_EQUAL(candidates[1].port, 30399);
+    BOOST_CHECK_EQUAL(candidates[2].host, "10.0.0.11");
+
+    auto staticMoved = peer(1);
+    staticMoved.host = "203.0.113.1";
+    manager.addCandidate(staticMoved);
+    BOOST_CHECK_EQUAL(manager.dialCandidates()[0].host, "10.0.0.1");
+    BOOST_CHECK_EQUAL(manager.candidateCount(), 3u);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

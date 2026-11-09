@@ -169,8 +169,25 @@ void PeerManager::addCandidate(rlpx::PeerConfig _peer)
         return;
     }
     std::unique_lock lock(m_mutex);
-    if (m_staticIds.contains(_peer.peerPublicKey) || m_discoveredIds.contains(_peer.peerPublicKey))
+    if (m_staticIds.contains(_peer.peerPublicKey))
     {
+        return;  // the operator's endpoint is never rewritten by discovery
+    }
+    if (m_discoveredIds.contains(_peer.peerPublicKey))
+    {
+        // Known id, possibly at a new endpoint: refresh host/port in place (queue position
+        // and score untouched) instead of dialing the stale address until its failures ban
+        // the id. Safe only because Discv4Service::candidates hands out bonded (pong-proven)
+        // endpoints, never a hearsay address.
+        auto entry = std::find_if(
+            m_discovered.begin(), m_discovered.end(), [&](rlpx::PeerConfig const& _known) {
+                return _known.peerPublicKey == _peer.peerPublicKey;
+            });
+        if (entry != m_discovered.end())
+        {
+            entry->host = std::move(_peer.host);
+            entry->port = _peer.port;
+        }
         return;
     }
     while (m_discovered.size() >= m_config.maxCandidates && !m_discovered.empty())

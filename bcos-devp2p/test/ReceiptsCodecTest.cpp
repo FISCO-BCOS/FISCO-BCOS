@@ -242,6 +242,33 @@ BOOST_AUTO_TEST_CASE(receipts68TrieFormWithBloom)
     }
 }
 
+// decodeReceipts keeps every eth/68 element as the OPAQUE wire item (ReceiptsMessage): a
+// typed receipt stays the RLP string (b9 .. 01 ..), so re-encoding the decoded message —
+// encodeReceipts splices elements verbatim — reproduces the original bytes. Unwrapping
+// the string here (takeTx) made the re-encoding emit a bare 0x01 || list instead.
+BOOST_AUTO_TEST_CASE(receipts68DecodeKeepsTheWireWrapper)
+{
+    auto receipts = gethVectorReceipts();
+    receipts[1].logsBloom[0] = 0xab;
+    eth::ReceiptsMessage response;
+    response.requestId = 1;
+    response.receipts.emplace_back();
+    for (auto const& receipt : receipts)
+    {
+        response.receipts[0].push_back(eth::encodeReceiptElement(receipt, 68));
+    }
+    auto encoded = eth::encodeReceipts(response, 68);
+    auto decoded = eth::decodeReceipts(ref(encoded), 68);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_REQUIRE_EQUAL(decoded->receipts.size(), 1u);
+    BOOST_REQUIRE_EQUAL(decoded->receipts[0].size(), 2u);
+    auto const& typed = decoded->receipts[0][1];
+    BOOST_CHECK_EQUAL(typed[0], 0xb9);  // the string prefix, not the bare type byte 0x01
+    BOOST_CHECK(typed == response.receipts[0][1]);
+    BOOST_CHECK(decoded->receipts[0][0] == response.receipts[0][0]);
+    BOOST_CHECK(eth::encodeReceipts(*decoded, 68) == encoded);
+}
+
 // Pre-Byzantium legacy receipts carry a 32-byte post-state root instead of a status.
 BOOST_AUTO_TEST_CASE(postStateReceiptElementRoundTrips)
 {
