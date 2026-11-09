@@ -229,6 +229,13 @@ void Listener::onAccepted(boost::asio::ip::tcp::socket&& _socket)
             [self = shared_from_this(), connection,
                 socket = std::make_shared<Socket>(std::move(socket)), remote]() mutable {
                 self->runConnection(connection, std::move(*socket), remote);
+                {
+                    // Release the session (and with it the socket) now that the handler is
+                    // done. Left to the next accept's reapFinished() or to stop(), a quiet
+                    // node would keep a finished peer's TCP connection open indefinitely.
+                    std::unique_lock lock(self->m_connectionsMutex);
+                    connection->established.reset();
+                }
                 connection->done.store(true);
             });
     }

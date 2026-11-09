@@ -31,6 +31,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 
 using namespace bcos;
@@ -279,6 +280,28 @@ BOOST_AUTO_TEST_CASE(oversizedHelloIsRefused)
     }
     listener->stop();
     BOOST_CHECK_EQUAL(sessions.load(), 1);
+}
+
+// A finished inbound session releases its socket as soon as the handler returns: the
+// dialer sees EOF right away — not at the next accept's reap or at stop(), which on a
+// quiet node could be never.
+BOOST_AUTO_TEST_CASE(finishedSessionClosesItsConnection)
+{
+    rlpx::EccKeyPair serverKey;
+    auto listener =
+        std::make_shared<rlpx::Listener>(serverKey, rlpx::ListenerConfig{"127.0.0.1", 0},
+            serverStatus, [](rlpx::EstablishedSession&) {});  // done at once
+    listener->start();
+    rlpx::EccKeyPair clientKey;
+    rlpx::RlpxClient client(clientKey, clientConfig(listener->port(), serverKey));
+    auto established = client.connect();
+    auto const begin = std::chrono::steady_clock::now();
+    BOOST_CHECK_EXCEPTION(
+        established.session.recvMessage(), std::runtime_error, [](std::runtime_error const& e) {
+            return std::string_view(e.what()).find("closed by peer") != std::string_view::npos;
+        });
+    BOOST_CHECK(std::chrono::steady_clock::now() - begin < std::chrono::seconds(1));
+    listener->stop();
 }
 
 // stop() must wake a handler parked in recvMessage (idle peer) and join it promptly —
