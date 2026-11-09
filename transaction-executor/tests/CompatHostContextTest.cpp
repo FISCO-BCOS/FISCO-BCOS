@@ -74,12 +74,12 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = gas,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037); unused below Amsterdam
             .recipient = recipientIn,
             .sender = {},
             .input_data = input == nullptr ? nullptr : input->data(),
             .input_size = input == nullptr ? 0 : input->size(),
             .value = {},
-            .state_gas = {},  // evmc ABI 19 (EIP-8037); unused below Amsterdam
             .code_address = recipientIn,
             .code = nullptr,
             .code_size = 0};
