@@ -121,8 +121,8 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
                 }
                 continue;
             }
-            // BlockRangeUpdate (0x11, eth/69+): the peer announces its served range on
-            // every head advance, also while our request is outstanding (geth: each
+            // BlockRangeUpdate (msg 0x11 / frame id 0x21 = 33, eth/69+): the peer announces its
+            // range on every head advance, also while our request is outstanding (geth: each
             // >= 32 blocks). A malformed or inverted range is a breach (EIP-7642:
             // disconnect); a valid one is skipped like the broadcasts above.
             if (response.id == eth::frameId(eth::msg::BlockRangeUpdate))

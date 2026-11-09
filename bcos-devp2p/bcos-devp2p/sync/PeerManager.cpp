@@ -177,8 +177,10 @@ void PeerManager::addCandidate(rlpx::PeerConfig _peer)
     {
         // Known id, possibly at a new endpoint: refresh host/port in place (queue position
         // and score untouched) instead of dialing the stale address until its failures ban
-        // the id. Safe only because Discv4Service::candidates hands out bonded (pong-proven)
-        // endpoints, never a hearsay address.
+        // the id. Safe because Discv4Service::candidates hands out bonded entries only: host
+        // and UDP port are pong-proven (signed packet from the address we pinged); the TCP
+        // port is the node's own announcement (its ping / ENR) once it made one, a
+        // Neighbors-reported value before that.
         auto entry = std::find_if(
             m_discovered.begin(), m_discovered.end(), [&](rlpx::PeerConfig const& _known) {
                 return _known.peerPublicKey == _peer.peerPublicKey;

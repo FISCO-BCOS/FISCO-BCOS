@@ -93,8 +93,8 @@ std::vector<Block> BodySequence::requestBodies(
                 }
                 continue;
             }
-            // BlockRangeUpdate (0x11, eth/69+), same handling as HeaderChain: a malformed
-            // or inverted range is a breach, a valid one is skipped like a broadcast.
+            // BlockRangeUpdate (msg 0x11 / frame id 0x21 = 33, eth/69+), as in HeaderChain: a
+            // malformed or inverted range is a breach, a valid one is skipped like a broadcast.
             if (response.id == eth::frameId(eth::msg::BlockRangeUpdate))
             {
                 auto update = unwrapOrThrow(eth::decodeBlockRangeUpdate(bytesConstRef(
