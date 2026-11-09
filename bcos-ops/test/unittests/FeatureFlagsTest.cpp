@@ -18,6 +18,7 @@
 #include "bcos-ops/tx/FeatureFlags.h"
 #include "bcos-ops/OpsError.h"
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <map>
 
 namespace bcos::ops::test
@@ -102,6 +103,15 @@ BOOST_AUTO_TEST_CASE(enableOrderPutsDependenciesFirst)
     BOOST_CHECK_EQUAL(mixed[0], "feature_balance");
     BOOST_CHECK_THROW(featureEnableOrder({"feature_nope"}), OpsError);
     BOOST_CHECK(featureDependencies("bugfix_revert").empty());
+
+    // feature_evm_prague needs cancun and the codecopy bugfix, which a pre-3.2.4 / 3.3-3.5
+    // genesis lacks
+    auto prague = featureEnableOrder({"feature_evm_prague"});
+    BOOST_REQUIRE_EQUAL(prague.size(), 3U);
+    BOOST_CHECK_EQUAL(prague.back(), "feature_evm_prague");
+    BOOST_CHECK(std::ranges::find(prague, "feature_evm_cancun") != prague.end());
+    BOOST_CHECK(std::ranges::find(prague, "bugfix_evm_create2_delegatecall_staticcall_codecopy") !=
+                prague.end());
 }
 
 BOOST_AUTO_TEST_CASE(readStatesMarksOnOffAndDeprecated)

@@ -98,7 +98,8 @@ public:
         feature_evm_eip2929,  // EIP-2929 冷热访问 gas 折扣（Berlin+）；影响全局
                               // gas，需治理层显式启用
         feature_evm_cancun,
-        feature_evm_prague,  // EIP-7702、BLS12-381；依赖 feature_evm_cancun
+        feature_evm_prague,  // EIP-7702、BLS12-381；依赖 feature_evm_cancun 与
+                             // bugfix_evm_create2_delegatecall_staticcall_codecopy
         feature_evm_osaka,   // EIP-7212 p256verify、EIP-7823/EIP-7883 modexp；依赖
                              // feature_evm_prague
         feature_evm_timestamp,
