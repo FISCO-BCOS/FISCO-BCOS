@@ -439,6 +439,17 @@ jobs:
         run: |
           cd tools
           bash .ci/ci_check_air.sh "true"
+      - name: Upload Air chain logs on failure
+        # ci_check_air.sh archives the failing chain's complete node logs into tools/logs/
+        # next to the per-chain scenario log; the job output only shows error|warn tails.
+        if: failure() && (matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm')
+        uses: actions/upload-artifact@v4
+        with:
+          name: air-integration-logs-${{ matrix.os }}
+          path: tools/logs/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 7
       - name: Ethereum executor integration test (executor_version=2)
         # Runs a single-node L2 chain with executor_version=2 (ethereum-executor),
         # pre-funds an EOA via genesis alloc, and drives a simple value transfer

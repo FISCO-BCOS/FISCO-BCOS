@@ -6,6 +6,7 @@
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-utilities/Exceptions.h"
@@ -18,6 +19,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <span>
 #include <type_traits>
 
 namespace bcos::executor_v1
@@ -150,15 +152,62 @@ public:
                 {
                     co_return;
                 }
-                m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
+                m_data->m_evmcResult.emplace(co_await executeTopFrame());
                 co_await refundGas();
             }
             else
             {
                 // Legacy path
-                m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
+                m_data->m_evmcResult.emplace(co_await executeTopFrame());
                 co_await consumeBalance();
             }
+        }
+
+        // #5772: what the top-level frame pays before it runs. The access list is the one the
+        // frame warms, not the Tars field: the signature binds only extraTransactionBytes, so
+        // that field can be empty on a transaction whose signed envelope carries a list (the
+        // resolver's paths B and C), and the same signed transaction would then pay less.
+        // A non-empty field that disagrees with the envelope (path A) is priced as it is warmed;
+        // txvalidator::normalize rebuilds it from the envelope on the pool ingresses.
+        int64_t upfrontGas() const
+        {
+            int64_t accessListCost = 0;
+            if (auto const& accessList = m_data->m_web3AccessListResolved.accessList)
+            {
+                for (auto const& [address, storageKeys] : *accessList)
+                {
+                    accessListCost +=
+                        protocol::gas::compute_access_list_entry_cost(storageKeys.size());
+                }
+            }
+            auto const& hostContext = m_data->m_hostContext;
+            auto const& message = hostContext.message();
+            return protocol::gas::compute_tx_upfront_cost(hostContext.revision(),
+                message.kind == EVMC_CREATE,
+                std::span<const uint8_t>{message.input_data, message.input_size}, accessListCost);
+        }
+
+        // #5772 (bugfix_tx_intrinsic_gas): the transaction pays its intrinsic gas before the
+        // top-level frame runs. A budget below the charge fails the transaction with every
+        // unit consumed and nothing executed: the transaction is already in a block, so it is
+        // settled like any other out-of-gas instead of being dropped as Ethereum would.
+        task::Task<EVMCResult> executeTopFrame()
+        {
+            auto& hostContext = m_data->m_hostContext;
+            if (m_data->m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::bugfix_tx_intrinsic_gas))
+            {
+                auto& message = hostContext.mutableMessage();
+                const auto charge = upfrontGas();
+                if (message.gas < charge)
+                {
+                    co_return makeErrorEVMCResult(*m_data->m_executor.get().m_hashImpl,
+                        protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0,
+                        "Intrinsic gas too low", true);
+                }
+                message.gas -= charge;
+            }
+            co_return co_await hostContext.execute();
         }
 
         task::Task<bool> updateNonce()
@@ -241,8 +290,15 @@ public:
                 // still pays at least the 21000-gas base cost (geth's intrinsic gas for
                 // an empty tx). If balance < intrinsic cost, drain what's left. This
                 // prevents free spam from repeatedly submitting under-funded transactions.
+                // #5772: under bugfix_tx_intrinsic_gas the base cost is what this transaction's
+                // top-level frame would have paid, capped like the out-of-gas path of
+                // executeTopFrame() at the budget the sender signed for.
                 constexpr static int64_t INTRINSIC_GAS = 21000;
-                const auto intrinsicCost = u256(INTRINSIC_GAS) * gasPrice;
+                const auto penaltyGas = m_data->m_ledgerConfig.get().features().get(
+                                            ledger::Features::Flag::bugfix_tx_intrinsic_gas) ?
+                                            std::min(upfrontGas(), m_data->m_gasLimit) :
+                                            INTRINSIC_GAS;
+                const auto intrinsicCost = u256(penaltyGas) * gasPrice;
                 const auto penalty = std::min(senderBalance, intrinsicCost);
                 if (penalty > 0)
                 {

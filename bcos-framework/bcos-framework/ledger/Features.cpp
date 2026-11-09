@@ -229,7 +229,7 @@ void Features::setUpgradeFeatures(
                         Flag::bugfix_nonce_ordering,
                     }},
             {.to = protocol::BlockVersion::V3_18_0_VERSION,
-                .flags = {Flag::bugfix_eip161_1052_account_semantics,
+                .flags = {Flag::bugfix_eip161_1052_account_semantics, Flag::bugfix_tx_intrinsic_gas,
                     Flag::bugfix_evm2929_created_address_warm}}});
     for (const auto& upgradeFeatures : upgradeRoadmap)
     {

@@ -37,9 +37,16 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Worker.h>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
 #include <chrono>
 #include <thread>
 
+namespace bcos
+{
+namespace test
+{
+// Using-directives live INSIDE bcos::test on purpose: at global scope they leak into every
+// consumer TU and every unity-build batch-mate (see FakeLedger.h).
 using namespace bcos::crypto;
 using namespace bcos::front;
 using namespace bcos::storage;
@@ -50,10 +57,6 @@ using namespace bcos::protocol;
 using namespace bcos::scheduler;
 using namespace bcos::consensus;
 
-namespace bcos
-{
-namespace test
-{
 class FakePBFTConfig : public PBFTConfig
 {
 public:
@@ -74,6 +77,16 @@ public:
     void stop() override { PBFTConfig::stop(); }
 
     virtual void setMinRequiredQuorum(uint64_t _quorum) { m_minRequiredQuorum = _quorum; }
+
+    // Test switch: while set, this node's caches do not move into precommit by themselves, so
+    // the node sends no commit vote. It still caches pre-prepares and sends prepare votes. A
+    // test that puts nodes into precommit by hand holds them first; otherwise it races the
+    // nodes' own progress.
+    void setHoldPrecommit(bool _hold) { m_holdPrecommit = _hold; }
+    bool holdPrecommit() const { return m_holdPrecommit; }
+
+private:
+    std::atomic<bool> m_holdPrecommit{false};
 };
 class FakePBFTCache : public PBFTCache
 {
@@ -84,6 +97,15 @@ public:
 
     PBFTMessageInterface::Ptr prePrepare() { return m_prePrepare; }
     void intoPrecommit() override { PBFTCache::intoPrecommit(); }
+    bool checkAndPreCommit() override
+    {
+        auto config = std::dynamic_pointer_cast<FakePBFTConfig>(m_config);
+        if (config && config->holdPrecommit())
+        {
+            return false;
+        }
+        return PBFTCache::checkAndPreCommit();
+    }
 };
 
 class FakePBFTCacheFactory : public PBFTCacheFactory

@@ -211,6 +211,7 @@ BOOST_AUTO_TEST_CASE(feature)
         // bugfix_evm2929_created_address_warm: v1 lane; ON keeps evmone 0.24's
         // created-address warmth, OFF reproduces the 0.21 cold-then-first-touch metering.
         "bugfix_evm2929_created_address_warm",
+        "bugfix_tx_intrinsic_gas",
     };
     // clang-format on
     BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());
@@ -440,6 +441,18 @@ BOOST_AUTO_TEST_CASE(upgrade)
     features16.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_5_VERSION,
         bcos::protocol::BlockVersion::V3_17_0_VERSION);
     BOOST_CHECK_EQUAL(validFlags(features16).size(), expect12.size());
+
+    // 3.17.0 to 3.18.0: the two fixes that change gas or account semantics on the FISCO lanes
+    Features features17;
+    features17.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION,
+        bcos::protocol::BlockVersion::V3_18_0_VERSION);
+    auto expect17 = std::to_array<std::string_view>({"bugfix_eip161_1052_account_semantics",
+        "bugfix_tx_intrinsic_gas", "bugfix_evm2929_created_address_warm"});
+    BOOST_CHECK_EQUAL(validFlags(features17).size(), expect17.size());
+    for (auto feature : expect17)
+    {
+        BOOST_CHECK(features17.get(feature));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(genesis)

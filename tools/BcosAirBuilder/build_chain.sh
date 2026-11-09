@@ -2386,6 +2386,9 @@ fisco_bcos_has_account_new()
 
 generate_auth_account_with_openssl()
 {
+  if ! command -v xxd >/dev/null 2>&1; then
+      LOG_FATAL "xxd is required to derive the admin account with OpenSSL, please install it or pass -a <admin address>"
+  fi
   local account_dir="accounts"
   local digest="keccak-256"
   if ${sm_mode}; then
@@ -2410,8 +2413,16 @@ generate_auth_account_with_openssl()
   "${OPENSSL_CMD}" genpkey -paramfile "${param_file}" -out "${key_file}" 2>/dev/null
   local pub_hex
   pub_hex=$("${OPENSSL_CMD}" ec -in "${key_file}" -text -noout 2>/dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}')
+  if ! [[ ${pub_hex} =~ ^[0-9a-fA-F]{128}$ ]]; then
+      LOG_FATAL "Failed to read the public key of the admin account with OpenSSL"
+  fi
+  # The address is the digest of the 64 raw public-key BYTES (what `fisco-bcos account new` and the
+  # node compute), not of their 128-character hex spelling: decode before hashing. The digest of an
+  # empty input also looks like a valid address, so a failed decode must not reach the check below.
   local digest_hex
-  digest_hex=$(printf '%s' "${pub_hex}" | "${OPENSSL_CMD}" dgst "-${digest}" | awk '{print $2}')
+  if ! digest_hex=$(set -o pipefail; printf '%s' "${pub_hex}" | xxd -r -p | "${OPENSSL_CMD}" dgst "-${digest}" | awk '{print $2}'); then
+      LOG_FATAL "Failed to hash the public key of the admin account with xxd and OpenSSL"
+  fi
   auth_admin_account="0x${digest_hex: -40}"
   if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
       LOG_FATAL "Failed to generate a valid admin account with OpenSSL"
