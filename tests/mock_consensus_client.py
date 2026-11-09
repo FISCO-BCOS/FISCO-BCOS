@@ -11,7 +11,7 @@ Engine API 调用流程:
   4. engine_getPayloadV3           — 校验 V3 响应形状
   5. engine_newPayloadV3           — [payload, [], beaconRoot] 提交,等区块成为 eth_* 头
   6. 0x7e deposit 负测             — deposit 是 OP 车道扩展,Eth 车道 FCU 终态 INVALID
-  7. V2 FCU 负测                   — Cancun 链上 V2 FCU 回 -38003
+  7. V2 FCU 负测                   — Cancun 链上 V2 FCU 回 -38005(时间戳在 V2 的 fork 窗口之外)
   8. 负测                          — 未实现版本 -38005、未知 payloadId -38001、缺参 -32602
 
 用法:
@@ -63,13 +63,18 @@ EXPECTED_CAPABILITIES = {
     "engine_newPayloadV4",
     "engine_getPayloadBodiesByHashV1",
     "engine_getPayloadBodiesByRangeV1",
+    "engine_getPayloadBodiesByHashV2",
+    "engine_getPayloadBodiesByRangeV2",
     "engine_getBlobsV1",
+    "engine_getBlobsV2",
+    "engine_getBlobsV3",
     "engine_getClientVersionV1",
     "engine_exchangeClientVersionV1",
 }
-
-# The one genuinely unimplemented version: routable, answers -38005, never advertised.
-UNIMPLEMENTED_METHODS = ("engine_forkchoiceUpdatedV4",)
+# Not listed, by design: the Amsterdam method versions (engine_forkchoiceUpdatedV4,
+# engine_getPayloadV6, engine_newPayloadV5, engine_getBlobsV4) are routable and answer the
+# spec's out-of-window -38005 (getBlobsV4: null) but are never advertised — this binary has
+# no Amsterdam execution. test_negative_cases exercises forkchoiceUpdatedV4.
 
 # ---- Minimal RLP encoder (enough for the deposit fixture) ----
 
@@ -397,12 +402,13 @@ def test_deposit_envelope_is_rejected_on_eth_lane() -> None:
 def run_v2_block_flow() -> None:
     """V2 FCU on a CANCUN harness chain is refused.
 
-    A V2 forkchoiceUpdated cannot express the CANCUN attribute shape
-    (parentBeaconBlockRoot). The L1 Engine API refuses it with -38003 Invalid payload
-    attributes (the node's current answer; geth answers -38005 Unsupported fork). The V2
-    build loop itself is covered by the engine unit tests on a SHANGHAI fixture.
+    The V2 attributes are well-formed for V2, but their timestamp falls outside V2's fork
+    window (execution-apis cancun.md, "Update the methods of previous forks"), so the L1
+    Engine API answers -38005 Unsupported fork from its one fork-window table — geth's
+    answer too. The V2 build loop itself is covered by the engine unit tests on a SHANGHAI
+    fixture.
     """
-    _log_test("FCU V2 on a Cancun chain -> -38003")
+    _log_test("FCU V2 on a Cancun chain -> -38005")
 
     head_hash = get_head_hash()
     fc_state = {
@@ -418,7 +424,7 @@ def run_v2_block_flow() -> None:
     }
 
     expect_error_code(
-        "engine_forkchoiceUpdatedV2", [fc_state, payload_attrs], -38003
+        "engine_forkchoiceUpdatedV2", [fc_state, payload_attrs], -38005
     )
     _log_pass()
 
