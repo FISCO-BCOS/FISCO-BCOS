@@ -308,8 +308,10 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         // transaction pooled for a later block and skipping the rest of the sender's nonce
         // suffix with it (the executor would reject the nonce gap). Execution would refuse
         // them, and buildL1Payload evicts what execution refuses, so they stop here:
-        //  * the fee cap is below this block's base fee, or the blob fee cap below its blob
-        //    base fee — the price can fall back, and the seal only sorts them last;
+        //  * the blob fee cap is below this block's blob base fee — the price can fall back.
+        //    (The execution fee cap needs no check here: MemPoolImpl::seal's base-fee gate
+        //    stops a sender at its first head priced below the block's base fee, so such a
+        //    transaction never reaches this list.)
         //  * the EIP-4844 sidecar never arrived — the transaction cannot be assembled
         //    into a blobsBundle, so it is unbuildable;
         //  * the block's blob budget is spent — the EIP-7844 schedule's per-block blob
@@ -331,15 +333,14 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             }
             if (sealedTx->type() ==
                     static_cast<std::uint8_t>(protocol::TransactionType::Web3Transaction) &&
-                (protocol::effectiveGasPrice(*sealedTx) < l1Input->l1Context.baseFee ||
-                    (!sealedTx->blobVersionedHashes().empty() &&
-                        sealedTx->maxFeePerBlobGas().value_or(0) < l1Input->l1Context.blobBaseFee)))
+                !sealedTx->blobVersionedHashes().empty() &&
+                sealedTx->maxFeePerBlobGas().value_or(0) < l1Input->l1Context.blobBaseFee)
             {
                 skippedSenders.insert(std::move(sender));
                 BCOS_LOG(INFO) << LOG_BADGE("EthEngineService")
                                << LOG_DESC(
-                                      "seal: fee cap below this block's price; leaving "
-                                      "transaction pooled")
+                                      "seal: blob fee cap below this block's blob base fee; "
+                                      "leaving transaction pooled")
                                << LOG_KV("hash", sealedTx->hash().hexPrefixed());
                 continue;
             }
