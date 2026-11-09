@@ -187,5 +187,28 @@ BOOST_AUTO_TEST_CASE(setCodeAuthListIsNotChargedBeforePrague)
     BOOST_CHECK_EQUAL(stuffed, empty);
 }
 
+// #5772: what executor_version 0 and 1 deduct before the top-level frame. Numbers by hand.
+BOOST_AUTO_TEST_CASE(upfrontCostIsTheLargerOfIntrinsicAndFloor)
+{
+    using bcos::protocol::gas::compute_tx_upfront_cost;
+    // 27 bytes of init code: 8 zero, 19 non-zero
+    bcos::bytes initCode(27, 0xff);
+    std::fill_n(initCode.begin(), 8, 0);
+    const std::span<const uint8_t> init{initCode};
+    const bcos::bytes heavy(100, 0xff);
+    const std::span<const uint8_t> data{heavy};
+
+    // before Prague there is no floor: base + creation + calldata (+ init code words from
+    // Shanghai)
+    BOOST_CHECK_EQUAL(compute_tx_upfront_cost(EVMC_PARIS, true, init, 0), 21000 + 32000 + 336);
+    BOOST_CHECK_EQUAL(compute_tx_upfront_cost(EVMC_CANCUN, true, init, 0), 21000 + 32000 + 336 + 2);
+    BOOST_CHECK_EQUAL(compute_tx_upfront_cost(EVMC_CANCUN, false, data, 0), 21000 + 1600);
+    BOOST_CHECK_EQUAL(compute_tx_upfront_cost(EVMC_CANCUN, false, {}, 2400 + 1900), 25300);
+    // Prague: 400 tokens put the floor (21000 + 4000) above the intrinsic gas (21000 + 1600)
+    BOOST_CHECK_EQUAL(compute_tx_upfront_cost(EVMC_PRAGUE, false, data, 0), 21000 + 4000);
+    // ... and a creation's intrinsic gas stays above its floor (21000 + 84 * 10)
+    BOOST_CHECK_EQUAL(compute_tx_upfront_cost(EVMC_PRAGUE, true, init, 0), 21000 + 32000 + 336 + 2);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

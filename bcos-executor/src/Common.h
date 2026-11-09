@@ -226,6 +226,10 @@ static const VMSchedule FiscoBcosScheduleOsaka = [] {
 
 constexpr static int64_t BALANCE_TRANSFER_GAS = 21000;
 
+// Ethereum's code deposit price (G_codedeposit), which replaces VMSchedule::createDataGas (20)
+// on executor_version 0 and 1 under bugfix_tx_intrinsic_gas (#5772)
+constexpr static unsigned ETHEREUM_CREATE_DATA_GAS = 200;
+
 // EIP-7623: calldata floor cost constants (Prague+)
 // token = 1 for zero byte, TOKENS_PER_NONZERO_BYTE for non-zero byte; floor = tokens * 10
 constexpr static int64_t TOKENS_PER_NONZERO_BYTE = 4;  // EIP-7623 token weight for non-zero byte
