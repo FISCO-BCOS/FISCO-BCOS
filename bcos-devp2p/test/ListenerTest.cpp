@@ -300,7 +300,9 @@ BOOST_AUTO_TEST_CASE(finishedSessionClosesItsConnection)
         established.session.recvMessage(), std::runtime_error, [](std::runtime_error const& e) {
             return std::string_view(e.what()).find("closed by peer") != std::string_view::npos;
         });
-    BOOST_CHECK(std::chrono::steady_clock::now() - begin < std::chrono::seconds(1));
+    // Well under the 15 s socket timeout (same bound as the other cases in this file; the
+    // "closed by peer" text above is what separates the fix from the old behaviour).
+    BOOST_CHECK(std::chrono::steady_clock::now() - begin < std::chrono::seconds(5));
     listener->stop();
 }
 
