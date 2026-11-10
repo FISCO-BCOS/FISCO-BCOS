@@ -24,7 +24,6 @@ if(WITH_LEDGER_ELECTION)
     find_package(etcd-cpp-api CONFIG REQUIRED)
     find_package(gRPC REQUIRED)
     add_library(leader_election ${SRCS})
-    target_include_directories(leader_election PUBLIC ${CMAKE_SOURCE_DIR})
     target_link_libraries(leader_election PUBLIC bcos-utilities bcos-framework etcd-cpp-api)
 
     if(TESTS)

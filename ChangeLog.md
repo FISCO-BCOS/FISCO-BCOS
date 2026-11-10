@@ -1,6 +1,11 @@
 
 ### v3.18.0
 
+**bcos-rpc/bcos-gateway/bcos-framework 破坏性变更**：
+
+* `RpcFactory::buildRpc` 和两个 `GatewayFactory::buildGateway` 重载删除 `LeaderEntryPointInterface::Ptr` 参数，`RpcFactory::buildGroupManager` 同步删除该参数；下游调用方及派生类需移除对应实参或形参，RPC 固定使用 `TarsGroupManager`，Pro Gateway 固定使用 `ProGatewayNodeManager`
+* 公共头目录 `bcos-framework/election/` 自 bcos-framework 安装内容中移除并迁移至 `legacy/bcos-framework/election/`；下游如仍需引用归档接口，需改为 `<legacy/bcos-framework/election/...>`，基于 etcd leader election 的 RPC/Gateway 故障转移不再可用
+
 **bcos-utilities 日志破坏性变更**：
 
 * 日志管线替换为整行异步 fast path；`log.format` 自定义格式恢复支持——配置串在 initLog 时编译为整行布局、由生产者线程直接渲染（支持字面量、`%%` 转义及 `%Severity%`、`%TimeStamp(format="...")%`、`%ThreadName%`、`%ThreadID%`、`%LineID%`、`%ProcessID%`、`%Message%`，TimeStamp 支持 date_time 标志 `%Y %y %m %d %H %M %S %f %%`），不支持的语法回退内置布局并在 stderr 与日志中输出 ERROR；格式串缺少 `%Message%` 占位符时日志内容不被渲染，布局仍然生效，但同样在 stderr 与日志中输出告警；`log.flush` 默认值由 `true` 改为 `false`（改为队列排空时刷盘，持续洪泛下兜底上界为 100ms + 至多 63 行的写盘延迟，逐行刷盘可显式配置 `flush=true` 恢复）
