@@ -53,7 +53,7 @@ int main(int argc, char** argv)
     logInitializer->initLog(pt);
 
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localClient", nullptr);
-    auto gateway = gatewayFactory.buildGateway(configFilePath, true, nullptr, "localClient");
+    auto gateway = gatewayFactory.buildGateway(configFilePath, true, "localClient");
     auto service = std::dynamic_pointer_cast<Service>(gateway->p2pInterface());
 
     gateway->start();

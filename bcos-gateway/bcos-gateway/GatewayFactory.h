@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include "bcos-framework/election/LeaderEntryPointInterface.h"
 #include "bcos-framework/security/KeyEncryptInterface.h"
 #include "bcos-gateway/Gateway.h"
 #include "bcos-gateway/GatewayConfig.h"
@@ -82,26 +81,22 @@ public:
      *
      * @param _configPath
      * @param _airVersion
-     * @param _entryPoint
      * @param _gatewayServiceName
      * @return Gateway::Ptr
      */
-    Gateway::Ptr buildGateway(const std::string& _configPath, bool _airVersion,
-        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
-        std::string const& _gatewayServiceName);
+    Gateway::Ptr buildGateway(
+        const std::string& _configPath, bool _airVersion, std::string const& _gatewayServiceName);
 
     /**
      * @brief construct Gateway for pro
      *
      * @param _config
      * @param _airVersion
-     * @param _entryPoint
      * @param _gatewayServiceName
      * @return Gateway::Ptr
      */
-    Gateway::Ptr buildGateway(GatewayConfig::Ptr _config, bool _airVersion,
-        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
-        std::string const& _gatewayServiceName);
+    Gateway::Ptr buildGateway(
+        GatewayConfig::Ptr _config, bool _airVersion, std::string const& _gatewayServiceName);
 
     /**
      * @brief
@@ -127,10 +122,6 @@ private:
 
     std::function<bool(const std::string& priKey, std::string& pubHex)> m_certPubHexHandler;
 
-    void initFailOver(std::shared_ptr<Gateway> _gateWay,
-        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
-
-private:
     std::string m_chainID;
     std::string m_rpcServiceName;
 
