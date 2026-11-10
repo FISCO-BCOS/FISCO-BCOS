@@ -115,6 +115,11 @@ public:
     void setOnMessageHandler(
         std::function<std::optional<bcos::Error>(SessionFace::Ptr, const Message&)> _handler);
 
+    /// Whether a fan-out may compress its payload once for all peers instead of once per peer.
+    /// Mirrors the session-level compression switch; on by default.
+    void setEnableCompressForBroadcast(bool _enable) { m_enableCompressForBroadcast.store(_enable); }
+    bool enableCompressForBroadcast() const { return m_enableCompressForBroadcast.load(); }
+
     void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) override;
     void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) override;
 
@@ -162,6 +167,9 @@ protected:
     bool m_run = false;
 
     std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers{};
+
+    // see setEnableCompressForBroadcast
+    std::atomic_bool m_enableCompressForBroadcast{true};
 
     // the local protocol
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
