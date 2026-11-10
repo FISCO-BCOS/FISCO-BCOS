@@ -70,7 +70,7 @@ enable_storage_security = false
 
         [[agency.group.node]]
         node_name = "node0"
-        key_page_size=10240
+        key_page_size=0
         deploy_ip = ["127.0.0.1"]
         executor_deploy_ip= ["127.0.0.1"]
         monitor_listen_port = "3901"
@@ -116,7 +116,7 @@ enable_storage_security = false
 
         [[agency.group.node]]
         node_name = "node0"
-        key_page_size=10240
+        key_page_size=0
         deploy_ip = ["127.0.0.1"]
         executor_deploy_ip= ["127.0.0.1"]
         monitor_listen_port = "3901"
@@ -161,7 +161,7 @@ enable_storage_security = false
 
         [[agency.group.node]]
         node_name = "node0"
-        key_page_size=10240
+        key_page_size=0
         deploy_ip = ["127.0.0.1"]
         executor_deploy_ip= ["127.0.0.1"]
         monitor_listen_port = "3901"
@@ -205,7 +205,7 @@ enable_storage_security = false
 
         [[agency.group.node]]
         node_name = "node0"
-        key_page_size=10240
+        key_page_size=0
         deploy_ip = ["127.0.0.1"]
         executor_deploy_ip= ["127.0.0.1"]
         monitor_listen_port = "3901"

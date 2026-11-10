@@ -169,7 +169,7 @@ class NodeConfig:
 
         # parse key_page_size
         self.key_page_size = utilities.get_item_value(
-            self.config, "key_page_size", 10240, False, self.desc)
+            self.config, "key_page_size", 0, False, self.desc)
         # load storage_security
         self.enable_storage_security = utilities.get_item_value(
             self.config, "enable_storage_security", False, False, self.desc)

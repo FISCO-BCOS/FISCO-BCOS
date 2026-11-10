@@ -45,7 +45,7 @@
     data_path=data
     enable_cache=true
     type=RocksDB
-    key_page_size=10240
+    key_page_size=0
     ; MPT state-node pruning (pathdb): delete MPT nodes obsoleted more than
     ; mpt_prune_window blocks ago, bounding state-trie disk usage.
     ; State roots within [latest - mpt_prune_window, latest] stay fully reachable

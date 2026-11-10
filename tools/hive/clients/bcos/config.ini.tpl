@@ -80,7 +80,7 @@
     data_path=data
     enable_cache=true
     type=RocksDB
-    key_page_size=10240
+    key_page_size=0
     rocksdb_max_open_files=-1
 
 [txpool]

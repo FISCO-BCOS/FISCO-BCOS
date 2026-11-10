@@ -2405,7 +2405,8 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_genesisConfig.m_groupID);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
-    m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
+    m_keyPageSizeConfigured = _pt.get_child_optional("storage.key_page_size").has_value();
+    m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 0);
     m_maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 4);
     m_maxBackgroundJobs = _pt.get<int32_t>("storage.max_background_jobs", 4);
     m_writeBufferSize = _pt.get<size_t>("storage.write_buffer_size", 64 << 20);
@@ -3016,6 +3017,16 @@ std::string const& NodeConfig::storageType() const
 size_t NodeConfig::keyPageSize() const
 {
     return m_keyPageSize;
+}
+
+bool NodeConfig::keyPageSizeConfigured() const
+{
+    return m_keyPageSizeConfigured;
+}
+
+void NodeConfig::setKeyPageSize(size_t _keyPageSize)
+{
+    m_keyPageSize = _keyPageSize;
 }
 
 int NodeConfig::maxWriteBufferNumber() const

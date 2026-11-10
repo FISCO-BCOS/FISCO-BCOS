@@ -29,7 +29,7 @@ enable_storage_security = false
         [[agency.group.node]]
         # expand the existed-max-node
         node_name = "node1"
-        key_page_size=10240
+        key_page_size=0
         deploy_ip = ["172.25.0.5"]
         executor_deploy_ip=["172.25.0.5"]
         # enable data disk encryption for bcos node or not, default is false

@@ -72,7 +72,7 @@
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
-#include <bcos-table/src/KeyPageStorage.h>
+#include <bcos-table/src/KeyPageStorageDetector.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
@@ -296,6 +296,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     else
     {
         throw std::runtime_error("storage type not support");
+    }
+
+    if (!m_nodeConfig->keyPageSizeConfigured())
+    {
+        auto hasMetadata = storage::hasKeyPageMetadata(*m_storage);
+        size_t const keyPageSize = hasMetadata ? 10240 : 0;
+        m_nodeConfig->setKeyPageSize(keyPageSize);
+        INITIALIZER_LOG(INFO) << LOG_DESC("resolveKeyPageSize")
+                              << LOG_KV("hasKeyPageMetadata", hasMetadata)
+                              << LOG_KV("keyPageSize", keyPageSize);
     }
 
     // build ledger

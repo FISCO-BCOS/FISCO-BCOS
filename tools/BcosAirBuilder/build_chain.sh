@@ -593,7 +593,7 @@ air
     -E <Enable debug log>               Default off. If set -E, enable debug log
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -R <Serial_mode>                    [Optional] Whether to use serial execute,default is true
-    -k <key page size>                  [Optional] key page size, default is 10240
+    -k <key page size>                  [Optional] key page size, default is 0
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
@@ -1457,7 +1457,8 @@ generate_common_ini() {
 [storage]
     data_path=data
     enable_cache=true
-    ; The granularity of the storage page, in bytes, must not be less than 4096 Bytes, the default is 10240 Bytes (10KB)
+    ; The granularity of the storage page in bytes; 0 disables KeyPage and is the default for new chains
+    ; If key_page_size is absent, 10240 is used when legacy KeyPage metadata is detected
     ; if modify key_page_size value to 0, should clear the data directory
     key_page_size=${key_page_size}
     enable_archive=false
