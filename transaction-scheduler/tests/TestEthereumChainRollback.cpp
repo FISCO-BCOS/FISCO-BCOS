@@ -393,7 +393,7 @@ task::Task<void> RBDriveChain(RBFixture& fixture, SchedulerSerialImpl& scheduler
             ethHeader, prevEthHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{},
             forks, 1, std::vector<bcos::bytes>{}, 0, decoder, stateRootCalc);
         BOOST_REQUIRE_MESSAGE(result.valid, "block " << number << " invalid: " << result.error);
-        // FakeLedger::asyncPrewriteBlock is a no-op: write the ledger metadata rows the real
+        // FakeLedger::prewriteBlock is a no-op: write the ledger metadata rows the real
         // Ledger::prewriteBlock would have written (same as TestMPTPrunerSyncWiring).
         co_await RBWriteCurrentNumber(fixture.backendStorage, number);
         co_await RBWriteBlockHash(
@@ -664,7 +664,7 @@ BOOST_FIXTURE_TEST_CASE(rollbackDeletesBlobRows, RBFixture)
         co_await RBDriveChain(*this, scheduler, verifier, *fakeLedger, chain, 4);
 
         // Simulate the engine-lane commit rows for blob-carrying blocks 3 and 4
-        // (FakeLedger::asyncPrewriteBlock is a no-op, so the test writes them the same
+        // (FakeLedger::prewriteBlock is a no-op, so the test writes them the same
         // way it writes the number/hash rows).
         auto writeBlobRow = [this](protocol::BlockNumber number,
                                 bcos::bytes payload) -> task::Task<void> {

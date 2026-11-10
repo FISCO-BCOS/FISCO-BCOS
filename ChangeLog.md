@@ -11,6 +11,11 @@
 
 **bcos-boostssl/bcos-cpp-sdk 破坏性变更**：删除 MessageFace 及工厂、WsMessage 改 move-only、回调改按值传 WsMessage、WsSession/WsService 去虚、发送路径签名改 const WsMessage&（迁移详见 PR #5464）
 
+**bcos-ledger 破坏性变更**：
+
+* 已安装公共头 `bcos-framework/ledger/LedgerInterface.h` 将 `void asyncPrewriteBlock(StorageInterface::Ptr, ConstTransactionsPtr, Block::ConstPtr, std::function<void(std::string, Error::Ptr&&)>, bool, std::optional<Features>, std::optional<HashType>, bool)` 替换为 `task::Task<std::string> prewriteBlock(StorageInterface::Ptr, ConstTransactionsPtr, Block::ConstPtr, bool, std::optional<HashType>, bool)`，同时删除回调和未使用的 `features` 参数；下游派生实现需改为协程 override，普通预写返回 hash-to-number 行的 primary key，系统合约部署分支只写 `SYS_KEY_CURRENT_NUMBER` 并返回空字符串，错误通过协程异常传播
+* 已安装公共头 `bcos-framework/ledger/Ledger.h` 将 CPO `bcos::ledger::prewriteBlock` 更名为 `bcos::ledger::prewriteBlockRows`，避免与 `LedgerInterface::prewriteBlock` 成员函数混淆；下游 CPO 调用及对应 `tag_invoke` 需同步更名
+
 **后续跟进**：`WsStreamDelegate::setVerifyCallback` fail-closed（raw 流上请求证书校验时抛错）将在独立 PR 落地
 
 **执行模式（lane）由 genesis `[executor] version` 唯一决定**：

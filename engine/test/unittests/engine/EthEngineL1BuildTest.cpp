@@ -510,7 +510,7 @@ struct EL1BFaultNode
 };
 
 /// A ledger stub whose prewrite persists the SYS_HASH_2_NUMBER row the self-built
-/// commit lane's fail-closed guard reads (the way the real Ledger::asyncPrewriteBlock
+/// commit lane's fail-closed guard reads (the way the real Ledger::prewriteBlock
 /// writes it); prewriteCount pins how often the commit section ran.
 class El1bPersistingLedger : public bcos::test::FakeLedger
 {
@@ -519,14 +519,12 @@ public:
 
     std::atomic<unsigned> prewriteCount{0};
 
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+    task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces) override
     {
         (void)writeTxsAndReceipts;
-        (void)features;
         (void)blockHashOverride;
         (void)writeNonces;
         if (block)
@@ -539,11 +537,11 @@ public:
                 [](auto&&) {});
         }
         ++prewriteCount;
-        callback("", nullptr);
+        co_return std::string{};
     }
 };
 
-/// El1bPersistingLedger whose asyncPrewriteBlock can be armed to fail (counted down, so
+/// El1bPersistingLedger whose prewriteBlock can be armed to fail (counted down, so
 /// a test can arm exactly one failure): a throw INSIDE the commit section, after
 /// pushView has consumed the executed view — the round-4 F1 path. Same injection shape
 /// as EngineServiceTest's FlakyLedger.
@@ -554,11 +552,10 @@ public:
 
     std::shared_ptr<std::atomic<int>> prewriteFailRemaining = std::make_shared<std::atomic<int>>(0);
 
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+    task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr txs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces) override
     {
         int remaining = prewriteFailRemaining->load(std::memory_order_acquire);
         while (remaining > 0 && !prewriteFailRemaining->compare_exchange_weak(
@@ -567,13 +564,11 @@ public:
         }
         if (remaining > 0)
         {
-            callback("injected", BCOS_ERROR_PTR(bcos::ledger::LedgerError::ErrorArgument,
-                                     "injected prewrite failure"));
-            return;
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(bcos::ledger::LedgerError::ErrorArgument, "injected prewrite failure"));
         }
-        El1bPersistingLedger::asyncPrewriteBlock(std::move(storage), std::move(txs),
-            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
-            std::move(blockHashOverride), writeNonces);
+        co_return co_await El1bPersistingLedger::prewriteBlock(std::move(storage), std::move(txs),
+            std::move(block), writeTxsAndReceipts, std::move(blockHashOverride), writeNonces);
     }
 };
 
@@ -1175,7 +1170,7 @@ BOOST_FIXTURE_TEST_CASE(selfBuiltCommitJournalsForShallowReorg, EL1BReorgFixture
     BOOST_CHECK(committedA.status == PayloadValidationStatus::Valid);
     BOOST_CHECK_EQUAL(
         task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)), u256(2000000000));
-    // FakeLedger::asyncPrewriteBlock is a no-op: write the ledger metadata rows the real
+    // FakeLedger::prewriteBlock is a no-op: write the ledger metadata rows the real
     // Ledger::prewriteBlock would have written (the established pattern of
     // TestEthereumChainRollback / TestMPTPrunerSyncWiring).
     el1bWriteCurrentNumber(nodeA.backendStorage, 1);

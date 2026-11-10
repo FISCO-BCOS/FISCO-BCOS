@@ -452,7 +452,7 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
                 ethHeader, prevEthHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{},
                 forks, 1, std::vector<bcos::bytes>{}, 0, decoder, stateRootCalc);
             BOOST_REQUIRE_MESSAGE(result.valid, "block " << number << " invalid: " << result.error);
-            // FakeLedger::asyncPrewriteBlock is a no-op, so the commit does not advance
+            // FakeLedger::prewriteBlock is a no-op, so the commit does not advance
             // SYS_KEY_CURRENT_NUMBER the way the real Ledger::prewriteBlock
             // (Ledger.cpp:296-300) does — write the row the real commit would have written,
             // so the verifier's head+1 guard sees the advanced head for the next block.

@@ -284,19 +284,17 @@ public:
         m_ledgerConfig->setHash(_blockHeader->hash());
     }
 
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+    task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+        bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
+        bool writeNonces) override
     {
         (void)storage;
         (void)block;
         (void)writeTxsAndReceipts;
-        (void)features;
         (void)blockHashOverride;
         (void)writeNonces;
-        callback("", nullptr);
+        co_return std::string{};
     }
 
     void setStorageState(std::string address, ledger::StorageState _state)

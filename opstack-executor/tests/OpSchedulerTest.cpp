@@ -297,11 +297,11 @@ void seedSender(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Ptr con
 }
 
 /// Seed the SYS_TABLES meta-rows for the ledger SYS tables (each uses the SYS_VALUE field,
-/// Ledger.cpp buildGenesisBlock). A real bcos::ledger::Ledger's asyncPrewriteBlock ends with
+/// Ledger.cpp buildGenesisBlock). A real bcos::ledger::Ledger's prewriteBlock ends with
 /// asyncGetTotalTransactionCount, which opens SYS_CURRENT_STATE through the Ledger's OWN
 /// m_stateStorage (here: a LegacyStorageWrapper over the MLS backend, distinct from the
 /// commit-hook MutableStorage that prewriteBlockToBuffer writes through). Without the SYS_TABLES
-/// row the open fails (Table does not exist) and the whole asyncPrewriteBlock errors out.
+/// row the open fails (Table does not exist) and the whole prewriteBlock errors out.
 void seedSysTables(MLS& mls)
 {
     auto view = mls.fork();
