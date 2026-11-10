@@ -75,6 +75,11 @@ public:
     bool encode(bytes& _buffer) const;
     int32_t decode(const bytesConstRef& _buffer);
 
+    /// Exact number of bytes encode() appends for the current field values. Lets a caller size the
+    /// buffer once instead of letting a chain of insert() calls grow it (which reallocates and
+    /// copies on every growth step).
+    std::size_t encodeSize() const;
+
     uint16_t moduleID() const;
     void setModuleID(uint16_t _moduleID);
 
@@ -195,6 +200,9 @@ public:
     const std::any& extAttributes() const;
 
     bool encodeHeader(bytes& _buffer) const;
+    /// Exact size of the header encodeHeader() emits for the current field values (base header plus
+    /// the V1+ extended header plus the options block when the packet type carries one).
+    std::size_t encodeHeaderSize() const;
 
 protected:
     bool encodeHeaderImpl(bytes& _buffer) const;

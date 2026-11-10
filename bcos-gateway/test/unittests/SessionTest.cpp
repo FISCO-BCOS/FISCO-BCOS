@@ -27,6 +27,7 @@
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
+#include "bcos-utilities/ZstdCompress.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
@@ -684,6 +685,107 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     uint16_t frameExt =
         (static_cast<uint16_t>(received[12]) << 8) | static_cast<uint16_t>(received[13]);
     BOOST_CHECK(frameExt & bcos::protocol::MessageExtFieldFlag::COMPRESS);
+}
+
+// A fan-out caller may hand the session an already-compressed payload (Options::prepared). The
+// session must send that exact zstd frame verbatim -- no second compression pass -- while still
+// stamping the COMPRESS bit onto its own wire header. Verified end-to-end: the peer decodes the
+// received frame back into the original payload.
+BOOST_AUTO_TEST_CASE(fastSendMessageUsesPreparedPayload)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeAsio = std::make_shared<FakeASIO>();
+
+    auto io = std::make_shared<ba::io_context>();
+    boost::asio::executor_work_guard<ba::io_context::executor_type> workGuard(io->get_executor());
+    std::thread ioThread([io] { io->run(); });
+
+    ba::ip::tcp::acceptor acceptor(*io, ba::ip::tcp::endpoint(ba::ip::tcp::v4(), 0));
+    auto listenEndpoint = acceptor.local_endpoint();
+
+    std::vector<uint8_t> received;
+    std::thread peerThread([&] {
+        ba::ip::tcp::socket peer(*io);
+        boost::system::error_code ec;
+        acceptor.accept(peer, ec);
+        if (ec)
+        {
+            return;
+        }
+        // the prepared frame is small (a few hundred bytes), so a single read gets all of it
+        std::array<uint8_t, 4096> buf;
+        std::size_t n = peer.read_some(ba::buffer(buf), ec);
+        if (!ec && n > 0)
+        {
+            received.assign(buf.begin(), buf.begin() + n);
+        }
+    });
+
+    ba::ip::tcp::socket client(*io);
+    boost::system::error_code connectError;
+    client.connect(listenEndpoint, connectError);
+    BOOST_REQUIRE(!connectError);
+
+    // The caller compresses once and shares the frame, exactly what a broadcast fan-out does.
+    bytes payload(4096, 'y');
+    auto prepared = std::make_shared<PreparedPayload>();
+    {
+        auto compressed = std::make_shared<bytes>();
+        BOOST_REQUIRE(ZstdCompress::compress(bcos::ref(payload), *compressed, 1));
+        BOOST_REQUIRE_LT(compressed->size(), payload.size());
+        prepared->data = std::move(compressed);
+        prepared->compressed = true;
+    }
+
+    {
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
+        auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
+        auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
+
+        Message message;
+        message.setVersion((uint16_t)bcos::protocol::ProtocolVersion::V2);
+        message.setPacketType(GatewayMessageType::Heartbeat);
+        message.setSeq(7);
+
+        Options options;
+        options.prepared = prepared;
+        task::syncWait(session->fastSendMessage(
+            message, ::ranges::views::single(bcos::ref(std::as_const(payload))), options));
+
+        session->disconnect(DisconnectReason::DisconnectRequested);
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
+    }
+
+    peerThread.join();
+    workGuard.reset();
+    {
+        boost::system::error_code ec;
+        acceptor.close(ec);
+    }
+    io->stop();
+    ioThread.join();
+
+    BOOST_REQUIRE_GE(received.size(), Message::MESSAGE_HEADER_LENGTH);
+
+    // the wire header must carry the COMPRESS bit ...
+    uint16_t frameExt =
+        (static_cast<uint16_t>(received[12]) << 8) | static_cast<uint16_t>(received[13]);
+    BOOST_CHECK(frameExt & bcos::protocol::MessageExtFieldFlag::COMPRESS);
+
+    // ... and the body must be the shared frame, i.e. it decodes back to the original payload
+    Message decoded;
+    auto decodedSize =
+        decoded.decode(bytesConstRef(received.data(), received.size()));
+    BOOST_REQUIRE_GT(decodedSize, 0);
+    BOOST_CHECK(decoded.payload().toBytes() == payload);
 }
 
 BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)

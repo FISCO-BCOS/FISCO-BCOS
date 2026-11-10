@@ -53,11 +53,24 @@ public:
 
     const bytes& data() const override { return m_keyData; }
     size_t size() const override { return m_keyData.size(); }
-    char* mutableData() override { return (char*)m_keyData.data(); }
+    char* mutableData() override
+    {
+        // the caller is about to overwrite the key material, so any cached hex is stale
+        m_hexCache.clear();
+        return (char*)m_keyData.data();
+    }
     const char* constData() const override { return (const char*)m_keyData.data(); }
     bytes encode() const override { return m_keyData; }
-    void decode(bytesConstRef _data) override { m_keyData = _data.toBytes(); }
-    void decode(bytes _data) override { m_keyData = std::move(_data); }
+    void decode(bytesConstRef _data) override
+    {
+        m_keyData = _data.toBytes();
+        m_hexCache.clear();
+    }
+    void decode(bytes _data) override
+    {
+        m_keyData = std::move(_data);
+        m_hexCache.clear();
+    }
 
     std::string shortHex() override
     {
@@ -70,9 +83,21 @@ public:
         return toHex(std::span(startIt, endIt)) + "...";
     }
 
-    std::string hex() override { return toHex(m_keyData); }
+    std::string hex() override
+    {
+        // Computed once per key and reused by every later call. This must be a MEMBER, not a
+        // function-local static: a static would be shared by every KeyImpl instance and would hand
+        // the first key's hex to all of them.
+        if (m_hexCache.empty())
+        {
+            m_hexCache = toHex(m_keyData);
+        }
+        return m_hexCache;
+    }
 
 private:
     bytes m_keyData;
+    /// Lazily filled by hex(); invalidated by decode() and mutableData().
+    std::string m_hexCache;
 };
 }  // namespace bcos::crypto

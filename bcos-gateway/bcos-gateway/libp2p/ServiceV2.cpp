@@ -176,7 +176,7 @@ void ServiceV2::onReceiveRouterTableRequest(
 
     auto routerTableData = std::make_shared<bytes>();
     m_routerTable->encode(*routerTableData);
-    auto dstP2PNodeID =
+    auto const& dstP2PNodeID =
         (!_message.srcP2PNodeID().empty()) ? _message.srcP2PNodeID() : _session->p2pID();
     auto self = std::static_pointer_cast<ServiceV2>(shared_from_this());
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
@@ -272,7 +272,7 @@ void ServiceV2::onReceiveRouterSeq(
                        << LOG_DESC("receive router seq and request router table")
                        << LOG_KV("peer", _session->printP2pID()) << LOG_KV("seq", statusSeq);
     // request router table to peer
-    auto dstP2PNodeID =
+    auto const& dstP2PNodeID =
         (!_message.srcP2PNodeID().empty()) ? _message.srcP2PNodeID() : _session->p2pID();
     auto self = std::static_pointer_cast<ServiceV2>(shared_from_this());
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
@@ -448,6 +448,15 @@ bcos::task::Task<void> ServiceV2::broadcastMessageToAll(Message::Ptr message,
 {
     auto reachableNodes = m_routerTable->getAllReachableNode();
     auto selfV2 = std::static_pointer_cast<ServiceV2>(shared_from_this());
+
+    // Compress the fan-out payload once for every peer. Per-peer compression would repeat the whole
+    // zstd pass N times for the identical bytes.
+    auto prepared = prepareFanoutPayload(payloads, m_enableCompressForBroadcast.load());
+    if (prepared)
+    {
+        options.prepared = prepared;
+    }
+
     // Fan out one independent coroutine per peer (see Service::broadcastMessageToAll).
     for (auto const& node : reachableNodes)
     {
@@ -543,7 +552,9 @@ bcos::task::Task<std::optional<Message>> bcos::gateway::ServiceV2::forwardMessag
     // Forwarding path (a message received from another node being relayed): unlike
     // sendMessageByNodeID it must NOT rewrite srcP2PNodeID — the original sender is preserved so
     // the final destination can reply directly to it. Only the next hop is resolved here.
-    auto dstNodeID = header.dstP2PNodeID();
+    // bind by reference: the header already owns the id, so a by-value `auto` copies the whole
+    // 32/128-byte node id on every forwarded message for no reason
+    auto const& dstNodeID = header.dstP2PNodeID();
     // without nextHop: maybe network unreachable or with distance equal to 1
     auto nextHop = m_routerTable->getNextHop(dstNodeID);
     if (nextHop.empty())
@@ -559,7 +570,7 @@ bcos::task::Task<std::optional<Message>> bcos::gateway::ServiceV2::forwardMessag
                                 << LOG_KV("rsp", header.isRespPacket());
         }
         co_return co_await Service::sendMessageByNodeID(
-            std::move(dstNodeID), header, std::move(payloads), options);
+            dstNodeID, header, std::move(payloads), options);
     }
     // with nextHop, send the message to nextHop
     if (c_fileLogLevel == TRACE) [[unlikely]]

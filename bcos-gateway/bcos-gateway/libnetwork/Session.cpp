@@ -929,6 +929,9 @@ bcos::task::Task<std::optional<bcos::gateway::Message>> bcos::gateway::Session::
     // const), so a reused message object (broadcast fan-out / retry loop) can never leak the flag
     // to a peer that receives an uncompressed frame.
     bytes headerBuffer;
+    // size the header buffer once: encodeHeader appends a fixed header plus the extended header
+    // plus the options block, and growing the vector across those steps reallocates repeatedly
+    headerBuffer.reserve(message.encodeHeaderSize());
     if (!message.encodeHeader(headerBuffer))
     {
         // e.g. P2PMessageOptions::encode failed (empty/oversized src/dst IDs). Sending a frame
@@ -953,7 +956,22 @@ bcos::task::Task<std::optional<bcos::gateway::Message>> bcos::gateway::Session::
     bcos::bytes compressedPayload;
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> wirePayloads =
         ::ranges::views::all(payloadRefs);
-    if (m_enableCompress && message.version() >= (uint16_t)bcos::protocol::ProtocolVersion::V2)
+    if (options.prepared)
+    {
+        // A fan-out caller already compressed this (identical) payload once; do not repeat the zstd
+        // pass per peer. The frame is self-delimiting, so only the COMPRESS bit has to be stamped
+        // when the shared buffer really is a zstd frame.
+        if (options.prepared->compressed && m_enableCompress &&
+            message.version() >= (uint16_t)bcos::protocol::ProtocolVersion::V2)
+        {
+            const auto compressedExt = static_cast<uint16_t>(
+                message.ext() | bcos::protocol::MessageExtFieldFlag::COMPRESS);
+            *(uint16_t*)(headerBuffer.data() + c_p2pHeaderExtOffset) =
+                boost::asio::detail::socket_ops::host_to_network_short(compressedExt);
+        }
+        wirePayloads = ::ranges::views::single(bcos::ref(*options.prepared->data));
+    }
+    else if (m_enableCompress && message.version() >= (uint16_t)bcos::protocol::ProtocolVersion::V2)
     {
         uint32_t payloadSize = 0;
         for (auto const& ref : payloadRefs)
@@ -968,7 +986,12 @@ bcos::task::Task<std::optional<bcos::gateway::Message>> bcos::gateway::Session::
                 joinedPayload.insert(joinedPayload.end(), ref.begin(), ref.end());
             }
             if (ZstdCompress::compress(
-                    ref(joinedPayload), compressedPayload, (int)c_zstdCompressLevel))
+                    ref(joinedPayload), compressedPayload, (int)c_zstdCompressLevel) &&
+                // High-entropy payloads (already-compressed blocks, signatures, ciphertext) can
+                // EXPAND under zstd: measured 1.00x-1.02x for random bytes. Only take the compressed
+                // frame when it actually saves wire bytes; otherwise fall through to the original
+                // zero-copy views.
+                compressedPayload.size() < joinedPayload.size())
             {
                 // stamp the COMPRESS flag onto the encoded header only (ext field of the fixed
                 // base header), before the frame is written to the wire
@@ -980,7 +1003,10 @@ bcos::task::Task<std::optional<bcos::gateway::Message>> bcos::gateway::Session::
             }
             else
             {
-                wirePayloads = ::ranges::views::single(bcos::ref(std::as_const(joinedPayload)));
+                // zstd reported no gain (or failed): fall back to the ORIGINAL zero-copy views
+                // instead of the joined copy we only built to feed the compressor
+                joinedPayload.clear();
+                joinedPayload.shrink_to_fit();
             }
         }
     }
