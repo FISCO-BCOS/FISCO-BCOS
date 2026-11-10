@@ -6,8 +6,9 @@
 #pragma once
 
 #include <bcos-framework/storage/StorageInterface.h>
+#include <cstddef>
 
 namespace bcos::storage
 {
-bool hasKeyPageMetadata(StorageInterface& storage);
+bool hasKeyPageMetadata(StorageInterface& storage, std::size_t* examinedTables = nullptr);
 }

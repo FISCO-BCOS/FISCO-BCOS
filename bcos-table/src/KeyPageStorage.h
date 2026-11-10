@@ -38,6 +38,8 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/property_map/property_map.hpp>
+#include <boost/serialization/collection_size_type.hpp>
+#include <boost/serialization/item_version_type.hpp>
 #include <boost/serialization/vector.hpp>
 #include <atomic>
 #include <cstddef>
@@ -191,6 +193,7 @@ public:
 
         [[nodiscard]] auto getPageData() const -> Data* { return m_pageData; }
         void setPageData(Data* data) { m_pageData = data; }
+        void setInputLimit(std::size_t limit) { inputLimit = limit; }
 
     private:
         void prepareMyData()
@@ -214,6 +217,7 @@ public:
         };
         std::shared_ptr<PageInfoData> m_data = std::make_shared<PageInfoData>();
         Data* m_pageData = nullptr;
+        std::size_t inputLimit = 0;
         friend class boost::serialization::access;
 
         template <class Archive>
@@ -229,7 +233,18 @@ public:
         {
             std::ignore = version;
             m_data = std::make_shared<PageInfoData>();
-            archive & m_data->pageKey;
+            std::size_t length = 0;
+            archive & length;
+            if (inputLimit > 0 && length > inputLimit)
+            {
+                BOOST_THROW_EXCEPTION(boost::archive::archive_exception(
+                    boost::archive::archive_exception::input_stream_error));
+            }
+            m_data->pageKey.resize(length);
+            if (length > 0)
+            {
+                archive.load_binary(m_data->pageKey.data(), length);
+            }
             archive & m_data->count;
             archive & m_data->size;
         }
@@ -252,6 +267,7 @@ public:
                 inputStream, bcos::storage::serialize::ARCHIVE_FLAG);
             archive >> *this;
         }
+        std::size_t inputLimit = 0;
         TableMeta(const TableMeta& meta)
         {
             pages = std::make_unique<std::vector<PageInfo>>();
@@ -529,19 +545,47 @@ public:
             KeyPage_LOG(DEBUG) << LOG_DESC("Serialize meta") << LOG_KV("valid", pages->size())
                                << LOG_KV("invalid", invalid);
         }
+        template <typename T>
+        struct BoundedAllocator : public std::allocator<T>
+        {
+            using Base = std::allocator<T>;
+            template <typename U>
+            struct rebind
+            {
+                using other = BoundedAllocator<U>;
+            };
+
+            BoundedAllocator(std::size_t limit = 0) : limit(limit) {}
+            template <typename U>
+            BoundedAllocator(BoundedAllocator<U> const& other) : limit(other.limit)
+            {}
+
+            T* allocate(std::size_t count)
+            {
+                if (limit > 0 && count > limit)
+                {
+                    BOOST_THROW_EXCEPTION(boost::archive::archive_exception(
+                        boost::archive::archive_exception::input_stream_error));
+                }
+                return Base::allocate(count);
+            }
+            void construct(T* p)
+            {
+                ::new (static_cast<void*>(p)) T();
+                p->setInputLimit(limit);
+            }
+
+            std::size_t limit;
+        };
+
         template <class Archive>
         void load(Archive& ar, const unsigned int version)
         {
             std::ignore = version;
-            // uint32_t s = 0;
-            // ar& s;
-            // pages = std::make_unique<std::vector<PageInfo>>(s, PageInfo());
-            // for (size_t i = 0; i < pages->size(); ++i)
-            // {
-            //     ar & pages->at(i);
-            // }
-            pages = std::make_unique<std::vector<PageInfo>>();
-            ar >> *pages;
+            using BoundedVector = std::vector<PageInfo, BoundedAllocator<PageInfo>>;
+            BoundedVector bounded{BoundedAllocator<PageInfo>(inputLimit)};
+            ar >> bounded;
+            pages = std::make_unique<std::vector<PageInfo>>(bounded.begin(), bounded.end());
         }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
     };
@@ -998,6 +1042,7 @@ public:
         auto rLock() -> std::shared_lock<std::shared_mutex> { return std::shared_lock(mutex); }
         void setTableMeta(TableMeta* _meta) { m_meta = _meta; }
         TableMeta* myTableMeta() { return m_meta; }
+        std::size_t inputLimit = 0;
 
     private:
         //   PageInfo* pageInfo;
@@ -1036,18 +1081,42 @@ public:
             std::ignore = version;
             uint32_t count = 0;
             ar & count;
+            if (inputLimit > 0 && count > inputLimit)
+            {
+                BOOST_THROW_EXCEPTION(boost::archive::archive_exception(
+                    boost::archive::archive_exception::input_stream_error));
+            }
             m_validCount = count;
             auto iter = entries.begin();
             for (size_t i = 0; i < m_validCount; ++i)
             {
+                std::size_t keyLength = 0;
+                ar & keyLength;
+                if (inputLimit > 0 && keyLength > inputLimit)
+                {
+                    BOOST_THROW_EXCEPTION(boost::archive::archive_exception(
+                        boost::archive::archive_exception::input_stream_error));
+                }
                 std::string key;
-                ar & key;
+                key.resize(keyLength);
+                if (keyLength > 0)
+                {
+                    ar.load_binary(key.data(), keyLength);
+                }
                 uint32_t len = 0;
                 ar & len;
+                if (inputLimit > 0 && len > inputLimit)
+                {
+                    BOOST_THROW_EXCEPTION(boost::archive::archive_exception(
+                        boost::archive::archive_exception::input_stream_error));
+                }
                 m_size += len;
                 m_size += key.size();
                 auto value = std::make_shared<std::vector<uint8_t>>(len, 0);
-                ar.load_binary(value->data(), value->size());
+                if (len > 0)
+                {
+                    ar.load_binary(value->data(), value->size());
+                }
                 Entry e;
                 e.set(std::move(value));
                 e.setStatus(Entry::Status::NORMAL);

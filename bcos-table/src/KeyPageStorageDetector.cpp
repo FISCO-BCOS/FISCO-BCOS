@@ -5,16 +5,13 @@
 
 #include "KeyPageStorageDetector.h"
 #include "KeyPageStorage.h"
-#include "StateStorageFactory.h"
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/iostreams/device/array.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/throw_exception.hpp>
-#include <cstdint>
 #include <future>
 #include <optional>
-#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -37,6 +34,7 @@ std::optional<T> decodeArchive(std::string_view value)
             value.data(), value.size());
         boost::archive::binary_iarchive archive(inputStream, serialize::ARCHIVE_FLAG);
         T output;
+        output.inputLimit = value.size();
         archive >> output;
         if (inputStream.peek() != std::char_traits<char>::eof())
         {
@@ -87,32 +85,28 @@ std::optional<Entry> getRow(StorageInterface& storage, std::string_view table, s
 
 [[noreturn]] void throwCorruptMetadata(std::string const& table, std::string const& pageKey)
 {
-    BOOST_THROW_EXCEPTION(BCOS_ERROR(StorageError::UnknownEntryType,
-        "Inconsistent KeyPage metadata in table " + table + ", page " + pageKey));
-}
-
-std::set<std::string, std::less<>> const& ignoredTables()
-{
-    static auto const tables = [] {
-        std::set<std::string, std::less<>> ignored;
-        ignored.insert(IGNORED_ARRAY.begin(), IGNORED_ARRAY.end());
-        ignored.insert(IGNORED_ARRAY_310.begin(), IGNORED_ARRAY_310.end());
-        ignored.insert(tool::FS_ROOT_SUBS.begin(), tool::FS_ROOT_SUBS.end());
-        return ignored;
-    }();
-    return tables;
+    BOOST_THROW_EXCEPTION(BCOS_ERROR(StorageError::ReadError,
+        "Inconsistent KeyPage metadata in table " + table + ", page 0x" + toHex(pageKey) +
+            "; set storage.key_page_size explicitly in config.ini to bypass detection"));
 }
 }  // namespace
 
-bool hasKeyPageMetadata(StorageInterface& storage)
+bool hasKeyPageMetadata(StorageInterface& storage, std::size_t* examinedTables)
 {
-    auto const& ignored = ignoredTables();
+    std::size_t examined = 0;
+    auto finish = [&]() {
+        if (examinedTables)
+        {
+            *examinedTables = examined;
+        }
+    };
     for (auto const& table : getRegisteredTables(storage))
     {
-        if (ignored.contains(table))
+        if (table == StorageInterface::SYS_TABLES)
         {
             continue;
         }
+        ++examined;
         auto metaEntry = getRow(storage, table, TABLE_META_KEY);
         if (!metaEntry)
         {
@@ -128,27 +122,27 @@ bool hasKeyPageMetadata(StorageInterface& storage)
         {
             continue;
         }
-        for (auto const& pageInfo : pageInfos)
+        auto const& pageInfo = pageInfos.front();
+        auto pageKey = pageInfo.getPageKey();
+        if (pageKey.empty() || pageInfo.getCount() == 0)
         {
-            auto pageKey = pageInfo.getPageKey();
-            if (pageKey.empty() || pageInfo.getCount() == 0)
-            {
-                throwCorruptMetadata(table, pageKey);
-            }
-            auto pageEntry = getRow(storage, table, pageKey);
-            if (!pageEntry)
-            {
-                throwCorruptMetadata(table, pageKey);
-            }
-            auto page = decodeArchive<KeyPageStorage::Page>(pageEntry->get());
-            if (!page || page->endKey() != pageKey || page->validCount() != pageInfo.getCount() ||
-                page->count() != page->validCount())
-            {
-                throwCorruptMetadata(table, pageKey);
-            }
-            return true;
+            throwCorruptMetadata(table, pageKey);
         }
+        auto pageEntry = getRow(storage, table, pageKey);
+        if (!pageEntry)
+        {
+            throwCorruptMetadata(table, pageKey);
+        }
+        auto page = decodeArchive<KeyPageStorage::Page>(pageEntry->get());
+        if (!page || page->endKey() != pageKey || page->validCount() != pageInfo.getCount() ||
+            page->count() != page->validCount())
+        {
+            throwCorruptMetadata(table, pageKey);
+        }
+        finish();
+        return true;
     }
+    finish();
     return false;
 }
 }  // namespace bcos::storage

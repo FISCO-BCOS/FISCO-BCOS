@@ -1458,8 +1458,8 @@ generate_common_ini() {
     data_path=data
     enable_cache=true
     ; The granularity of the storage page in bytes; 0 disables KeyPage and is the default for new chains
-    ; If key_page_size is absent, 10240 is used when legacy KeyPage metadata is detected
-    ; if modify key_page_size value to 0, should clear the data directory
+    ; If key_page_size is absent, the resolved value is cached; legacy KeyPage metadata defaults to 10240
+    ; For an existing chain, switching this value to 0 requires clearing the data directory
     key_page_size=${key_page_size}
     enable_archive=false
     archive_ip=127.0.0.1

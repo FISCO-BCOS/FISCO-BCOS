@@ -82,6 +82,24 @@ BOOST_AUTO_TEST_CASE(storageConfigDefaults)
 }
 
 
+BOOST_AUTO_TEST_CASE(storageConfigKeyPageValidation)
+{
+    for (auto const* valid : {"0", "4096", "33554432"})
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_NO_THROW(probe.loadStorageConfig(
+            fromIni(std::string("[storage]\nkey_page_size=") + valid + "\n")));
+    }
+    for (auto const* invalid : {"", "-1", "1", "1024", "33554433", "abc"})
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_THROW(probe.loadStorageConfig(
+                              fromIni(std::string("[storage]\nkey_page_size=") + invalid + "\n")),
+            bcos::tool::InvalidConfig);
+    }
+}
+
+
 BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
 {
     // mpt_prune_window: -1 (disabled) or [1, 10000000]; anything else throws.

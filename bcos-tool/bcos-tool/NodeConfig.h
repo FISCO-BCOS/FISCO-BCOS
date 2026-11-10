@@ -156,6 +156,9 @@ public:
     std::string const& stateDBPath() const;
     std::string const& blockDBPath() const;
     std::string const& storageType() const;
+    static constexpr int32_t MIN_KEY_PAGE_SIZE = 4096;
+    static constexpr int32_t MAX_KEY_PAGE_SIZE = 1 << 25;
+
     size_t keyPageSize() const;
     bool keyPageSizeConfigured() const;
     void setKeyPageSize(size_t _keyPageSize);
