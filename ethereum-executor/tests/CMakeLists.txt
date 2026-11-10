@@ -38,3 +38,17 @@ target_link_libraries(test-ethereum-authorization-list PRIVATE
     evmone::evmone Boost::unit_test_framework)
 set_target_properties(test-ethereum-authorization-list PROPERTIES UNITY_BUILD OFF)
 add_test(NAME test-ethereum-authorization-list COMMAND test-ethereum-authorization-list)
+
+# eth_getTransactionReceipt's contractAddress on the eth lane: a CREATE must report
+# CreateAddress(sender, pre-execution nonce) in the shared FISCO string form, a CALL must
+# leave it empty. Pins the field that used to be null for every eth-lane deployment and the
+# single formatter (evm::toFiscoContractAddress) both lanes now share.
+add_executable(test-ethereum-receipt-create-address
+    TestMain.cpp
+    TestEthL1ReceiptContractAddress.cpp)
+target_include_directories(test-ethereum-receipt-create-address PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(test-ethereum-receipt-create-address PRIVATE
+    ethereum-executor protocol-tars bcos-framework bcos-task bcos-crypto codec
+    evmone::evmone Boost::unit_test_framework)
+set_target_properties(test-ethereum-receipt-create-address PROPERTIES UNITY_BUILD OFF)
+add_test(NAME test-ethereum-receipt-create-address COMMAND test-ethereum-receipt-create-address)

@@ -22,6 +22,8 @@
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/util.h"
 
+#include <memory>
+
 using namespace bcos;
 using namespace bcos::rpc;
 
@@ -30,17 +32,34 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
     std::optional<protocol::BlockNumber> forkchoiceSafe,
     std::optional<protocol::BlockNumber> forkchoiceFinalized, bool failClosedOnMissingForkchoice)
 {
-    // check params
-    if (!jParams.isMember("fromBlock") || jParams["fromBlock"].isNull())
-    {
-        FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("fromBlock is null");
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "fromBlock is null"));
-    }
+    // Every criterion of an Ethereum filter is optional, and the two ways to bound a query are
+    // alternatives: either a {fromBlock, toBlock} range (each defaulting to "latest") or a
+    // single blockHash. The old code required fromBlock/toBlock, which rejected exactly what the
+    // common client shapes send — ethers' queryFilter(event) and web3.js'
+    // getPastLogs({address}) omit the range, and a blockHash-only request carries no range by
+    // definition, so the blockHash fast path in FilterSystem::getLogsImpl was unreachable from
+    // any spec-conformant caller.
+    //
+    // A "blockHash" key is read in both casings: the JSON-RPC field is blockHash, but older
+    // builds of this file only ever looked at the all-lowercase spelling, and the Web3 entry
+    // hands the request object over verbatim (no key normalisation), so clients written against
+    // that build send blockhash. Accept both rather than silently ignoring one.
+    auto const blockHashMember = [&jParams]() -> const Json::Value* {
+        for (char const* key : {"blockHash", "blockhash"})
+        {
+            if (jParams.isMember(key) && !jParams[key].isNull())
+            {
+                return std::addressof(jParams[key]);
+            }
+        }
+        return nullptr;
+    }();
 
-    if (!jParams.isMember("toBlock") || jParams["toBlock"].isNull())
+    // A blockHash-only request needs no range; resolve it before the range defaults so that a
+    // missing fromBlock/toBlock cannot reject it.
+    if (blockHashMember != nullptr)
     {
-        FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("toBlock is null");
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "toBlock is null"));
+        m_blockHash = blockHashMember->asString();
     }
 
     // `address` and `topics` are optional in the Ethereum filter spec: an omitted (or null)
@@ -51,14 +70,25 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
     auto const hasAddress = jParams.isMember("address") && !jParams["address"].isNull();
     auto const hasTopics = jParams.isMember("topics") && !jParams["topics"].isNull();
 
+    // prase fromBlock / toBlock. Both default to "latest" when omitted or null, which is what
+    // the spec says and what clients that pass only a criterion (or only a blockHash) rely on:
+    // getBlockNumberByTag maps an empty tag to (latest, isLatest=true).
+    auto const blockTagOf = [&jParams](char const* key) -> std::string {
+        if (!jParams.isMember(key) || jParams[key].isNull())
+        {
+            return {};
+        }
+        return jParams[key].asString();
+    };
+
     // prase fromBlock
     std::tie(m_fromBlock, m_fromIsLatest) =
-        getBlockNumberByTag(latest, jParams["fromBlock"].asString(), safeDepth, finalizedDepth,
+        getBlockNumberByTag(latest, blockTagOf("fromBlock"), safeDepth, finalizedDepth,
             forkchoiceSafe, forkchoiceFinalized, failClosedOnMissingForkchoice);
 
     // prase toBlock
     std::tie(m_toBlock, m_toIsLatest) =
-        getBlockNumberByTag(latest, jParams["toBlock"].asString(), safeDepth, finalizedDepth,
+        getBlockNumberByTag(latest, blockTagOf("toBlock"), safeDepth, finalizedDepth,
             forkchoiceSafe, forkchoiceFinalized, failClosedOnMissingForkchoice);
 
     // prase address
@@ -112,11 +142,7 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
         }
     }
 
-    // prase blockhash
-    if (jParams.isMember("blockhash") && !jParams["blockhash"].isNull())
-    {
-        m_blockHash = jParams["blockhash"].asString();
-    }
+    // The blockHash was parsed above, before the range defaults.
 }
 
 bool FilterRequest::checkBlockRange()

@@ -329,14 +329,20 @@ public:
     template <class Host>
     /// @param keepOutput accepted for signature parity with EthL1Policy::buildReceipt; the OP
     ///        receipt has always carried the return data, which is left unchanged here.
-    /// @param ethLaneContractAddress accepted for signature parity with EthL1Policy::buildReceipt.
-    ///        Unused: this policy already derives the address from the validate-time snapshot
-    ///        (m_sender / m_nonce), which is what op-geth's MakeReceipt does — the fresh
-    ///        sender_acc.nonce the eth lane passes in is the same value for a validated tx.
+    /// @param isCreate    accepted for signature parity with EthL1Policy::buildReceipt.
+    /// @param sender      accepted for signature parity with EthL1Policy::buildReceipt.
+    /// @param senderNonce accepted for signature parity with EthL1Policy::buildReceipt.
+    ///        The three creation inputs above are deliberately not read. This policy already
+    ///        holds the validate-time snapshot (m_isCreate / m_sender / m_nonce) that op-geth's
+    ///        MakeReceipt derives the address from, and reading the arguments instead would make
+    ///        a dry run (eth_call, where the state nonce and effectiveNonce can differ) report a
+    ///        different address than a mined transaction would. Both lanes format the result with
+    ///        the shared evm::toFiscoContractAddress, so the wire form cannot drift.
     protocol::TransactionReceipt::Ptr buildReceipt(Host& host, evmc::Result const& result,
         int64_t gasUsed, protocol::TransactionReceiptFactory const& rf, int64_t blockNumber,
-        [[maybe_unused]] bool keepOutput = false,
-        [[maybe_unused]] std::string ethLaneContractAddress = std::string{}) const
+        [[maybe_unused]] bool keepOutput = false, [[maybe_unused]] bool isCreate = false,
+        [[maybe_unused]] evmc::address const& sender = {},
+        [[maybe_unused]] uint64_t senderNonce = 0) const
     {
         // gas_used is int64_t; a runtime non-negative check guards the cast against wrap
         // (evmone guarantees it; under NDEBUG the assert is gone and the consensus surface
@@ -351,8 +357,8 @@ public:
                 bcos::bytes{result.output_data, result.output_data + result.output_size} :
                 bcos::bytes{}};
         auto out = rf.createReceipt(bcos::u256{static_cast<uint64_t>(gasUsed)},
-            m_isCreate ? toFiscoContractAddress(m_sender, m_nonce) : std::string{}, std::move(logs),
-            toFiscoOpStatus(result.status_code),
+            m_isCreate ? eth::evm::toFiscoContractAddress(m_sender, m_nonce) : std::string{},
+            std::move(logs), toFiscoOpStatus(result.status_code),
             bcos::bytesConstRef{outputBytes.data(), outputBytes.size()}, blockNumber);
         const auto bloom = bcos::getLogsBloom(out->logEntries());
         out->setLogsBloom(bcos::bytesConstRef{bloom.data(), bloom.size()});

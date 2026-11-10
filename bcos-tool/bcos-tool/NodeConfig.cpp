@@ -94,6 +94,29 @@ bool isHex(std::string_view sv)
            std::all_of(sv.begin(), sv.end(), [](unsigned char c) { return std::isxdigit(c) != 0; });
 }
 
+// A one-shot eth_getLogs has no cursor, so the per-request block budget decides whether it
+// succeeds or fails outright (FilterSystem::getLogsImpl rejects a wider range instead of
+// answering a prefix). The budget therefore has to sit at the scale Ethereum tooling assumes:
+// public providers cap at the 10000-block mark and go-ethereum imposes no block-count cap at
+// all. Keeping the old value of 10 alongside fail-closed would have turned the silent-truncation
+// bug into a blanket eth_getLogs failure on every default-configured node.
+inline constexpr int DEFAULT_FILTER_MAX_PROCESS_BLOCK = 10'000;
+
+// A non-positive budget makes every one-shot eth_getLogs throw (the resolved range is at least
+// one block), so reject it at boot instead of surfacing it per request. Also bounds the value to
+// int range for the int64_t comparisons in FilterSystem.
+int requirePositiveFilterMaxProcessBlock(
+    std::string const& section, std::string const& field, int value)
+{
+    if (value <= 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[" + section + "]." + field + " must be positive, got " + std::to_string(value)));
+    }
+    return value;
+}
+
 // Require that `value` (the raw config value of `field` in `section`) is a
 // 0x-prefixed hex string. If expectedLen > 0, the hex body (after 0x) must be
 // exactly that many chars; otherwise it must merely be valid hex of even
@@ -1189,12 +1212,13 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
         disable_ssl=false
         ; 300s
         filter_timeout=300
-        filter_max_process_block=10
+        filter_max_process_block=10000
     */
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("rpc.listen_port", 20200);
     int filterTimeout = _pt.get<int>("rpc.filter_timeout", 300);
-    int maxProcessBlock = _pt.get<int>("rpc.filter_max_process_block", 10);
+    int maxProcessBlock = requirePositiveFilterMaxProcessBlock("rpc", "filter_max_process_block",
+        _pt.get<int>("rpc.filter_max_process_block", DEFAULT_FILTER_MAX_PROCESS_BLOCK));
     bool smSsl = _pt.get<bool>("rpc.sm_ssl", false);
     bool disableSsl = _pt.get<bool>("rpc.disable_ssl", false);
     // enable ssl cover disable ssl
@@ -1237,7 +1261,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         thread_count=16
         ; 300s
         filter_timeout=300
-        filter_max_process_block=10
+        filter_max_process_block=10000
         batch_request_size_limit=8
         ;request body size limit for web3 rpc, default is 10MB
         request_body_size_limit=10240000
@@ -1272,7 +1296,9 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
     const int filterTimeout = _pt.get<int>("web3_rpc.filter_timeout", 300);
-    const int maxProcessBlock = _pt.get<int>("web3_rpc.filter_max_process_block", 10);
+    const int maxProcessBlock =
+        requirePositiveFilterMaxProcessBlock("web3_rpc", "filter_max_process_block",
+            _pt.get<int>("web3_rpc.filter_max_process_block", DEFAULT_FILTER_MAX_PROCESS_BLOCK));
     const bool enableWeb3Rpc = _pt.get<bool>("web3_rpc.enable", false);
     const int batchRequestSizeLimit = _pt.get<int>("web3_rpc.batch_request_size_limit", 8);
     const int requestBodySizeLimit = _pt.get<int>("web3_rpc.request_body_size_limit", 10240000);
