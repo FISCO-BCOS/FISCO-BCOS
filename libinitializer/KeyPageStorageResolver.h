@@ -9,7 +9,6 @@
 #include <bcos-tool/NodeConfig.h>
 #include <cstddef>
 #include <string>
-#include <string_view>
 
 namespace rocksdb
 {
@@ -18,8 +17,6 @@ class DB;
 
 namespace bcos::initializer
 {
-inline constexpr std::string_view KEY_PAGE_SIZE_MARKER_KEY = "s_node_local:key_page_size";
-
 struct KeyPageSizeResolution
 {
     size_t value;

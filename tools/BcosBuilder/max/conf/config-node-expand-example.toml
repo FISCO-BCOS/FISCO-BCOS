@@ -29,8 +29,6 @@ enable_storage_security = false
         [[agency.group.node]]
         # expand the existed-max-node
         node_name = "node1"
-        # A fresh expanded node cannot detect peer KeyPage metadata locally.
-        # For a legacy group, set this explicitly to match the existing group's storage mode.
         key_page_size=0
         deploy_ip = ["172.25.0.5"]
         executor_deploy_ip=["172.25.0.5"]

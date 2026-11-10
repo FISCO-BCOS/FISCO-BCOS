@@ -26,24 +26,11 @@ namespace
 struct RawTableMeta
 {
     std::vector<KeyPageStorage::PageInfo> pages;
-    std::optional<std::size_t> forcedCount;
 
     template <class Archive>
     void save(Archive& archive, const unsigned int) const
     {
-        if (!forcedCount)
-        {
-            archive & pages;
-            return;
-        }
-        boost::serialization::collection_size_type count(*forcedCount);
-        archive & count;
-        boost::serialization::item_version_type itemVersion(0);
-        archive & itemVersion;
-        for (auto const& info : pages)
-        {
-            archive & info;
-        }
+        archive & pages;
     }
     template <class Archive>
     void load(Archive& archive, const unsigned int)
@@ -218,16 +205,6 @@ BOOST_FIXTURE_TEST_CASE(duplicatePageEntriesFail, KeyPageStorageDetectorFixture)
 {
     writeDuplicateEntryPage("t_page");
     BOOST_CHECK_THROW(hasKeyPageMetadata(*backend), bcos::Error);
-}
-
-BOOST_FIXTURE_TEST_CASE(oversizedCountIsRejected, KeyPageStorageDetectorFixture)
-{
-    RawTableMeta meta;
-    meta.pages.emplace_back("name", 1, 1, nullptr);
-    meta.forcedCount = static_cast<std::size_t>(-1);
-    setRow(*backend, StorageInterface::SYS_TABLES, "t_page", "value");
-    setRow(*backend, "t_page", "", serialize::encode(meta));
-    BOOST_CHECK(!hasKeyPageMetadata(*backend));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

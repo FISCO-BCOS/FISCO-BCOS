@@ -7,7 +7,6 @@
 #include <bcos-framework/storage/Serialize.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-table/src/KeyPageStorage.h>
-#include <bcos-tool/Exceptions.h>
 #include <rocksdb/db.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/test/unit_test.hpp>
@@ -95,71 +94,74 @@ struct ResolverFixture
 
 BOOST_AUTO_TEST_SUITE(KeyPageStorageResolverTest)
 
-BOOST_FIXTURE_TEST_CASE(legacyDetectionIsPerformedOnceAndCached, ResolverFixture)
+BOOST_FIXTURE_TEST_CASE(emptyDatabaseAlwaysUsesZero, ResolverFixture)
 {
-    writePage("t_page");
-    ConfigProbe first;
-    loadStorage(first, "");
-    auto initial = resolve(first);
-    BOOST_CHECK_EQUAL(initial.value, 10240);
-    BOOST_CHECK_EQUAL(initial.source, "detection");
-    BOOST_CHECK_EQUAL(initial.tablesExamined, 1);
+    ConfigProbe positive;
+    loadStorage(positive, "[storage]\nkey_page_size=10240\n");
+    auto initial = resolve(positive);
+    BOOST_CHECK_EQUAL(initial.value, 0);
+    BOOST_CHECK_EQUAL(initial.source, "empty");
+    BOOST_CHECK_EQUAL(positive.keyPageSize(), 0);
 
-    put("s_tables:t_plain", "value");
-    put("t_plain:name", "payload");
-    ConfigProbe restarted;
-    loadStorage(restarted, "");
-    auto cached = resolve(restarted);
-    BOOST_CHECK_EQUAL(cached.value, 10240);
-    BOOST_CHECK_EQUAL(cached.source, "marker");
-    BOOST_CHECK_EQUAL(cached.tablesExamined, 0);
+    ConfigProbe missing;
+    loadStorage(missing, "");
+    BOOST_CHECK_EQUAL(resolve(missing).value, 0);
 }
 
-BOOST_FIXTURE_TEST_CASE(normalStorageResolutionIsCached, ResolverFixture)
+BOOST_FIXTURE_TEST_CASE(legacyPageUsesConfiguredOrHistoricalDefaultSize, ResolverFixture)
 {
+    writePage("t_page");
+    ConfigProbe custom;
+    loadStorage(custom, "[storage]\nkey_page_size=8192\n");
+    auto configured = resolve(custom);
+    BOOST_CHECK_EQUAL(configured.value, 8192);
+    BOOST_CHECK_EQUAL(configured.source, "config");
+    BOOST_CHECK_EQUAL(configured.tablesExamined, 1);
+
+    ConfigProbe restarted;
+    loadStorage(restarted, "");
+    auto detected = resolve(restarted);
+    BOOST_CHECK_EQUAL(detected.value, 10240);
+    BOOST_CHECK_EQUAL(detected.source, "detection");
+    BOOST_CHECK_EQUAL(detected.tablesExamined, 1);
+
+    ConfigProbe restartedAgain;
+    loadStorage(restartedAgain, "");
+    auto detectedAgain = resolve(restartedAgain);
+    BOOST_CHECK_EQUAL(detectedAgain.value, 10240);
+    BOOST_CHECK_EQUAL(detectedAgain.source, "detection");
+    BOOST_CHECK_EQUAL(detectedAgain.tablesExamined, 1);
+}
+
+BOOST_FIXTURE_TEST_CASE(plainExistingDataCannotEnablePageLater, ResolverFixture)
+{
+    put("s_tables:t_plain", "value");
+    put("t_plain:name", "payload");
+    ConfigProbe positive;
+    loadStorage(positive, "[storage]\nkey_page_size=10240\n");
+    auto result = resolve(positive);
+    BOOST_CHECK_EQUAL(result.value, 0);
+    BOOST_CHECK_EQUAL(result.source, "plain");
+    BOOST_CHECK_EQUAL(result.tablesExamined, 1);
+    BOOST_CHECK_EQUAL(positive.keyPageSize(), 0);
+}
+
+BOOST_FIXTURE_TEST_CASE(missingConfigOnPlainDataUsesZero, ResolverFixture)
+{
+    put("s_tables:t_plain", "value");
+    put("t_plain:name", "payload");
     ConfigProbe first;
     loadStorage(first, "");
     auto initial = resolve(first);
     BOOST_CHECK_EQUAL(initial.value, 0);
-    BOOST_CHECK_EQUAL(initial.source, "detection");
+    BOOST_CHECK_EQUAL(initial.source, "plain");
 
     ConfigProbe restarted;
     loadStorage(restarted, "");
-    auto cached = resolve(restarted);
-    BOOST_CHECK_EQUAL(cached.value, 0);
-    BOOST_CHECK_EQUAL(cached.source, "marker");
-    BOOST_CHECK_EQUAL(cached.tablesExamined, 0);
-}
-
-BOOST_FIXTURE_TEST_CASE(explicitCustomSizeIsRecoveredFromMarker, ResolverFixture)
-{
-    ConfigProbe first;
-    loadStorage(first, "[storage]\nkey_page_size=8192\n");
-    auto initial = resolve(first);
-    BOOST_CHECK_EQUAL(initial.value, 8192);
-    BOOST_CHECK_EQUAL(initial.source, "config");
-
-    ConfigProbe restarted;
-    loadStorage(restarted, "");
-    auto cached = resolve(restarted);
-    BOOST_CHECK_EQUAL(cached.value, 8192);
-    BOOST_CHECK_EQUAL(cached.source, "marker");
-    BOOST_CHECK_EQUAL(cached.tablesExamined, 0);
-}
-
-BOOST_FIXTURE_TEST_CASE(invalidMarkerRequiresExplicitConfig, ResolverFixture)
-{
-    put(std::string(KEY_PAGE_SIZE_MARKER_KEY), "invalid");
-    ConfigProbe probe;
-    loadStorage(probe, "");
-    BOOST_CHECK_THROW(resolve(probe), tool::InvalidConfig);
-
-    ConfigProbe explicitZero;
-    loadStorage(explicitZero, "[storage]\nkey_page_size=0\n");
-    BOOST_CHECK_NO_THROW(resolve(explicitZero));
-    ConfigProbe restarted;
-    loadStorage(restarted, "");
-    BOOST_CHECK_EQUAL(resolve(restarted).value, 0);
+    auto repeated = resolve(restarted);
+    BOOST_CHECK_EQUAL(repeated.value, 0);
+    BOOST_CHECK_EQUAL(repeated.source, "plain");
+    BOOST_CHECK_EQUAL(repeated.tablesExamined, 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

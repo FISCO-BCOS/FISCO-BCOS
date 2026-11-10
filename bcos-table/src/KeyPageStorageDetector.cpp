@@ -34,7 +34,6 @@ std::optional<T> decodeArchive(std::string_view value)
             value.data(), value.size());
         boost::archive::binary_iarchive archive(inputStream, serialize::ARCHIVE_FLAG);
         T output;
-        output.inputLimit = value.size();
         archive >> output;
         if (inputStream.peek() != std::char_traits<char>::eof())
         {
