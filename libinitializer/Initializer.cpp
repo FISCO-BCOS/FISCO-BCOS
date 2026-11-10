@@ -1977,8 +1977,7 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
         moveSSTFiles = false;
     }
     auto rocksdbOption = getRocksDBOption(nodeConfig, true);
-    auto rocksDB =
-        StorageInitializer::createRocksDB(stateDBPath, rocksdbOption, nodeConfig->keyPageSize());
+    auto rocksDB = StorageInitializer::createRocksDB(stateDBPath, rocksdbOption);
     ingestIntoRocksDB(*rocksDB, sstFiles, moveSSTFiles);
     bcos::storage::TransactionalStorageInterface::Ptr stateStorage = nullptr;
     // import tx and receipt

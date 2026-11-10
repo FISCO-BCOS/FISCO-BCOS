@@ -6,9 +6,6 @@
 #include "KeyPageStorageDetector.h"
 #include "KeyPageStorage.h"
 #include <bcos-framework/storage/Serialize.h>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/iostreams/device/array.hpp>
-#include <boost/iostreams/stream.hpp>
 #include <boost/throw_exception.hpp>
 #include <future>
 #include <optional>
@@ -21,6 +18,19 @@ namespace bcos::storage
 {
 namespace
 {
+template <typename T>
+bool hasExactEncoding(T const& output, std::string_view value)
+{
+    try
+    {
+        return serialize::encode(output) == value;
+    }
+    catch (std::exception const&)
+    {
+        return false;
+    }
+}
+
 std::optional<KeyPageStorage::TableMeta> decodeArchive(std::string_view value)
 {
     if (value.empty())
@@ -29,10 +39,8 @@ std::optional<KeyPageStorage::TableMeta> decodeArchive(std::string_view value)
     }
     try
     {
-        boost::iostreams::stream<boost::iostreams::array_source> inputStream(
-            value.data(), value.size());
         KeyPageStorage::TableMeta output(value);
-        if (inputStream.rdbuf()->in_avail() > 0)
+        if (!hasExactEncoding(output, value))
         {
             return std::nullopt;
         }
@@ -52,14 +60,7 @@ std::optional<KeyPageStorage::Page> decodeArchive(std::string_view value, std::s
     }
     try
     {
-        boost::iostreams::stream<boost::iostreams::array_source> inputStream(
-            value.data(), value.size());
-        KeyPageStorage::Page output(value, pageKey);
-        if (inputStream.rdbuf()->in_avail() > 0)
-        {
-            return std::nullopt;
-        }
-        return output;
+        return KeyPageStorage::Page(value, pageKey);
     }
     catch (std::exception const&)
     {
@@ -146,7 +147,7 @@ bool hasKeyPageMetadata(StorageInterface& storage, std::size_t* examinedTables)
         auto pageKey = pageInfo.getPageKey();
         if (pageKey.empty() || pageInfo.getCount() == 0)
         {
-            throwCorruptMetadata(table, pageKey);
+            continue;
         }
         auto pageEntry = getRow(storage, table, pageKey);
         if (!pageEntry)
@@ -154,10 +155,18 @@ bool hasKeyPageMetadata(StorageInterface& storage, std::size_t* examinedTables)
             throwCorruptMetadata(table, pageKey);
         }
         auto page = decodeArchive(pageEntry->get(), pageKey);
-        if (!page || page->endKey() != pageKey || page->validCount() != pageInfo.getCount() ||
+        if (!page)
+        {
+            continue;
+        }
+        if (page->endKey() != pageKey || page->validCount() != pageInfo.getCount() ||
             page->count() != page->validCount())
         {
             throwCorruptMetadata(table, pageKey);
+        }
+        if (!hasExactEncoding(*page, pageEntry->get()))
+        {
+            continue;
         }
         finish();
         return true;

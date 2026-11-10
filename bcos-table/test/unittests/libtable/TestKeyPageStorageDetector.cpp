@@ -154,23 +154,23 @@ BOOST_FIXTURE_TEST_CASE(systemTablePageMetadataIsAlsoDetected, KeyPageStorageDet
     BOOST_CHECK(hasKeyPageMetadata(*backend));
 }
 
-BOOST_FIXTURE_TEST_CASE(inconsistentPageMetadataFails, KeyPageStorageDetectorFixture)
+BOOST_FIXTURE_TEST_CASE(undecodablePageIsNotPageEvidence, KeyPageStorageDetectorFixture)
 {
     writePageRow("t_page", "name", "payload");
     setRow(*backend, "t_page", "name", "not-a-page");
-    BOOST_CHECK_THROW(hasKeyPageMetadata(*backend), bcos::Error);
+    BOOST_CHECK(!hasKeyPageMetadata(*backend));
 }
 
-BOOST_FIXTURE_TEST_CASE(emptyPageKeyFails, KeyPageStorageDetectorFixture)
+BOOST_FIXTURE_TEST_CASE(emptyPageKeyIsNotPageEvidence, KeyPageStorageDetectorFixture)
 {
     writeMetadata("t_page", "", 1, "name", false);
-    BOOST_CHECK_THROW(hasKeyPageMetadata(*backend), bcos::Error);
+    BOOST_CHECK(!hasKeyPageMetadata(*backend));
 }
 
-BOOST_FIXTURE_TEST_CASE(zeroPageCountFails, KeyPageStorageDetectorFixture)
+BOOST_FIXTURE_TEST_CASE(zeroPageCountIsNotPageEvidence, KeyPageStorageDetectorFixture)
 {
     writeMetadata("t_page", "name", 0, "name", false);
-    BOOST_CHECK_THROW(hasKeyPageMetadata(*backend), bcos::Error);
+    BOOST_CHECK(!hasKeyPageMetadata(*backend));
 }
 
 BOOST_FIXTURE_TEST_CASE(missingPageFailsWithRemedy, KeyPageStorageDetectorFixture)
@@ -205,6 +205,29 @@ BOOST_FIXTURE_TEST_CASE(duplicatePageEntriesFail, KeyPageStorageDetectorFixture)
 {
     writeDuplicateEntryPage("t_page");
     BOOST_CHECK_THROW(hasKeyPageMetadata(*backend), bcos::Error);
+}
+
+BOOST_FIXTURE_TEST_CASE(trailingMetadataBytesAreNotPageEvidence, KeyPageStorageDetectorFixture)
+{
+    RawTableMeta meta;
+    meta.pages.emplace_back("name", 1, 1, nullptr);
+    setRow(*backend, StorageInterface::SYS_TABLES, "t_page", "value");
+    setRow(*backend, "t_page", "", serialize::encode(meta) + "trailing");
+    BOOST_CHECK(!hasKeyPageMetadata(*backend));
+}
+
+BOOST_FIXTURE_TEST_CASE(trailingPageBytesAreNotPageEvidence, KeyPageStorageDetectorFixture)
+{
+    RawTableMeta meta;
+    meta.pages.emplace_back("name", 1, 1, nullptr);
+    KeyPageStorage::Page page;
+    Entry entry;
+    entry.set("payload");
+    page.setEntry("name", std::move(entry));
+    setRow(*backend, StorageInterface::SYS_TABLES, "t_page", "value");
+    setRow(*backend, "t_page", "", serialize::encode(meta));
+    setRow(*backend, "t_page", "name", serialize::encode(page) + "trailing");
+    BOOST_CHECK(!hasKeyPageMetadata(*backend));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

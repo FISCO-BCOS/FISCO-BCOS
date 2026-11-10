@@ -728,7 +728,11 @@ parse_params() {
         i)
            mtail_ip_param="${OPTARG}"
            ;;
-        k) key_page_size="${OPTARG}";;
+        k)
+            if [[ "${OPTARG}" != "0" ]]; then
+                LOG_FATAL "key_page_size must be 0 for new chains; configure positive values manually only for legacy Page data"
+            fi
+            key_page_size="${OPTARG}";;
         M) prometheus_dir="${OPTARG}" ;;
         D) docker_mode="true"
            if [ -n "${macOS}" ];then
