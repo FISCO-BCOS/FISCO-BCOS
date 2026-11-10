@@ -82,6 +82,18 @@ BOOST_AUTO_TEST_CASE(storageConfigDefaults)
 }
 
 
+BOOST_AUTO_TEST_CASE(storageConfigRejectsMalformedKeyPageSize)
+{
+    for (auto const* invalid : {"", "abc"})
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_THROW(probe.loadStorageConfig(
+                              fromIni(std::string("[storage]\nkey_page_size=") + invalid + "\n")),
+            bcos::tool::InvalidConfig);
+    }
+}
+
+
 BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
 {
     // mpt_prune_window: -1 (disabled) or [1, 10000000]; anything else throws.

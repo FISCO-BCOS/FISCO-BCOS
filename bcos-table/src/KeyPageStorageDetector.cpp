@@ -21,8 +21,7 @@ namespace bcos::storage
 {
 namespace
 {
-template <typename T>
-std::optional<T> decodeArchive(std::string_view value)
+std::optional<KeyPageStorage::TableMeta> decodeArchive(std::string_view value)
 {
     if (value.empty())
     {
@@ -32,14 +31,35 @@ std::optional<T> decodeArchive(std::string_view value)
     {
         boost::iostreams::stream<boost::iostreams::array_source> inputStream(
             value.data(), value.size());
-        boost::archive::binary_iarchive archive(inputStream, serialize::ARCHIVE_FLAG);
-        T output;
-        archive >> output;
-        if (inputStream.peek() != std::char_traits<char>::eof())
+        KeyPageStorage::TableMeta output(value);
+        if (inputStream.rdbuf()->in_avail() > 0)
         {
             return std::nullopt;
         }
-        return std::optional<T>(std::move(output));
+        return output;
+    }
+    catch (std::exception const&)
+    {
+        return std::nullopt;
+    }
+}
+
+std::optional<KeyPageStorage::Page> decodeArchive(std::string_view value, std::string_view pageKey)
+{
+    if (value.empty())
+    {
+        return std::nullopt;
+    }
+    try
+    {
+        boost::iostreams::stream<boost::iostreams::array_source> inputStream(
+            value.data(), value.size());
+        KeyPageStorage::Page output(value, pageKey);
+        if (inputStream.rdbuf()->in_avail() > 0)
+        {
+            return std::nullopt;
+        }
+        return output;
     }
     catch (std::exception const&)
     {
@@ -84,9 +104,10 @@ std::optional<Entry> getRow(StorageInterface& storage, std::string_view table, s
 
 [[noreturn]] void throwCorruptMetadata(std::string const& table, std::string const& pageKey)
 {
-    BOOST_THROW_EXCEPTION(BCOS_ERROR(StorageError::ReadError,
+    BOOST_THROW_EXCEPTION(BCOS_ERROR(StorageError::DatabaseError,
         "Inconsistent KeyPage metadata in table " + table + ", page 0x" + toHex(pageKey) +
-            "; set storage.key_page_size explicitly in config.ini to bypass detection"));
+            "; verify storage integrity and set storage.key_page_size explicitly for the existing "
+            "data format"));
 }
 }  // namespace
 
@@ -111,7 +132,7 @@ bool hasKeyPageMetadata(StorageInterface& storage, std::size_t* examinedTables)
         {
             continue;
         }
-        auto meta = decodeArchive<KeyPageStorage::TableMeta>(metaEntry->get());
+        auto meta = decodeArchive(metaEntry->get());
         if (!meta)
         {
             continue;
@@ -132,7 +153,7 @@ bool hasKeyPageMetadata(StorageInterface& storage, std::size_t* examinedTables)
         {
             throwCorruptMetadata(table, pageKey);
         }
-        auto page = decodeArchive<KeyPageStorage::Page>(pageEntry->get());
+        auto page = decodeArchive(pageEntry->get(), pageKey);
         if (!page || page->endKey() != pageKey || page->validCount() != pageInfo.getCount() ||
             page->count() != page->validCount())
         {

@@ -7,9 +7,12 @@
 #include <bcos-framework/storage/Serialize.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-table/src/KeyPageStorage.h>
+#include <bcos-tool/Exceptions.h>
 #include <rocksdb/db.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -23,6 +26,8 @@ namespace bcos::test
 {
 namespace
 {
+std::atomic_uint64_t fixtureCounter{0};
+
 struct ConfigProbe : tool::NodeConfig
 {
     using tool::NodeConfig::loadStorageConfig;
@@ -86,7 +91,10 @@ struct ResolverFixture
     }
 
     std::filesystem::path dir =
-        std::filesystem::temp_directory_path() / "keypage_storage_resolver_test";
+        std::filesystem::temp_directory_path() /
+        ("keypage_storage_resolver_test_" +
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "_" +
+            std::to_string(fixtureCounter++));
     std::unique_ptr<rocksdb::DB> db;
     std::shared_ptr<storage::RocksDBStorage> storage;
 };
@@ -98,14 +106,13 @@ BOOST_FIXTURE_TEST_CASE(emptyDatabaseAlwaysUsesZero, ResolverFixture)
 {
     ConfigProbe positive;
     loadStorage(positive, "[storage]\nkey_page_size=10240\n");
-    auto initial = resolve(positive);
-    BOOST_CHECK_EQUAL(initial.value, 0);
-    BOOST_CHECK_EQUAL(initial.source, "empty");
-    BOOST_CHECK_EQUAL(positive.keyPageSize(), 0);
+    BOOST_CHECK_THROW(resolve(positive), tool::InvalidConfig);
 
     ConfigProbe missing;
     loadStorage(missing, "");
-    BOOST_CHECK_EQUAL(resolve(missing).value, 0);
+    auto initial = resolve(missing);
+    BOOST_CHECK_EQUAL(initial.value, 0);
+    BOOST_CHECK_EQUAL(initial.source, "empty");
 }
 
 BOOST_FIXTURE_TEST_CASE(legacyPageUsesConfiguredOrHistoricalDefaultSize, ResolverFixture)
@@ -115,7 +122,7 @@ BOOST_FIXTURE_TEST_CASE(legacyPageUsesConfiguredOrHistoricalDefaultSize, Resolve
     loadStorage(custom, "[storage]\nkey_page_size=8192\n");
     auto configured = resolve(custom);
     BOOST_CHECK_EQUAL(configured.value, 8192);
-    BOOST_CHECK_EQUAL(configured.source, "config");
+    BOOST_CHECK_EQUAL(configured.source, "config-verified");
     BOOST_CHECK_EQUAL(configured.tablesExamined, 1);
 
     ConfigProbe restarted;
@@ -139,11 +146,7 @@ BOOST_FIXTURE_TEST_CASE(plainExistingDataCannotEnablePageLater, ResolverFixture)
     put("t_plain:name", "payload");
     ConfigProbe positive;
     loadStorage(positive, "[storage]\nkey_page_size=10240\n");
-    auto result = resolve(positive);
-    BOOST_CHECK_EQUAL(result.value, 0);
-    BOOST_CHECK_EQUAL(result.source, "plain");
-    BOOST_CHECK_EQUAL(result.tablesExamined, 1);
-    BOOST_CHECK_EQUAL(positive.keyPageSize(), 0);
+    BOOST_CHECK_THROW(resolve(positive), tool::InvalidConfig);
 }
 
 BOOST_FIXTURE_TEST_CASE(missingConfigOnPlainDataUsesZero, ResolverFixture)
@@ -162,6 +165,12 @@ BOOST_FIXTURE_TEST_CASE(missingConfigOnPlainDataUsesZero, ResolverFixture)
     BOOST_CHECK_EQUAL(repeated.value, 0);
     BOOST_CHECK_EQUAL(repeated.source, "plain");
     BOOST_CHECK_EQUAL(repeated.tablesExamined, 1);
+
+    ConfigProbe explicitZero;
+    loadStorage(explicitZero, "[storage]\nkey_page_size=0\n");
+    auto skipped = resolve(explicitZero);
+    BOOST_CHECK_EQUAL(skipped.source, "config-skipped");
+    BOOST_CHECK_EQUAL(skipped.tablesExamined, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
