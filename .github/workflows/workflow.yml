@@ -213,13 +213,13 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for linux arm
         if: matrix.os == 'ubuntu-26.04-arm'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
         if: matrix.os == 'macos-26'
         run: |
@@ -229,13 +229,13 @@ jobs:
           mkdir -p build
           cd build
           ARCH=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
-          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=${ARCH}-osx-release ${EXTRA_FLAGS} ..
+          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=${ARCH}-osx-release ${EXTRA_FLAGS} ..
       - name: Configure for windows
         if: matrix.os == 'windows-2025'
         run: |
           mkdir build -Force
           cd build
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DALLOCATOR=default -DTESTS=OFF -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_TARS_SERVICES=OFF -DWITH_CPPSDK=ON -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static-release ..
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DALLOCATOR=default -DTESTS=OFF -DFULLNODE=OFF -DWITH_TARS_SERVICES=OFF -DWITH_CPPSDK=ON -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static-release ..
       # vcpkg installs during Configure; nothing past this point writes to
       # build/vcpkg_installed, so strip and save the tree right here instead of at the end
       # of the job: a flake in the build, the unit tests or any of the E2E gates would
@@ -679,7 +679,7 @@ jobs:
           # because Debug makes vcpkg link the debug/ dependency variants, which
           # the x64-linux-release triplet does not build. Benchmarks are never
           # run by ctest, so building them instrumented produces no coverage data.
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DUNITY_BUILD=OFF -DWITH_BENCHMARK=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DUNITY_BUILD=OFF -DWITH_BENCHMARK=OFF -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       # vcpkg installs during Configure, so save right after it (same reasoning as the
       # build matrix): a later flake must not discard a freshly built dependency tree.
       - name: Save vcpkg cache
