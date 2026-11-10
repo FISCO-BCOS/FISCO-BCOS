@@ -50,7 +50,7 @@ target_link_libraries(init PUBLIC
 )
 if(WITH_LIGHTNODE)
     target_sources(init PRIVATE LightNodeInitializer.cpp LightNodeInitializer.h)
-    target_link_libraries(init PUBLIC bcos-lightnode bcos-concepts bcos-legacy)
+    target_link_libraries(init PUBLIC bcos-lightnode bcos-concepts)
 endif()
 add_dependencies(init BuildInfo.h)
 

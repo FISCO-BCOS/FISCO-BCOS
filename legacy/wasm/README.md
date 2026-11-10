@@ -6,8 +6,7 @@ FISCO-BCOS. It is **reference material only**.
 - **Not built.** `legacy/CMakeLists.txt` never does `add_subdirectory(wasm)`, so
   nothing here is compiled, linked, tested, or packaged. (The parent `legacy/`
   tree is built, but only the subdirectories it explicitly lists; this one is
-  deliberately not among them. The headers sit on the `bcos-legacy` INTERFACE
-  include path but are inert unless `#include`d, and nothing includes them.)
+  deliberately not among them.)
 - **Not buildable.** The code depends on two vcpkg ports that were removed with
   it — `fbwasm` (the Rust WASM engine, `github.com/FISCO-BCOS/bcos-wasm`) and
   `wabt`. Restoring these files alone will not produce a working build.

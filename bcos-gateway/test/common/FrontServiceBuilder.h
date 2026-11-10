@@ -41,7 +41,7 @@ inline std::shared_ptr<bcos::front::FrontService> buildFrontService(
 
     // build gateway
     gatewayFactory->setIOServicePool(ioServicePool);
-    auto gateway = gatewayFactory->buildGateway(_configPath, true, nullptr, "localGateway");
+    auto gateway = gatewayFactory->buildGateway(_configPath, true, "localGateway");
 
     // create nodeID by nodeID str
     auto nodeIDPtr =
