@@ -60,9 +60,10 @@ BOOST_AUTO_TEST_CASE(tableNodeIdAndEntries)
     BOOST_CHECK_EQUAL(table.routerEntries().size(), 2U);
     BOOST_CHECK_EQUAL(table.getNextHop("nodeA"), "nodeA");
 
-    auto reachable = table.getAllReachableNode();
-    BOOST_CHECK(reachable.find("nodeA") != reachable.end());
-    BOOST_CHECK(reachable.find("nodeB") != reachable.end());
+    auto const* reachable = table.getAllReachableNode();
+    BOOST_REQUIRE(reachable);
+    BOOST_CHECK(reachable->find("nodeA") != reachable->end());
+    BOOST_CHECK(reachable->find("nodeB") != reachable->end());
 }
 
 BOOST_AUTO_TEST_CASE(encodeDecodeRoundTrip)
@@ -90,8 +91,9 @@ BOOST_AUTO_TEST_CASE(eraseRemovesEntry)
 
     std::set<std::string> unreachable;
     table.erase(unreachable, "nodeA");
-    auto reachable = table.getAllReachableNode();
-    BOOST_CHECK(reachable.find("nodeA") == reachable.end());
+    auto const* reachable = table.getAllReachableNode();
+    BOOST_REQUIRE(reachable);
+    BOOST_CHECK(reachable->find("nodeA") == reachable->end());
 }
 
 BOOST_AUTO_TEST_CASE(factoryBuildsFromEncoded)
