@@ -183,6 +183,47 @@ BOOST_AUTO_TEST_CASE(TE_FC_7_calldata_floor_overflow_guard_saturates)
     BOOST_CHECK_EQUAL(calcEip7623CalldataGas(hugeRef), std::numeric_limits<int64_t>::max());
 }
 
+// R8 [HIGH] regression, nested half: a nested CREATE rejected by the auth check
+// (without bugfix_auth_check, block version < 3.17.0) must reach evmone as
+// EVMC_REVERT so the CREATE opcode pushes 0 like the 0.21-era empty
+// create_address echo — and must NOT be mapped at the checkAuth site, where the
+// top-level result (which feeds the receipt) would be rewritten as well.
+BOOST_AUTO_TEST_CASE(TE_FC_nested_rejected_create_reports_revert)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::V3_16_0_VERSION);
+    ledgerConfig.setAuthCheckStatus(1);
+    // Put the auth manager in white-list deploy mode with an empty list: any origin is
+    // denied, which is what an internal CREATE without deploy permission sees. The
+    // legacy auth path reads the root "/" table's "apps" directory entry
+    // ({type, status, acl_type, acl_white, acl_black, extra}, see buildDirEntry).
+    bcos::storage::Entry appsEntry;
+    appsEntry.set(
+        bcos::storage::serialize::encode<std::vector<std::string>>({"0", "0", "1", "", "", ""}));
+    bcos::task::syncWait(bcos::storage2::writeOne(storage, StateKey{"/", "apps"}, appsEntry));
+    auto host = makeHost(features,
+        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_16_0_VERSION), {}, {}, EVMC_CALL);
+
+    bcos::bytes initCode{0x00};  // STOP; never executed — the auth reject comes first
+    evmc_message createMessage = {.kind = EVMC_CREATE,
+        .flags = 0,
+        .depth = 0,
+        .gas = 100000,
+        .state_gas = {},
+        .recipient = {},
+        .sender = {},
+        .input_data = initCode.data(),
+        .input_size = initCode.size(),
+        .value = {},
+        .code_address = {},
+        .code = nullptr,
+        .code_size = 0};
+
+    auto result = bcos::task::syncWait(host.externalCall(createMessage));
+    BOOST_CHECK_EQUAL(result.status_code, EVMC_REVERT);
+    BOOST_CHECK_EQUAL(result.status, protocol::TransactionStatus::PermissionDenied);
+}
+
 BOOST_AUTO_TEST_SUITE_END()  // CompatHostContext
 
 }  // namespace bcos::test

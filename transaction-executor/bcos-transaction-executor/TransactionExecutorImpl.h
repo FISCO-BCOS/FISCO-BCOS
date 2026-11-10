@@ -398,13 +398,25 @@ public:
             std::string newContractAddress;
             if (evmcMessage.kind == EVMC_CREATE && evmcResult.status_code == EVMC_SUCCESS)
             {
-                // evmc ABI 19: evmc_result::create_address is gone; the created
-                // address rides on the prepared message's recipient (set by
-                // getMessage() for transaction-level creates).
-                newContractAddress.reserve(sizeof(evmcMessage.recipient) * 2);
-                boost::algorithm::hex_lower(evmcMessage.recipient.bytes,
-                    evmcMessage.recipient.bytes + sizeof(evmcMessage.recipient.bytes),
-                    std::back_inserter(newContractAddress));
+                if (evmcResult.status == protocol::TransactionStatus::None)
+                {
+                    // evmc ABI 19: evmc_result::create_address is gone; the created
+                    // address rides on the prepared message's recipient (set by
+                    // getMessage() for transaction-level creates).
+                    newContractAddress.reserve(sizeof(evmcMessage.recipient) * 2);
+                    boost::algorithm::hex_lower(evmcMessage.recipient.bytes,
+                        evmcMessage.recipient.bytes + sizeof(evmcMessage.recipient.bytes),
+                        std::back_inserter(newContractAddress));
+                }
+                else
+                {
+                    // Rejected deploy (auth reject without bugfix_auth_check keeps
+                    // evmStatus at SUCCESS): released code echoed its empty
+                    // create_address as forty zeros. ABI 19 has no such field, so
+                    // reproduce the historical receipt value explicitly — it is
+                    // hashed into receiptsRoot.
+                    newContractAddress.assign(40, '0');
+                }
             }
 
             if (evmcResult.status_code != EVMC_SUCCESS)

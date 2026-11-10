@@ -801,6 +801,17 @@ public:
             {
                 recordHostFault(hostcontext.hostFaultMessage());
             }
+            // A nested CREATE that "succeeded" but carries a non-None legacy status is
+            // a rejected/failed create (auth reject keeps evmStatus at SUCCESS without
+            // bugfix_auth_check). Report it to evmone as REVERT so the opcode pushes 0
+            // like the 0.21-era empty create_address echo. Nested-only: the top-level
+            // result also feeds the receipt (see TransactionExecutorImpl::finish()).
+            if ((message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2) &&
+                result.status_code == EVMC_SUCCESS &&
+                result.status != protocol::TransactionStatus::None)
+            {
+                result.status_code = EVMC_REVERT;
+            }
             auto& logs = hostcontext.logs();
             if (result.status_code == EVMC_SUCCESS && !logs.empty())
             {

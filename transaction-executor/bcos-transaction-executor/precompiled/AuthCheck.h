@@ -74,13 +74,8 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
         auto buffer = std::make_unique<uint8_t[]>(errorOutput.size());
         std::uninitialized_copy(errorOutput.begin(), errorOutput.end(), buffer.get());
 
-        auto status = static_cast<evmc_status_code>(params->evmStatus);
-        if ((message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2) && status == EVMC_SUCCESS)
-        {
-            status = EVMC_REVERT;
-        }
         return std::make_optional(EVMCResult{
-            evmc_result{.status_code = status,
+            evmc_result{.status_code = static_cast<evmc_status_code>(params->evmStatus),
                 .gas_left = params->gas,
                 .gas_refund = 0,
                 .state_gas = {},
