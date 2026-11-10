@@ -2406,24 +2406,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_genesisConfig.m_groupID);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
     m_keyPageSizeConfigured = _pt.get_child_optional("storage.key_page_size").has_value();
-    if (m_keyPageSizeConfigured)
-    {
-        auto const child = _pt.get_child("storage.key_page_size");
-        auto const parsed = child.get_value_optional<int32_t>();
-        if (!parsed ||
-            (*parsed != 0 && (*parsed < MIN_KEY_PAGE_SIZE || *parsed > MAX_KEY_PAGE_SIZE)))
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "[storage].key_page_size must be 0 or in [4096, 33554432], got '" +
-                    child.get_value<std::string>() + "'"));
-        }
-        m_keyPageSize = static_cast<size_t>(*parsed);
-    }
-    else
-    {
-        m_keyPageSize = 0;
-    }
+    m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 0);
     m_maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 4);
     m_maxBackgroundJobs = _pt.get<int32_t>("storage.max_background_jobs", 4);
     m_writeBufferSize = _pt.get<size_t>("storage.write_buffer_size", 64 << 20);
