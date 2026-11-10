@@ -3,8 +3,8 @@
 
 **bcos-rpc/bcos-gateway/bcos-framework 破坏性变更**：
 
-* `RpcFactory::buildRpc` 和两个 `GatewayFactory::buildGateway` 重载删除 `LeaderEntryPointInterface::Ptr` 参数，`RpcFactory::buildGroupManager` 同步删除该参数；下游调用方及派生类需移除对应实参或形参，RPC 固定使用 `TarsGroupManager`，Pro Gateway 固定使用 `ProGatewayNodeManager`
-* 公共头目录 `bcos-framework/election/` 自 bcos-framework 安装内容中移除并迁移至 `legacy/bcos-framework/election/`；下游如仍需引用归档接口，需改为 `<legacy/bcos-framework/election/...>`，基于 etcd leader election 的 RPC/Gateway 故障转移不再可用
+* `RpcFactory::buildRpc` 和两个 `GatewayFactory::buildGateway` 重载删除 `LeaderEntryPointInterface::Ptr` 参数，`RpcFactory::buildGroupManager` 同步删除该参数；下游调用方及派生类需移除对应实参或形参，`RpcFactory::buildGroupManager` 固定返回 `TarsGroupManager`（AIR 本地 RPC 仍使用 `AirGroupManager`），Pro Gateway 固定使用 `ProGatewayNodeManager`
+* 公共头目录 `bcos-framework/election/` 自 bcos-framework 安装内容中移除，不再随安装包分发，仅在源码树中归档于 `legacy/bcos-framework/election/`；源码树内如仍需引用归档接口，可改为 `<legacy/bcos-framework/election/...>`，基于 etcd leader election 的 RPC/Gateway 故障转移不再可用
 
 **bcos-utilities 日志破坏性变更**：
 
