@@ -250,6 +250,27 @@ public:
         updateLedgerConfig(latestBlock->blockHeader());
     }
 
+    /// Test-only: append an already-built block (header + transactions + receipts) at the given
+    /// height, so a test can control what the receipt readers see. addNewBlock's fake receipts
+    /// all carry a non-zero status, and LogMatcher skips those -- so a test that needs getLogs to
+    /// report a log has to supply the receipt itself. The header must already carry its final
+    /// hash (calculateHash before calling).
+    void appendBuiltBlock(Block::Ptr _block)
+    {
+        auto const number = _block->blockHeader()->number();
+        auto const hash = _block->blockHeader()->hash();
+        {
+            WriteGuard l(x_ledger);
+            if (m_ledger.size() <= static_cast<size_t>(number))
+            {
+                m_ledger.resize(static_cast<size_t>(number) + 1);
+            }
+            m_ledger[number] = _block;
+            m_hash2Block[hash] = number;
+        }
+        updateLedgerConfig(_block->blockHeader());
+    }
+
     /// Test-only: inject an already-built block header (e.g. an Eth-shaped header whose hash is
     /// the RLP hash, as debug_getRawHeader expects) and register its hash->number mapping so
     /// hash-based lookups resolve to it. The header must already carry its final hash.

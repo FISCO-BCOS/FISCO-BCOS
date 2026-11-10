@@ -227,18 +227,7 @@ inline int32_t toFiscoOpStatus(evmc_status_code status) noexcept
     return status == EVMC_SUCCESS ? 0 : 1;
 }
 
-/// Contract-creation address for a top-level transaction, in the FISCO receipt's string form
-/// (40-char lowercase hex, NO "0x" — the RPC layer adds "0x" + checksum). Mirrors op-geth
-/// state_processor.go MakeReceipt: a creation tx (to == nil) records
-/// `CreateAddress(from, nonce)` where nonce is the sender's pre-execution account nonce —
-/// tx.Nonce() for a normal tx, statedb.GetNonce(from) (i.e. preNonce) for a Regolith+ deposit.
-/// contractAddress is an RPC-only field: it is NOT part of the OP consensus receipt RLP (status /
-/// cumGas / bloom / logs / deposit nonce+version), so filling it never affects receiptsRoot or
-/// stateRoot.
-inline std::string toFiscoContractAddress(const evmc::address& sender, uint64_t nonce)
-{
-    const auto addr = eth::evm::compute_create_address(sender, nonce);
-    // evmc::address::bytes is a plain uint8_t[20]; brace-init a bytes_view.
-    return std::string(evmc::hex({addr.bytes, sizeof(addr.bytes)}));
-}
+/// Contract-creation address for a top-level transaction is bcos::executor_v1::eth::evm::
+/// toFiscoContractAddress (ethereum-executor/EVMSupport.h) -- the single formatter both lanes
+/// use, so eth_getTransactionReceipt reports one address shape for a deployment on either chain.
 }  // namespace bcos::executor_v1::opstack

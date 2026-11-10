@@ -348,13 +348,17 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         {
             co_return Json::Value(Json::arrayValue);
         }
-        // A one-shot eth_getLogs has no cursor to continue from: the caller cannot tell that
-        // only a prefix of the range was scanned. Truncating it to m_maxBlockProcessPerReq
-        // answers a *smaller, plausible-looking* log set instead of the requested one, which
-        // silently hides events (a query covering any range wider than the budget returns a
-        // prefix and looks successful). Fail closed and say what the bound is; the streaming
-        // paths (getLogChangeImpl / eth_getFilterChanges) keep paginating, they do have a
-        // cursor. Raise web3_rpc.filter_max_process_block to widen the window.
+        // This function has three entry points, and all three now fail closed on a range wider
+        // than m_maxBlockProcessPerReq:
+        //   * eth_getLogs                     (FilterSystem::getLogs)
+        //   * eth_getFilterLogs               (FilterSystem::getFilterLogsImpl)
+        //   * getLogs on the legacy JSON-RPC   (JsonRpcImpl_2_0::getLogs)
+        // None of them has a cursor, so truncating would answer a *smaller, plausible-looking*
+        // log set instead of the requested one and silently hide events. Only the paginating
+        // path -- getLogChangeImpl / eth_getFilterChanges -- keeps its silent clamp, because it
+        // advances startBlockNumber and the caller resumes from there.
+        // The budget is web3_rpc.filter_max_process_block (rpc.filter_max_process_block on the
+        // legacy listener); raise it to widen the window.
         auto const blockRange = toBlock - fromBlock + 1;
         if (blockRange > m_maxBlockProcessPerReq)
         {

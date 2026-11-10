@@ -356,8 +356,8 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     assert(sender_acc.nonce < EthAccount::NonceMax);  // Required for valid tx.
     // A top-level CREATE derives its address from the nonce the transaction was validated
     // against, i.e. the account nonce BEFORE this bump (prepare_message's
-    // `sender_acc.nonce - 1`). Capture it here so the receipt can report the same address
-    // evmone created the account at.
+    // `sender_acc.nonce - 1`). Capture it here and hand it to the policy's buildReceipt, which
+    // reports the address evmone created the account at.
     const auto senderNonce = sender_acc.nonce;
     ++sender_acc.nonce;  // Bump sender nonce.
 
@@ -425,24 +425,18 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
         tx_max_cost, effective_gas_price, priority_gas_price, sender_acc);
 
     // A creation transaction records the to-be-created address in its receipt (op-geth
-    // state_processor.go MakeReceipt / ApplyTransactionWithEVM: CreateAddress(from, nonce)).
-    // The eth lane used to hand buildReceipt an empty address unconditionally, so
-    // eth_getTransactionReceipt answered contractAddress: null for every deployment while the
-    // same deployment on the OP lane reported one. RPC-only field: the receipts trie leaf
-    // (encodeReceiptLeaf) is [status, cumulativeGasUsed, logsBloom, logs], so this never moves
-    // receiptsRoot. Format matches the OP lane: 40 lowercase hex chars, no "0x" -- the RPC
-    // layer adds the prefix and EIP-55 checksums it.
-    std::string contractAddress;
-    if (!to.has_value())
-    {
-        const auto created = evm::compute_create_address(sender, senderNonce);
-        contractAddress = evmc::hex({created.bytes, sizeof(created.bytes)});
-    }
+    // state_processor.go MakeReceipt: CreateAddress(from, pre-execution nonce)). Which address
+    // that is -- and how it is formatted -- is the policy's call, so hand it the two inputs and
+    // let it derive: the eth lane has no snapshot of its own and formats inline, while the OP
+    // policy substitutes the validate-time snapshot it already holds (and ignores these).
+    // Before this the address was derived here for every lane and then dropped by the OP
+    // policy, which cost a keccak256 over RLP(sender, nonce) plus a 40-byte allocation per L2
+    // deployment and left two formatters for one RPC field.
 
     // Dry runs (eth_call / eth_estimateGas) are the only callers that need the return data in
     // the receipt; they discard it, while a mined transaction's receipt would grow for nothing.
-    auto receipt = policy.buildReceipt(
-        host, result, gas_used, rf, blockNumber, callParams.free, std::move(contractAddress));
+    auto receipt = policy.buildReceipt(host, result, gas_used, rf, blockNumber, callParams.free,
+        /*isCreate=*/!to.has_value(), sender, senderNonce);
 
     co_await state.applyToStorage(rev);
     co_return receipt;

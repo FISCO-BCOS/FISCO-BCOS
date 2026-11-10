@@ -323,7 +323,7 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
     if (receiptGasUsed < 0)
         throw std::runtime_error("opRunDeposit: negative gas_used");
     auto out = rf.createReceipt(bcos::u256{static_cast<uint64_t>(receiptGasUsed)},
-        !dep.to.has_value() ? toFiscoContractAddress(dep.from, preNonce) : std::string{},
+        !dep.to.has_value() ? eth::evm::toFiscoContractAddress(dep.from, preNonce) : std::string{},
         std::move(logs), toFiscoOpStatus(receiptStatus),
         bcos::bytesConstRef{outputBytes.data(), outputBytes.size()}, blockNumber);
     const auto bloom = bcos::getLogsBloom(out->logEntries());
