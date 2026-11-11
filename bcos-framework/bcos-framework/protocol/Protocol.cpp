@@ -89,10 +89,6 @@ std::optional<ModuleID> stringToModuleID(const std::string& _moduleName)
     {
         return bcos::protocol::ModuleID::ConsTxsSync;
     }
-    else if (boost::iequals(_moduleName, "light_node"))
-    {
-        return bcos::protocol::ModuleID::LIGHTNODE_GET_BLOCK;
-    }
     else
     {
         return std::nullopt;
@@ -115,14 +111,6 @@ std::string moduleIDToString(ModuleID _moduleID)
         return "cons_txs_sync";
     case ModuleID::AMOP:
         return "amop";
-    case ModuleID::LIGHTNODE_GET_BLOCK:
-    case ModuleID::LIGHTNODE_GET_TRANSACTIONS:
-    case ModuleID::LIGHTNODE_GET_RECEIPTS:
-    case ModuleID::LIGHTNODE_GET_STATUS:
-    case ModuleID::LIGHTNODE_SEND_TRANSACTION:
-    case ModuleID::LIGHTNODE_CALL:
-    case ModuleID::LIGHTNODE_GET_ABI:
-        return "light_node";
     case ModuleID::SYNC_GET_TRANSACTIONS:
         return "sync_get";
     case ModuleID::SYNC_PUSH_TRANSACTION:

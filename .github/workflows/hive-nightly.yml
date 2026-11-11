@@ -55,7 +55,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=OFF -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DTOOLS=ON -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=OFF -DCOVERAGE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DTOOLS=ON -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       # vcpkg installs during Configure, so save right after it (same reasoning as
       # workflow.yml's build matrix): a later build failure must not discard a freshly
       # built dependency tree. This workflow has no pull_request trigger (schedule +

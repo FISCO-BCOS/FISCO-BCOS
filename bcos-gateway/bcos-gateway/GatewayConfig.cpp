@@ -884,7 +884,7 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     /*
     [flow_control]
     ; the module that does not limit bandwidth
-    ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
+    ; list of all modules: raft,pbft,amop,block_sync,txs_sync,cons_txs_sync
     ;
     modules_without_bw_limit=raft,pbft
 
@@ -959,7 +959,7 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
                     InvalidParameter() << errinfo_comment(
                         "load flow_control config items, unrecognized module: " + module +
                         " ,list of available modules: "
-                        "raft,pbft,amop,block_sync,txs_sync,light_node"));
+                        "raft,pbft,amop,block_sync,txs_sync"));
             }
 
             GATEWAY_CONFIG_LOG(INFO)

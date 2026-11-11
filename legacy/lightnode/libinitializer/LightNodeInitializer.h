@@ -14,7 +14,6 @@
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
-#include <legacy/bcos-ledger/LedgerImpl.h>
 #include <legacy/concepts/bcos-concepts/ledger/Ledger.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>

@@ -84,7 +84,6 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-txpool/txpool/utilities/SystemTransaction.h>
-#include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <rocksdb/slice.h>
@@ -1176,31 +1175,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_protocolInitializer->blockFactory(), m_blockStorage, m_nodeConfig->archiveListenIP(),
             m_nodeConfig->archiveListenPort());
     }
-#endif
-
-#ifdef WITH_LIGHTNODE
-    bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(m_storage);
-
-    auto hasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
-    using Hasher = std::remove_cvref_t<decltype(hasher)>;
-    auto lightNodeLedger =
-        std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(hasher.clone(),
-            std::move(storageWrapper), m_protocolInitializer->blockFactory(), m_storage,
-            m_nodeConfig->blockLimit());
-    lightNodeLedger->setKeyPageSize(m_nodeConfig->keyPageSize());
-
-    auto txpool = m_txpoolInitializer->txpool();
-    auto transactionPool =
-        std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(
-            m_protocolInitializer->cryptoSuite(), txpool);
-    auto scheduler = std::make_shared<bcos::scheduler::SchedulerWrapperImpl<
-        std::shared_ptr<bcos::scheduler::SchedulerInterface>>>(
-        m_scheduler, m_protocolInitializer->cryptoSuite());
-
-    m_lightNodeInitializer = std::make_shared<LightNodeInitializer>();
-    m_lightNodeInitializer->initLedgerServer(
-        std::dynamic_pointer_cast<bcos::front::FrontService>(m_frontServiceInitializer->front()),
-        lightNodeLedger, transactionPool, scheduler);
 #endif
 }
 
