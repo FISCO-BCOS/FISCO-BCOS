@@ -72,6 +72,10 @@
 
 **build_chain.sh / BcosBuilder 默认兼容版本**：不带 `-v` 建链现在写 `compatibility_version=3.18.0`（此前为 `v3.16.0`，导致新链不激活 3.17.0 与 3.18.0 注册的 bugfix flag）；BcosBuilder 配置缺省 `compatibility_version` 时由 `3.1.0` 改为 `3.18.0`；两处与 `docs/README_EN.md` 的版本行一并纳入 `tools/version_sync.sh --check`
 
+**修复**
+
+* 修复 Web3 交易 nonce 准入对没有余额记录的账户的判断（`Ledger::getStorageState` 不再因账户缺少 balance 行而按账户不存在返回）
+
 **升级描述**
 
 * v1 EVM 链（build_chain.sh 建的 AIR 链默认）：直接替换二进制，不需要改配置；genesis 字节不变（`NodeConfigV1GenesisPinGoldenTest` 钉住 3.0.0/3.1.0/3.6.0/3.17.0/3.18.0 × pbft/rpbft 的黄金值）
