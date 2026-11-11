@@ -2443,15 +2443,7 @@ BOOST_AUTO_TEST_CASE(ethereumLaneStoredReceiptsKeepTheirLegacyPosition)
         block->appendReceipt(receipts[i]);
     }
 
-    std::promise<bool> prewritePromise;
-    m_ledger->asyncPrewriteBlock(
-        m_storage, nullptr, block,
-        [&](std::string, Error::Ptr&& error) {
-            BOOST_CHECK(!error);
-            prewritePromise.set_value(true);
-        },
-        true, std::nullopt, std::nullopt, true);
-    BOOST_REQUIRE(prewritePromise.get_future().get());
+    task::syncWait(m_ledger->prewriteBlock(m_storage, nullptr, block, true, std::nullopt, true));
 
     std::promise<protocol::Block::Ptr> blockPromise;
     m_ledger->asyncGetBlockDataByNumber(
@@ -2659,15 +2651,7 @@ BOOST_AUTO_TEST_CASE(receiptPositionIsFoundForEveryBlockReadShape)
         block->appendReceipt(receipts[i]);
     }
 
-    std::promise<bool> prewritePromise;
-    m_ledger->asyncPrewriteBlock(
-        m_storage, nullptr, block,
-        [&](std::string, Error::Ptr&& error) {
-            BOOST_CHECK(!error);
-            prewritePromise.set_value(true);
-        },
-        true, std::nullopt, std::nullopt, true);
-    BOOST_REQUIRE(prewritePromise.get_future().get());
+    task::syncWait(m_ledger->prewriteBlock(m_storage, nullptr, block, true, std::nullopt, true));
 
     // Literal expectations, not values read off the block under test.
     std::vector<std::size_t> const expectedLogIndex{0, 2, 2};

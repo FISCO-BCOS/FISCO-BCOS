@@ -298,7 +298,7 @@ inline std::vector<ledger::Alloc> allocsFromPre(std::map<std::string, EESTAccoun
 
 // ---- the chain ------------------------------------------------------------------------------
 
-/// FakeLedger whose prewrite persists the rows Ledger::asyncPrewriteBlock writes and the
+/// FakeLedger whose prewrite persists the rows Ledger::prewriteBlock writes and the
 /// pipeline reads back (the current height, hash<->number, the header) into the storage it is
 /// handed — the commit view — so a committed block is the next block's parent the way it is
 /// on a node. FakeLedger itself drops them, which would stall the verifier's height guard at
@@ -308,11 +308,10 @@ class PersistingLedger : public FakeLedger
 public:
     using FakeLedger::FakeLedger;
 
-    void asyncPrewriteBlock(storage::StorageInterface::Ptr storage,
+    task::Task<std::string> prewriteBlock(storage::StorageInterface::Ptr storage,
         protocol::ConstTransactionsPtr /*transactions*/, protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool /*writeTxsAndReceipts*/,
-        std::optional<ledger::Features> /*features*/,
-        std::optional<crypto::HashType> blockHashOverride, bool /*writeNonces*/) override
+        bool /*writeTxsAndReceipts*/, std::optional<crypto::HashType> blockHashOverride,
+        bool /*writeNonces*/) override
     {
         if (block)
         {
@@ -321,7 +320,7 @@ public:
                 protocol::ethHeaderHash(protocol::EthBlockHeader(*header).data()));
             writeBlockRows(*storage, *header, blockHash);
         }
-        callback("", nullptr);
+        co_return std::string{};
     }
 
     static void writeBlockRows(
