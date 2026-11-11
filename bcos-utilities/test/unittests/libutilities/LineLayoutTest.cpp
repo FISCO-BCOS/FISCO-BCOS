@@ -79,10 +79,14 @@ public:
         std::string prefix;
         std::string message;
     };
-    void writeLine(LogLevel _level, std::string_view _prefix, std::string_view _message) override
+    void writeLine(LogLevel _level, std::string_view _prefix, std::string_view _message,
+        bcos::LineRecord const* _record = nullptr) override
     {
         std::lock_guard lock(m_mutex);
         m_entries.push_back({_level, std::string(_prefix), std::string(_message)});
+        // The record is what orders lines across producers; capture the stamp so a
+        // test can assert the custom log.format path carries one.
+        m_records.push_back(_record == nullptr ? bcos::LineRecord{} : *_record);
     }
     std::vector<Entry> entries()
     {
@@ -93,6 +97,7 @@ public:
 private:
     std::mutex m_mutex;
     std::vector<Entry> m_entries;
+    std::vector<bcos::LineRecord> m_records;
 };
 
 struct LayoutGatedBackend

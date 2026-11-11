@@ -303,6 +303,10 @@ std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::ini
             targetDir, m_maxArchiveSize, m_minFreeSpace, m_maxArchiveFiles, m_compressArchive));
     }
     sink->locked_backend()->scan_for_files();
+    // log.flush=true means "durable per line"; the sink then stops batching, since
+    // the backend flushes once per consumeLine() call. Must be set before the
+    // sink is registered so no producer can enqueue a batched line first.
+    sink->setPerLinePersistence(m_autoFlush);
     if (m_enableLog)
     {
         bcos::log::registerLineSink(sink);
@@ -339,6 +343,8 @@ std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::ini
     sink->locked_backend()->set_rotation_size(m_rotateSize);
     /// set auto-flush according to log configuration
     sink->locked_backend()->auto_flush(m_autoFlush);
+    // See initLineLogSink: batching is incompatible with per-line durability.
+    sink->setPerLinePersistence(m_autoFlush);
     if (m_enableLog)
     {
         bcos::log::registerLineSink(sink);
@@ -355,6 +361,8 @@ BoostLogInitializer::initLineConsoleLogSink(boost::property_tree::ptree const& _
         boost::shared_ptr<std::ostream>(&std::cout, boost::null_deleter()));
     bool need_flush = _pt.get<bool>("log.flush", false);
     sink->locked_backend()->auto_flush(need_flush);
+    // See initLineLogSink: batching is incompatible with per-line durability.
+    sink->setPerLinePersistence(need_flush);
     if (m_enableLog)
     {
         bcos::log::registerLineSink(sink);
@@ -403,10 +411,13 @@ void BoostLogInitializer::stopLogging()
         return;
     }
     m_running.store(false);
-    // Unregister whole-line sinks first so new records stop arriving;
-    // unregisterLineSink takes the registry's unique lock, so it waits for
-    // in-flight producers (who hold the shared lock across writeLine) before
-    // the sinks below are stopped and destroyed.
+    // Unpublish the whole-line sinks first so no new records reach them. The
+    // registry is lock-free: unregisterLineSink() only clears the atomic slot, so
+    // it does NOT wait for in-flight producers. That is safe because the sink is
+    // never destroyed (ownership is parked in leakedSinks) and sink->stop() below
+    // sets the sink's own m_stop, which makes a late writeLine a counted no-op.
+    // The ordering guarantee callers rely on comes from stop() draining inline,
+    // not from this call.
     for (auto const& sink : m_lineSinks)
     {
         bcos::log::unregisterLineSink(sink.get());
