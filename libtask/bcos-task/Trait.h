@@ -54,21 +54,9 @@ template <class Awaitable>
 concept IsAwaitable =
     HasADLCoAwait<Awaitable> || HasMemberCoAwait<Awaitable> || HasAwaitable<Awaitable>;
 
-// The primaries below are declared but not defined on purpose: the constrained
-// specializations are the only definitions. A non-awaitable argument then
-// leaves the trait incomplete, so `typename AwaitableTrait<T>::type` becomes a
-// substitution failure in the immediate context instead of a hard error. That
-// matters during overload resolution: whenAll's variadic overload forms its
-// return type from AwaitableReturnType<Tasks> before its own constraint is
-// evaluated, and with a hard error there a call like
-// whenAll(std::vector<Task<void>>) fails to compile even though the vector
-// overload is the intended match (observed with Apple clang 17).
-template <class Task>
-struct AwaitableTrait;
-
 template <class Task>
     requires IsAwaitable<Task>
-struct AwaitableTrait<Task>
+struct AwaitableTrait
 {
     using type = std::remove_cvref_t<decltype(getAwaitable(std::declval<Task>()))>;
 };
@@ -76,11 +64,7 @@ template <class Task>
 using AwaitableType = typename AwaitableTrait<Task>::type;
 
 template <class Task>
-struct AwaitableReturnTrait;
-
-template <class Task>
-    requires IsAwaitable<Task>
-struct AwaitableReturnTrait<Task>
+struct AwaitableReturnTrait
 {
     using type = decltype(std::declval<AwaitableType<Task>>().await_resume());
 };

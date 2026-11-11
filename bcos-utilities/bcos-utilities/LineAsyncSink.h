@@ -31,13 +31,20 @@
  *  worker is idle) can still stall the abort; closing that residual is a
  *  design change tracked in #5701.
  *
- *  The hand-off is one mutex + two std::deque<uint32_t> (free/ready slot
- *  indices), the same architecture spdlog's async thread pool uses. A
- *  lock-free queue was measured ~350ns/call slower here: the slot pool, the
- *  queue head/tail and the string buffers are 4+ cache lines ping-ponging
- *  between the producer and consumer cores, while the mutex variant touches
- *  1-2 lines and folds slot allocation, line assembly and enqueueing into a
- *  single short critical section.
+ *  The hand-off is one bounded ring buffer per producing thread (QueueShard),
+ *  single-producer/single-consumer: a producer only writes its own ring's tail
+ *  and its own slots, the feeding thread only advances heads. Logging from N
+ *  threads therefore costs N independent hand-offs instead of N threads
+ *  contending on one mutex.
+ *
+ *  Ordering. The feeding thread repeatedly picks the non-empty ring whose head
+ *  line carries the earliest timestamp, so lines from different producers are
+ *  merged by event time. This REDUCES the number of inversions relative to a
+ *  single shared queue; it does NOT restore a global order. A thread that
+ *  samples its timestamp at t1 and is then descheduled can enqueue after a
+ *  thread that sampled t2 > t1, and the feeder cannot wait for a line it cannot
+ *  see. Identical timestamps are broken by ring order. Within one thread the
+ *  order is exact.
  *
  *  Slot strings keep their heap capacity between rounds, so after warmup a
  *  steady-state log line causes no allocation on either thread. A slot that
@@ -50,6 +57,12 @@
  *  staleness bound is FlushInterval plus up to FlushCheckEvery - 1 lines of
  *  backend latency. Log lines still reach the file promptly without paying
  *  a per-line flush on the producer.
+ *
+ *  Persistence. log.flush=true used to flush after every line; a batch is one
+ *  backend write, so with log.flush=true the pipeline emits each line as its own
+ *  batch instead of joining up to BatchSize of them (see batchLimitFor).
+ *  Otherwise a crash could lose up to BatchSize - 1 already-built lines, which
+ *  are exactly the ones a post-mortem needs.
  *
  * @file: LineAsyncSink.h
  */
@@ -68,10 +81,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <deque>
 #include <memory>
 #include <mutex>
-#include <set>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -89,8 +100,15 @@ public:
     virtual ~LineSinkWriter() = default;
     // Writes one complete log line (prefix + message). Must never throw and
     // never block the caller on backend IO.
-    virtual void writeLine(
-        LogLevel _level, std::string_view _prefix, std::string_view _message) = 0;
+    //
+    // _record, when not null, is the context sampled on the producing thread.
+    // The sink stamps its queue slot with it so the feeding thread can merge
+    // rings by event time. The custom log.format path renders the whole line
+    // before handing it over, so it has no prefix to defer and must pass the
+    // record explicitly; without it every slot would carry a zero timestamp and
+    // the merge would silently degrade to ring-index order.
+    virtual void writeLine(LogLevel _level, std::string_view _prefix, std::string_view _message,
+        LineRecord const* _record = nullptr) = 0;
     // Writes one record: the caller supplies the sampled LineRecord and the
     // message only, and the sink renders the prefix on its feeding thread. The
     // default implementation renders it here (caller thread) so sinks that do
@@ -130,9 +148,27 @@ void appendLinePrefix(std::string& _out, LogLevel _level);
 // keeping it off producer threads and off shared IO pools whose threads also
 // log.
 //
+// Client management is a plain mutex + condition variable, and deliberately so.
+// It is control plane: addClient() runs once per sink, removeClient() once at
+// teardown, and the worker takes the lock once per pass. Producers never touch
+// it — a log call only raises the atomic m_dirty flag — so the lock is never on
+// the hot path. An earlier lock-free version (per-slot atomics plus an in-flight
+// flag and an epoch counter) was both harder to review and unsound: worker and
+// remover each stored one variable and then loaded the other, which is the
+// Dekker pattern, and release/acquire does not provide the StoreLoad barrier
+// that pattern needs. Both sides could therefore miss each other's store and
+// the worker could call into a client the remover had already started
+// destroying. Holding the mutex for the "is it still registered?" check and the
+// "mark in flight" update makes that impossible, because both now happen in one
+// critical section.
+//
 // The instance is intentionally leaked: line sinks may live in statics whose
 // destruction order against a static worker is undefined, and an idle worker
-// costs nothing but a thread sleeping on its condition variable.
+// costs nothing but a thread sleeping on its wait channel. Note that leaking the
+// worker is also what makes sink teardown safe — with an ordinary static, the
+// worker would be destroyed *before* the sink that lazily created it (the sink's
+// constructor is what first calls instance()), so removeClient() during the
+// sink's destruction would touch a dead object.
 class LineFeeder
 {
 public:
@@ -153,23 +189,12 @@ public:
         return *s_instance;
     }
 
-    // Registers a client in the first free slot. One CAS per slot, no lock: the
-    // registration path runs once per sink, and the worker only ever reads the
-    // slots.
+    // Registration and removal are rare (once per sink lifetime), so neither is
+    // worth optimising at the cost of the reasoning above.
     void addClient(Client* _client)
     {
-        for (auto& slot : m_clientSlots)
-        {
-            Client* expected = nullptr;
-            if (slot.client.compare_exchange_strong(
-                    expected, _client, std::memory_order_acq_rel, std::memory_order_relaxed))
-            {
-                return;
-            }
-        }
-        // More clients than slots. Not reachable with today's deployments
-        // (console XOR file); say so instead of dropping silently.
-        std::fputs("LineFeeder: client table full, client not registered\n", stderr);
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_clients.push_back(_client);
     }
 
     // Wakes the worker for one pass over all registered clients. Cheap when a
@@ -179,10 +204,9 @@ public:
     // m_dirty doubles as the wait predicate and the wake channel: the worker
     // blocks in m_dirty.wait(false) and this notify_one releases it. There is
     // no separate condition variable, so no mutex has to be acquired just to
-    // pair the flag change with the notification (which is what the previous
-    // m_cv + m_mutex pair was for). A notify that arrives while the worker is
-    // busy is not lost: m_dirty stays true, so the next wait() returns
-    // immediately and the worker runs another (possibly empty) pass.
+    // pair the flag change with the notification. A notify that arrives while
+    // the worker is busy is not lost: m_dirty stays true, so the next wait()
+    // returns immediately and the worker runs another (possibly empty) pass.
     void wake()
     {
         if (!m_dirty.exchange(true, std::memory_order_acq_rel))
@@ -192,34 +216,28 @@ public:
     }
 
     // Removes _client, blocking until the worker is not inside its
-    // feedOnWorker(); once this returns the worker never touches _client
-    // again, so the caller may destroy it.
+    // feedOnWorker(); once this returns the worker never touches _client again,
+    // so the caller may destroy it. This is a concurrency barrier, not just
+    // bookkeeping: the worker is a long-lived thread, so it races with sink
+    // teardown no matter how the two objects are ordered.
     //
-    // The pointer is cleared first, so no later pass can pick the client up; the
-    // worker then publishes inFlight before re-reading the pointer, which closes
-    // the window where it might have loaded the pointer just before it was
-    // cleared. Waiting uses an epoch counter because feedOnWorker() can take
-    // milliseconds (a disk write) and must not be spun on.
+    // Erasing under the mutex is what makes it sound. The worker marks a client
+    // in flight under the SAME mutex only after re-checking that it is still
+    // registered, so either the worker sees the erase (and skips the client
+    // after this function returns) or this function sees the in-flight mark (and
+    // waits). One critical section, one total order, no fences needed.
     void removeClient(Client* _client)
     {
-        for (auto& slot : m_clientSlots)
+        std::unique_lock<std::mutex> lock(m_mutex);
+        auto const it = std::find(m_clients.begin(), m_clients.end(), _client);
+        if (it == m_clients.end())
         {
-            if (slot.client.load(std::memory_order_acquire) != _client)
-            {
-                continue;
-            }
-            slot.client.store(nullptr, std::memory_order_release);
-            for (;;)
-            {
-                uint32_t const epoch = m_idleEpoch.load(std::memory_order_acquire);
-                if (!slot.inFlight.load(std::memory_order_acquire))
-                {
-                    break;
-                }
-                m_idleEpoch.wait(epoch, std::memory_order_acquire);
-            }
             return;
         }
+        m_clients.erase(it);
+        m_idleCv.wait(
+            lock, [this, _client] { return std::find(m_active.begin(), m_active.end(), _client) ==
+                                           m_active.end(); });
     }
 
 private:
@@ -236,23 +254,25 @@ private:
             m_dirty.wait(false, std::memory_order_acquire);
             m_dirty.store(false, std::memory_order_relaxed);
 
-            for (auto& slot : m_clientSlots)
+            // Snapshot under the lock, then call the clients with it released:
+            // feedOnWorker() does disk IO and must not block addClient() or
+            // removeClient() for its duration.
             {
-                Client* const client = slot.client.load(std::memory_order_acquire);
-                if (client == nullptr)
+                std::lock_guard<std::mutex> lock(m_mutex);
+                m_snapshot.assign(m_clients.begin(), m_clients.end());
+            }
+            for (Client* const client : m_snapshot)
+            {
                 {
-                    continue;
-                }
-                // Publish "in use" before re-reading the pointer: if
-                // removeClient() cleared it in between, the re-read detects that
-                // and this pass skips the client instead of calling into an
-                // object the remover may already be destroying.
-                slot.inFlight.store(true, std::memory_order_release);
-                if (slot.client.load(std::memory_order_acquire) != client)
-                {
-                    slot.inFlight.store(false, std::memory_order_release);
-                    bumpIdleEpoch();
-                    continue;
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    // Re-check membership: the client may have been removed
+                    // between the snapshot and now. Removing it also invalidated
+                    // the pointer, so it must not be dereferenced here.
+                    if (std::find(m_clients.begin(), m_clients.end(), client) == m_clients.end())
+                    {
+                        continue;
+                    }
+                    m_active.push_back(client);
                 }
                 try
                 {
@@ -260,34 +280,30 @@ private:
                 }
                 catch (...)
                 {}
-                slot.inFlight.store(false, std::memory_order_release);
-                bumpIdleEpoch();
+                {
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    auto const it = std::find(m_active.begin(), m_active.end(), client);
+                    if (it != m_active.end())
+                    {
+                        m_active.erase(it);
+                    }
+                }
+                m_idleCv.notify_all();
             }
         }
     }
 
-    // Publishes "a client left the in-flight state" and wakes the waiters in
-    // removeClient().
-    void bumpIdleEpoch()
-    {
-        m_idleEpoch.fetch_add(1, std::memory_order_acq_rel);
-        m_idleEpoch.notify_all();
-    }
-
-    // Client table. Fixed capacity so the worker can iterate it without a lock;
-    // a slot is claimed with a CAS on registration and cleared on removal.
-    struct ClientSlot
-    {
-        std::atomic<Client*> client{nullptr};
-        /// Set by the worker for the duration of feedOnWorker(); removeClient()
-        /// waits for it to clear before returning.
-        std::atomic<bool> inFlight{false};
-    };
-    static constexpr std::size_t MaxClients = 4;
-    std::array<ClientSlot, MaxClients> m_clientSlots{};
-    /// Incremented whenever a client leaves the in-flight state; the wait
-    /// channel for removeClient().
-    std::atomic<uint32_t> m_idleEpoch{0};
+    std::mutex m_mutex;
+    /// Signalled whenever a client leaves the in-flight set; the wait channel for
+    /// removeClient().
+    std::condition_variable m_idleCv;
+    /// Registered clients, guarded by m_mutex.
+    std::vector<Client*> m_clients;
+    /// Clients the worker is currently inside feedOnWorker() for, guarded by
+    /// m_mutex.
+    std::vector<Client*> m_active;
+    /// Worker-private pass snapshot; a member so a pass does not allocate.
+    std::vector<Client*> m_snapshot;
     // Work-pending flag, and the wait/notify channel between producers and the
     // worker: producers raise it and notify, the worker waits for true and
     // clears it before each pass.
@@ -303,13 +319,28 @@ private:
 // from N threads costs N independent single-producer/single-consumer hand-offs
 // instead of N threads contending on one mutex. The feeding worker is the only
 // consumer; it serves the ring whose oldest pending line has the earliest
-// timestamp, so the file keeps a global chronological order.
+// timestamp.
+//
+// That merge REDUCES cross-thread inversions relative to the single shared queue
+// (measured: 0.13% vs 3.99% on the writeRecord path); it does not eliminate them.
+// A thread that samples its timestamp and is then descheduled enqueues after a
+// thread with a later timestamp, and the worker cannot know it is coming. Lines
+// from one thread are always in order, and equal timestamps are broken by ring
+// index. Any consumer that needs a strict global order or cross-thread causality
+// cannot get it from this design.
 //
 // Memory: a ring is allocated the first time a thread logs, so the footprint is
-// (number of logging threads) x CapacityPerShard slots. A node that logs from
-// ~40 threads holds 40 x 4096 slots, in the same range as the single shared pool
-// this replaces; MaxQueueShards only bounds the number of rings.
-template <typename BackendT, std::size_t CapacityV = 4096, std::size_t MaxShardsV = 128>
+// (threads that have logged) x CapacityPerShard slots. A node logging from ~40
+// threads holds ~40 x 4096 slots, the same range as the single shared pool this
+// replaces. Rings are 4096 slots; the old pool had 32768 in total, so a node with
+// more than 8 logging threads uses more memory than before, not less.
+//
+// A ring whose owning thread has exited is reclaimed (see ThreadToken): the next
+// thread that needs one reuses it instead of allocating, so thread churn cannot
+// consume the shard budget and silently push every producer onto the shared
+// overflow ring.
+template <typename BackendT, std::size_t CapacityV = 4096, std::size_t MaxShardsV = 128,
+    std::size_t MaxLinesPerPassV = 64 * 1024>
 class LineAsyncSink : public LineSinkWriter, public LineFeeder::Client
 {
 public:
@@ -354,32 +385,43 @@ public:
         return m_droppedTotal.load(std::memory_order_relaxed);
     }
 
+    /// Tells the sink that the operator configured log.flush=true, i.e. that a
+    /// line must be durable by the time the producing statement returns. Batching
+    /// would turn that into "durable in groups of 32", so the sink switches to one
+    /// line per backend write. Called from initLog before the sink is registered.
+    void setPerLinePersistence(bool _enabled) noexcept
+    {
+        m_perLinePersistence.store(_enabled, std::memory_order_relaxed);
+    }
+
+    /// Number of private rings this sink has allocated. Diagnostic: it tells an
+    /// operator whether the node is within MaxQueueShards and whether rings are
+    /// being reused instead of growing without bound.
+    std::size_t ringCount() const noexcept
+    {
+        return m_shardCount.load(std::memory_order_acquire);
+    }
+
     /// Lines enqueued but not yet handed to the backend. Useful as a backlog
     /// metric, and for asserting drain behaviour in tests.
     std::size_t pendingLines() const noexcept
     {
+        auto const pendingOf = [](QueueShard const* _shard) -> std::size_t {
+            return _shard == nullptr ? 0 : _shard->tail.load(std::memory_order_acquire) -
+                                                _shard->head.load(std::memory_order_acquire);
+        };
         std::size_t pending = 0;
         auto const count = m_shardCount.load(std::memory_order_acquire);
         for (std::size_t i = 0; i < count; ++i)
         {
-            QueueShard const* const shard = m_shards[i].get();
-            if (shard == nullptr)
-            {
-                continue;
-            }
-            pending += shard->tail.load(std::memory_order_acquire) -
-                       shard->head.load(std::memory_order_acquire);
+            pending += pendingOf(m_shards[i].get());
         }
-        if (m_overflowUsed.load(std::memory_order_acquire))
-        {
-            QueueShard const* const shard = m_overflowShard.get();
-            pending += shard->tail.load(std::memory_order_acquire) -
-                       shard->head.load(std::memory_order_acquire);
-        }
+        pending += pendingOf(m_overflowShard.load(std::memory_order_acquire));
         return pending;
     }
 
-    void writeLine(LogLevel _level, std::string_view _prefix, std::string_view _message) override
+    void writeLine(LogLevel _level, std::string_view _prefix, std::string_view _message,
+        LineRecord const* _record = nullptr) override
     {
         // FATAL bypasses the rings: a queued FATAL could be dropped on overflow
         // or sit behind a backlog, and the abort lives in the backend's
@@ -433,7 +475,7 @@ public:
             return;
         }
 
-        enqueue(_level, nullptr, _prefix, _message, false);
+        enqueue(_level, _record, _prefix, _message, false);
     }
 
     // Enqueues a record whose prefix is rendered by the feeding thread: the
@@ -499,6 +541,28 @@ public:
             }
         }
         LineFeeder::instance().removeClient(this);
+        // A producer that was already past its own m_stop check when the flag was
+        // set publishes its line after the drain above, so drain once more now
+        // that the worker can no longer touch this sink. Producers that publish
+        // after this point see m_stop and drain the line themselves (see
+        // enqueue()), which is what keeps the line from being stranded.
+        {
+            std::unique_lock<std::mutex> lock(m_controlMutex);
+            unlockAndDrain(lock);
+            reportDroppedLocked();
+            flushBackendLocked();
+        }
+    }
+
+    /// Drains the backlog on a producing thread that lost the race with stop().
+    /// The line it just published would otherwise sit in a ring the worker has
+    /// already detached from: neither consumed nor counted as dropped.
+    void drainInlineAfterStop()
+    {
+        std::unique_lock<std::mutex> lock(m_controlMutex);
+        unlockAndDrain(lock);
+        reportDroppedLocked();
+        flushBackendLocked();
     }
 
 private:
@@ -535,8 +599,11 @@ private:
     // removeClient() (sink shutdown) and the other registered sinks make
     // progress: with a continuous flood the rings refill faster than they
     // drain, and "drain until empty" would never return. The bound is far above
-    // any realistic burst, so a normal pass still drains everything.
-    static constexpr std::size_t MaxLinesPerPass = 64 * 1024;
+    // any realistic burst, so a normal pass still drains everything. A pass that
+    // hits it wakes the worker again (see feedOnWorker) so the remainder is not
+    // stranded when no producer logs again. Configurable so a test can shrink it
+    // to a few lines and exercise that path deterministically.
+    static constexpr std::size_t MaxLinesPerPass = MaxLinesPerPassV;
 
     struct Slot
     {
@@ -546,6 +613,16 @@ private:
         /// True when line holds the message only and the prefix still has to be
         /// rendered on the feeding thread.
         bool needsPrefix = false;
+    };
+
+    // Identifies one thread lifetime, so a ring can tell whether the thread that
+    // claimed it is still running. Heap-owned and referenced by every ring that
+    // points at it, so it outlives the thread: the TLS holder only clears
+    // `alive`, it never destroys the object. That is what makes reclamation safe
+    // — the check reads memory that is still valid after the thread is gone.
+    struct ThreadToken
+    {
+        std::atomic<bool> alive{true};
     };
 
     // One single-producer/single-consumer ring. head is advanced only by the
@@ -562,26 +639,49 @@ private:
         std::atomic<std::size_t> tail{0};
         /// Producer-private copy of head, refreshed only when the ring looks full.
         std::size_t cachedHead = 0;
-        std::atomic<std::uint64_t> dropped{0};
         std::unique_ptr<Slot[]> ring;
         /// True for the shared overflow shard; enqueue() then takes producerMutex.
         /// Const and fixed at construction so no thread ever observes a change.
         bool const shared;
         std::mutex producerMutex;
+        /// Thread lifetime that claimed this ring. Written only under m_shardMutex;
+        /// read there too (never by the data path). A ring whose owner has exited
+        /// is handed to the next thread that needs one.
+        std::shared_ptr<ThreadToken> owner;
+        /// Set once a producing thread had to fall back to this ring, which makes
+        /// its producers serialise. Only used to report the condition once.
+        std::atomic<bool> everShared{false};
 
         explicit QueueShard(bool _shared = false)
           : ring(std::make_unique<Slot[]>(CapacityPerShard)), shared(_shared)
         {}
     };
 
-    // Per-thread binding to a shard. m_sinkId guards against a sink being
-    // destroyed and a new one landing at the same address.
-    struct ThreadShard
+    // Per-thread cache of (sink -> ring) bindings, and the token describing this
+    // thread's lifetime.
+    //
+    // More than one slot because two live sinks of the same type each need their
+    // own binding (a test sink plus the initializer's, or console + file while a
+    // config reload swaps them). With a single slot every alternating line
+    // re-entered the claim path, and the claim path allocated a fresh 4096-slot
+    // ring each time — the reviewer's "79 ns statement becomes 100 us while
+    // holding m_shardMutex". A tiny array makes rebinding a non-event.
+    struct ThreadBinding
     {
         std::uint64_t sinkId = 0;
         QueueShard* shard = nullptr;
     };
-    static inline thread_local ThreadShard s_threadShard{};
+    static constexpr std::size_t MaxThreadBindings = 4;
+
+    struct ThreadLocalState
+    {
+        ThreadBinding bindings[MaxThreadBindings]{};
+        std::size_t nextVictim = 0;
+        std::shared_ptr<ThreadToken> token = std::make_shared<ThreadToken>();
+
+        ~ThreadLocalState() { token->alive.store(false, std::memory_order_release); }
+    };
+    static inline thread_local ThreadLocalState s_threadLocal{};
     static inline std::atomic<std::uint64_t> s_nextSinkId{1};
 
     /// Appends one line to the calling thread's ring.
@@ -594,24 +694,50 @@ private:
             // handed in now would sit in a ring nobody drains. Count it instead
             // of swallowing it silently: this is the "leaky sink + late
             // producer" window that the registry's never-destroy policy allows.
-            countDrop(nullptr);
+            countDrop();
             return;
         }
+        // The record pointer is passed straight through: push() stamps the slot
+        // once the line is known to fit, and only samples a timestamp when the
+        // caller supplied none. Nothing is copied on the hot path here.
         QueueShard* const shard = shardForProducer();
+        bool published = false;
         if (shard->shared)
         {
             // Several threads share this ring; the single-producer fast path
             // below is invalid for it.
             std::lock_guard<std::mutex> lock(shard->producerMutex);
-            pushLocked(shard, _level, _record, _prefix, _message, _needsPrefix, false);
+            published = push(shard, _level, _record, _prefix, _message, _needsPrefix, false);
+        }
+        else
+        {
+            published = push(shard, _level, _record, _prefix, _message, _needsPrefix, true);
+        }
+        if (!published)
+        {
             return;
         }
-        pushLocked(shard, _level, _record, _prefix, _message, _needsPrefix, true);
+        // The entering check above cannot rule out a stop() that lands while this
+        // line is being built: a producer that copies a large message can lose
+        // milliseconds there, long enough for stop() to set the flag, drain
+        // (seeing nothing) and detach from the worker. The line would then sit in
+        // a ring nobody drains — not consumed, not counted as dropped, invisible.
+        // Re-checking after the publish closes it: either this thread sees the
+        // flag and drains the line itself, or stop()'s drain sees the published
+        // tail. The load hits the cache line the entering check already brought
+        // in, so it costs nothing measurable.
+        if (m_stop.load(std::memory_order_acquire))
+        {
+            drainInlineAfterStop();
+            return;
+        }
+        LineFeeder::instance().wake();
     }
 
     /// Appends into _shard. _useCachedHead is true only when this thread is the
-    /// shard's sole producer.
-    void pushLocked(QueueShard* _shard, LogLevel _level, LineRecord const* _record,
+    /// shard's sole producer. Returns false when the line was dropped because the
+    /// ring was full.
+    bool push(QueueShard* _shard, LogLevel _level, LineRecord const* _record,
         std::string_view _prefix, std::string_view _message, bool _needsPrefix,
         bool _useCachedHead)
     {
@@ -626,8 +752,8 @@ private:
                 _shard->cachedHead = _shard->head.load(std::memory_order_acquire);
                 if (tail - _shard->cachedHead >= CapacityPerShard)
                 {
-                    countDrop(_shard);
-                    return;
+                    countDrop();
+                    return false;
                 }
             }
         }
@@ -639,17 +765,29 @@ private:
             // overwrite slots the worker has not copied yet.
             if (tail - _shard->head.load(std::memory_order_acquire) >= CapacityPerShard)
             {
-                countDrop(_shard);
-                return;
+                countDrop();
+                return false;
             }
         }
 
         Slot& slot = _shard->ring[tail % CapacityPerShard];
         slot.level = _level;
         slot.needsPrefix = _needsPrefix;
-        if (_needsPrefix)
+        // Stamped on both paths, and only once the line is known to fit: the merge
+        // across rings reads it unconditionally. A caller that formatted the whole
+        // line itself has no deferred prefix but still supplies the stamp; a direct
+        // writeLine that supplies none gets one sampled here, so the slot is never
+        // left with a zero timestamp.
+        if (_record != nullptr)
         {
             slot.record = *_record;
+        }
+        else
+        {
+            slot.record = sampleLineRecord(_level);
+        }
+        if (_needsPrefix)
+        {
             slot.line.clear();
             slot.line.reserve(_message.size());
             slot.line.append(_message);
@@ -664,94 +802,153 @@ private:
         // Publish: the release store makes every slot write visible to the
         // worker, which reads tail with acquire before touching the slot.
         _shard->tail.store(tail + 1, std::memory_order_release);
-        LineFeeder::instance().wake();
+        return true;
     }
 
-    /// Counts one dropped line exactly once: the marker is emitted from
-    /// m_droppedLines, so the per-shard counter must not be summed into it again.
-    void countDrop(QueueShard* _shard)
+    /// Counts one dropped line exactly once. m_droppedLines is the single
+    /// authoritative counter that the marker line is built from; per-shard
+    /// counters were removed because nothing ever read them.
+    void countDrop()
     {
-        if (_shard != nullptr)
-        {
-            _shard->dropped.fetch_add(1, std::memory_order_relaxed);
-        }
         m_droppedLines.fetch_add(1, std::memory_order_relaxed);
         m_droppedTotal.fetch_add(1, std::memory_order_relaxed);
     }
 
     QueueShard* shardForProducer()
     {
-        if (s_threadShard.sinkId == m_sinkId)
+        // Fast path: this thread already holds a ring for this sink.
+        for (auto const& binding : s_threadLocal.bindings)
         {
-            return s_threadShard.shard;
+            if (binding.sinkId == m_sinkId)
+            {
+                return binding.shard;
+            }
         }
-        // First line from this thread: claim a shard. Control plane, runs once
-        // per thread.
+        // First line from this thread for this sink: claim a ring. Control plane,
+        // runs once per (thread, sink) pair.
         std::lock_guard<std::mutex> lock(m_shardMutex);
-        auto const index = m_shardCount.load(std::memory_order_relaxed);
+        auto const count = m_shardCount.load(std::memory_order_relaxed);
         QueueShard* shard = nullptr;
-        if (index < MaxQueueShards)
+        // Reuse the ring of a thread that has exited before allocating a new one:
+        // otherwise thread churn (temporary std::thread objects, a rebuilt IO
+        // pool) consumes the ring budget permanently, and once it is exhausted
+        // every producer silently lands on the shared overflow ring and loses all
+        // of the concurrency this design exists for.
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            QueueShard* const candidate = m_shards[i].get();
+            if (candidate->owner->alive.load(std::memory_order_acquire))
+            {
+                continue;
+            }
+            // Only an EMPTY ring may be handed over. A dead thread can leave lines
+            // behind that the worker has not drained yet; giving such a ring to a
+            // new producer would hand it a ring that already looks full, so its
+            // first lines would be dropped. Leave it to drain and reclaim it later.
+            if (candidate->head.load(std::memory_order_acquire) !=
+                candidate->tail.load(std::memory_order_acquire))
+            {
+                continue;
+            }
+            // Anything the previous owner left in the ring stays there and is
+            // drained normally: head/tail keep counting, only the producer
+            // changes. cachedHead is producer-private and must start from the live
+            // head rather than the dead thread's stale copy.
+            candidate->owner = s_threadLocal.token;
+            candidate->cachedHead = candidate->head.load(std::memory_order_acquire);
+            shard = candidate;
+            break;
+        }
+        if (shard == nullptr && count < MaxQueueShards)
         {
             // Allocated on first use: a thread that never logs never pays for a
-            // ring, which keeps a 40-thread node at ~40 x CapacityPerShard slots
-            // instead of MaxQueueShards x CapacityPerShard.
-            m_shards[index] = std::make_unique<QueueShard>();
-            shard = m_shards[index].get();
-            m_shardCount.store(index + 1, std::memory_order_release);
+            // ring.
+            m_shards[count] = std::make_unique<QueueShard>();
+            m_shards[count]->owner = s_threadLocal.token;
+            shard = m_shards[count].get();
+            m_shardCount.store(count + 1, std::memory_order_release);
         }
-        else
+        if (shard == nullptr)
         {
-            // More producing threads than shards: several threads share the
-            // overflow ring, so it is marked shared and its producers serialise
-            // on producerMutex. Unreachable with MaxQueueShards = 128 on any real
-            // node, but it must stay correct rather than corrupt a
-            // single-producer ring.
-            shard = m_overflowShard.get();
-            m_overflowUsed.store(true, std::memory_order_release);
+            // More producing threads than rings, and none of the owners has
+            // exited: several threads now share the overflow ring, so it is marked
+            // shared and its producers serialise on producerMutex. Correct, but it
+            // gives up the per-thread hand-off, so it is worth reporting once.
+            shard = overflowShard();
+            if (!shard->everShared.exchange(true, std::memory_order_relaxed))
+            {
+                std::fprintf(stderr,
+                    "LineAsyncSink: %zu rings in use, further producers share one ring\n",
+                    MaxQueueShards);
+            }
         }
-        s_threadShard.sinkId = m_sinkId;
-        s_threadShard.shard = shard;
+        // Round-robin replacement: all bindings were misses, so any slot is cold.
+        auto& slot = s_threadLocal.bindings[s_threadLocal.nextVictim];
+        slot.sinkId = m_sinkId;
+        slot.shard = shard;
+        s_threadLocal.nextVictim = (s_threadLocal.nextVictim + 1) % MaxThreadBindings;
         return shard;
     }
 
-    // Picks the non-empty ring whose head line has the earliest timestamp so the
-    // file keeps a global chronological order across producing threads.
+    /// The shared ring used when every private ring is claimed. Caller holds
+    /// m_shardMutex. Allocated on first use: it is unreachable with
+    /// MaxQueueShards = 128 on any real node, so paying ~400 KB per sink for it
+    /// up front contradicted the lazily-allocated design of the private rings.
+    QueueShard* overflowShard()
+    {
+        if (m_overflowShard.load(std::memory_order_relaxed) == nullptr)
+        {
+            m_overflowOwner = std::make_unique<QueueShard>(true);
+            m_overflowShard.store(m_overflowOwner.get(), std::memory_order_release);
+        }
+        return m_overflowShard.load(std::memory_order_relaxed);
+    }
+
+    // Picks the non-empty ring whose head line has the earliest timestamp, which
+    // merges the per-thread rings by event time.
+    //
+    // One helper and one source of truth for "does this sink have more rings":
+    // the overflow ring is either allocated or not, and every enumeration goes
+    // through consider()/pending(). The previous version summed a separate flag
+    // into a loop bound with unspecified operand evaluation order, so this
+    // function and hasPendingLines() could disagree about whether the overflow
+    // ring existed — which showed up as a drain loop that made no progress.
     bool pickEarliest(QueueShard*& _shard, std::size_t& _index)
     {
         _shard = nullptr;
-        auto const count =
-            m_shardCount.load(std::memory_order_acquire) +
-            (m_overflowUsed.load(std::memory_order_acquire) ? 1U : 0U);
-        for (std::size_t i = 0; i < count; ++i)
-        {
-            QueueShard* const shard =
-                i < m_shardCount.load(std::memory_order_relaxed) ? m_shards[i].get() :
-                                                                   m_overflowShard.get();
-            if (shard == nullptr)
+        _index = 0;
+        auto const consider = [&_shard, &_index](QueueShard* _candidate) {
+            if (_candidate == nullptr)
             {
-                continue;  // never claimed by a producing thread
+                return;
             }
-            std::size_t const head = shard->head.load(std::memory_order_relaxed);
-            if (head == shard->tail.load(std::memory_order_acquire))
+            std::size_t const head = _candidate->head.load(std::memory_order_relaxed);
+            if (head == _candidate->tail.load(std::memory_order_acquire))
             {
-                continue;  // empty
+                return;  // empty
             }
             if (_shard == nullptr)
             {
-                _shard = shard;
+                _shard = _candidate;
                 _index = head;
-                continue;
+                return;
             }
-            Slot const& candidate = shard->ring[head % CapacityPerShard];
+            Slot const& candidate = _candidate->ring[head % CapacityPerShard];
             Slot const& best = _shard->ring[_index % CapacityPerShard];
             if (candidate.record.secs < best.record.secs ||
                 (candidate.record.secs == best.record.secs &&
                     candidate.record.micros < best.record.micros))
             {
-                _shard = shard;
+                _shard = _candidate;
                 _index = head;
             }
+        };
+        auto const count = m_shardCount.load(std::memory_order_acquire);
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            consider(m_shards[i].get());
         }
+        consider(m_overflowShard.load(std::memory_order_acquire));
         return _shard != nullptr;
     }
 
@@ -770,12 +967,30 @@ private:
             if (hasPendingLines())
             {
                 fedAnything = true;
-                linesThisPass += consumeBatch(linesSinceFlushCheck);
-                if (linesThisPass >= MaxLinesPerPass || m_stop.load(std::memory_order_relaxed))
+                std::size_t const written = consumeBatch(linesSinceFlushCheck);
+                linesThisPass += written;
+                if (written == 0)
                 {
-                    // Bounded pass: yield so shutdown and other sinks can run.
-                    // Nothing is lost — the remaining lines keep their rings and
-                    // wake() brings the worker straight back.
+                    // No progress even though a ring looked non-empty: a ring
+                    // whose tail the consumer has already caught up with, or an
+                    // inconsistency between the enumerations. Returning beats
+                    // "continue", which would spin on the same condition and burn
+                    // a core.
+                    return;
+                }
+                if (linesThisPass >= MaxLinesPerPass)
+                {
+                    // Bounded pass: yield so shutdown and the other sinks make
+                    // progress. The remaining lines stay in their rings, and the
+                    // worker has to be woken to come back for them: a burst can be
+                    // fully enqueued before this pass starts, in which case no
+                    // producer will call wake() again and the tail would sit in
+                    // the rings until the next unrelated log statement.
+                    LineFeeder::instance().wake();
+                    return;
+                }
+                if (m_stop.load(std::memory_order_relaxed))
+                {
                     return;
                 }
                 continue;
@@ -837,46 +1052,36 @@ private:
 
     bool hasPendingLines()
     {
+        auto const hasLine = [](QueueShard const* _shard) {
+            // The shared overflow ring is not part of m_shards, so it has to be
+            // passed in explicitly: forgetting it stranded every line written by
+            // a thread beyond MaxQueueShards.
+            return _shard != nullptr && _shard->head.load(std::memory_order_relaxed) !=
+                                            _shard->tail.load(std::memory_order_acquire);
+        };
         auto const count = m_shardCount.load(std::memory_order_acquire);
         for (std::size_t i = 0; i < count; ++i)
         {
-            QueueShard* const shard = m_shards[i].get();
-            if (shard == nullptr)
-            {
-                continue;
-            }
-            if (shard->head.load(std::memory_order_relaxed) !=
-                shard->tail.load(std::memory_order_acquire))
+            if (hasLine(m_shards[i].get()))
             {
                 return true;
             }
         }
-        // The shared overflow ring is not part of m_shards, so it has to be
-        // checked explicitly: forgetting it stranded every line written by a
-        // thread beyond MaxQueueShards.
-        if (m_overflowUsed.load(std::memory_order_acquire))
-        {
-            QueueShard* const shard = m_overflowShard.get();
-            if (shard->head.load(std::memory_order_relaxed) !=
-                shard->tail.load(std::memory_order_acquire))
-            {
-                return true;
-            }
-        }
-        return false;
+        return hasLine(m_overflowShard.load(std::memory_order_acquire));
     }
 
-    // Consumes up to BatchSize lines, merged across rings so the batch is in
-    // timestamp order, and writes it to the backend in one call.
+    // Consumes up to batchLimitFor() lines, merged across rings so the batch is
+    // in timestamp order, and writes it to the backend in one call.
     // Returns the number of lines written.
     std::size_t consumeBatch(std::uint64_t& _linesSinceFlushCheck)
     {
         thread_local std::string batch;
         batch.clear();
 
+        std::size_t const limit = batchLimitFor();
         std::size_t written = 0;
         LogLevel firstLevel = LogLevel::INFO;
-        for (std::size_t n = 0; n < BatchSize && batch.size() < MaxBatchBytes; ++n)
+        for (std::size_t n = 0; n < limit && batch.size() < MaxBatchBytes; ++n)
         {
             QueueShard* shard = nullptr;
             std::size_t index = 0;
@@ -933,7 +1138,27 @@ private:
             _linesSinceFlushCheck = 0;
             maybeFlush();
         }
+        // A single outsized line grows the thread_local batch to its size and it
+        // would stay that large for the life of the feeding thread. Give the
+        // memory back once the batch is no longer representative.
+        if (batch.capacity() > MaxBatchBytes * 2)
+        {
+            std::string().swap(batch);
+        }
         return written;
+    }
+
+    /// How many lines one backend write may carry.
+    ///
+    /// BatchSize normally: one write for up to 32 lines is the whole point of
+    /// batching. With log.flush=true it drops to 1, because the backend's
+    /// auto-flush then runs per consumeLine() call — batching would turn the
+    /// configured "flush after every line" into "flush after every 32", so a
+    /// crash could lose up to 31 lines that were already built. Those are exactly
+    /// the lines a post-mortem needs, and the old pipeline never lost them.
+    std::size_t batchLimitFor() const noexcept
+    {
+        return m_perLinePersistence.load(std::memory_order_relaxed) ? 1 : BatchSize;
     }
 
     // Takes the pending drop count for the marker. m_droppedLines is the single
@@ -1053,10 +1278,13 @@ private:
     std::uint64_t const m_sinkId;
     std::array<std::unique_ptr<QueueShard>, MaxQueueShards> m_shards;
     std::atomic<std::size_t> m_shardCount{0};
-    /// Set once a producing thread had to fall back to the shared overflow ring.
-    std::atomic<bool> m_overflowUsed{false};
-    // Shard for producing threads beyond MaxQueueShards, guarded by m_shardMutex.
-    std::unique_ptr<QueueShard> m_overflowShard = std::make_unique<QueueShard>(true);
+    /// Owns the shared overflow ring; published through m_overflowShard once it
+    /// is allocated (on first fallback, never eagerly).
+    std::unique_ptr<QueueShard> m_overflowOwner;
+    /// Published pointer to the shared overflow ring, or null while it has not
+    /// been needed. This single value is what every reader keys off, so "does this
+    /// sink have an overflow ring" has exactly one answer.
+    std::atomic<QueueShard*> m_overflowShard{nullptr};
     std::mutex m_shardMutex;
 
     // Serialises the consumers: the shared worker and stop()'s inline drain.
@@ -1071,6 +1299,8 @@ private:
     // construction; unlike m_droppedLines it is never reset by marker emission,
     // so it can be exported as an operator-facing metric.
     std::atomic<std::uint64_t> m_droppedTotal{0};
+    /// True when the operator configured log.flush=true; see batchLimitFor().
+    std::atomic<bool> m_perLinePersistence{false};
     std::chrono::steady_clock::time_point m_lastFlush{};
     std::atomic<bool> m_stop{false};
     // Flush handshake, guarded by m_controlMutex: a requester (flush(), the
@@ -1089,6 +1319,8 @@ inline void LineSinkWriter::writeRecord(LineRecord const& _record, std::string_v
     thread_local std::string prefix;
     prefix.clear();
     appendRecordPrefix(prefix, _record);
-    writeLine(_record.level, prefix, _message);
+    // Pass the record on: the prefix is rendered here, but the timestamp is still
+    // what orders this line against the other producing threads.
+    writeLine(_record.level, prefix, _message, &_record);
 }
 }  // namespace bcos::log

@@ -105,6 +105,24 @@ namespace
 // deliberately-leaked lifetime as LineFeeder and the registry itself, and it
 // costs a few megabytes once at exit — after stopLogging() has already flushed
 // every line.
+//
+// Why not std::atomic<std::shared_ptr<LineSinkWriter>>, which would remove the
+// leak? Three reasons, all measured or verified rather than assumed:
+//   1. Apple's libc++ does not implement the atomic<shared_ptr> specialization
+//      (P0718), so `std::atomic<SinkPtr>` falls back to the primary template and
+//      fails with "not trivially copyable". It does not build on macOS at all.
+//   2. Where it does exist it is NOT lock-free: load() takes an internal spinlock
+//      and then copies the pointer pair, i.e. one refcount increment plus one
+//      decrement per line. Measured against a plain atomic pointer load on the
+//      same slot (the single-sink case): +18 ns/line at 1 thread, +614 ns/line
+//      at 16 threads — roughly 3x the whole per-line cost this PR worked to
+//      bring down. Using only .get() does not avoid it: load() returns a value,
+//      and dropping that temporary immediately leaves a dangling raw pointer.
+//   3. The leak it would fix is only realised at process exit, where the kernel
+//      reclaims it; initLog runs once per process, so it does not accumulate.
+// The sender side has the same constraint for a different reason: a sink
+// registers itself from its own constructor (addClient(this)), where no
+// shared_ptr exists yet, so shared_from_this() throws bad_weak_ptr.
 constexpr std::size_t MaxLineSinks = 4;
 struct LineSinkRegistry
 {
@@ -124,12 +142,23 @@ LineSinkRegistry& registry()
 }
 
 // Ownership of every sink ever registered; see the comment on LineSinkRegistry.
-// Bounded by the number of log initialisers plus test sinks, and written only
-// from registerLineSink(), which already serialises through the slot CAS.
+// Bounded by the number of log initialisers plus test sinks.
+//
+// The slot CAS only decides WHICH slot a caller claims, it says nothing about
+// this vector, so two threads registering different sinks would otherwise push
+// into it concurrently and corrupt it (two registrations can overlap: a test
+// sink is registered while the initializer is still coming up). Guarded by its
+// own mutex, which is only ever taken on the registration path.
 std::vector<std::shared_ptr<LineSinkWriter>>& leakedSinks()
 {
     static auto* s_sinks = new std::vector<std::shared_ptr<LineSinkWriter>>();
     return *s_sinks;
+}
+
+std::mutex& leakedSinksMutex()
+{
+    static auto* s_mutex = new std::mutex();
+    return *s_mutex;
 }
 
 constexpr std::string_view c_severityNames[] = {
@@ -235,6 +264,17 @@ void appendHex(std::string& _out, std::uint64_t _value, unsigned _minWidth = 1)
 }
 }  // namespace
 
+// Width of the ThreadID attribute's hex field. release-3.18.0 rendered it with
+// snprintf("0x%08lx") on Windows and "0x%016llx" elsewhere; both keep the width
+// so the line stays byte-identical to the old pipeline on each platform.
+// Only one definition so the built-in prefix and the custom log.format path
+// cannot drift apart.
+#ifdef _WIN32
+constexpr unsigned c_threadIdHexWidth = 8;
+#else
+constexpr unsigned c_threadIdHexWidth = 16;
+#endif
+
 // "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|", byte-identical to the
 // release-3.18.0 default formatter expression (attr<severity_level>
 // ("Severity") << "|" << format_date_time<ptime>("TimeStamp",
@@ -249,7 +289,7 @@ void appendHex(std::string& _out, std::uint64_t _value, unsigned _minWidth = 1)
 void appendRecordPrefix(std::string& _out, LineRecord const& _record)
 {
     // severity(7) + '|' + date(19) + '.' + micros(6) + '|' + name(15) + '-' +
-    // "0x" + tid(16) + '|' = 70 bytes; 96 leaves headroom.
+    // "0x" + tid + '|'; 96 leaves headroom for the 16-digit POSIX id.
     char buf[96];
     char* p = buf;
 
@@ -303,7 +343,7 @@ void appendRecordPrefix(std::string& _out, LineRecord const& _record)
     *p++ = '-';
     *p++ = '0';
     *p++ = 'x';
-    p = appendFixedHex(p, _record.threadId, 16);
+    p = appendFixedHex(p, _record.threadId, c_threadIdHexWidth);
     *p++ = '|';
 
     _out.append(buf, static_cast<std::size_t>(p - buf));
@@ -751,7 +791,7 @@ void appendLayoutLine(
         }
         case LineLayout::Field::ThreadID:
             _out.append("0x");
-            appendHex(_out, _record.threadId, 16);
+            appendHex(_out, _record.threadId, c_threadIdHexWidth);
             break;
         case LineLayout::Field::LineID:
             appendUnsigned(_out, lineID);
@@ -792,7 +832,10 @@ void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
         {
             // Park ownership for the rest of the process so a producer holding
             // the pointer can never touch a destroyed sink.
-            leakedSinks().push_back(std::move(_sink));
+            {
+                std::lock_guard<std::mutex> lock(leakedSinksMutex());
+                leakedSinks().push_back(std::move(_sink));
+            }
             reg.count.fetch_add(1, std::memory_order_release);
             return;
         }
@@ -854,7 +897,9 @@ void commitLine(LineRecord const& _record, std::string_view _message)
     {
         // Custom log.format: the layout decides where the message appears, so
         // the line is assembled whole here and handed over as prefix + no
-        // message. Rendering cannot be deferred past this point.
+        // message. Rendering cannot be deferred past this point, so the record is
+        // passed explicitly — the sink still needs its timestamp to merge the
+        // per-producer rings in order.
         thread_local std::string line;
         line.clear();
         appendLayoutLine(line, *layout, _record, _message);
@@ -862,7 +907,7 @@ void commitLine(LineRecord const& _record, std::string_view _message)
         {
             if (auto* sink = slot.load(std::memory_order_acquire); sink != nullptr)
             {
-                sink->writeLine(_record.level, line, {});
+                sink->writeLine(_record.level, line, {}, &_record);
             }
         }
         return;
@@ -899,6 +944,12 @@ LogStream::~LogStream() noexcept
     }
     catch (...)
     {}
+    // Release the spill buffer. grow() frees each previous buffer as it doubles,
+    // so the buffer live at the end of the statement is the only one that would
+    // otherwise outlive it — and with it the whole line's worth of heap, on
+    // every statement longer than InlineCapacity. Must run after the commit
+    // above, which reads the buffer through view().
+    delete[] m_heap;
 }
 
 namespace

@@ -270,21 +270,35 @@ public:
     LogStream& operator<<(std::ios& (*_pf)(std::ios&));
     LogStream& operator<<(std::ios_base& (*_pf)(std::ios_base&));
 
-    // --- enums: format through the underlying type, exactly as std::ostream
-    // resolves them (an enum with a char underlying type prints as a char) ---
+    // --- enums with no stream operator of their own: format through the
+    // underlying type, which is exactly what the old pipeline produced via
+    // integral promotion.
+    //
+    // An enum that DOES have its own operator<< must take the bridge instead:
+    // an unconditional enum -> underlying conversion silently bypassed every
+    // custom overload in this repository, so TransactionStatus::OutOfGas printed
+    // as "12" instead of "OutOfGas" and BlockVersion printed as an integer
+    // instead of "x.y.z".
+    //
+    // The distinguishing test is sound because a scoped enum (enum class) is not
+    // implicitly convertible to its underlying type, so `os << v` is only valid
+    // when a real overload exists. An unscoped enum promotes to int and is
+    // therefore always valid; it takes the bridge too, which reproduces the old
+    // promotion behaviour exactly.
     template <class T>
-        requires std::is_enum_v<T>
+        requires std::is_enum_v<T> && (!requires(std::ostream& os, T const& v) { os << v; })
     LogStream& operator<<(T _value)
     {
         return *this << static_cast<std::underlying_type_t<T>>(_value);
     }
 
     // --- any other type that is streamable into std::ostream: bridge ---
+    // Enums are not excluded: the ones that reach here have a real overload
+    // (see above) and must be formatted by it.
     template <class T>
         requires(!std::is_array_v<std::remove_reference_t<T>> &&
                  !std::is_arithmetic_v<std::remove_cvref_t<T>> &&
                  !std::is_pointer_v<std::remove_cvref_t<T>> &&
-                 !std::is_enum_v<std::remove_cvref_t<T>> &&
                  !std::is_same_v<std::remove_cvref_t<T>, std::string> &&
                  !std::is_convertible_v<T const&, std::string_view> &&
                  requires(std::ostream& os, T const& v) { os << v; })
@@ -340,6 +354,35 @@ private:
     static std::ostream& bridgeStream()
     {
         thread_local std::ostream stream(&bridgeBuf());
+        return stream;
+    }
+
+    // Entry point for every operand that needs the bridge.
+    //
+    // The bridge is thread_local and shared by every statement on this thread,
+    // so its formatting state has to be re-established per bridge call: leaving
+    // it alone let one operator<< that changed a flag (or simply ran with
+    // std::hex from an earlier statement) permanently alter every later line on
+    // that thread. The state the old pipeline would have shown is the defaults
+    // plus the base selected by earlier operands of THIS statement, which
+    // m_base tracks.
+    std::ostream& bridgeForOperand()
+    {
+        auto& stream = bridgeStream();
+        auto base = std::ios_base::dec;
+        if (m_base == 16)
+        {
+            base = std::ios_base::hex;
+        }
+        else if (m_base == 8)
+        {
+            base = std::ios_base::oct;
+        }
+        // skipws is std::ostream's initial flag set; everything else is default.
+        stream.flags(std::ios_base::skipws | base);
+        stream.width(0);
+        stream.precision(6);
+        stream.fill(' ');
         return stream;
     }
 
@@ -480,7 +523,7 @@ inline LogStream& LogStream::operator<<(std::ostream& (*_pf)(std::ostream&))
     auto& buf = bridgeBuf();
     LogStream* const previous = buf.m_target;
     buf.m_target = this;
-    bridgeStream() << _pf;
+    bridgeForOperand() << _pf;
     buf.m_target = previous;
     return *this;
 }
@@ -490,7 +533,7 @@ inline LogStream& LogStream::operator<<(std::ios& (*_pf)(std::ios&))
     auto& buf = bridgeBuf();
     LogStream* const previous = buf.m_target;
     buf.m_target = this;
-    bridgeStream() << _pf;
+    bridgeForOperand() << _pf;
     buf.m_target = previous;
     return *this;
 }
@@ -520,7 +563,7 @@ inline LogStream& LogStream::operator<<(std::ios_base& (*_pf)(std::ios_base&))
     auto& buf = bridgeBuf();
     LogStream* const previous = buf.m_target;
     buf.m_target = this;
-    bridgeStream() << _pf;
+    bridgeForOperand() << _pf;
     buf.m_target = previous;
     return *this;
 }
@@ -529,7 +572,6 @@ template <class T>
     requires(!std::is_array_v<std::remove_reference_t<T>> &&
              !std::is_arithmetic_v<std::remove_cvref_t<T>> &&
              !std::is_pointer_v<std::remove_cvref_t<T>> &&
-             !std::is_enum_v<std::remove_cvref_t<T>> &&
              !std::is_same_v<std::remove_cvref_t<T>, std::string> &&
              !std::is_convertible_v<T const&, std::string_view> &&
              requires(std::ostream& os, T const& v) { os << v; })
@@ -540,7 +582,7 @@ LogStream& LogStream::operator<<(T const& _value)
     auto& buf = bridgeBuf();
     LogStream* const previous = buf.m_target;
     buf.m_target = this;
-    bridgeStream() << _value;
+    bridgeForOperand() << _value;
     buf.m_target = previous;
     return *this;
 }
