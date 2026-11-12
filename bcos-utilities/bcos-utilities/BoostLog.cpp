@@ -105,24 +105,6 @@ namespace
 // deliberately-leaked lifetime as LineFeeder and the registry itself, and it
 // costs a few megabytes once at exit — after stopLogging() has already flushed
 // every line.
-//
-// Why not std::atomic<std::shared_ptr<LineSinkWriter>>, which would remove the
-// leak? Three reasons, all measured or verified rather than assumed:
-//   1. Apple's libc++ does not implement the atomic<shared_ptr> specialization
-//      (P0718), so `std::atomic<SinkPtr>` falls back to the primary template and
-//      fails with "not trivially copyable". It does not build on macOS at all.
-//   2. Where it does exist it is NOT lock-free: load() takes an internal spinlock
-//      and then copies the pointer pair, i.e. one refcount increment plus one
-//      decrement per line. Measured against a plain atomic pointer load on the
-//      same slot (the single-sink case): +18 ns/line at 1 thread, +614 ns/line
-//      at 16 threads — roughly 3x the whole per-line cost this PR worked to
-//      bring down. Using only .get() does not avoid it: load() returns a value,
-//      and dropping that temporary immediately leaves a dangling raw pointer.
-//   3. The leak it would fix is only realised at process exit, where the kernel
-//      reclaims it; initLog runs once per process, so it does not accumulate.
-// The sender side has the same constraint for a different reason: a sink
-// registers itself from its own constructor (addClient(this)), where no
-// shared_ptr exists yet, so shared_from_this() throws bad_weak_ptr.
 constexpr std::size_t MaxLineSinks = 4;
 struct LineSinkRegistry
 {
@@ -238,30 +220,23 @@ char* appendFixedHex(char* _out, std::uint64_t _value, unsigned _width)
     return _out + _width;
 }
 
-// Writes _value as zero-padded lowercase hex through a raw pointer, for the
-// cold layout path where the field width is not fixed.
-char* appendHexTo(char* _out, std::uint64_t _value, unsigned _minWidth)
+// Zero-padded lowercase hex append into a std::string. Only the custom
+// log.format layout uses this (cold path).
+//
+// Delegates to appendFixedHex so the ThreadID field has exactly ONE renderer:
+// while these were two independent implementations they disagreed about what to
+// do with a value wider than the field (one truncated, the other widened), which
+// would print two different identifiers for the same thread depending on which
+// layout the operator configured.
+void appendHex(std::string& _out, std::uint64_t _value, unsigned _width = 1)
 {
-    char tmp[16];
-    auto const result = std::to_chars(tmp, tmp + sizeof(tmp), _value, 16);
-    auto const len = static_cast<std::size_t>(result.ptr - tmp);
-    std::size_t const pad = _minWidth > len ? _minWidth - len : 0;
-    if (pad != 0)
-    {
-        std::memset(_out, '0', pad);
-    }
-    std::memcpy(_out + pad, tmp, len);
-    return _out + pad + len;
+    char tmp[24];
+    auto const end = appendFixedHex(tmp, _value, _width);
+    _out.append(tmp, static_cast<std::size_t>(end - tmp));
 }
 
 // Zero-padded lowercase hex append into a std::string. Only the custom
 // log.format layout uses this (cold path).
-void appendHex(std::string& _out, std::uint64_t _value, unsigned _minWidth = 1)
-{
-    char tmp[16];
-    char* const end = appendHexTo(tmp, _value, _minWidth);
-    _out.append(tmp, static_cast<std::size_t>(end - tmp));
-}
 }  // namespace
 
 // Width of the ThreadID attribute's hex field. release-3.18.0 rendered it with
@@ -909,6 +884,17 @@ void commitLine(LineRecord const& _record, std::string_view _message)
             {
                 sink->writeLine(_record.level, line, {}, &_record);
             }
+        }
+        // Hard to bound this at 4096 like the consumer-side buffers would be: the
+        // line is already built. The same policy as the queue slots
+        // (MaxRetainedLineCapacity) is close enough, and this buffer is
+        // per-PRODUCING-thread, so one outsized line would otherwise pin N copies
+        // of its capacity for the life of the process. Log content is partly
+        // attacker-influenced (peer data, transaction payloads).
+        constexpr std::size_t MaxRetainedLineCapacity = 4096;
+        if (line.capacity() > MaxRetainedLineCapacity)
+        {
+            std::string().swap(line);
         }
         return;
     }

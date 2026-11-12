@@ -23,12 +23,45 @@
 #include <utility>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <psapi.h>
+#else
+#include <sys/resource.h>
+#endif
+
 using namespace std::chrono_literals;
 
 namespace bcos::test
 {
 namespace
 {
+/// Peak resident set size in bytes. Peak, not current, so it never decreases;
+/// that is enough for a one-way "did the process retain N megabytes" assertion,
+/// and it needs no allocator hook (which would perturb the whole test binary).
+long long peakRssBytes()
+{
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS info{};
+    if (::GetProcessMemoryInfo(::GetCurrentProcess(), &info, sizeof(info)) == 0)
+    {
+        return 0;
+    }
+    return static_cast<long long>(info.PeakWorkingSetSize);
+#else
+    rusage usage{};
+    if (::getrusage(RUSAGE_SELF, &usage) != 0)
+    {
+        return 0;
+    }
+#ifdef __APPLE__
+    return static_cast<long long>(usage.ru_maxrss);  // bytes on macOS
+#else
+    return static_cast<long long>(usage.ru_maxrss) * 1024;  // KiB elsewhere
+#endif
+#endif
+}
+
 struct FakeBackend
 {
     std::mutex mutex;
@@ -194,6 +227,27 @@ inline std::ostream& operator<<(std::ostream& _out, HexLeaker const&)
     _out.setf(std::ios_base::hex, std::ios_base::basefield);
     return _out << "1f";
 }
+
+// Puts the stream into a failed state, as a naive operator<< could.
+struct BreaksStream
+{
+};
+
+inline std::ostream& operator<<(std::ostream& _out, BreaksStream const&)
+{
+    _out.setstate(std::ios_base::failbit);
+    return _out;
+}
+
+// Plain custom type, used to observe whether the bridge still works at all.
+struct Plain
+{
+};
+
+inline std::ostream& operator<<(std::ostream& _out, Plain const&)
+{
+    return _out << "plain";
+}
 }  // namespace fmt
 
 /// Formats one statement through a real LogStream + registered sink and returns
@@ -294,6 +348,38 @@ BOOST_AUTO_TEST_CASE(longLineSpillsPastInlineArena)
     BOOST_REQUIRE_EQUAL(fields.size(), 4u);
     BOOST_CHECK_EQUAL(fields[3], big);
     sink->stop();
+}
+
+// The spill buffer is heap-allocated for lines over InlineCapacity and must be
+// released with the statement. Asserting only the rendered text (as the case
+// above does) leaves the whole suite green if the `delete[]` is ever dropped, so
+// this measures peak RSS instead: 20000 statements of 2 KB would otherwise retain
+// ~80 MB (roughly twice the line length each) until the process exits.
+BOOST_AUTO_TEST_CASE(longLinesDoNotRetainHeap)
+{
+    // No sink registered: commitLine is skipped, but the statement still builds
+    // (and therefore spills) its buffer, which is the allocation under test.
+    std::string const big(2048, 'x');
+
+    // Warm up so one-off allocator and page-fault costs are already paid.
+    for (int i = 0; i < 256; ++i)
+    {
+        bcos::LogStream stream(LogLevel::INFO);
+        stream << big;
+    }
+
+    long long const before = peakRssBytes();
+    BOOST_REQUIRE_GT(before, 0);  // the measurement itself must work
+    for (int i = 0; i < 20000; ++i)
+    {
+        bcos::LogStream stream(LogLevel::INFO);
+        stream << big << i;
+    }
+    long long const after = peakRssBytes();
+
+    // A leak grows the peak by ~80 MB. 16 MB of slack absorbs allocator behaviour
+    // while still failing loudly if the buffer is retained.
+    BOOST_CHECK_LT(after - before, 16LL * 1024 * 1024);
 }
 
 BOOST_AUTO_TEST_CASE(overflowDropsAreCountedReportedAndFatalSurvives)
@@ -658,10 +744,18 @@ BOOST_AUTO_TEST_CASE(stopRacingAnInFlightProducerLosesNothing)
     }
     BOOST_REQUIRE_GE(backend->consumeEntered.load(std::memory_order_acquire), 1);
 
-    std::string const huge(8u * 1024u * 1024u, 'x');
+    // The copy must still be running when stop() begins, otherwise the line is
+    // published and drained by stop()'s own drain and the post-publish m_stop
+    // re-check is never load-bearing — with an 8 MB line the copy finished in
+    // 1-3 ms while this thread slept 50 ms, so disabling the re-check kept the
+    // case green. 128 MB takes roughly 40-80 ms, and the wait below is 1 ms, so
+    // stop() reliably lands while this thread is inside the copy. Verified by
+    // mutation: with the re-check disabled this now leaves the line stranded.
+    std::string const huge(128u * 1024u * 1024u, 'x');
     std::thread producer([&] { sink.writeLine(LogLevel::INFO, "p|", huge); });
-    // Long enough for the producer to be inside the copy, past its stop check.
-    std::this_thread::sleep_for(50ms);
+    // Just long enough for the producer to be past its stop check and inside the
+    // copy; far shorter than the copy itself.
+    std::this_thread::sleep_for(1ms);
 
     backend->gate = true;
     sink.stop();
@@ -791,6 +885,40 @@ BOOST_AUTO_TEST_CASE(bridgeStateDoesNotLeakBetweenStatements)
         loggedMessage(LogLevel::INFO, [](bcos::LogStream& s) { s << fmt::BaseProbe{}; }), "dec");
     BOOST_CHECK_EQUAL(
         loggedMessage(LogLevel::INFO, [](bcos::LogStream& s) { s << 31; }), "31");
+}
+
+// Within one statement a custom operator's flags must survive for the operands
+// that follow it, exactly as they did when the whole line went through a single
+// std::ostream. Resetting the bridge per operand wiped them, so the operand after
+// `HexLeaker{}` printed in the wrong base — and because the bridge's base was
+// never folded back, the fast path after it disagreed too.
+BOOST_AUTO_TEST_CASE(customOperatorFlagsComposeWithinOneStatement)
+{
+    // Old pipeline: "1f" + hex-seeing probe + 255 in hex.
+    BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO,
+                         [](bcos::LogStream& s) { s << fmt::HexLeaker{} << fmt::BaseProbe{}; }),
+        "1fhex");
+    // The base a custom operator set must reach the fast path as well.
+    BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO,
+                         [](bcos::LogStream& s) { s << fmt::HexLeaker{} << 255; }),
+        "1fff");
+    // And an explicit manipulator must keep applying after a bridged operand.
+    BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO,
+                         [](bcos::LogStream& s) { s << fmt::Plain{} << std::hex << fmt::BaseProbe{}; }),
+        "plainhex");
+}
+
+// A custom operator that leaves the stream in a failed state must not silence the
+// rest of the log pipeline for the life of the thread: the bridge is never
+// destroyed, so a sticky failbit would make every later insertion a no-op.
+BOOST_AUTO_TEST_CASE(failedBridgeOperandDoesNotSilenceLaterOnes)
+{
+    BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO,
+                         [](bcos::LogStream& s) { s << fmt::BreaksStream{} << fmt::Plain{}; }),
+        "plain");
+    // ...and the next statement on the same thread is unaffected too.
+    BOOST_CHECK_EQUAL(
+        loggedMessage(LogLevel::INFO, [](bcos::LogStream& s) { s << fmt::Plain{}; }), "plain");
 }
 
 // F4: a thread that exits releases its ring for reuse, but only once that ring is
