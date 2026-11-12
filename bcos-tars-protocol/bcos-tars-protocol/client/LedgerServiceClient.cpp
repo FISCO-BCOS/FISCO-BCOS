@@ -23,10 +23,36 @@
 #include "../protocol/BlockImpl.h"
 #include "../protocol/TransactionImpl.h"
 #include "../protocol/TransactionReceiptImpl.h"
+#include <bcos-task/OneShot.h>
 #include <bcos-utilities/LogStream.h>
 #include <boost/throw_exception.hpp>
 
 using namespace bcostars;
+
+namespace
+{
+template <typename Result, typename Initiate>
+bcos::task::Task<std::pair<bcos::Error::Ptr, Result>> awaitCallback(Initiate initiate)
+{
+    auto done = std::make_shared<bcos::task::OneShot<bcos::Error::Ptr, Result>>();
+    initiate([done](bcos::Error::Ptr error, Result result) mutable {
+        done->complete(std::move(error), std::move(result));
+    });
+    auto [error, result] = co_await *done;
+    co_return {std::move(error), std::move(result)};
+}
+
+template <typename Result, typename Initiate>
+bcos::task::Task<Result> awaitResult(Initiate initiate)
+{
+    auto [error, result] = co_await awaitCallback<Result>(std::move(initiate));
+    if (error)
+    {
+        BOOST_THROW_EXCEPTION(*error);
+    }
+    co_return std::move(result);
+}
+}  // namespace
 
 void LedgerServiceClient::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
     int32_t _blockFlag,
@@ -360,36 +386,154 @@ bcos::task::Task<std::string> bcostars::LedgerServiceClient::prewriteBlock(
         "prewriteBlock is not implemented by LedgerServiceClient"));
     co_return std::string{};
 }
-void bcostars::LedgerServiceClient::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
-    bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::UniquePtr&&)>)
+bcos::task::Task<void> bcostars::LedgerServiceClient::preStoreBlockTxs(
+    bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr)
 {
-    BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPreStoreBlockTxs");
+    BCOS_LOG(ERROR) << LOG_DESC("unimplemented method preStoreBlockTxs");
+    BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::CallbackError,
+        "preStoreBlockTxs is not implemented by LedgerServiceClient"));
+    co_return;
 }
+
 bcos::Error::Ptr bcostars::LedgerServiceClient::storeTransactionsAndReceipts(
     bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr)
 {
     BCOS_LOG(ERROR) << LOG_DESC("unimplemented method");
     return nullptr;
 }
-void bcostars::LedgerServiceClient::asyncGetCurrentStateByKey(std::string_view const& _key,
-    std::function<void(bcos::Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
 
+bcos::task::Task<bcos::protocol::Block::Ptr> bcostars::LedgerServiceClient::getBlockDataByNumber(
+    bcos::protocol::BlockNumber blockNumber, int32_t blockFlag)
 {
-    BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncGetCurrentStateByKey");
+    return awaitResult<bcos::protocol::Block::Ptr>([this, blockNumber, blockFlag](auto callback) {
+        asyncGetBlockDataByNumber(blockNumber, blockFlag, std::move(callback));
+    });
 }
+
+bcos::task::Task<bcos::protocol::BlockNumber> bcostars::LedgerServiceClient::getBlockNumber()
+{
+    return awaitResult<bcos::protocol::BlockNumber>(
+        [this](auto callback) { asyncGetBlockNumber(std::move(callback)); });
+}
+
+bcos::task::Task<bcos::crypto::HashType> bcostars::LedgerServiceClient::getBlockHashByNumber(
+    bcos::protocol::BlockNumber blockNumber)
+{
+    return awaitResult<bcos::crypto::HashType>([this, blockNumber](auto callback) {
+        asyncGetBlockHashByNumber(blockNumber, std::move(callback));
+    });
+}
+
+bcos::task::Task<bcos::protocol::BlockNumber> bcostars::LedgerServiceClient::getBlockNumberByHash(
+    bcos::crypto::HashType blockHash)
+{
+    return awaitResult<bcos::protocol::BlockNumber>(
+        [this, blockHash = std::move(blockHash)](
+            auto callback) { asyncGetBlockNumberByHash(blockHash, std::move(callback)); });
+}
+
+bcos::task::Task<bcos::ledger::BatchTransactionsResult>
+bcostars::LedgerServiceClient::getBatchTxsByHashList(
+    bcos::crypto::HashListPtr txHashList, bool withProof)
+{
+    return awaitResult<bcos::ledger::BatchTransactionsResult>(
+        [this, txHashList = std::move(txHashList), withProof](auto callback) mutable {
+            asyncGetBatchTxsByHashList(txHashList, withProof,
+                [callback = std::move(callback)](bcos::Error::Ptr error,
+                    bcos::protocol::TransactionsPtr transactions,
+                    bcos::ledger::MerkleProofMapPtr proofs) mutable {
+                    callback(std::move(error), bcos::ledger::BatchTransactionsResult{
+                                                   std::move(transactions), std::move(proofs)});
+                });
+        });
+}
+
+bcos::task::Task<bcos::ledger::TransactionReceiptResult>
+bcostars::LedgerServiceClient::getTransactionReceiptByHash(
+    bcos::crypto::HashType txHash, bool withProof)
+{
+    return [](LedgerServiceClient& self, bcos::crypto::HashType hash,
+               bool requestProof) -> bcos::task::Task<bcos::ledger::TransactionReceiptResult> {
+        auto [error, result] = co_await awaitCallback<bcos::ledger::TransactionReceiptResult>(
+            [&self, hash = std::move(hash), requestProof](auto callback) mutable {
+                self.asyncGetTransactionReceiptByHash(hash, requestProof,
+                    [callback = std::move(callback)](bcos::Error::Ptr callbackError,
+                        bcos::protocol::TransactionReceipt::Ptr receipt,
+                        bcos::ledger::MerkleProofPtr proof) mutable {
+                        callback(std::move(callbackError),
+                            bcos::ledger::TransactionReceiptResult{
+                                std::move(receipt), std::move(proof), nullptr});
+                    });
+            });
+        if (error && (!requestProof || !result.receipt))
+        {
+            BOOST_THROW_EXCEPTION(*error);
+        }
+        result.error = std::move(error);
+        co_return result;
+    }(*this, std::move(txHash), withProof);
+}
+
+bcos::task::Task<bcos::ledger::TransactionCountResult>
+bcostars::LedgerServiceClient::getTotalTransactionCount()
+{
+    return awaitResult<bcos::ledger::TransactionCountResult>([this](auto callback) {
+        asyncGetTotalTransactionCount(
+            [callback = std::move(callback)](bcos::Error::Ptr error, int64_t total, int64_t failed,
+                bcos::protocol::BlockNumber blockNumber) mutable {
+                callback(std::move(error),
+                    bcos::ledger::TransactionCountResult{total, failed, blockNumber});
+            });
+    });
+}
+
+bcos::task::Task<std::optional<bcos::storage::Entry>>
+bcostars::LedgerServiceClient::getCurrentStateByKey(std::string_view)
+{
+    BCOS_LOG(ERROR) << LOG_DESC("unimplemented method getCurrentStateByKey");
+    BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::CallbackError,
+        "getCurrentStateByKey is not implemented by LedgerServiceClient"));
+    co_return std::nullopt;
+}
+
 bcos::Error::Ptr bcostars::LedgerServiceClient::setCurrentStateByKey(
     std::string_view const& _key, bcos::storage::Entry entry)
 {
     BCOS_LOG(ERROR) << LOG_DESC("unimplemented method setCurrentStateByKey");
     return nullptr;
 }
-void bcostars::LedgerServiceClient::asyncGetNonceList(bcos::protocol::BlockNumber, int64_t,
-    std::function<void(bcos::Error::Ptr,
-        std::shared_ptr<std::map<bcos::protocol::BlockNumber, bcos::protocol::NonceListPtr>>)>)
 
+bcos::task::Task<bcos::ledger::SystemConfigEntry>
+bcostars::LedgerServiceClient::getSystemConfigByKey(std::string_view key)
 {
-    BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncGetNonceList");
+    return awaitResult<bcos::ledger::SystemConfigEntry>(
+        [this, key = std::string(key)](auto callback) {
+            asyncGetSystemConfigByKey(
+                key, [callback = std::move(callback)](bcos::Error::Ptr error, std::string value,
+                         bcos::protocol::BlockNumber blockNumber) mutable {
+                    callback(std::move(error),
+                        bcos::ledger::SystemConfigEntry{std::move(value), blockNumber});
+                });
+        });
 }
+
+bcos::task::Task<bcos::consensus::ConsensusNodeList>
+bcostars::LedgerServiceClient::getNodeListByType(std::string_view type)
+{
+    return awaitResult<bcos::consensus::ConsensusNodeList>(
+        [this, type = std::string(type)](
+            auto callback) { asyncGetNodeListByType(type, std::move(callback)); });
+}
+
+bcos::task::Task<bcos::ledger::NonceListResult> bcostars::LedgerServiceClient::getNonceList(
+    bcos::protocol::BlockNumber, int64_t)
+{
+    BCOS_LOG(ERROR) << LOG_DESC("unimplement method getNonceList");
+    BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::CallbackError,
+        "getNonceList is not implemented by LedgerServiceClient"));
+    co_return nullptr;
+}
+
 void bcostars::LedgerServiceClient::removeExpiredNonce(
     bcos::protocol::BlockNumber blockNumber, bool sync)
 {

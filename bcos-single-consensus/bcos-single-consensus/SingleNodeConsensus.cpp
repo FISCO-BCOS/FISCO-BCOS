@@ -170,16 +170,18 @@ void SingleNodeConsensus::loop()
 
 void SingleNodeConsensus::resolveInitialHead()
 {
-    auto headPromise =
-        std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::BlockNumber>>>();
-    m_ledger->asyncGetBlockNumber([headPromise](Error::Ptr _error, protocol::BlockNumber _number) {
-        headPromise->setValue(std::make_tuple(std::move(_error), _number));
-    });
-    auto [headError, headNumber] = headPromise->wait(m_running);
-    if (headError || headNumber < 0)
+    protocol::BlockNumber headNumber = -1;
+    try
     {
-        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("resolve head block number failed")
-                                    << LOG_KV("msg", headError ? headError->errorMessage() : "");
+        headNumber = task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
+    }
+    catch (bcos::Error const& error)
+    {
+        SINGLE_CONSENSUS_LOG(ERROR)
+            << LOG_DESC("resolve head block number failed") << LOG_KV("msg", error.errorMessage());
+    }
+    if (headNumber < 0)
+    {
         BOOST_THROW_EXCEPTION(
             std::runtime_error("SingleNodeConsensus: cannot resolve the initial head"));
     }
@@ -187,20 +189,20 @@ void SingleNodeConsensus::resolveInitialHead()
     m_headHash = task::syncWait(ledger::getBlockHash(*m_ledger, headNumber));
 
     // Seed m_lastTimestamp from the head header's timestamp (whole-second milliseconds)
-    // so a restart in the same wall-clock second as the parent cannot reseal
+    // so a restart within the same wall-clock second as the parent cannot reseal
     // parent.timestamp: EIP-2 requires strictly increasing block timestamps, and
     // produceBlock only steps +1000ms from m_lastTimestamp. Without the seed, a restart
     // within the parent block's second makes the first produced block share the parent's
     // timestamp. A legacy genesis without [eth_genesis_header] has timestamp 0, which
     // seeds to the same default and changes nothing.
-    auto headerPromise =
-        std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::Block::Ptr>>>();
-    m_ledger->asyncGetBlockDataByNumber(headNumber, ledger::HEADER,
-        [headerPromise](Error::Ptr _error, protocol::Block::Ptr _block) {
-            headerPromise->setValue(std::make_tuple(std::move(_error), std::move(_block)));
-        });
-    auto [headHeaderError, headBlock] = headerPromise->wait(m_running);
-    if (!headHeaderError && headBlock && headBlock->blockHeader())
+    protocol::Block::Ptr headBlock;
+    try
+    {
+        headBlock = task::syncWait(ledger::getBlockData(*m_ledger, headNumber, ledger::HEADER));
+    }
+    catch (bcos::Error const&)
+    {}
+    if (headBlock && headBlock->blockHeader())
     {
         m_lastTimestamp = static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
     }

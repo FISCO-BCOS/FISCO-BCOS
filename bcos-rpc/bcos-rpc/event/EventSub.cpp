@@ -26,6 +26,7 @@
 #include "bcos-rpc/event/EventSubRequest.h"
 #include "bcos-rpc/event/EventSubResponse.h"
 #include "bcos-rpc/event/EventSubTask.h"
+#include <bcos-task/Wait.h>
 #include <chrono>
 #include <memory>
 #include <thread>
@@ -510,36 +511,41 @@ void EventSub::processNextBlock(
     }
 
     auto ledger = nodeService->ledger();
-    ledger->asyncGetBlockDataByNumber(_blockNumber,
-        bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS,
-        [matcher, _task, _blockNumber, _callback, self](
-            Error::Ptr _error, protocol::Block::Ptr _block) {
-            if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
-            {
-                // Note: wait for next time
-                EVENT_SUB(ERROR) << LOG_BADGE("processNextBlock")
-                                 << LOG_DESC("asyncGetBlockDataByNumber")
-                                 << LOG_KV("id", _task->id()) << LOG_KV("blockNumber", _blockNumber)
-                                 << LOG_KV("code", _error->errorCode())
-                                 << LOG_KV("message", _error->errorMessage());
-                _callback(_error);
-                return;
-            }
+    task::wait([](decltype(ledger) ledger, decltype(matcher) matcher, EventSubTask::Ptr task,
+                   int64_t blockNumber, std::function<void(Error::Ptr)> callback,
+                   decltype(self) self) -> task::Task<void> {
+        protocol::Block::Ptr block;
+        try
+        {
+            block = co_await ledger->getBlockDataByNumber(
+                blockNumber, bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS);
+        }
+        catch (bcos::Error& error)
+        {
+            auto errorPtr = std::make_shared<Error>(std::move(error));
+            EVENT_SUB(ERROR) << LOG_BADGE("processNextBlock")
+                             << LOG_DESC("asyncGetBlockDataByNumber") << LOG_KV("id", task->id())
+                             << LOG_KV("blockNumber", blockNumber)
+                             << LOG_KV("code", errorPtr->errorCode())
+                             << LOG_KV("message", errorPtr->errorMessage());
+            callback(std::move(errorPtr));
+            co_return;
+        }
 
-            Json::Value jResp(Json::arrayValue);
-            auto count = matcher->matches(_task->params(), _block, jResp);
-            if (count)
-            {
-                EVENT_SUB(TRACE) << LOG_BADGE("processNextBlock")
-                                 << LOG_DESC("asyncGetBlockDataByNumber")
-                                 << LOG_KV("blockNumber", _blockNumber) << LOG_KV("id", _task->id())
-                                 << LOG_KV("count", count);
+        Json::Value jResp(Json::arrayValue);
+        auto count = matcher->matches(task->params(), block, jResp);
+        if (count)
+        {
+            EVENT_SUB(TRACE) << LOG_BADGE("processNextBlock")
+                             << LOG_DESC("asyncGetBlockDataByNumber")
+                             << LOG_KV("blockNumber", blockNumber) << LOG_KV("id", task->id())
+                             << LOG_KV("count", count);
 
-                _task->callback()(_task->id(), false, jResp);
-            }
+            task->callback()(task->id(), false, jResp);
+        }
 
-            _callback(nullptr);
-        });
+        callback(nullptr);
+    }(ledger, matcher, _task, _blockNumber, std::move(_callback), self));
 }
 
 void EventSub::executeEventSubTasks()

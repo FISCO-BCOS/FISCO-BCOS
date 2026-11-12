@@ -93,29 +93,23 @@ public:
     uint64_t fetchTxGasLimit()
     {
         EXECUTOR_LOG(TRACE) << LOG_BADGE("LedgerCache") << "fetchTxGasLimit start";
-        std::promise<uint64_t> txGasLimitFuture;
-
-        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-            [&txGasLimitFuture](
-                Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
-                if (error)
-                {
-                    EXECUTOR_LOG(ERROR)
-                        << LOG_BADGE("LedgerCache")
-                        << "fetchTxGasLimit error: " << LOG_KV("code", error->errorCode())
-                        << LOG_KV("message", error->errorMessage());
-                    txGasLimitFuture.set_value(0);
-                }
-                else
-                {
-                    txGasLimitFuture.set_value(boost::lexical_cast<uint64_t>(config));
-                    EXECUTOR_LOG(TRACE)
-                        << LOG_BADGE("LedgerCache") << "fetchTxGasLimit finish"
-                        << LOG_KV("txGasLimit", config) << LOG_KV("blockNumber", _number);
-                }
-            });
-        auto txGasLimit = txGasLimitFuture.get_future().get();
-        return txGasLimit;
+        try
+        {
+            auto [config, blockNumber] =
+                task::syncWait(m_ledger->getSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT));
+            auto txGasLimit = boost::lexical_cast<uint64_t>(config);
+            EXECUTOR_LOG(TRACE) << LOG_BADGE("LedgerCache") << "fetchTxGasLimit finish"
+                                << LOG_KV("txGasLimit", config)
+                                << LOG_KV("blockNumber", blockNumber);
+            return txGasLimit;
+        }
+        catch (bcos::Error const& error)
+        {
+            EXECUTOR_LOG(ERROR) << LOG_BADGE("LedgerCache")
+                                << "fetchTxGasLimit error: " << LOG_KV("code", error.errorCode())
+                                << LOG_KV("message", error.errorMessage());
+            return 0;
+        }
     }
 
     evmc_uint256be chainId()

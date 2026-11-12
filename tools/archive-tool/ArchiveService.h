@@ -72,23 +72,21 @@ public:
                                                        bcos::Error::Ptr, Json::Value&)>& callback) {
             auto startBlock = request[0].asInt64();
             auto endBlock = request[1].asInt64();
-            std::promise<std::pair<Error::Ptr, bcos::protocol::BlockNumber>> promise;
-            m_ledger->asyncGetBlockNumber(
-                [&promise](const Error::Ptr& err, bcos::protocol::BlockNumber number) {
-                    promise.set_value(std::make_pair(err, number));
-                });
-            auto ret = promise.get_future().get();
             Json::Value result;
-            if (ret.first)
+            protocol::BlockNumber currentBlock = -1;
+            try
             {
-                result["status"] = "error, get block number failed, " + ret.first->errorMessage();
+                currentBlock = task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
+            }
+            catch (bcos::Error const& error)
+            {
+                result["status"] = "error, get block number failed, " + error.errorMessage();
                 ARCHIVE_SERVICE_LOG(WARNING)
                     << LOG_BADGE("deleteArchivedData GetBlockNumber failed")
-                    << LOG_KV("message", ret.first->errorMessage());
+                    << LOG_KV("message", error.errorMessage());
                 callback(nullptr, result);
                 return;
             }
-            auto currentBlock = ret.second;
             if (startBlock > currentBlock || endBlock > currentBlock || startBlock > endBlock ||
                 startBlock <= 0)
             {
@@ -100,34 +98,33 @@ public:
                 return;
             }
             // read archived block number to check the request range
-            std::promise<std::pair<Error::Ptr, std::optional<bcos::storage::Entry>>> statePromise;
-            m_ledger->asyncGetCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER,
-                [&statePromise](Error::Ptr&& err, std::optional<bcos::storage::Entry>&& entry) {
-                    statePromise.set_value(std::make_pair(err, entry));
-                });
-            auto archiveRet = statePromise.get_future().get();
-            if (archiveRet.first)
+            std::optional<bcos::storage::Entry> archiveEntry;
+            try
             {
-                result["status"] =
-                    "error, get current state failed, " + archiveRet.first->errorMessage();
+                archiveEntry =
+                    task::syncWait(m_ledger->getCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER));
+            }
+            catch (bcos::Error const& error)
+            {
+                result["status"] = "error, get current state failed, " + error.errorMessage();
                 ARCHIVE_SERVICE_LOG(WARNING)
                     << LOG_BADGE("deleteArchivedData get current state failed")
-                    << LOG_KV("message", archiveRet.first->errorMessage());
+                    << LOG_KV("message", error.errorMessage());
                 callback(nullptr, result);
                 return;
             }
             protocol::BlockNumber archivedBlockNumber = 0;
-            if (archiveRet.second)
+            if (archiveEntry)
             {
                 try
                 {
-                    archivedBlockNumber = boost::lexical_cast<int64_t>(archiveRet.second->get());
+                    archivedBlockNumber = boost::lexical_cast<int64_t>(archiveEntry->get());
                 }
                 catch (boost::bad_lexical_cast& e)
                 {
                     ARCHIVE_SERVICE_LOG(DEBUG)
                         << "Lexical cast transaction count failed, entry value: "
-                        << archiveRet.second->get();
+                        << archiveEntry->get();
                 }
             }
             if (archivedBlockNumber > 0 && startBlock != archivedBlockNumber)

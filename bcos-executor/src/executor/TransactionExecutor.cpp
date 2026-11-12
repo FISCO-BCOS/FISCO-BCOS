@@ -2858,43 +2858,30 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
 
 protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()
 {
-    std::promise<protocol::BlockNumber> blockNumberFuture;
-    m_ledger->asyncGetBlockNumber(
-        [this, &blockNumberFuture](Error::Ptr error, protocol::BlockNumber number) {
-            if (error)
-            {
-                EXECUTOR_NAME_LOG(INFO) << "Get blockNumber from storage failed";
-                blockNumberFuture.set_value(-1);
-            }
-            else
-            {
-                blockNumberFuture.set_value(number);
-            }
-        });
-
-    return blockNumberFuture.get_future().get();
+    try
+    {
+        return task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
+    }
+    catch (std::exception const&)
+    {
+        EXECUTOR_NAME_LOG(INFO) << "Get blockNumber from storage failed";
+        return -1;
+    }
 }
 
 protocol::BlockHeader::Ptr TransactionExecutor::getBlockHeaderInStorage(
     protocol::BlockNumber number)
 {
-    std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
-
-    m_ledger->asyncGetBlockDataByNumber(number, bcos::ledger::HEADER,
-        [this, &blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
-            if (error)
-            {
-                EXECUTOR_NAME_LOG(INFO) << "Get getBlockHeader from storage failed";
-                blockHeaderFuture.set_value(nullptr);
-            }
-            else
-            {
-                blockHeaderFuture.set_value(block->blockHeader());
-            }
-        });
-
-
-    return blockHeaderFuture.get_future().get();
+    try
+    {
+        auto block = task::syncWait(ledger::getBlockData(*m_ledger, number, bcos::ledger::HEADER));
+        return block->blockHeader();
+    }
+    catch (std::exception const&)
+    {
+        EXECUTOR_NAME_LOG(INFO) << "Get getBlockHeader from storage failed";
+        return nullptr;
+    }
 }
 
 std::string TransactionExecutor::getCodeHash(

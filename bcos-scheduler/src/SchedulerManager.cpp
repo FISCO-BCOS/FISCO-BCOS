@@ -1,4 +1,5 @@
 #include "SchedulerManager.h"
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/LogStream.h>
 #include <boost/throw_exception.hpp>
@@ -445,20 +446,15 @@ void SchedulerManager::testTriggerSwitch()
         bcos::WriteGuard l(mutex);
 
         // Get current blockNumber
-        std::promise<protocol::BlockNumber> blockNumberFuture;
-        m_factory->getLedger()->asyncGetBlockNumber(
-            [&blockNumberFuture](Error::Ptr error, protocol::BlockNumber number) {
-                if (error)
-                {
-                    SCHEDULER_LOG(ERROR) << "Scheduler get blockNumber from storage failed";
-                    blockNumberFuture.set_value(-1);
-                }
-                else
-                {
-                    blockNumberFuture.set_value(number);
-                }
-            });
-        auto blockNumber = blockNumberFuture.get_future().get();
+        protocol::BlockNumber blockNumber = -1;
+        try
+        {
+            blockNumber = task::syncWait(m_factory->getLedger()->getBlockNumber());
+        }
+        catch (bcos::Error const&)
+        {
+            SCHEDULER_LOG(ERROR) << "Scheduler get blockNumber from storage failed";
+        }
 
         // trigger switch
         if (utcTime() - m_scheduler->getSchedulerTermId() > 30000 &&
@@ -577,18 +573,23 @@ void SchedulerManager::onSwitchTermNotify()
         return;
     }
 
-    m_factory->getLedger()->asyncGetBlockNumber(
-        [this](Error::Ptr error, protocol::BlockNumber blockNumber) {
-            if (error)
+    task::wait(
+        [](SchedulerManager& self, bcos::ledger::LedgerInterface::Ptr ledger) -> task::Task<void> {
+            protocol::BlockNumber blockNumber = -1;
+            try
+            {
+                blockNumber = co_await ledger->getBlockNumber();
+            }
+            catch (bcos::Error const&)
             {
                 SCHEDULER_LOG(ERROR)
                     << "Could not get blockNumber from ledger on scheduler switch term";
-                return;
+                co_return;
             }
 
-            for (auto& onSwitchTerm : m_onSwitchTermHandlers)
+            for (auto& onSwitchTerm : self.m_onSwitchTermHandlers)
             {
                 onSwitchTerm(blockNumber + 1);
             }
-        });
+        }(*this, m_factory->getLedger()));
 }

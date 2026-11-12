@@ -348,10 +348,11 @@ BOOST_AUTO_TEST_CASE(malformedEnvelopeIsRejectedBeforeTheChainIdCheck)
 /// A ledger whose SYS_CONFIG reads fail outright.
 struct SystemConfigUnreadableLedger : FakeLedger
 {
-    void asyncGetSystemConfigByKey(std::string_view const&,
-        std::function<void(Error::Ptr, std::string, protocol::BlockNumber)>) override
+    bcos::task::Task<bcos::ledger::SystemConfigEntry> getSystemConfigByKey(
+        std::string_view) override
     {
         throw std::runtime_error("SYS_CONFIG must not be read at admission");
+        co_return bcos::ledger::SystemConfigEntry{};
     }
 };
 
