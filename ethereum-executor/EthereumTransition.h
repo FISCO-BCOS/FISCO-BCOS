@@ -424,17 +424,14 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
         txProps.min_gas_cost, gasLimit, result.gas_left, delegation_refund, result.gas_refund,
         tx_max_cost, effective_gas_price, priority_gas_price, sender_acc);
 
+    // Dry runs (eth_call / eth_estimateGas) are the only callers that need the return data in
+    // the receipt; they discard it, while a mined transaction's receipt would grow for nothing.
+    //
     // A creation transaction records the to-be-created address in its receipt (op-geth
     // state_processor.go MakeReceipt: CreateAddress(from, pre-execution nonce)). Which address
     // that is -- and how it is formatted -- is the policy's call, so hand it the two inputs and
     // let it derive: the eth lane has no snapshot of its own and formats inline, while the OP
     // policy substitutes the validate-time snapshot it already holds (and ignores these).
-    // Before this the address was derived here for every lane and then dropped by the OP
-    // policy, which cost a keccak256 over RLP(sender, nonce) plus a 40-byte allocation per L2
-    // deployment and left two formatters for one RPC field.
-
-    // Dry runs (eth_call / eth_estimateGas) are the only callers that need the return data in
-    // the receipt; they discard it, while a mined transaction's receipt would grow for nothing.
     auto receipt = policy.buildReceipt(host, result, gas_used, rf, blockNumber, callParams.free,
         /*isCreate=*/!to.has_value(), sender, senderNonce);
 

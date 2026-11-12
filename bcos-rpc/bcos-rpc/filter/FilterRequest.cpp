@@ -56,9 +56,21 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
     }();
 
     // A blockHash-only request needs no range; resolve it before the range defaults so that a
-    // missing fromBlock/toBlock cannot reject it.
+    // missing fromBlock/toBlock cannot reject it. EIP-234 makes blockHash an alternative to the
+    // {fromBlock, toBlock} pair rather than an addition to it, so a request carrying both is
+    // rejected. Resolving the range and then letting getLogsImpl prefer blockHash would answer a
+    // single block's logs where the caller asked for a range -- a plausible-looking smaller
+    // result with no error, which is the failure shape this PR exists to remove.
     if (blockHashMember != nullptr)
     {
+        auto const hasRangeField = [&jParams](char const* key) {
+            return jParams.isMember(key) && !jParams[key].isNull();
+        };
+        if (hasRangeField("fromBlock") || hasRangeField("toBlock"))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
+                "blockHash is mutually exclusive with the fromBlock/toBlock range"));
+        }
         m_blockHash = blockHashMember->asString();
     }
 

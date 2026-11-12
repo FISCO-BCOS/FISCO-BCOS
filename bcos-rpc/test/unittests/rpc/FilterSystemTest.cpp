@@ -18,8 +18,9 @@ public:
         rpc = factory->buildLocalRpc(groupInfo, nodeService);
         web3JsonRpc = rpc->web3JsonRpc();
         BOOST_CHECK(web3JsonRpc != nullptr);
-        filterSystem = std::make_shared<Web3FilterSystem>(
-            *ioServicePool->getIOService(), rpc->groupManager(), "test-group", 600000, 10);
+        filterSystem = std::make_shared<Web3FilterSystem>(*ioServicePool->getIOService(),
+            rpc->groupManager(), "test-group", 600000,
+            /*maxBlockProcessPerReq=*/10, /*maxBlockRange=*/10);
     }
     Json::Value onRPCRequestWrapper(std::string_view request, rpc::Sender _diySender = nullptr)
     {
@@ -160,8 +161,9 @@ BOOST_AUTO_TEST_CASE(test_filter_expiration)
     request->setToBlock(100);
 
     auto timeout = 200;
-    filterSystem = std::make_shared<Web3FilterSystem>(
-        *ioServicePool->getIOService(), rpc->groupManager(), "test-group", timeout, 10);
+    filterSystem = std::make_shared<Web3FilterSystem>(*ioServicePool->getIOService(),
+        rpc->groupManager(), "test-group", timeout, /*maxBlockProcessPerReq=*/10,
+        /*maxBlockRange=*/10);
 
     const auto filterId = task::syncWait(filterSystem->newFilter(request));
 
@@ -177,9 +179,9 @@ BOOST_AUTO_TEST_CASE(test_filter_expiration)
         task::syncWait(filterSystem->getFilterChanges(id)), bcos::rpc::JsonRpcException);
 }
 
-// 1001: a one-shot eth_getLogs must never answer a truncated log set. The per-request budget
-// is filter_max_process_block (10 in this fixture); a wider window is an error, not a silent
-// prefix of the requested range. Streaming (eth_getFilterChanges) keeps its cursor semantics.
+// 1001: a one-shot eth_getLogs must never answer a truncated log set. The range cap in this
+// fixture is 10 blocks; a wider window is an error, not a silent prefix of the requested range.
+// Streaming (eth_getFilterChanges) keeps its cursor semantics and its own, separate paging step.
 BOOST_AUTO_TEST_CASE(test_getLogsOverRangeLimitFailsClosed)
 {
     for (int i = 0; i < 20; ++i)
@@ -199,12 +201,12 @@ BOOST_AUTO_TEST_CASE(test_getLogsOverRangeLimitFailsClosed)
         return request;
     };
 
-    // 11 blocks (0x5..0xf) is one over the 10-block budget: refuse rather than return a prefix.
+    // 11 blocks (0x5..0xf) is one over the 10-block cap: refuse rather than return a prefix.
     BOOST_CHECK_THROW(task::syncWait(filterSystem->getLogs(
                           parseRequest(R"({"fromBlock":"0x5","toBlock":"0xf"})"))),
         bcos::rpc::JsonRpcException);
 
-    // Exactly the budget (0x5..0xe) still answers.
+    // Exactly the cap (0x5..0xe) still answers.
     auto logs = task::syncWait(
         filterSystem->getLogs(parseRequest(R"({"fromBlock":"0x5","toBlock":"0xe"})")));
     BOOST_TEST(logs.isArray());
@@ -236,7 +238,7 @@ BOOST_AUTO_TEST_CASE(getFilterLogsOverRangeLimitFailsClosed)
         return task::syncWait(filterSystem->newFilter(request));
     };
 
-    // A filter spanning more than the 10-block budget: its backfill is refused, not truncated.
+    // A filter spanning more than the 10-block cap: its backfill is refused, not truncated.
     auto const wideId = newFilterFor(R"({"fromBlock":"0x0","toBlock":"latest"})");
     BOOST_REQUIRE(!wideId.empty());
     BOOST_CHECK_THROW(
@@ -354,6 +356,78 @@ BOOST_AUTO_TEST_CASE(getLogsEmptyFilterMatchesAllLogs)
     auto const otherAddress = task::syncWait(filterSystem->getLogs(
         parseRequest(R"({"address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
     BOOST_CHECK(otherAddress.empty());
+}
+
+// The one-shot range cap and the streaming paging step are separate knobs. They used to be one
+// member, so raising the cap for eth_getLogs also multiplied the per-poll work of
+// eth_getFilterChanges / eth_getBlockChanges / eth_getPendingTransactions by the same factor.
+// This builds a system with the original 10-block paging step and the shipped 10000-block cap,
+// then asserts a range far wider than the step is answered in a single one-shot call: the two
+// values are read at different places, so moving one leaves the other alone.
+BOOST_AUTO_TEST_CASE(oneShotRangeCapIsIndependentOfPagingStep)
+{
+    for (int i = 0; i < 20; ++i)
+    {
+        m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 1);
+    }
+    auto wideCap = std::make_shared<Web3FilterSystem>(*ioServicePool->getIOService(),
+        rpc->groupManager(), "test-group", 600000, /*maxBlockProcessPerReq=*/10,
+        /*maxBlockRange=*/10000);
+    auto const latest = wideCap->getLatestBlockNumber();
+    BOOST_REQUIRE_GE(latest, 16);
+
+    Json::Reader reader;
+    Json::Value value;
+    BOOST_REQUIRE(reader.parse(R"({"fromBlock":"0x0","toBlock":"latest"})", value));
+    auto request = std::make_shared<Web3FilterRequest>();
+    request->fromJson(
+        value, latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
+
+    // ~20 blocks is twice the paging step but well inside the cap, so it must be answered.
+    auto const logs = task::syncWait(wideCap->getLogs(request));
+    BOOST_TEST(logs.isArray());
+}
+
+// EIP-234 makes blockHash an alternative to the {fromBlock, toBlock} pair, not an addition, so a
+// request carrying both is rejected. Accepting it would take the single-block branch in
+// getLogsImpl and answer a range query with one block's logs -- the same "plausible-looking
+// smaller result" the range cap exists to eliminate.
+BOOST_AUTO_TEST_CASE(filterRequestRejectsBlockHashCombinedWithRange)
+{
+    Json::Reader reader;
+    auto parse = [&reader](std::string const& s) {
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(s, value));
+        return value;
+    };
+
+    auto const newRequest = []() { return std::make_shared<Web3FilterRequest>(); };
+
+    {
+        auto request = newRequest();
+        BOOST_CHECK_THROW(request->fromJson(parse(R"({"blockHash":"0x1234","fromBlock":"0x1"})"),
+                              100, 1, 2, std::nullopt, std::nullopt, false),
+            bcos::rpc::JsonRpcException);
+    }
+    {
+        auto request = newRequest();
+        BOOST_CHECK_THROW(request->fromJson(parse(R"({"blockhash":"0x1234","toBlock":"0x2"})"), 100,
+                              1, 2, std::nullopt, std::nullopt, false),
+            bcos::rpc::JsonRpcException);
+    }
+    // Either side alone is still accepted: this is about the combination, not about blockHash.
+    {
+        auto request = newRequest();
+        request->fromJson(
+            parse(R"({"blockHash":"0x1234"})"), 100, 1, 2, std::nullopt, std::nullopt, false);
+        BOOST_CHECK_EQUAL(request->blockHash(), "0x1234");
+    }
+    {
+        auto request = newRequest();
+        request->fromJson(parse(R"({"fromBlock":"0x1","toBlock":"0x2"})"), 100, 1, 2, std::nullopt,
+            std::nullopt, false);
+        BOOST_CHECK(request->blockHash().empty());
+    }
 }
 
 // The remaining criteria are optional too, and a blockHash is an alternative to the range: a

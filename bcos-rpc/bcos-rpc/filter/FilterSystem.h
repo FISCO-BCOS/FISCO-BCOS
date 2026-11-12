@@ -64,7 +64,7 @@ public:
 
     FilterSystem(boost::asio::io_context& _ioService, GroupManager::Ptr groupManager,
         std::string groupId, FilterRequestFactory::Ptr factory, int filterTimeout,
-        int maxBlockProcessPerReq);
+        int maxBlockProcessPerReq, int maxBlockRange);
     virtual ~FilterSystem() { m_cleanUpTimer->stop(); }
 
     // jsonrpc
@@ -170,7 +170,12 @@ protected:
     using FilterMap = BucketMap<filter::KeyType, Filter::Ptr, std::hash<filter::KeyType>>;
 
     uint64_t m_filterTimeout = FILTER_DEFAULT_EXPIRATION_TIME;
+    // Paging step for the streaming filter paths (getBlockChangeImpl / getPendingTxChangeImpl /
+    // getLogChangeImpl). Each poll advances the cursor by this many blocks.
     int64_t m_maxBlockProcessPerReq = 10;
+    // Range cap for the one-shot paths (eth_getLogs / eth_getFilterLogs / legacy getLogs), which
+    // have no cursor and therefore reject a wider request instead of paging it.
+    int64_t m_maxBlockRange = 10000;
     GroupManager::Ptr m_groupManager;
     std::string m_group;
     LogMatcher::Ptr m_matcher;

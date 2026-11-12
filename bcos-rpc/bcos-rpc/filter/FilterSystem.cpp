@@ -11,9 +11,10 @@ using namespace bcos::rpc::filter;
 
 FilterSystem::FilterSystem(boost::asio::io_context& _ioService, GroupManager::Ptr groupManager,
     std::string groupId, FilterRequestFactory::Ptr factory, int filterTimeout,
-    int maxBlockProcessPerReq)
+    int maxBlockProcessPerReq, int maxBlockRange)
   : m_filterTimeout(filterTimeout),
     m_maxBlockProcessPerReq(maxBlockProcessPerReq),
+    m_maxBlockRange(maxBlockRange),
     m_groupManager(std::move(groupManager)),
     m_group(std::move(groupId)),
     m_matcher(std::make_shared<LogMatcher>()),
@@ -349,7 +350,7 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
             co_return Json::Value(Json::arrayValue);
         }
         // This function has three entry points, and all three now fail closed on a range wider
-        // than m_maxBlockProcessPerReq:
+        // than m_maxBlockRange:
         //   * eth_getLogs                     (FilterSystem::getLogs)
         //   * eth_getFilterLogs               (FilterSystem::getFilterLogsImpl)
         //   * getLogs on the legacy JSON-RPC   (JsonRpcImpl_2_0::getLogs)
@@ -357,19 +358,23 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         // log set instead of the requested one and silently hide events. Only the paginating
         // path -- getLogChangeImpl / eth_getFilterChanges -- keeps its silent clamp, because it
         // advances startBlockNumber and the caller resumes from there.
-        // The budget is web3_rpc.filter_max_process_block (rpc.filter_max_process_block on the
-        // legacy listener); raise it to widen the window.
+        //
+        // m_maxBlockRange is deliberately NOT the same knob as m_maxBlockProcessPerReq: the
+        // latter is the paging step those streaming paths spend on every poll, so raising it to
+        // a query-sized window would multiply the work of each eth_getFilterChanges call. The
+        // range cap is web3_rpc.filter_max_block_range (rpc.filter_max_block_range on the
+        // legacy listener); raise it to widen the one-shot window.
         auto const blockRange = toBlock - fromBlock + 1;
-        if (blockRange > m_maxBlockProcessPerReq)
+        if (blockRange > m_maxBlockRange)
         {
             FILTER_LOG(WARNING) << LOG_BADGE("getLogsImpl") << LOG_DESC("block range exceeds limit")
                                 << LOG_KV("fromBlock", fromBlock) << LOG_KV("toBlock", toBlock)
                                 << LOG_KV("blockRange", blockRange)
-                                << LOG_KV("maxBlockProcessPerReq", m_maxBlockProcessPerReq);
+                                << LOG_KV("maxBlockRange", m_maxBlockRange);
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
                 "block range too large: requested " + std::to_string(blockRange) +
-                    " blocks, limit is " + std::to_string(m_maxBlockProcessPerReq) +
-                    " (web3_rpc.filter_max_process_block)"));
+                    " blocks, limit is " + std::to_string(m_maxBlockRange) +
+                    " (web3_rpc.filter_max_block_range)"));
         }
         params->setFromBlock(fromBlock);
         params->setToBlock(toBlock);
