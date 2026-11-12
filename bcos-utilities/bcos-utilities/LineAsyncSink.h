@@ -681,7 +681,21 @@ private:
 
         ~ThreadLocalState() { token->alive.store(false, std::memory_order_release); }
     };
-    static inline thread_local ThreadLocalState s_threadLocal{};
+
+    // Function-local, not a class-scope `static inline thread_local` member.
+    // A class-scope one with dynamic initialisation (the shared_ptr above) makes
+    // GCC emit a file-scope `__tls_guard` symbol; a unity build that also pulls
+    // in another dynamically-initialised thread_local from the same TU (for
+    // example Common.cpp's `thread_local std::string c_threadName`) then fails
+    // with "redefinition of 'bool __tls_guard'" at this line. Verified with
+    // g++ 16 on the real unity TU. The per-thread lookup is a single TLS address
+    // computation plus an inline guard check, and the fast path calls it once
+    // per log statement.
+    static ThreadLocalState& threadLocalState()
+    {
+        static thread_local ThreadLocalState state{};
+        return state;
+    }
     static inline std::atomic<std::uint64_t> s_nextSinkId{1};
 
     /// Appends one line to the calling thread's ring.
@@ -722,10 +736,30 @@ private:
         // milliseconds there, long enough for stop() to set the flag, drain
         // (seeing nothing) and detach from the worker. The line would then sit in
         // a ring nobody drains — not consumed, not counted as dropped, invisible.
-        // Re-checking after the publish closes it: either this thread sees the
-        // flag and drains the line itself, or stop()'s drain sees the published
-        // tail. The load hits the cache line the entering check already brought
-        // in, so it costs nothing measurable.
+        //
+        // The re-check below NARROWS that window, it does not close it: this
+        // store (release) followed by the load of m_stop and stop()'s store
+        // (relaxed) followed by its load of the tail are a Dekker pattern, and
+        // release/acquire provides no StoreLoad barrier, so the standard permits
+        // both sides to miss each other. What actually makes it unreachable in
+        // practice is the ordering AFTER this point, and both steps are
+        // load-bearing:
+        //   1. a producer that reads m_stop == false here goes on to call
+        //      wake(), whose m_dirty.exchange(acq_rel) is an RMW that commits the
+        //      tail store above within nanoseconds;
+        //   2. stop() takes m_controlMutex (an acquiring RMW) before its first
+        //      drain, and runs a third drain after removeClient(), which itself
+        //      takes a mutex.
+        // A stranded line therefore needs this thread to be descheduled between
+        // the publish and this load for that whole sequence, and a context switch
+        // is a full barrier. Closing the gap formally would cost a seq_cst fence
+        // on the per-line hot path. Do not remove the post-removeClient() drain,
+        // and do not turn wake() into a plain store: either reopens this silently.
+        //
+        // The branch that DOES see the flag runs drainInlineAfterStop(), i.e.
+        // backend file I/O plus a flush on a producing thread. That breaks the
+        // "producer never touches the backend" rule, but only during shutdown and
+        // only for the line that lost the race.
         if (m_stop.load(std::memory_order_acquire))
         {
             drainInlineAfterStop();
@@ -817,7 +851,8 @@ private:
     QueueShard* shardForProducer()
     {
         // Fast path: this thread already holds a ring for this sink.
-        for (auto const& binding : s_threadLocal.bindings)
+        auto& tls = threadLocalState();
+        for (auto const& binding : tls.bindings)
         {
             if (binding.sinkId == m_sinkId)
             {
@@ -854,7 +889,7 @@ private:
             // drained normally: head/tail keep counting, only the producer
             // changes. cachedHead is producer-private and must start from the live
             // head rather than the dead thread's stale copy.
-            candidate->owner = s_threadLocal.token;
+            candidate->owner = tls.token;
             candidate->cachedHead = candidate->head.load(std::memory_order_acquire);
             shard = candidate;
             break;
@@ -864,7 +899,7 @@ private:
             // Allocated on first use: a thread that never logs never pays for a
             // ring.
             m_shards[count] = std::make_unique<QueueShard>();
-            m_shards[count]->owner = s_threadLocal.token;
+            m_shards[count]->owner = tls.token;
             shard = m_shards[count].get();
             m_shardCount.store(count + 1, std::memory_order_release);
         }
@@ -883,10 +918,10 @@ private:
             }
         }
         // Round-robin replacement: all bindings were misses, so any slot is cold.
-        auto& slot = s_threadLocal.bindings[s_threadLocal.nextVictim];
+        auto& slot = tls.bindings[tls.nextVictim];
         slot.sinkId = m_sinkId;
         slot.shard = shard;
-        s_threadLocal.nextVictim = (s_threadLocal.nextVictim + 1) % MaxThreadBindings;
+        tls.nextVictim = (tls.nextVictim + 1) % MaxThreadBindings;
         return shard;
     }
 

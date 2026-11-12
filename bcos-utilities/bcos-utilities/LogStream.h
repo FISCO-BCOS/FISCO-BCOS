@@ -359,31 +359,75 @@ private:
 
     // Entry point for every operand that needs the bridge.
     //
-    // The bridge is thread_local and shared by every statement on this thread,
-    // so its formatting state has to be re-established per bridge call: leaving
-    // it alone let one operator<< that changed a flag (or simply ran with
-    // std::hex from an earlier statement) permanently alter every later line on
-    // that thread. The state the old pipeline would have shown is the defaults
-    // plus the base selected by earlier operands of THIS statement, which
-    // m_base tracks.
+    // The bridge is a thread_local std::ostream shared by every statement on this
+    // thread, so its state has to be established once per STATEMENT, not once per
+    // operand:
+    //
+    //  - Once per statement, because a custom operator<< in the middle of a
+    //    statement may deliberately change a flag for the operands that follow it
+    //    (`stream << SetsHex{} << next` is the old pipeline's behaviour). Resetting
+    //    per operand wiped that out and printed the following operands in the
+    //    wrong base.
+    //  - Once per statement, because leaving the state alone entirely let one
+    //    statement's flags leak into every later statement on the thread.
+    //
+    // The error state is cleared before every use: the stream is never destroyed,
+    // so a sticky failbit/badbit would turn every later insertion on this thread
+    // into a silent no-op (ostream's sentry refuses to construct on a bad stream).
     std::ostream& bridgeForOperand()
     {
         auto& stream = bridgeStream();
-        auto base = std::ios_base::dec;
-        if (m_base == 16)
+        if (!m_bridgeReady)
         {
-            base = std::ios_base::hex;
+            // skipws is std::ostream's initial flag set; everything else is
+            // default, except the base earlier operands of this statement chose.
+            stream.flags(std::ios_base::skipws | baseFlag(m_base));
+            stream.width(0);
+            stream.precision(6);
+            stream.fill(' ');
+            m_bridgeReady = true;
         }
-        else if (m_base == 8)
-        {
-            base = std::ios_base::oct;
-        }
-        // skipws is std::ostream's initial flag set; everything else is default.
-        stream.flags(std::ios_base::skipws | base);
-        stream.width(0);
-        stream.precision(6);
-        stream.fill(' ');
+        stream.clear();
         return stream;
+    }
+
+    static std::ios_base::fmtflags baseFlag(int _base) noexcept
+    {
+        if (_base == 16)
+        {
+            return std::ios_base::hex;
+        }
+        if (_base == 8)
+        {
+            return std::ios_base::oct;
+        }
+        return std::ios_base::dec;
+    }
+
+    static int baseOf(std::ios_base::fmtflags _flags) noexcept
+    {
+        auto const base = _flags & std::ios_base::basefield;
+        return base == std::ios_base::hex ? 16 : base == std::ios_base::oct ? 8 : 10;
+    }
+
+    /// After a bridged operand, fold the base it left behind back into m_base so
+    /// the fast-path integers and floats that follow in the same statement agree
+    /// with what the bridge would have printed.
+    void syncBaseFromBridge()
+    {
+        m_base = baseOf(bridgeStream().flags());
+    }
+
+    /// Selects the integral base for both the fast path and (if it is already in
+    /// use) the bridge, so the two cannot disagree within one statement.
+    void setBase(int _base)
+    {
+        m_base = _base;
+        if (m_bridgeReady)
+        {
+            auto flags = bridgeStream().flags() & ~std::ios_base::basefield;
+            bridgeStream().flags(flags | baseFlag(_base));
+        }
     }
 
     void append(char const* _data, std::size_t _size)
@@ -494,6 +538,9 @@ private:
     char* m_end = m_inline + InlineCapacity;
     char* m_heap = nullptr;
     int m_base = 10;
+    /// True once this statement has initialised the thread_local bridge; see
+    /// bridgeForOperand() for why the initialisation is per statement.
+    bool m_bridgeReady = false;
     LineRecord m_record;
 };
 
@@ -525,6 +572,7 @@ inline LogStream& LogStream::operator<<(std::ostream& (*_pf)(std::ostream&))
     buf.m_target = this;
     bridgeForOperand() << _pf;
     buf.m_target = previous;
+    syncBaseFromBridge();
     return *this;
 }
 
@@ -535,6 +583,7 @@ inline LogStream& LogStream::operator<<(std::ios& (*_pf)(std::ios&))
     buf.m_target = this;
     bridgeForOperand() << _pf;
     buf.m_target = previous;
+    syncBaseFromBridge();
     return *this;
 }
 
@@ -544,17 +593,17 @@ inline LogStream& LogStream::operator<<(std::ios_base& (*_pf)(std::ios_base&))
     // the integral base for the operands that follow.
     if (_pf == &std::hex)
     {
-        m_base = 16;
+        setBase(16);
         return *this;
     }
     if (_pf == &std::dec)
     {
-        m_base = 10;
+        setBase(10);
         return *this;
     }
     if (_pf == &std::oct)
     {
-        m_base = 8;
+        setBase(8);
         return *this;
     }
     // No log statement in this repository uses any other ios_base manipulator
@@ -565,6 +614,7 @@ inline LogStream& LogStream::operator<<(std::ios_base& (*_pf)(std::ios_base&))
     buf.m_target = this;
     bridgeForOperand() << _pf;
     buf.m_target = previous;
+    syncBaseFromBridge();
     return *this;
 }
 
@@ -584,6 +634,9 @@ LogStream& LogStream::operator<<(T const& _value)
     buf.m_target = this;
     bridgeForOperand() << _value;
     buf.m_target = previous;
+    // A user operator may have switched the base (`<< SetsHex{} << 255`); fold it
+    // back so the fast-path operand that follows prints in the same base.
+    syncBaseFromBridge();
     return *this;
 }
 
