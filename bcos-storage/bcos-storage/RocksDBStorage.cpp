@@ -88,9 +88,8 @@ void RocksDBStorage::asyncGetPrimaryKeys(std::string_view _table,
         {
             errorMessage.append(" ").append(status.getState());
         }
-        STORAGE_ROCKSDB_LOG(WARNING)
-            << LOG_DESC("asyncGetPrimaryKeys failed") << LOG_KV("table", _table)
-            << LOG_KV("message", errorMessage);
+        STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("asyncGetPrimaryKeys failed")
+                                     << LOG_KV("table", _table) << LOG_KV("message", errorMessage);
         _callback(BCOS_ERROR_UNIQUE_PTR(ReadError, errorMessage), {});
         return;
     }

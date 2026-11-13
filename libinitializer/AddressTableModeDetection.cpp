@@ -52,10 +52,9 @@ bool bcos::initializer::hasAnyTableRegistration(::rocksdb::DB& stateDB)
     auto status = it->status();
     if (!status.ok())
     {
-        BOOST_THROW_EXCEPTION(
-            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "failed to scan table registrations (" + status.ToString() +
-                "); cannot determine whether the state DB is empty"));
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "failed to scan table registrations (" + status.ToString() +
+                                  "); cannot determine whether the state DB is empty"));
     }
     return it->Valid() && it->key().starts_with(::rocksdb::Slice(prefix.data(), prefix.size()));
 }

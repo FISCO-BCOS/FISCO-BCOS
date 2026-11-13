@@ -271,8 +271,8 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeysPropagatesIteratorFailure)
     std::unique_ptr<rocksdb::DB> db = std::make_unique<FailingIteratorDB>();
     RocksDBStorage storage(std::move(db), nullptr);
     std::promise<std::pair<Error::UniquePtr, std::vector<std::string>>> promise;
-    storage.asyncGetPrimaryKeys("t_page", std::nullopt,
-        [&promise](Error::UniquePtr error, std::vector<std::string> keys) {
+    storage.asyncGetPrimaryKeys(
+        "t_page", std::nullopt, [&promise](Error::UniquePtr error, std::vector<std::string> keys) {
             promise.set_value({std::move(error), std::move(keys)});
         });
     auto [error, keys] = promise.get_future().get();
