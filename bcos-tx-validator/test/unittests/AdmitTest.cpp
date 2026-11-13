@@ -348,11 +348,16 @@ BOOST_AUTO_TEST_CASE(malformedEnvelopeIsRejectedBeforeTheChainIdCheck)
 /// A ledger whose SYS_CONFIG reads fail outright.
 struct SystemConfigUnreadableLedger : FakeLedger
 {
+    std::size_t systemConfigReads = 0;
+
     bcos::task::Task<bcos::ledger::SystemConfigEntry> getSystemConfigByKey(
         std::string_view) override
     {
-        throw std::runtime_error("SYS_CONFIG must not be read at admission");
-        co_return bcos::ledger::SystemConfigEntry{};
+        ++systemConfigReads;
+        return []() -> bcos::task::Task<bcos::ledger::SystemConfigEntry> {
+            throw std::runtime_error("SYS_CONFIG must not be read at admission");
+            co_return bcos::ledger::SystemConfigEntry{};
+        }();
     }
 };
 
@@ -363,10 +368,12 @@ struct SystemConfigUnreadableLedger : FakeLedger
 BOOST_AUTO_TEST_CASE(admissionReadsNoSystemConfig)
 {
     AdmitHarness harness;
-    harness.ledger = std::make_shared<SystemConfigUnreadableLedger>();
+    auto ledger = std::make_shared<SystemConfigUnreadableLedger>();
+    harness.ledger = ledger;
     harness.web3NonceChecker = std::make_shared<CountingWeb3NonceChecker>(harness.ledger);
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+    BOOST_CHECK_EQUAL(ledger->systemConfigReads, 0);
 }
 
 // ------------------------------------------------------------ contexts and policy

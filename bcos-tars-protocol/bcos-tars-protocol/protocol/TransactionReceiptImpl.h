@@ -94,4 +94,15 @@ private:
     std::function<bcostars::TransactionReceipt*()> m_inner;
     mutable std::vector<bcos::protocol::LogEntry> m_logEntries;
 };
+
+inline bcos::protocol::TransactionReceipt::Ptr makeTransactionReceiptFromTars(
+    bcostars::TransactionReceipt receipt)
+{
+    if (receipt.dataHash.empty())
+    {
+        return nullptr;
+    }
+    return std::make_shared<TransactionReceiptImpl>(
+        [receipt = std::move(receipt)]() mutable { return &receipt; });
+}
 }  // namespace bcostars::protocol

@@ -252,8 +252,7 @@ void LedgerServiceClient::asyncGetTransactionReceiptByHash(bcos::crypto::HashTyp
             const bcostars::TransactionReceipt& _receipt,
             const std::vector<std::string>& _proof) override
         {
-            auto bcosReceipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-                [m_receipt = std::move(_receipt)]() mutable { return &m_receipt; });
+            auto bcosReceipt = protocol::makeTransactionReceiptFromTars(_receipt);
             auto bcosProof = std::make_shared<bcos::ledger::MerkleProof>();
             for (auto const& item : _proof)
             {

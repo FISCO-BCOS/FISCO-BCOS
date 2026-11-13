@@ -23,15 +23,13 @@ using namespace bcos::single_consensus;
 
 namespace
 {
-/// Bridges the callback-style ledger API to a blocking wait for the driver thread, with two
+/// Bridges an asynchronous ledger result to a blocking wait for the driver thread, with two
 /// guards the raw promise/future pattern lacks:
-///  * setValue() is idempotent via std::call_once — a double-invoked callback cannot throw
+///  * Completion is idempotent via std::call_once — a double completion cannot throw
 ///    std::future_error(promise_already_satisfied) from the ledger thread, where nothing
 ///    catches it and the process would std::terminate.
 ///  * wait() polls and aborts as soon as the driver is stopping, so stop()'s join() cannot
-///    hang forever on a callback that never arrives.
-/// The callback lambda holds a shared_ptr, so even if wait() bails out (shutdown) and the
-/// call site returns, a later callback invocation still targets a live promise.
+///    hang forever on a result that never arrives.
 template <typename T>
 class CallbackPromise
 {
@@ -40,6 +38,13 @@ public:
     {
         std::call_once(
             m_once, [this, v = std::move(value)]() mutable { m_promise.set_value(std::move(v)); });
+    }
+
+    void setException(std::exception_ptr exception)
+    {
+        std::call_once(m_once, [this, exception = std::move(exception)]() mutable {
+            m_promise.set_exception(std::move(exception));
+        });
     }
 
     T wait(std::atomic_bool const& _running,
@@ -60,6 +65,23 @@ private:
     std::once_flag m_once;
     std::promise<T> m_promise;
 };
+
+template <typename T, typename Initiate>
+T waitWithShutdown(Initiate initiate, std::atomic_bool const& running)
+{
+    auto completion = std::make_shared<CallbackPromise<T>>();
+    task::wait([](Initiate initiate, auto completion) -> task::Task<void> {
+        try
+        {
+            completion->setValue(co_await initiate());
+        }
+        catch (...)
+        {
+            completion->setException(std::current_exception());
+        }
+    }(std::move(initiate), completion));
+    return completion->wait(running);
+}
 }  // namespace
 
 namespace
@@ -173,7 +195,9 @@ void SingleNodeConsensus::resolveInitialHead()
     protocol::BlockNumber headNumber = -1;
     try
     {
-        headNumber = task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
+        headNumber = waitWithShutdown<protocol::BlockNumber>(
+            [ledgerPtr = m_ledger]() { return ledger::getCurrentBlockNumber(*ledgerPtr); },
+            m_running);
     }
     catch (bcos::Error const& error)
     {
@@ -198,7 +222,11 @@ void SingleNodeConsensus::resolveInitialHead()
     protocol::Block::Ptr headBlock;
     try
     {
-        headBlock = task::syncWait(ledger::getBlockData(*m_ledger, headNumber, ledger::HEADER));
+        headBlock = waitWithShutdown<protocol::Block::Ptr>(
+            [ledgerPtr = m_ledger, headNumber]() {
+                return ledger::getBlockData(*ledgerPtr, headNumber, ledger::HEADER);
+            },
+            m_running);
     }
     catch (bcos::Error const&)
     {}
