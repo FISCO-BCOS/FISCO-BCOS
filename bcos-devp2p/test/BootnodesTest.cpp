@@ -51,6 +51,34 @@ BOOST_AUTO_TEST_CASE(parseEnodeWithDiscPort)
     BOOST_CHECK_EQUAL(config.peerPublicKey.size(), 64u);
 }
 
+// geth prints `?discport=0` for a --nodiscover node and accepts it back: such a bootnode
+// is dialed over TCP only — Discv4Service::addSeen drops a zero UDP port, so it is never
+// seeded into discovery. The TCP port itself must stay non-zero (there is nothing to dial).
+BOOST_AUTO_TEST_CASE(parseEnodeDiscportZeroIsTcpOnly)
+{
+    std::string pubkey(128, 'a');
+    auto uri = sync::parseEnodeUri("enode://" + pubkey + "@10.0.0.1:30303?discport=0");
+    BOOST_CHECK_EQUAL(uri.host, "10.0.0.1");
+    BOOST_CHECK_EQUAL(uri.tcpPort, 30303);
+    BOOST_CHECK_EQUAL(uri.udpPort, 0);
+    BOOST_CHECK_EQUAL(bcos::toHex(uri.publicKey), pubkey);
+    BOOST_CHECK_THROW(
+        sync::parseEnodeUri("enode://" + pubkey + "@10.0.0.1:0"), std::invalid_argument);
+    BOOST_CHECK_THROW(sync::parseEnodeUri("enode://" + pubkey + "@10.0.0.1:30303?discport=65536"),
+        std::invalid_argument);
+
+    std::string tmp = "/tmp/bootnodes_discport0_test.json";
+    {
+        std::ofstream out(tmp);
+        out << "[\"enode://" << pubkey << "@10.0.0.1:30303?discport=0\"]";
+    }
+    auto nodes = sync::loadBootnodeUris(tmp);
+    BOOST_REQUIRE_EQUAL(nodes.size(), 1u);
+    BOOST_CHECK_EQUAL(nodes[0].tcpPort, 30303);
+    BOOST_CHECK_EQUAL(nodes[0].udpPort, 0);
+    std::remove(tmp.c_str());
+}
+
 BOOST_AUTO_TEST_CASE(parseEnodeBadPrefix)
 {
     std::string pubkey(128, 'c');

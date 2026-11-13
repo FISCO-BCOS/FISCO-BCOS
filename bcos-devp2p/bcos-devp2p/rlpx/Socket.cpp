@@ -75,7 +75,7 @@ void pollWithRemaining(int _fd, short _events,
             std::chrono::duration_cast<std::chrono::milliseconds>(_deadline - now).count();
         if (remaining <= 0)
         {
-            throw std::runtime_error(
+            throw SocketTimeout(
                 _what + " timed out after " + std::to_string(_totalTimeoutMs) + "ms");
         }
         struct pollfd pfd;
@@ -95,8 +95,7 @@ void pollWithRemaining(int _fd, short _events,
             }
             throw std::runtime_error(_what + " failed: " + std::string(strerror(errno)));
         }
-        throw std::runtime_error(
-            _what + " timed out after " + std::to_string(_totalTimeoutMs) + "ms");
+        throw SocketTimeout(_what + " timed out after " + std::to_string(_totalTimeoutMs) + "ms");
     }
 }
 }  // namespace
@@ -221,6 +220,14 @@ void Socket::close()
     }
 }
 
+void Socket::shutdown() noexcept
+{
+    if (m_fd >= 0)
+    {
+        ::shutdown(m_fd, SHUT_RDWR);
+    }
+}
+
 void Socket::sendAll(bytesConstRef _data)
 {
     // Bound the WHOLE write by one deadline (not each poll) so a peer that
@@ -255,7 +262,23 @@ bcos::bytes Socket::recvFixed(size_t _size)
     size_t received = 0;
     while (received < _size)
     {
-        pollWithRemaining(m_fd, POLLIN, deadline, c_ioTimeoutMs, "Socket::recvFixed: read");
+        try
+        {
+            pollWithRemaining(m_fd, POLLIN, deadline, c_ioTimeoutMs, "Socket::recvFixed: read");
+        }
+        catch (SocketTimeout const& e)
+        {
+            if (received == 0)
+            {
+                throw;  // nothing consumed: the caller may treat the peer as idle and retry
+            }
+            // Part of this item is consumed; a retry would misparse the stream from here
+            // (a frame header read as a MAC-checked frame, ...). Not a SocketTimeout, so an
+            // idle-tolerant caller does not retry.
+            throw std::runtime_error(std::string(e.what()) + " mid-read (" +
+                                     std::to_string(received) + " of " + std::to_string(_size) +
+                                     " bytes received)");
+        }
         ssize_t n = ::recv(m_fd, out.data() + received, _size - received, 0);
         if (n == 0)
         {

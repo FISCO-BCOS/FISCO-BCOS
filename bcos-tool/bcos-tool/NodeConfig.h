@@ -312,6 +312,13 @@ public:
     // on first start (conf/node.rlpx.key) so the RLPx identity survives restarts
     const std::string& ethereumNodeKeyFile() const;
     uint32_t ethereumMaxBatchSize() const;
+    // --- peer serving ---
+    // [ethereum] serve_peers (default true): run the inbound RLPx listener and serve
+    // headers/bodies/receipts (eth/69, eth/70) to peers; listen_port (default 30303) is
+    // the listener's TCP port; max_peers (default 50) caps inbound + outbound sessions.
+    bool ethereumServePeers() const;
+    uint16_t ethereumListenPort() const;
+    size_t ethereumMaxPeers() const;
     // the Ethereum-lane chain id ([chain] chain_id in config.genesis, executor.version >= 2);
     // 0 = unset (never a mainnet fallback)
     uint64_t ethereumChainId() const;
@@ -359,6 +366,18 @@ public:
     // engine mempool holds at once; 0 = unlimited. Default 64 (geth has no such cap on
     // executable transactions; its AccountQueue bounds gapped ones at 64).
     size_t ethereumMempoolMaxTxsPerSender() const;
+    // --- discovery ---
+    // [ethereum] discovery / discovery_port / dns_discovery_url / max_discovered_peers:
+    // devp2p node discovery for the L1 EL lane (discv4 over UDP + the EIP-1459 DNS node
+    // list). Bonded discovered nodes are dialed only to fetch a chain the consensus client
+    // named. Only meaningful when ethereumELModeEnabled().
+    bool ethereumDiscoveryEnabled() const;
+    uint16_t ethereumDiscoveryPort() const;
+    // enrtree:// URL of this chain's node list; empty (default) = DNS discovery off.
+    std::string const& ethereumDnsDiscoveryUrl() const;
+    // cap on discovered candidates handed to the dialer per sync round
+    size_t ethereumMaxDiscoveredPeers() const;
+    // --- end discovery ---
 
     // config for cert
     const std::string& certPath();
@@ -684,6 +703,10 @@ private:
     bool m_ethereumTxGossip = true;
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
+    // --- peer serving ---
+    bool m_ethereumServePeers = true;
+    uint16_t m_ethereumListenPort = 30303;
+    size_t m_ethereumMaxPeers = 50;
     uint64_t m_ethereumMergeBlock = 0;
     std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
     // [ethereum] reorg_window: EL shallow-reorg depth bound (see ethereumReorgWindow()).
@@ -693,6 +716,12 @@ private:
     size_t m_ethereumMempoolCapacity = 5120;
     std::int64_t m_ethereumMempoolTxLifetimeMinutes = 30;
     size_t m_ethereumMempoolMaxTxsPerSender = 64;
+    // --- discovery ---
+    bool m_ethereumDiscovery = true;
+    uint16_t m_ethereumDiscoveryPort = 30303;
+    std::string m_ethereumDnsDiscoveryUrl;
+    size_t m_ethereumMaxDiscoveredPeers = 8;
+    // --- end discovery ---
     // EIP-6110 deposit contract ([ethereum] deposit_contract_address in config.ini) for the
     // Prague+ requestsHash cross-check. Defaults to the Ethereum mainnet deposit contract —
     // the same address scheduler_v1::c_mainnetDepositContractAddress pins (Sepolia:

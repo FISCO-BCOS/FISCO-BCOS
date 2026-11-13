@@ -14,8 +14,8 @@
  *  limitations under the License.
  *
  * @file SyncPeerServer.h
- * @brief Test-only fake Ethereum peer: holds an in-memory chain and answers
- *        eth/68 GetBlockHeaders / GetBlockBodies / Ping requests.
+ * @brief Test-only fake Ethereum peer: an in-memory chain exposed through the
+ *        production BlockSourceInterface and served by the production PeerServer.
  * @date 2026/8/18
  */
 #pragma once
@@ -25,12 +25,17 @@
 #include <bcos-devp2p/rlpx/Client.h>
 #include <bcos-devp2p/rlpx/Messages.h>
 #include <bcos-devp2p/sync/Block.h>
+#include <bcos-devp2p/sync/BlockSource.h>
 #include <bcos-devp2p/sync/HeaderValidator.h>
 #include <bcos-devp2p/sync/OpHeaderValidator.h>
+#include <bcos-devp2p/sync/PeerServer.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <map>
+#include <mutex>
+#include <optional>
+#include <vector>
 
 namespace bcos::devp2p::test
 {
@@ -261,86 +266,137 @@ inline void reencodeOpHeader(sync::Block& _block)
     _block.hash = bcos::crypto::keccak256Hash(bcos::bytesConstRef(rlp.data(), rlp.size()));
 }
 
-// Serve eth/68 requests over an established session until the peer disconnects
-// or an unexpected message arrives. Runs on the server thread.
-inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> const& _chain)
+// The in-memory chain behind the production serving loop. Receipts default to none
+// per block (an empty list); tests attach them with setReceipts.
+class InMemoryBlockSource : public sync::BlockSourceInterface
 {
-    std::map<bcos::h256, size_t> byHash;
-    for (size_t i = 0; i < _chain.size(); ++i)
+public:
+    explicit InMemoryBlockSource(std::vector<sync::Block> _chain) { reset(std::move(_chain)); }
+
+    void reset(std::vector<sync::Block> _chain)
     {
-        byHash[_chain[i].hash] = i;
+        std::unique_lock lock(m_mutex);
+        m_chain = std::move(_chain);
+        m_byHash.clear();
+        for (size_t i = 0; i < m_chain.size(); ++i)
+        {
+            m_byHash[m_chain[i].hash] = i;
+        }
+    }
+    // Append a block (simulates a head advance under a live serving loop).
+    void append(sync::Block _block)
+    {
+        std::unique_lock lock(m_mutex);
+        m_byHash[_block.hash] = m_chain.size();
+        m_chain.push_back(std::move(_block));
+    }
+    void setReceipts(uint64_t _number, std::vector<bcos::protocol::EthReceiptData> _receipts)
+    {
+        std::unique_lock lock(m_mutex);
+        m_receipts[_number] = std::move(_receipts);
     }
 
-    for (;;)
+    sync::BlockRange range() override
     {
-        auto msg =
-            unwrapOrThrow(_session.recvMessage(), "SyncPeerServer: failed to decode a frame: ");
-        if (msg.id == rlpx::baseMsg::Ping)
+        std::unique_lock lock(m_mutex);
+        if (m_chain.empty())
         {
-            _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, rlpx::encodePong()});
-            continue;
+            return {};
         }
-        if (msg.id == eth::frameId(eth::msg::GetBlockHeaders))
+        return {0, m_chain.size() - 1, m_chain.back().hash};
+    }
+    std::optional<uint64_t> numberByHash(bcos::h256 const& _hash) override
+    {
+        std::unique_lock lock(m_mutex);
+        auto it = m_byHash.find(_hash);
+        if (it == m_byHash.end())
         {
-            auto request = unwrapOrThrow(eth::decodeGetBlockHeaders(ref(msg.data)),
-                "SyncPeerServer: malformed GetBlockHeaders: ");
-            eth::BlockHeadersMessage response;
-            response.requestId = request.requestId;
-            if (request.originHash.has_value())
-            {
-                auto it = byHash.find(*request.originHash);
-                if (it != byHash.end())
-                {
-                    response.headers.push_back(_chain[it->second].headerRlp);
-                }
-            }
-            else
-            {
-                for (uint64_t k = 0; k < request.amount; ++k)
-                {
-                    int64_t idx = request.reverse ?
-                                      static_cast<int64_t>(request.originNumber) -
-                                          static_cast<int64_t>(k * (request.skip + 1)) :
-                                      static_cast<int64_t>(request.originNumber) +
-                                          static_cast<int64_t>(k * (request.skip + 1));
-                    if (idx < 0 || static_cast<size_t>(idx) >= _chain.size())
-                    {
-                        break;
-                    }
-                    response.headers.push_back(_chain[static_cast<size_t>(idx)].headerRlp);
-                }
-            }
-            _session.sendMessage(
-                rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::BlockHeaders)),
-                    eth::encodeBlockHeaders(response)});
-            continue;
+            return std::nullopt;
         }
-        if (msg.id == eth::frameId(eth::msg::GetBlockBodies))
+        return it->second;
+    }
+    std::optional<bcos::bytes> headerRlp(uint64_t _number) override
+    {
+        std::unique_lock lock(m_mutex);
+        if (_number >= m_chain.size())
         {
-            auto request = unwrapOrThrow(eth::decodeGetBlockBodies(ref(msg.data)),
-                "SyncPeerServer: malformed GetBlockBodies: ");
-            eth::BlockBodiesMessage response;
-            response.requestId = request.requestId;
-            for (auto const& hash : request.hashes)
-            {
-                eth::BlockBody body;
-                auto it = byHash.find(hash);
-                if (it != byHash.end())
-                {
-                    auto const& block = _chain[it->second];
-                    body.transactions = block.transactions;
-                    body.uncles = block.uncles;
-                    body.withdrawals = block.withdrawals;
-                }
-                response.bodies.push_back(std::move(body));
-            }
-            _session.sendMessage(
-                rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::BlockBodies)),
-                    eth::encodeBlockBodies(response)});
-            continue;
+            return std::nullopt;
         }
-        // Unknown message or disconnect: stop serving.
-        break;
+        return m_chain[_number].headerRlp;
+    }
+    std::optional<eth::BlockBody> body(uint64_t _number) override
+    {
+        std::unique_lock lock(m_mutex);
+        if (_number >= m_chain.size())
+        {
+            return std::nullopt;
+        }
+        auto const& block = m_chain[_number];
+        eth::BlockBody body;
+        body.transactions = block.transactions;
+        body.uncles = block.uncles;
+        body.withdrawals = block.withdrawals;
+        return body;
+    }
+    std::optional<std::vector<bcos::protocol::EthReceiptData>> receipts(uint64_t _number) override
+    {
+        std::unique_lock lock(m_mutex);
+        if (_number >= m_chain.size())
+        {
+            return std::nullopt;
+        }
+        auto it = m_receipts.find(_number);
+        if (it == m_receipts.end())
+        {
+            return std::vector<bcos::protocol::EthReceiptData>{};
+        }
+        return it->second;
+    }
+
+private:
+    std::mutex m_mutex;
+    std::vector<sync::Block> m_chain;
+    std::map<bcos::h256, size_t> m_byHash;
+    std::map<uint64_t, std::vector<bcos::protocol::EthReceiptData>> m_receipts;
+};
+
+// Serve eth requests over an established session with the production PeerServer until
+// the peer disconnects or the session breaks. Runs on the server thread.
+inline sync::PeerServer::ExitReason serveRequests(
+    rlpx::EstablishedSession& _established, std::vector<sync::Block> const& _chain)
+{
+    InMemoryBlockSource source(_chain);
+    sync::PeerServer server(source);
+    return server.serve(_established, nullptr);
+}
+
+// Like serveRequests, but every reply is preceded by `_update` as a BlockRangeUpdate
+// frame — what an eth/69+ geth does on a head advance while our request is outstanding.
+// Built on PeerServer::handle: PeerServer::serve only announces a range AFTER its reply.
+// Returns when the peer disconnects, breaches, or the connection breaks (throws).
+inline void serveRequestsAnnouncingRange(rlpx::EstablishedSession& _established,
+    std::vector<sync::Block> const& _chain, eth::BlockRangeUpdateMessage const& _update)
+{
+    using Kind = sync::PeerServer::Outcome::Kind;
+    InMemoryBlockSource source(_chain);
+    sync::PeerServer server(source);
+    auto const ethVersion = static_cast<uint8_t>(_established.peerStatus.protocolVersion);
+    while (true)
+    {
+        auto frame =
+            unwrapOrThrow(_established.session.recvMessage(), "test server: undecodable frame: ");
+        auto outcome = server.handle(ethVersion, frame);
+        if (outcome.kind == Kind::Reply)
+        {
+            _established.session.sendMessage(
+                rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::BlockRangeUpdate)),
+                    eth::encodeBlockRangeUpdate(_update)});
+            _established.session.sendMessage(outcome.reply);
+        }
+        else if (outcome.kind != Kind::Ignore)
+        {
+            return;
+        }
     }
 }
 }  // namespace bcos::devp2p::test

@@ -39,10 +39,21 @@ public:
     bcos::codec::rlp::RlpResult<Message> recvMessage();
 
     void enableCompression() { m_codec.enableCompression(); }
+    // Largest frame recvMessage accepts; a longer one throws before its body is read. The
+    // same bound applies to the decompressed payload (snappy inflates up to ~21x).
+    void setMaxFrameSize(size_t _size)
+    {
+        m_maxFrameSize = _size;
+        m_codec.setMaxDecompressedSize(_size);
+    }
+    // Unblock a recvMessage parked on this session from another thread (see
+    // Socket::shutdown). Safe to call concurrently with the owning loop's I/O.
+    void shutdown() noexcept { m_socket.shutdown(); }
 
 private:
     Socket m_socket;
     FramingCipher m_cipher;
     MessageCodec m_codec;
+    size_t m_maxFrameSize{MessageCodec::kMaxFrameSize};
 };
 }  // namespace bcos::devp2p::rlpx

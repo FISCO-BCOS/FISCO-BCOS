@@ -26,7 +26,10 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <exception>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <thread>
 
 using namespace bcos;
@@ -181,6 +184,100 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
 
     serverThread.join();
     BOOST_CHECK(serverOk);
+}
+
+// The dialer caps handshake frames at 64 KiB like the listener does: a peer whose Hello is
+// 100 KiB (anyone we dial can claim any frame size) is refused before the body is read.
+BOOST_AUTO_TEST_CASE(oversizedServerHelloIsRefusedByDialer)
+{
+    rlpx::EccKeyPair serverKey;
+    rlpx::PeerConfig serverConfig;
+    serverConfig.clientId.assign(100 * 1024, 'x');
+    rlpx::RlpxServer server(serverKey, 0, serverConfig);
+    uint16_t const port = server.port();
+    std::thread serverThread([&] {
+        try
+        {
+            auto established = server.accept();
+        }
+        catch (std::exception const&)
+        {
+            // the dialer drops the connection on our oversized Hello
+        }
+    });
+
+    rlpx::PeerConfig config;
+    config.host = "127.0.0.1";
+    config.port = port;
+    config.peerPublicKey = serverKey.publicKey();
+    rlpx::EccKeyPair clientKey;
+    rlpx::RlpxClient client(std::move(clientKey), config);
+    BOOST_CHECK_EXCEPTION(client.connect(), std::exception, [](std::exception const& e) {
+        return std::string_view(e.what()).find("frame too large") != std::string_view::npos;
+    });
+    serverThread.join();
+}
+
+// Once the handshake is done both sides lift the 64 KiB cap again (frame size and
+// decompression bound): a 100 KiB frame passes in either direction.
+BOOST_AUTO_TEST_CASE(largeFramesPassAfterHandshake)
+{
+    bcos::bytes payload(100 * 1024);
+    for (size_t i = 0; i < payload.size(); ++i)
+    {
+        payload[i] = static_cast<bcos::byte>(i * 7 + 1);
+    }
+    auto const transactions = static_cast<uint8_t>(eth::frameId(eth::msg::Transactions));
+
+    rlpx::EccKeyPair serverKey;
+    rlpx::PeerConfig serverConfig;
+    serverConfig.clientId = "fake-peer";
+    rlpx::RlpxServer server(serverKey, 0, serverConfig);
+    uint16_t const port = server.port();
+    std::string serverError;
+    std::atomic<bool> serverGotIt{false};
+    std::thread serverThread([&] {
+        try
+        {
+            auto established = server.accept();  // acceptHandshake: capped, then restored
+            established.session.sendMessage(Message{transactions, payload});
+            auto echo = established.session.recvMessage();
+            serverGotIt = echo.has_value() && echo->id == transactions && echo->data == payload;
+        }
+        catch (std::exception const& e)
+        {
+            serverError = e.what();
+        }
+    });
+
+    rlpx::PeerConfig config;
+    config.host = "127.0.0.1";
+    config.port = port;
+    config.peerPublicKey = serverKey.publicKey();
+    rlpx::EccKeyPair clientKey;
+    rlpx::RlpxClient client(std::move(clientKey), config);
+    // Any failure below must still close the connection and join the server thread.
+    std::exception_ptr failure;
+    try
+    {
+        auto established = client.connect();  // RlpxClient::connect: capped, then restored
+        auto frame = established.session.recvMessage();
+        BOOST_REQUIRE(frame.has_value());
+        BOOST_CHECK_EQUAL(frame->id, transactions);
+        BOOST_CHECK(frame->data == payload);
+        established.session.sendMessage(Message{transactions, payload});
+    }  // the session closes here: the server reads our frame, then EOF
+    catch (...)
+    {
+        failure = std::current_exception();
+    }
+    serverThread.join();
+    if (failure)
+    {
+        std::rethrow_exception(failure);
+    }
+    BOOST_CHECK_MESSAGE(serverError.empty(), serverError);
+    BOOST_CHECK(serverGotIt.load());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

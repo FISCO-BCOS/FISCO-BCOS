@@ -624,13 +624,13 @@ private:
                             break;
                         }
                     }
-                    catch (std::exception const& e)
+                    catch (devp2p::rlpx::SocketTimeout const&)
                     {
-                        if (std::string_view(e.what()).find("timed out") != std::string_view::npos)
-                        {
-                            continue;  // 15s of silence is an idle peer, not a dead one
-                        }
-                        throw;
+                        // Only thrown when nothing of the frame was consumed: 15 s of silence
+                        // is an idle peer, not a dead one. A stall mid-frame surfaces as a
+                        // plain runtime_error (its text still says "timed out"), and retrying
+                        // recvMessage on it would read the rest of the frame as a header.
+                        continue;
                     }
                 }
                 std::unique_lock lock(m_peersMutex);
