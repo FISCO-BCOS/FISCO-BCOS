@@ -27,7 +27,7 @@ add_library(init
     TxPoolInitializer.cpp
     MemPoolInitializer.cpp
     LedgerInitializer.cpp AddressTableModeDetection.cpp AccountTableMigration.cpp
-    GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp
+    KeyPageStorageResolver.cpp GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp
     BaselineSchedulerInst.cpp
     OpEngineServiceInstantiate.cpp
 )

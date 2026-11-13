@@ -169,8 +169,7 @@ createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig,
             option.blockCacheSize = nodeConfig->blockCacheSize();
             option.enableDBStatistics = nodeConfig->enableStatistics();
             storage = StorageInitializer::build(
-                StorageInitializer::createRocksDB(stateDBPath, option, nodeConfig->keyPageSize()),
-                dataEncryption);
+                StorageInitializer::createRocksDB(stateDBPath, option), dataEncryption);
             blockStorage = storage;
             if (nodeConfig->enableSeparateBlockAndState())
             {

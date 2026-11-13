@@ -2405,7 +2405,23 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_genesisConfig.m_groupID);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
-    m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
+    m_keyPageSizeConfigured = false;
+    if (auto const child = _pt.get_child_optional("storage.key_page_size"))
+    {
+        auto const parsed = child->get_value_optional<int32_t>();
+        if (!parsed)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[storage].key_page_size must be an integer, got '" +
+                                      child->get_value<std::string>() + "'"));
+        }
+        m_keyPageSize = static_cast<size_t>(*parsed);
+        m_keyPageSizeConfigured = true;
+    }
+    else
+    {
+        m_keyPageSize = 0;
+    }
     m_maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 4);
     m_maxBackgroundJobs = _pt.get<int32_t>("storage.max_background_jobs", 4);
     m_writeBufferSize = _pt.get<size_t>("storage.write_buffer_size", 64 << 20);
@@ -2470,11 +2486,6 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
         m_archiveListenPort = _pt.get<uint16_t>("storage.archive_port");
     }
 
-    // if (m_keyPageSize < 4096 || m_keyPageSize > (1 << 25))
-    // {
-    //     BOOST_THROW_EXCEPTION(
-    //         InvalidConfig() << errinfo_comment("Please set storage.key_page_size in 4K~32M"));
-    // }
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
     m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
     g_BCOSConfig.setStorageType(m_storageType);  // Set storageType to global
@@ -3016,6 +3027,16 @@ std::string const& NodeConfig::storageType() const
 size_t NodeConfig::keyPageSize() const
 {
     return m_keyPageSize;
+}
+
+bool NodeConfig::keyPageSizeConfigured() const
+{
+    return m_keyPageSizeConfigured;
+}
+
+void NodeConfig::setKeyPageSize(size_t _keyPageSize)
+{
+    m_keyPageSize = _keyPageSize;
 }
 
 int NodeConfig::maxWriteBufferNumber() const

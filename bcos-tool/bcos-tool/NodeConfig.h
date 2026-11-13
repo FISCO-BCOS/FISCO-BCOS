@@ -157,6 +157,8 @@ public:
     std::string const& blockDBPath() const;
     std::string const& storageType() const;
     size_t keyPageSize() const;
+    bool keyPageSizeConfigured() const;
+    void setKeyPageSize(size_t _keyPageSize);
     int maxWriteBufferNumber() const;
     bool enableStatistics() const;
     int maxBackgroundJobs() const;
@@ -570,7 +572,8 @@ private:
     // storage configuration
     std::string m_storagePath;
     std::string m_storageType = "RocksDB";
-    size_t m_keyPageSize = 10240;
+    size_t m_keyPageSize = 0;
+    bool m_keyPageSizeConfigured = false;
     bool m_enableDBStatistics = false;
     int m_maxWriteBufferNumber = 3;
     int m_maxBackgroundJobs = 3;

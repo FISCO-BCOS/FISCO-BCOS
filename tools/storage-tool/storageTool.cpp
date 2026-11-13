@@ -25,6 +25,7 @@
 #include "bcos-tool/bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "boost/filesystem.hpp"
+#include "libinitializer/KeyPageStorageResolver.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/StorageInitializer.h"
 #include "rocksdb/db.h"
@@ -258,15 +259,18 @@ TransactionalStorageInterface::Ptr createBackendStorage(
             option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
             option.blockCacheSize = nodeConfig->blockCacheSize();
 
-            storage = StorageInitializer::build(
-                StorageInitializer::createRocksDB(nodeConfig->storagePath(), option),
-                dataEncryption);
+            auto rocksDB = StorageInitializer::createRocksDB(nodeConfig->storagePath(), option);
+            auto* stateDB = rocksDB.get();
+            storage = StorageInitializer::build(std::move(rocksDB), dataEncryption);
+            resolveKeyPageSize(*nodeConfig, *storage, *stateDB);
         }
         else
         {
-            auto* rocksdb = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
-            storage = std::make_shared<RocksDBStorage>(
-                std::unique_ptr<rocksdb::DB>(rocksdb), dataEncryption);
+            std::unique_ptr<rocksdb::DB> rocksDB(
+                createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath));
+            auto* stateDB = rocksDB.get();
+            storage = std::make_shared<RocksDBStorage>(std::move(rocksDB), dataEncryption);
+            resolveKeyPageSize(*nodeConfig, *storage, *stateDB);
         }
     }
     else
@@ -482,6 +486,7 @@ int main(int argc, const char* argv[])
         }
         // create secondary instance
         StorageInterface::Ptr storage = createBackendStorage(nodeConfig, logInitializer->logPath());
+        keyPageSize = nodeConfig->keyPageSize();
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
             auto keyPageStorage =
@@ -542,6 +547,7 @@ int main(int argc, const char* argv[])
         TransactionalStorageInterface::Ptr rocksdbStorage =
             dynamic_pointer_cast<TransactionalStorageInterface>(
                 createBackendStorage(nodeConfig, logInitializer->logPath(), true));
+        keyPageSize = nodeConfig->keyPageSize();
         StorageInterface::Ptr storage = rocksdbStorage;
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
@@ -611,6 +617,7 @@ int main(int argc, const char* argv[])
             return -1;
         }
         StorageInterface::Ptr storage = createBackendStorage(nodeConfig, logInitializer->logPath());
+        keyPageSize = nodeConfig->keyPageSize();
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
             storage =

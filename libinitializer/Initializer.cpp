@@ -32,6 +32,7 @@
 #include "EthereumSyncInitializer.h"
 #include "ExternalPayloadVerifier.h"
 #include "GlobalStateStorageInitializer.h"
+#include "KeyPageStorageResolver.h"
 #include "LedgerInitializer.h"
 #include "MemPoolInitializer.h"
 #include "SchedulerInitializer.h"
@@ -72,7 +73,6 @@
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
-#include <bcos-table/src/KeyPageStorage.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
@@ -296,6 +296,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         throw std::runtime_error("storage type not support");
     }
+
+    auto keyPageResolution =
+        resolveKeyPageSize(*m_nodeConfig, *m_storage, m_globalStateStorageInitializer->rocksDB());
+    INITIALIZER_LOG(INFO) << LOG_DESC("resolveKeyPageSize")
+                          << LOG_KV("source", keyPageResolution.source)
+                          << LOG_KV("keyPageSize", keyPageResolution.value)
+                          << LOG_KV("tablesExamined", keyPageResolution.tablesExamined);
 
     // build ledger
     auto ledger = LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage,
@@ -1944,8 +1951,7 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
         moveSSTFiles = false;
     }
     auto rocksdbOption = getRocksDBOption(nodeConfig, true);
-    auto rocksDB =
-        StorageInitializer::createRocksDB(stateDBPath, rocksdbOption, nodeConfig->keyPageSize());
+    auto rocksDB = StorageInitializer::createRocksDB(stateDBPath, rocksdbOption);
     ingestIntoRocksDB(*rocksDB, sstFiles, moveSSTFiles);
     bcos::storage::TransactionalStorageInterface::Ptr stateStorage = nullptr;
     // import tx and receipt
