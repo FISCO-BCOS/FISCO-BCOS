@@ -118,6 +118,10 @@ if(FULLNODE)
     endif()
 endif()
 
+if(TESTS)
+    add_subdirectory(tools/BcosBuilder)
+endif()
+
 if(TOOLS)
   add_subdirectory(tools)
 endif()

@@ -2,6 +2,8 @@
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <rocksdb/iterator.h>
+#include <rocksdb/utilities/stackable_db.h>
 #include <rocksdb/write_batch.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -46,6 +48,21 @@ public:
         return bcos::crypto::hasher::AnyHasher{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}};
     }
 };
+
+class FailingIteratorDB final : public rocksdb::StackableDB
+{
+public:
+    FailingIteratorDB() : StackableDB(static_cast<rocksdb::DB*>(nullptr)) {}
+
+    rocksdb::Iterator* NewIterator(
+        const rocksdb::ReadOptions&, rocksdb::ColumnFamilyHandle*) override
+    {
+        return rocksdb::NewErrorIterator(rocksdb::Status::IOError("injected iterator failure"));
+    }
+
+    rocksdb::ColumnFamilyHandle* DefaultColumnFamily() const override { return nullptr; }
+};
+
 struct TestRocksDBStorageFixture
 {
     TestRocksDBStorageFixture()
@@ -247,6 +264,22 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
             });
     }
     cleanupTestTableData();
+}
+
+BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeysPropagatesIteratorFailure)
+{
+    std::unique_ptr<rocksdb::DB> db = std::make_unique<FailingIteratorDB>();
+    RocksDBStorage storage(std::move(db), nullptr);
+    std::promise<std::pair<Error::UniquePtr, std::vector<std::string>>> promise;
+    storage.asyncGetPrimaryKeys("t_page", std::nullopt,
+        [&promise](Error::UniquePtr error, std::vector<std::string> keys) {
+            promise.set_value({std::move(error), std::move(keys)});
+        });
+    auto [error, keys] = promise.get_future().get();
+    BOOST_REQUIRE(error);
+    BOOST_CHECK_EQUAL(error->errorCode(), StorageError::ReadError);
+    BOOST_CHECK(keys.empty());
+    BOOST_CHECK_NE(error->errorMessage().find("injected iterator failure"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)

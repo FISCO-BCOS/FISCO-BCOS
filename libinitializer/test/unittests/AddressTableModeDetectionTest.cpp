@@ -22,6 +22,8 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-tool/Exceptions.h>
 #include <rocksdb/db.h>
+#include <rocksdb/iterator.h>
+#include <rocksdb/utilities/stackable_db.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 
@@ -39,6 +41,20 @@ std::string binaryTableName()
     name.append(std::string(20, '\x42'));
     return name;
 }
+
+class FailingIteratorDB final : public rocksdb::StackableDB
+{
+public:
+    FailingIteratorDB() : StackableDB(static_cast<rocksdb::DB*>(nullptr)) {}
+
+    rocksdb::Iterator* NewIterator(
+        const rocksdb::ReadOptions&, rocksdb::ColumnFamilyHandle*) override
+    {
+        return rocksdb::NewErrorIterator(rocksdb::Status::IOError("injected iterator failure"));
+    }
+
+    rocksdb::ColumnFamilyHandle* DefaultColumnFamily() const override { return nullptr; }
+};
 
 struct DetectTempRocksDB
 {
@@ -115,6 +131,12 @@ BOOST_AUTO_TEST_CASE(HasAnyTableRegistrationIsBoundedAndExact)
         writeAccountTableLayoutFlag(*fixture.db, ACCOUNT_TABLE_LAYOUT_BINARY);
         BOOST_CHECK(!hasAnyTableRegistration(*fixture.db));
     }
+}
+
+BOOST_AUTO_TEST_CASE(HasAnyTableRegistrationRejectsIteratorFailure)
+{
+    FailingIteratorDB db;
+    BOOST_CHECK_THROW(hasAnyTableRegistration(db), bcos::tool::InvalidConfig);
 }
 
 BOOST_AUTO_TEST_CASE(ResolvesModeFromFlag)

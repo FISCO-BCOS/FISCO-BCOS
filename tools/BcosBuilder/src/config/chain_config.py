@@ -170,7 +170,7 @@ class NodeConfig:
         # parse key_page_size
         self.key_page_size = utilities.get_item_value(
             self.config, "key_page_size", 0, False, self.desc)
-        if self.key_page_size not in (0, "0"):
+        if str(self.key_page_size) != "0":
             raise Exception(
                 "key_page_size must be 0 for new or expanded nodes; configure legacy Page data manually")
         # load storage_security
