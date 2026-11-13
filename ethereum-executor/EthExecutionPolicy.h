@@ -348,19 +348,31 @@ struct EthL1Policy
     ///        thrown away. A mined transaction's receipt does not keep it -- the receipt shape
     ///        a v2 chain commits to (encodeReceiptLeaf: status, cumulativeGasUsed, logsBloom,
     ///        logs) has no output field, so persisting it would only grow the receipt store.
+    /// @param isCreate    the transaction is a top-level CREATE (to == nullopt).
+    /// @param sender      the transaction's sender.
+    /// @param senderNonce the sender's PRE-execution account nonce. For a top-level CREATE the
+    ///        created address is CreateAddress(sender, senderNonce) -- the same pair evmone's
+    ///        prepare_message uses (it reads sender_acc.nonce - 1 after the bump). Passing the
+    ///        two primitives rather than a pre-derived string keeps the derivation where it
+    ///        belongs: this policy owns it, and the OP policy substitutes its own snapshot.
+    ///        The created address is RPC-only (encodeReceiptLeaf does not carry it), so filling
+    ///        it never moves receiptsRoot.
     template <class Host>
     static protocol::TransactionReceipt::Ptr buildReceipt(Host& host, evmc::Result const& result,
         int64_t gasUsed, protocol::TransactionReceiptFactory const& rf, int64_t blockNumber,
-        bool keepOutput = false)
+        bool keepOutput = false, bool isCreate = false, evmc::address const& sender = {},
+        uint64_t senderNonce = 0)
     {
         auto logs = eth::takeBcosLogs(host);
         // evmone leaves output_data null for an empty result; `nullptr + 0` is still UB.
         bcos::bytes output;
         if (keepOutput && result.output_size != 0)
             output.assign(result.output_data, result.output_data + result.output_size);
-        return rf.createReceipt(bcos::u256(static_cast<uint64_t>(gasUsed)), std::string{},
-            std::move(logs), mapEvmcStatusToBcosStatus(result.status_code), bcos::ref(output),
-            blockNumber);
+        auto contractAddress =
+            isCreate ? evm::toFiscoContractAddress(sender, senderNonce) : std::string{};
+        return rf.createReceipt(bcos::u256(static_cast<uint64_t>(gasUsed)),
+            std::move(contractAddress), std::move(logs),
+            mapEvmcStatusToBcosStatus(result.status_code), bcos::ref(output), blockNumber);
     }
 };
 }  // namespace bcos::executor_v1::eth

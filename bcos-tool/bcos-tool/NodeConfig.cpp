@@ -94,6 +94,36 @@ bool isHex(std::string_view sv)
            std::all_of(sv.begin(), sv.end(), [](unsigned char c) { return std::isxdigit(c) != 0; });
 }
 
+// Pagination step for the *streaming* filter paths -- getBlockChangeImpl,
+// getPendingTxChangeImpl and getLogChangeImpl. Each of them advances the cursor stored on the
+// filter and the next call resumes from there, so a small step is correct: it bounds the work of
+// one eth_getFilterChanges / eth_getFilterLogs poll. Never raise this to a query-sized window.
+inline constexpr int DEFAULT_FILTER_MAX_PROCESS_BLOCK = 10;
+
+// Range cap for the *one-shot* filter paths -- eth_getLogs, eth_getFilterLogs and getLogs on the
+// legacy JSON-RPC. They have no cursor, so FilterSystem::getLogsImpl rejects a wider range
+// outright instead of answering a prefix, and the cap therefore has to sit at the scale Ethereum
+// tooling assumes: public providers cap at the 10000-block mark and go-ethereum imposes no
+// block-count cap at all. It is a separate key from filter_max_process_block precisely because
+// the two jobs differ -- a query-sized window is right for a single explicit request and wrong
+// for a step that is spent on every poll.
+inline constexpr int DEFAULT_FILTER_MAX_BLOCK_RANGE = 10'000;
+
+// Both budgets are read as range bounds, and a non-positive value would make the corresponding
+// path reject everything (a resolved range is at least one block), so reject it at boot instead
+// of surfacing it per request. Also bounds the value to int range for the int64_t comparisons in
+// FilterSystem.
+int requirePositiveFilterBudget(std::string const& section, std::string const& field, int value)
+{
+    if (value <= 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[" + section + "]." + field + " must be positive, got " + std::to_string(value)));
+    }
+    return value;
+}
+
 // Require that `value` (the raw config value of `field` in `section`) is a
 // 0x-prefixed hex string. If expectedLen > 0, the hex body (after 0x) must be
 // exactly that many chars; otherwise it must merely be valid hex of even
@@ -1190,11 +1220,15 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
         ; 300s
         filter_timeout=300
         filter_max_process_block=10
+        filter_max_block_range=10000
     */
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("rpc.listen_port", 20200);
     int filterTimeout = _pt.get<int>("rpc.filter_timeout", 300);
-    int maxProcessBlock = _pt.get<int>("rpc.filter_max_process_block", 10);
+    int maxProcessBlock = requirePositiveFilterBudget("rpc", "filter_max_process_block",
+        _pt.get<int>("rpc.filter_max_process_block", DEFAULT_FILTER_MAX_PROCESS_BLOCK));
+    int maxBlockRange = requirePositiveFilterBudget("rpc", "filter_max_block_range",
+        _pt.get<int>("rpc.filter_max_block_range", DEFAULT_FILTER_MAX_BLOCK_RANGE));
     bool smSsl = _pt.get<bool>("rpc.sm_ssl", false);
     bool disableSsl = _pt.get<bool>("rpc.disable_ssl", false);
     // enable ssl cover disable ssl
@@ -1219,11 +1253,14 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     m_rpcSmSsl = smSsl;
     m_rpcFilterTimeout = filterTimeout * 1000;  // to milliseconds
     m_rpcMaxProcessBlock = maxProcessBlock;
+    m_rpcMaxBlockRange = maxBlockRange;
     g_BCOSConfig.setNeedRetInput(needRetInput);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadRpcConfig") << LOG_KV("listenIP", listenIP)
                          << LOG_KV("listenPort", listenPort) << LOG_KV("listenPort", listenPort)
                          << LOG_KV("smSsl", smSsl) << LOG_KV("disableSsl", disableSsl)
+                         << LOG_KV("maxProcessBlock", maxProcessBlock)
+                         << LOG_KV("maxBlockRange", maxBlockRange)
                          << LOG_KV("needRetInput", needRetInput);
 }
 
@@ -1238,6 +1275,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; 300s
         filter_timeout=300
         filter_max_process_block=10
+        filter_max_block_range=10000
         batch_request_size_limit=8
         ;request body size limit for web3 rpc, default is 10MB
         request_body_size_limit=10240000
@@ -1272,7 +1310,10 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
     const int filterTimeout = _pt.get<int>("web3_rpc.filter_timeout", 300);
-    const int maxProcessBlock = _pt.get<int>("web3_rpc.filter_max_process_block", 10);
+    const int maxProcessBlock = requirePositiveFilterBudget("web3_rpc", "filter_max_process_block",
+        _pt.get<int>("web3_rpc.filter_max_process_block", DEFAULT_FILTER_MAX_PROCESS_BLOCK));
+    const int maxBlockRange = requirePositiveFilterBudget("web3_rpc", "filter_max_block_range",
+        _pt.get<int>("web3_rpc.filter_max_block_range", DEFAULT_FILTER_MAX_BLOCK_RANGE));
     const bool enableWeb3Rpc = _pt.get<bool>("web3_rpc.enable", false);
     const int batchRequestSizeLimit = _pt.get<int>("web3_rpc.batch_request_size_limit", 8);
     const int requestBodySizeLimit = _pt.get<int>("web3_rpc.request_body_size_limit", 10240000);
@@ -1299,6 +1340,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     m_enableWeb3Rpc = enableWeb3Rpc;
     m_web3FilterTimeout = filterTimeout * 1000;  // to milliseconds
     m_web3MaxProcessBlock = maxProcessBlock;
+    m_web3MaxBlockRange = maxBlockRange;
     m_web3BatchRequestSizeLimit = batchRequestSizeLimit;
     m_web3HttpBodySizeLimit = requestBodySizeLimit;
     m_web3EnableCors = enableCors;
@@ -1321,6 +1363,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
                          << LOG_KV("filterTimeout", filterTimeout)
                          << LOG_KV("maxProcessBlock", maxProcessBlock)
+                         << LOG_KV("maxBlockRange", maxBlockRange)
                          << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
                          << LOG_KV("enableCors", enableCors)
                          << LOG_KV("corsAllowedOrigins", corsAllowedOrigins)
@@ -3213,6 +3256,11 @@ uint32_t NodeConfig::rpcMaxProcessBlock() const
     return m_rpcMaxProcessBlock;
 }
 
+uint32_t NodeConfig::rpcMaxBlockRange() const
+{
+    return m_rpcMaxBlockRange;
+}
+
 bool NodeConfig::rpcSmSsl() const
 {
     return m_rpcSmSsl;
@@ -3246,6 +3294,11 @@ uint32_t NodeConfig::web3FilterTimeout() const
 uint32_t NodeConfig::web3MaxProcessBlock() const
 {
     return m_web3MaxProcessBlock;
+}
+
+uint32_t NodeConfig::web3MaxBlockRange() const
+{
+    return m_web3MaxBlockRange;
 }
 
 uint32_t NodeConfig::web3BatchRequestSizeLimit() const

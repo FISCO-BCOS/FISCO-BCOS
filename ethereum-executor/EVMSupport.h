@@ -252,6 +252,27 @@ inline bcos::u256 compute_blob_gas_price(
     return addr;
 }
 
+/// Contract-creation address for a top-level transaction, in the FISCO receipt's string form
+/// (40-char lowercase hex, NO "0x" -- the RPC layer adds the prefix and the EIP-55 checksum).
+/// Mirrors op-geth state_processor.go MakeReceipt: a creation tx (to == nil) records
+/// `CreateAddress(from, nonce)` where nonce is the sender's PRE-execution account nonce -- for a
+/// normal transaction the state nonce before the bump (== tx.Nonce() once validated), for a
+/// Regolith+ deposit statedb.GetNonce(from).
+///
+/// contractAddress is an RPC-only field: it is NOT part of any consensus receipt encoding
+/// (encodeReceiptLeaf is [status, cumulativeGasUsed, logsBloom, logs]; the OP leaf adds only the
+/// deposit nonce/version tail), so filling it never affects receiptsRoot or stateRoot.
+///
+/// Lives here, next to compute_create_address, because both lanes need it: EthL1Policy and
+/// OpPolicy must format the same RPC field identically (case and prefix included) or
+/// eth_getTransactionReceipt would report the same deployment differently on L1 and L2.
+[[nodiscard]] inline std::string toFiscoContractAddress(const evmc::address& sender, uint64_t nonce)
+{
+    const auto addr = compute_create_address(sender, nonce);
+    // evmc::address::bytes is a plain uint8_t[20]; brace-init a bytes_view.
+    return std::string(evmc::hex({addr.bytes, sizeof(addr.bytes)}));
+}
+
 /// Computes the address of to-be-created contract with the CREATE2 scheme.
 /// (ported evmone host.cpp).
 [[nodiscard]] inline evmc::address compute_create2_address(
