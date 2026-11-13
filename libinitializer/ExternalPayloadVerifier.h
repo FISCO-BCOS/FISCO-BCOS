@@ -131,13 +131,15 @@ public:
         auto const revision =
             scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0));
         ExternalL1Context context;
-        // Throws UnsupportedFork for a revision this binary cannot map to a header era
-        // — the same loud failure the number-keyed derivation had.
-        context.forkVersion = engine::detail::ethBlockVersionFor(revision);
+        // The build lane derives the header era from this (ethBlockVersionFor) and throws
+        // UnsupportedFork for a revision this binary cannot map — the same loud failure the
+        // number-keyed derivation had.
+        context.revision = revision;
         context.baseFee = devp2p::sync::computeNextBaseFee(parentHeader);
         auto const blobSchedule = protocol::blobScheduleForTimestamp(
             protocol::BlobForkTimes{.cancunTime = m_forkSchedule.cancunTime,
                 .pragueTime = m_forkSchedule.pragueTime,
+                .osakaTime = m_forkSchedule.osakaTime,
                 .bpo1Time = m_forkSchedule.bpo1Time,
                 .bpo2Time = m_forkSchedule.bpo2Time},
             static_cast<uint64_t>(timestampSeconds));
@@ -153,11 +155,20 @@ public:
         co_return context;
     }
 
-    std::optional<bcos::protocol::EthBlockVersion> forkVersionAt(
-        int64_t timestampSeconds) const override
+    evmc_revision revisionAt(int64_t timestampSeconds) const override
     {
-        return engine::detail::tryEthBlockVersionFor(
-            scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0)));
+        if (scheduler_v1::isUnsupportedForkAt(m_forkSchedule, timestampSeconds))
+        {
+            // amsterdam_time reached: the Osaka revision the ladder would answer is not the
+            // block's rules. Every fork-gated method owes -38005 from here (osaka.md /
+            // amsterdam.md "Update the methods of previous forks"), and this binary
+            // implements no Amsterdam method, so nothing can be built or admitted.
+            BOOST_THROW_EXCEPTION(engine::UnsupportedFork{} << bcos::errinfo_comment{
+                                      "timestamp " + std::to_string(timestampSeconds) +
+                                      " is in the Amsterdam fork, which this node does not "
+                                      "implement (EIP-7928 block access lists)"});
+        }
+        return scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0));
     }
 
     task::Task<engine::engine_common::ExternalBuildResult> buildL1Block(

@@ -45,15 +45,21 @@ Web3Transaction makeBlobTx(std::size_t blobCount)
     return tx;
 }
 
-engine::BlobTxSidecar makeSidecar(std::size_t blobCount)
+engine::BlobTxSidecar makeSidecar(
+    std::size_t blobCount, std::uint8_t version = engine::BLOB_SIDECAR_VERSION_0)
 {
     engine::BlobTxSidecar sidecar;
+    sidecar.version = version;
     for (std::size_t i = 0; i < blobCount; ++i)
     {
         sidecar.blobs.emplace_back(BLOB_TX_BLOB_SIZE, byte{static_cast<uint8_t>(i + 1)});
         sidecar.commitments.emplace_back(
             BLOB_TX_COMMITMENT_SIZE, byte{static_cast<uint8_t>(0xc0 + i)});
-        sidecar.proofs.emplace_back(BLOB_TX_PROOF_SIZE, byte{static_cast<uint8_t>(0xd0 + i)});
+        for (std::size_t j = 0; j < engine::blobProofsPerBlob(version); ++j)
+        {
+            sidecar.proofs.emplace_back(
+                BLOB_TX_PROOF_SIZE, byte{static_cast<uint8_t>(0xd0 + i + (j % 16))});
+        }
     }
     return sidecar;
 }
@@ -91,6 +97,83 @@ BOOST_AUTO_TEST_CASE(roundtripPreservesTransactionAndSidecar)
 
     // The decoded transaction re-encodes to the exact stripped form of the original.
     BOOST_CHECK(decoded.encode() == tx.encode());
+}
+
+// EIP-7594 wrapper version 1: rlp([tx_payload_body, wrapper_version, blobs, commitments,
+// cell_proofs]) with CELLS_PER_EXT_BLOB proofs per blob. The decoder tells it from version
+// 0 by the second item being a byte string, carries the version out, and demands the
+// cell-proof count; a version 0 wrapper still decodes as version 0.
+BOOST_AUTO_TEST_CASE(wrapperVersion1RoundtripCarriesCellProofs)
+{
+    auto tx = makeBlobTx(2);
+    auto sidecar = makeSidecar(2, engine::BLOB_SIDECAR_VERSION_1);
+    BOOST_REQUIRE_EQUAL(sidecar.proofs.size(), 2 * engine::CELL_PROOFS_PER_BLOB);
+    auto const wrapper = encodeBlobTxNetworkWrapper(tx, sidecar);
+    BOOST_REQUIRE(isBlobTxNetworkWrapper(bcos::bytesConstRef(wrapper.data(), wrapper.size())));
+
+    Web3Transaction decoded;
+    engine::BlobTxSidecar decodedSidecar;
+    decodeBlobTxNetworkWrapper(
+        bcos::bytesConstRef(wrapper.data(), wrapper.size()), decoded, decodedSidecar);
+    BOOST_CHECK_EQUAL(decodedSidecar.version, engine::BLOB_SIDECAR_VERSION_1);
+    BOOST_CHECK(decodedSidecar.blobs == sidecar.blobs);
+    BOOST_CHECK(decodedSidecar.commitments == sidecar.commitments);
+    BOOST_CHECK(decodedSidecar.proofs == sidecar.proofs);
+    BOOST_CHECK(decoded.encode() == tx.encode());
+
+    // The version-0 form of the same transaction decodes as version 0 with one proof per
+    // blob, and the two wire forms differ (the version byte).
+    auto const v0 = encodeBlobTxNetworkWrapper(tx, makeSidecar(2));
+    engine::BlobTxSidecar decodedV0;
+    decodeBlobTxNetworkWrapper(bcos::bytesConstRef(v0.data(), v0.size()), decoded, decodedV0);
+    BOOST_CHECK_EQUAL(decodedV0.version, engine::BLOB_SIDECAR_VERSION_0);
+    BOOST_CHECK_EQUAL(decodedV0.proofs.size(), 2);
+    BOOST_CHECK(v0 != wrapper);
+
+    // A version-1 count of proofs under a version-0 wrapper (or one proof per blob under
+    // version 1) is a count mismatch, at encode and at decode.
+    auto mixed = makeSidecar(2, engine::BLOB_SIDECAR_VERSION_1);
+    mixed.version = engine::BLOB_SIDECAR_VERSION_0;
+    BOOST_CHECK_THROW(encodeBlobTxNetworkWrapper(tx, mixed), bcos::Exception);
+    auto fewProofs = makeSidecar(2, engine::BLOB_SIDECAR_VERSION_1);
+    fewProofs.proofs.pop_back();
+    BOOST_CHECK_THROW(encodeBlobTxNetworkWrapper(tx, fewProofs), bcos::Exception);
+
+    // A wrapper_version other than 1 is refused: splice the byte in the encoded form. The
+    // version item is the single byte 0x01 right after the tx body (0x02 is also a single
+    // RLP byte, so the length stays valid).
+    auto badVersion = wrapper;
+    auto const bodyEnd = [&] {
+        // Find the encoded tx body: wrapper = 0x03 || listHeader || body || 0x01 || ...
+        // The body starts at the outer header's end and is itself a list whose header gives
+        // its length.
+        std::size_t pos = 1;
+        auto const outerHead = static_cast<uint8_t>(badVersion[pos]);
+        pos += 1 + (outerHead >= 0xf8 ? outerHead - 0xf7 : 0);
+        auto const bodyHead = static_cast<uint8_t>(badVersion[pos]);
+        std::size_t bodyLen = 0;
+        std::size_t headerSize = 1;
+        if (bodyHead >= 0xf8)
+        {
+            auto const lenOfLen = bodyHead - 0xf7;
+            for (int i = 0; i < lenOfLen; ++i)
+            {
+                bodyLen = (bodyLen << 8) | static_cast<uint8_t>(badVersion[pos + 1 + i]);
+            }
+            headerSize += lenOfLen;
+        }
+        else
+        {
+            bodyLen = bodyHead - 0xc0;
+        }
+        return pos + headerSize + bodyLen;
+    }();
+    BOOST_REQUIRE_EQUAL(static_cast<uint8_t>(badVersion[bodyEnd]), 0x01);
+    badVersion[bodyEnd] = byte{0x02};
+    BOOST_CHECK_THROW(
+        decodeBlobTxNetworkWrapper(
+            bcos::bytesConstRef(badVersion.data(), badVersion.size()), decoded, decodedSidecar),
+        codec::rlp::RlpDecodeException);
 }
 
 BOOST_AUTO_TEST_CASE(strippedFormIsNotAWrapper)

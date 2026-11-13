@@ -498,12 +498,18 @@ if echo "${RESP}" | grep -q '"result"'; then
         engine_forkchoiceUpdatedV1 engine_forkchoiceUpdatedV2 engine_forkchoiceUpdatedV3 \
         engine_getPayloadV1 engine_getPayloadV2 engine_getPayloadV3 \
         engine_getPayloadV4 engine_getPayloadV5 \
-        engine_newPayloadV1 engine_newPayloadV2 engine_newPayloadV3 engine_newPayloadV4; do
+        engine_newPayloadV1 engine_newPayloadV2 engine_newPayloadV3 engine_newPayloadV4 \
+        engine_getPayloadBodiesByHashV1 engine_getPayloadBodiesByRangeV1 \
+        engine_getPayloadBodiesByHashV2 engine_getPayloadBodiesByRangeV2 \
+        engine_getBlobsV1 engine_getBlobsV2 engine_getBlobsV3 engine_getClientVersionV1 \
+        engine_exchangeClientVersionV1; do
         echo "${RESP}" | grep -q "\"${CAP}\"" || MISSING="${MISSING} ${CAP}"
     done
-    # forkchoiceUpdatedV4 is not implemented, so must not be advertised.
+    # The Amsterdam method versions are routable (-38005) but not implemented, so must not
+    # be advertised.
     EXTRA=""
-    for CAP in engine_forkchoiceUpdatedV4; do
+    for CAP in engine_forkchoiceUpdatedV4 engine_getPayloadV6 engine_newPayloadV5 \
+        engine_getBlobsV4; do
         echo "${RESP}" | grep -q "\"${CAP}\"" && EXTRA="${EXTRA} ${CAP}"
     done
     if [ -z "${MISSING}" ] && [ -z "${EXTRA}" ]; then
@@ -637,21 +643,21 @@ else
     log_pass
 fi
 
-# 3.6 forkchoiceUpdatedV2 with a Cancun timestamp: the V2 attribute shape cannot carry
-# parentBeaconBlockRoot, so the L1 Engine API refuses it as -38003 Invalid payload
-# attributes. (geth answers -38005 Unsupported fork for this CL/chain mismatch; this pins
-# the node's current answer.)
-log_test "engine_forkchoiceUpdatedV2 answers -38003 (Cancun timestamp needs V3 attributes)"
+# 3.6 forkchoiceUpdatedV2 with a Cancun timestamp: the V2 attributes are well-formed for
+# V2, but their timestamp falls outside V2's fork window (execution-apis cancun.md, "Update
+# the methods of previous forks"), so the one L1 fork-window table answers -38005
+# Unsupported fork — geth's answer too.
+log_test "engine_forkchoiceUpdatedV2 answers -38005 (Cancun timestamp is outside V2's window)"
 V2_HEAD=$(json_val "$(rpc_call "eth_getBlockByNumber" '["latest",false]')" "hash")
 V2_TS_SECS=$((TS_SECS + 12))
 V2_TS_HEX=$(printf '0x%x' "${V2_TS_SECS}")
 if [ -n "${V2_HEAD}" ]; then
     RESP=$(rpc_call "engine_forkchoiceUpdatedV2" \
         "[{\"headBlockHash\":\"${V2_HEAD}\",\"safeBlockHash\":\"${V2_HEAD}\",\"finalizedBlockHash\":\"${V2_HEAD}\"},{\"timestamp\":\"${V2_TS_HEX}\",\"prevRandao\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"suggestedFeeRecipient\":\"0x0000000000000000000000000000000000000001\",\"withdrawals\":[]}]")
-    if echo "${RESP}" | grep -q '\-38003'; then
+    if echo "${RESP}" | grep -q '\-38005'; then
         log_pass
     else
-        log_fail "expected forkchoiceUpdatedV2 to be refused as -38003 Invalid payload attributes, got: ${RESP}"
+        log_fail "expected forkchoiceUpdatedV2 to be refused as -38005 Unsupported fork, got: ${RESP}"
     fi
 else
     log_fail "Cannot get head hash"

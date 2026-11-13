@@ -66,24 +66,40 @@ struct BlobsBundleV1
     std::vector<bytes> blobs;
 };
 
-/// EIP-4844 per-transaction sidecar (the network-wrapper payload of a type-3 transaction):
-/// the blob bodies with their KZG commitments and proofs, kept alongside the stripped
-/// transaction while it sits in the blob pool. A block's BlobsBundleV1 is the concatenation
-/// of its blob transactions' sidecars in block order.
+/// Blob sidecar (network wrapper) versions. Version 0 is the EIP-4844 wrapper: one blob
+/// proof per blob. Version 1 is the EIP-7594 (Osaka) wrapper: CELLS_PER_EXT_BLOB cell proofs
+/// per blob, laid out blob-major (proofs[i * 128 + j] proves cell j of blob i).
+inline constexpr std::uint8_t BLOB_SIDECAR_VERSION_0 = 0;
+inline constexpr std::uint8_t BLOB_SIDECAR_VERSION_1 = 1;
+inline constexpr std::size_t CELL_PROOFS_PER_BLOB = 128;
+/// Proofs one blob carries under @p sidecarVersion.
+inline constexpr std::size_t blobProofsPerBlob(std::uint8_t sidecarVersion) noexcept
+{
+    return sidecarVersion == BLOB_SIDECAR_VERSION_1 ? CELL_PROOFS_PER_BLOB : 1;
+}
+
+/// Per-transaction sidecar (the network-wrapper payload of a type-3 transaction): the blob
+/// bodies with their KZG commitments and proofs, kept alongside the stripped transaction
+/// while it sits in the blob pool. The proofs list is flat, blobProofsPerBlob(version)
+/// entries per blob. A block's BlobsBundleV1 is the concatenation of its blob transactions'
+/// sidecars in block order (a V2 bundle is the same three arrays over version-1 sidecars).
 struct BlobTxSidecar
 {
+    std::uint8_t version = BLOB_SIDECAR_VERSION_0;
     std::vector<bytes> blobs;
     std::vector<bytes> commitments;
     std::vector<bytes> proofs;
 };
 
-/// One blob with its commitment and proof — the engine_getBlobsV1 answer unit. The wire
-/// object (BlobAndProofV1) carries only blob and proof; the commitment rides along because
-/// the versioned hash a CL asks by derives from it.
+/// One blob with its commitment and proofs — the engine_getBlobs answer unit. V1 answers
+/// the single blob proof of a version-0 sidecar; V2/V3 answer the cell proofs of a
+/// version-1 sidecar. The commitment rides along because the versioned hash a CL asks by
+/// derives from it.
 struct BlobItem
 {
+    std::uint8_t version = BLOB_SIDECAR_VERSION_0;
     bytes commitment;
-    bytes proof;
+    std::vector<bytes> proofs;
     bytes blob;
 };
 

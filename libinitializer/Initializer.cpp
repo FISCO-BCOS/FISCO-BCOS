@@ -366,6 +366,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             memPoolConfig.blobForks =
                 bcos::protocol::BlobForkTimes{.cancunTime = forkSchedule.cancunTime,
                     .pragueTime = forkSchedule.pragueTime,
+                    .osakaTime = forkSchedule.osakaTime,
                     .bpo1Time = forkSchedule.bpo1Time,
                     .bpo2Time = forkSchedule.bpo2Time};
             memPoolConfig.headTimestampSeconds = [state = m_ledgerConfigState] {

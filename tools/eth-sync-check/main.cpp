@@ -759,8 +759,10 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         auto osakaTime = jsonQuantity(config, "osakaTime");
         auto bpo1Time = jsonQuantity(config, "bpo1Time");
         auto bpo2Time = jsonQuantity(config, "bpo2Time");
-        if (preLondonForever && (shanghaiTime != kNever || cancunTime != kNever ||
-                                    pragueTime != kNever || osakaTime || bpo1Time || bpo2Time))
+        auto amsterdamTime = jsonQuantity(config, "amsterdamTime");
+        if (preLondonForever &&
+            (shanghaiTime != kNever || cancunTime != kNever || pragueTime != kNever || osakaTime ||
+                bpo1Time || bpo2Time || amsterdamTime))
         {
             // geth's checkConfigForkOrder rejects a timestamp fork without London;
             // mirror that instead of emitting a chain that is pre-London and
@@ -1009,6 +1011,10 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         if (bpo2Time)
         {
             ini << "    bpo2_time=" << bpo2Time->str() << "\n";
+        }
+        if (amsterdamTime)
+        {
+            ini << "    amsterdam_time=" << amsterdamTime->str() << "\n";
         }
         ini << "\n";
         for (size_t i = 0; i < genesis.m_allocs.size(); ++i)
