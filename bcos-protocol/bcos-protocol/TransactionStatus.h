@@ -98,6 +98,10 @@ enum class TransactionStatus : int32_t
     /// The sender already holds the pool's per-sender maximum of pooled transactions (a new
     /// (sender, nonce) slot was asked for; replacing a held nonce is not counted).
     SenderTxLimitExceeded = 10026,
+    /// Replace-by-fee refused: the (sender, nonce) slot is held and the incoming transaction
+    /// does not bump both the stored tip and fee cap by the EIP-1559 10% (geth's
+    /// ErrReplaceUnderpriced, "replacement transaction underpriced").
+    ReplacementUnderpriced = 10027,
 };
 
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
@@ -247,6 +251,9 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
         break;
     case TransactionStatus::SenderTxLimitExceeded:
         _out << "SenderTxLimitExceeded";
+        break;
+    case TransactionStatus::ReplacementUnderpriced:
+        _out << "ReplacementUnderpriced";
         break;
     case TransactionStatus::AlreadyInTxPoolAndAccept:
         _out << "AlreadyInTxPoolAndAccept";

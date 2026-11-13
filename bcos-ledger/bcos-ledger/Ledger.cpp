@@ -164,11 +164,16 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
     // way. The lane is genesis-fixed (SystemConfigPrecompiled refuses governance writes
     // crossing ETHEREUM_EXECUTOR_VERSION), so any historical block number resolves it
     // correctly; one SYS_CONFIG row read (fetchExecutorVersionAt).
-    auto const contractTableName =
-        co_await fetchExecutorVersionAt(_blockNumber) >= ledger::ETHEREUM_EXECUTOR_VERSION ?
-            account::ethLaneAccountTableName(
-                bcos::Address{_address, bcos::Address::FromHex, bcos::Address::AlignRight}) :
-            account::accountTableName(_address);
+    if (co_await fetchExecutorVersionAt(_blockNumber) >= ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        // The Ethereum lane's rows are flat (genesis import, EthereumState) with no key pages, so
+        // the key-page view getStateStorage() builds at key_page_size > 0 answers nothing.
+        co_return co_await bcos::storage2::readOne(*m_stateStorage,
+            executor_v1::StateKeyView{account::ethLaneAccountTableName(bcos::Address{_address,
+                                          bcos::Address::FromHex, bcos::Address::AlignRight}),
+                _key});
+    }
+    auto const contractTableName = account::accountTableName(_address);
     auto const stateStorage = getStateStorage();
     co_return co_await bcos::storage2::readOne(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});

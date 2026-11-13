@@ -613,6 +613,15 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
                       protocol::BlockNumber) -> task::Task<std::optional<ledger::StorageState>> {
             co_return std::nullopt;
         });
+    // The committed-balance read goes through the balance row alone (TxValidator reads
+    // ACCOUNT_TABLE_FIELDS::BALANCE with getStorageAt, not getStorageState); an unstubbed
+    // FakeIt call throws a std::string (FakeIt-boost) or crashed outright on the x64 CI leg,
+    // neither of which is an admission verdict, so answer "no row" here as well.
+    fakeit::When(Method(mockLedger, getStorageAt))
+        .AlwaysDo([](std::string_view, std::string_view,
+                      protocol::BlockNumber) -> task::Task<std::optional<storage::Entry>> {
+            co_return std::nullopt;
+        });
 
     auto configWithSig = makeConfig(true);
     MemoryStorage storageWithSig(configWithSig, *ioServicePool->getIOService());
@@ -1306,6 +1315,13 @@ BOOST_AUTO_TEST_CASE(proposalVerificationReadsNothingFromTheLedger)
     fakeit::When(Method(mockLedger, getStorageState))
         .AlwaysDo([](std::string_view,
                       protocol::BlockNumber) -> task::Task<std::optional<ledger::StorageState>> {
+            throw std::runtime_error("storage unavailable");
+        });
+    // The validator's own account read is the balance row (getStorageAt); it must throw too,
+    // or "every ledger read throws" above stops being true of the read that is actually made.
+    fakeit::When(Method(mockLedger, getStorageAt))
+        .AlwaysDo([](std::string_view, std::string_view,
+                      protocol::BlockNumber) -> task::Task<std::optional<storage::Entry>> {
             throw std::runtime_error("storage unavailable");
         });
     fakeit::When(Method(mockLedger, asyncGetBlockNumber)).AlwaysDo([](auto) -> long long {

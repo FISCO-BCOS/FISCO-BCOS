@@ -52,10 +52,11 @@
     ; cost for reorg depth. 0 disables journaling/rollback entirely. Must be <=
     ; storage.mpt_prune_window unless the latter is -1 (unbounded).
     ; reorg_window=256
-    ; engine mempool sizing (EL mode only): capacity in transactions, per-transaction
-    ; lifetime in minutes before expiry
+    ; engine mempool sizing (L1 and OP lanes): capacity in transactions, per-transaction
+    ; lifetime in minutes before expiry, per-sender cap on pooled transactions (0 = unlimited)
     ; mempool_capacity=5120
     ; mempool_tx_lifetime_minutes=30
+    ; mempool_max_txs_per_sender=64
     ; eth/68 transaction gossip: dedicated outbound sessions exchange pooled
     ; transactions with bootnode peers and admit what arrives into the engine
     ; mempool (locally injected RPC transactions are announced the same way).

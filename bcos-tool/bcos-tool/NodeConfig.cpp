@@ -1592,7 +1592,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                                                std::to_string(m_ethereumReorgWindow)));
     }
 
-    // Engine mempool sizing (EL mode only): capacity in transactions and per-transaction
+    // Engine mempool sizing (the L1 and OP lanes): capacity in transactions and per-transaction
     // lifetime in minutes. Validated on the signed parse like the neighbours — a negative
     // or zero value is a config error at load time, not a pool that silently never holds
     // (or never expires) a transaction.

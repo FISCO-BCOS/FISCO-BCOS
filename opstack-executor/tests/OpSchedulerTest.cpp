@@ -1791,12 +1791,11 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
     BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
 }
 
-/// Admission's balance read (TxValidator::readAccountState -> getPendingStorageAt(BALANCE)) on
-/// the OP lane. Balances DO live in the flat plane here -- the genesis alloc import writes flat
-/// /apps/ rows (GenesisStateLoader.h) and the executor reads and writes them on the block's own
-/// view (EthereumState.h) -- so the committed row answers, and a pending layer wins over it just
-/// as for the nonce. Pinned because the "MPT only" comments on coCallLatest read as if this
-/// plane were empty; the L1Cost admission row depends on this value being the executed one.
+/// getPendingStorageAt(BALANCE) on the OP lane. Balances DO live in the flat plane here -- the
+/// genesis alloc import writes flat /apps/ rows (GenesisStateLoader.h) and the executor reads and
+/// writes them on the block's own view (EthereumState.h) -- so the committed row answers, and a
+/// pending layer wins over it just as for the nonce. Pinned because the "MPT only" comments on
+/// coCallLatest read as if this plane were empty.
 BOOST_AUTO_TEST_CASE(PendingStorageAtServesTheOpLaneBalanceFromTheFlatPlane)
 {
     Fixture f;

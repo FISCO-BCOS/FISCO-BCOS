@@ -350,7 +350,7 @@ public:
     // storage.mpt_prune_window to be -1 or >= this value (validated in
     // validateELModeInvariants). Default 256.
     std::int64_t ethereumReorgWindow() const;
-    // EL-mode engine mempool sizing ([ethereum] mempool_capacity /
+    // Ethereum-lane (L1 and OP) engine mempool sizing ([ethereum] mempool_capacity /
     // mempool_tx_lifetime_minutes in config.ini): how many transactions the in-process
     // pool holds and how many minutes one lives before expiry. Defaults 5120 / 30.
     size_t ethereumMempoolCapacity() const;
@@ -689,7 +689,7 @@ private:
     // [ethereum] reorg_window: EL shallow-reorg depth bound (see ethereumReorgWindow()).
     std::int64_t m_ethereumReorgWindow = 256;
     // [ethereum] mempool_capacity / mempool_tx_lifetime_minutes: engine mempool sizing
-    // (EL mode only; see ethereumMempoolCapacity()).
+    // (the L1 and OP lanes; see ethereumMempoolCapacity()).
     size_t m_ethereumMempoolCapacity = 5120;
     std::int64_t m_ethereumMempoolTxLifetimeMinutes = 30;
     size_t m_ethereumMempoolMaxTxsPerSender = 64;

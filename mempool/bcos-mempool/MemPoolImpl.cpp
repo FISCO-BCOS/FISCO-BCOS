@@ -70,19 +70,19 @@ bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::insertLocked(
         bcos::throwTrace(InvalidTaintedTransaction{});
     }
 
-    // L2 never admits blob (type-3) transactions (OP Stack, Ecotone onwards). The RPC entry
-    // rejects them before decoding; this is the second gate for in-process callers. For Web3
-    // transactions the signing payload (extraTransactionBytes) starts with the same EIP-2718
-    // type byte as the raw envelope, so the shared dispatch table applies. On L1 blob
-    // transactions are the point of the fee market, so the gate becomes a shape check
-    // (TxValidator does the full validation upstream; this gate keeps in-process callers
-    // honest).
+    // The Fisco and Op kinds never admit blob (type-3) transactions (OP Stack: Ecotone
+    // onwards). The RPC entry rejects them before decoding; this is the second gate for
+    // in-process callers. For Web3 transactions the signing payload (extraTransactionBytes)
+    // starts with the same EIP-2718 type byte as the raw envelope, so the shared dispatch
+    // table applies. On L1 blob transactions are the point of the fee market, so the gate
+    // becomes a shape check (TxValidator does the full validation upstream; this gate keeps
+    // in-process callers honest).
     if (transaction->type() ==
             static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction) &&
         bcos::engine::dispatchRawTransaction(transaction->extraTransactionBytes()) ==
             bcos::engine::RawTransactionKind::Blob) [[unlikely]]
     {
-        if (m_config.chainKind == ChainKind::L2)
+        if (!admitsBlobs(m_config.chainKind))
         {
             bcos::throwTrace(InvalidBlobTransaction{});
         }
@@ -135,23 +135,34 @@ bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::insertLocked(
         if (position != nonceIndex.end() && position->sender() == transactionData.sender() &&
             position->nonce() == transactionData.nonce())
         {
-            if (onTakenNonce == OnTakenNonce::Refuse)
+            if (hasFeeMarket(m_config.chainKind))
             {
+                // With a fee market a taken (sender, nonce) is priced, on BOTH entries: the
+                // incoming transaction must outbid the stored one by the EIP-1559 price bump
+                // (geth's ErrReplaceUnderpriced), or the slot stays with the stored one. This
+                // is what makes replace-by-fee reachable from eth_sendRawTransaction and
+                // gossip, which admit through tryAdd().
+                if (!bumpsFee(*position->m_transaction, *transactionData.m_transaction))
+                {
+                    return TransactionStatus::ReplacementUnderpriced;
+                }
+            }
+            else if (onTakenNonce == OnTakenNonce::Refuse)
+            {
+                // No fee to compare: first come first served, as the other pool does; only
+                // add() replaces, unconditionally.
                 return TransactionStatus::NonceCheckFail;
             }
-            // On L1 a taken (sender, nonce) is a fee-market decision: the incoming
-            // transaction must outbid the stored one by the EIP-1559 price bump, or the
-            // slot stays with the stored transaction (geth's ErrUnderpriced; the pool
-            // has no underpriced-specific status, so it reports AlreadyInTxPool).
-            if (m_config.chainKind == ChainKind::L1 &&
-                !bumpsFee(*position->m_transaction, *transactionData.m_transaction))
-            {
-                return TransactionStatus::AlreadyInTxPool;
-            }
             // The replaced transaction's sidecar goes with it; the incoming transaction's
-            // (when it carries one) is registered below.
+            // (when it carries one) is registered below. Erase + insert, not replace(): the
+            // sequenced index is what evictExpiredLocked() walks as a prefix of import times,
+            // so the fresh transaction must take a slot at its back. An in-place replace()
+            // would leave a fresh importTime early in that sequence, and every older
+            // transaction behind it would stop expiring for as long as the slot kept being
+            // re-bid -- reachable from eth_sendRawTransaction now that tryAdd() replaces.
             m_blobSidecars.erase(position->hash());
-            nonceIndex.replace(position, std::move(transactionData));
+            nonceIndex.erase(position);
+            nonceIndex.emplace(std::move(transactionData));
             if (sidecar.has_value())
             {
                 m_blobSidecars.emplace(hash, std::move(*sidecar));
@@ -182,13 +193,16 @@ bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::insertLocked(
 }
 
 bcos::u512 bcos::txpool::MemPoolImpl::pendingCost(
-    std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis) const
+    std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis)
 {
     // An unparsable exclusion excludes nothing: the caller's transaction is then refused by
     // the same nonce parse at insert, so over-counting here changes no admission verdict.
     auto const excluded = parseNonce(excludeNonce);
     u512 total = 0;
     std::unique_lock lock(m_mutex);
+    // Expired transactions reserve nothing. The budget is read before insertion's own cleanup,
+    // and a non-building node has no seal to run it.
+    evictExpiredLocked();
     auto const& senderIndex = m_transactions.get<2>();
     auto [it, end] = senderIndex.equal_range(sender);
     for (; it != end; ++it)
