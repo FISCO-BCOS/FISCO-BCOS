@@ -748,47 +748,46 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::ConstPtr _block)
 
     auto self = weak_from_this();
     auto startT = utcTime();
-    asyncFillBlock(
-        txsHashList, [self, startT, _block](Error::Ptr _error, ConstTransactionsPtr _txs) {
-            auto blockHeader = _block->blockHeader();
-            if (_error)
+    asyncFillBlock(txsHashList, [self, startT, _block](
+                                    Error::Ptr _error, ConstTransactionsPtr _txs) {
+        auto blockHeader = _block->blockHeader();
+        if (_error)
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC("storeVerifiedBlock, fillBlock failed")
+                                << LOG_KV("consNum", blockHeader->number())
+                                << LOG_KV("hash", blockHeader->hash().abridged())
+                                << LOG_KV("msg", _error->errorMessage())
+                                << LOG_KV("code", _error->errorCode());
+            return;
+        }
+        auto txpool = self.lock();
+        if (!txpool)
+        {
+            return;
+        }
+        task::wait([](bcos::ledger::LedgerInterface::Ptr ledger,
+                       bcos::protocol::ConstTransactionsPtr transactions,
+                       bcos::protocol::Block::ConstPtr block, int64_t startT) -> task::Task<void> {
+            auto blockHeader = block->blockHeader();
+            try
+            {
+                co_await ledger->preStoreBlockTxs(std::move(transactions), block);
+            }
+            catch (bcos::Error const& error)
             {
                 TXPOOL_LOG(WARNING)
-                    << LOG_DESC("storeVerifiedBlock, fillBlock failed")
+                    << LOG_DESC("storeVerifiedBlock: asyncPreStoreBlockTxs failed")
                     << LOG_KV("consNum", blockHeader->number())
                     << LOG_KV("hash", blockHeader->hash().abridged())
-                    << LOG_KV("msg", _error->errorMessage()) << LOG_KV("code", _error->errorCode());
-                return;
+                    << LOG_KV("msg", error.errorMessage()) << LOG_KV("code", error.errorCode());
+                co_return;
             }
-            auto txpool = self.lock();
-            if (!txpool)
-            {
-                return;
-            }
-            task::wait([](bcos::ledger::LedgerInterface::Ptr ledger,
-                           bcos::protocol::ConstTransactionsPtr transactions,
-                           bcos::protocol::Block::ConstPtr block,
-                           int64_t startT) -> task::Task<void> {
-                auto blockHeader = block->blockHeader();
-                try
-                {
-                    co_await ledger->preStoreBlockTxs(std::move(transactions), block);
-                }
-                catch (bcos::Error const& error)
-                {
-                    TXPOOL_LOG(WARNING)
-                        << LOG_DESC("storeVerifiedBlock: asyncPreStoreBlockTxs failed")
-                        << LOG_KV("consNum", blockHeader->number())
-                        << LOG_KV("hash", blockHeader->hash().abridged())
-                        << LOG_KV("msg", error.errorMessage()) << LOG_KV("code", error.errorCode());
-                    co_return;
-                }
-                TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock success")
-                                 << LOG_KV("consNum", blockHeader->number())
-                                 << LOG_KV("hash", blockHeader->hash().abridged())
-                                 << LOG_KV("timecost", (utcTime() - startT));
-            }(txpool->m_config->ledger(), std::move(_txs), _block, startT));
-        });
+            TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock success")
+                             << LOG_KV("consNum", blockHeader->number())
+                             << LOG_KV("hash", blockHeader->hash().abridged())
+                             << LOG_KV("timecost", (utcTime() - startT));
+        }(txpool->m_config->ledger(), std::move(_txs), _block, startT));
+    });
 }
 void bcos::txpool::TxPool::notifyConnectedNodes(
     bcos::crypto::NodeIDSet const& _connectedNodes, std::function<void(Error::Ptr)> _onResponse)
