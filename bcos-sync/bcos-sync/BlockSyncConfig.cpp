@@ -20,7 +20,7 @@
  */
 #include "BlockSyncConfig.h"
 #include "bcos-sync/utilities/Common.h"
-#include <future>
+#include <bcos-task/Wait.h>
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -191,22 +191,25 @@ bool BlockSyncConfig::existNode(bcos::consensus::ConsensusNodeList const& _nodeL
 bcos::protocol::BlockNumber BlockSyncConfig::archiveBlockNumber() const
 {
     protocol::BlockNumber archivedBlockNumber = 0;
-    std::promise<std::pair<Error::Ptr, std::optional<bcos::storage::Entry>>> statePromise;
-    m_ledger->asyncGetCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER,
-        [&statePromise](Error::Ptr&& err, std::optional<bcos::storage::Entry>&& entry) {
-            statePromise.set_value(std::make_pair(std::move(err), std::move(entry)));
-        });
-    auto archiveRet = statePromise.get_future().get();
-    if (!archiveRet.first && archiveRet.second)
+    std::optional<bcos::storage::Entry> entry;
+    try
+    {
+        entry = task::syncWait(m_ledger->getCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER));
+    }
+    catch (bcos::Error const&)
+    {
+        return archivedBlockNumber;
+    }
+    if (entry)
     {
         try
         {
-            archivedBlockNumber = boost::lexical_cast<int64_t>(archiveRet.second->get());
+            archivedBlockNumber = boost::lexical_cast<int64_t>(entry->get());
         }
         catch (boost::bad_lexical_cast& e)
         {
             BLKSYNC_LOG(DEBUG) << "Lexical cast transaction count failed, entry value: "
-                               << archiveRet.second->get();
+                               << entry->get();
         }
     }
     return archivedBlockNumber;

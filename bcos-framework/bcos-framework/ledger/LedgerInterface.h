@@ -34,16 +34,34 @@
 #include <boost/lexical_cast.hpp>
 #include <gsl/span>
 #include <map>
+#include <tuple>
+#include <utility>
 
 
 namespace bcos::ledger
 {
+using MerkleProofMapPtr = std::shared_ptr<std::map<std::string, MerkleProofPtr>>;
+using BatchTransactionsResult = std::pair<protocol::TransactionsPtr, MerkleProofMapPtr>;
+using TransactionCountResult = std::tuple<int64_t, int64_t, protocol::BlockNumber>;
+using NonceListResult = std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>;
+
+struct TransactionReceiptResult
+{
+    protocol::TransactionReceipt::Ptr receipt;
+    MerkleProofPtr proof;
+    // Only a proof failure can coexist with a receipt. Read failures are thrown.
+    Error::Ptr error;
+};
+
 class LedgerInterface
 {
 public:
     using Ptr = std::shared_ptr<LedgerInterface>;
     LedgerInterface() = default;
     virtual ~LedgerInterface() = default;
+
+    virtual task::Task<void> preStoreBlockTxs(
+        protocol::ConstTransactionsPtr blockTxs, protocol::Block::ConstPtr block) = 0;
 
     /**
      * @brief prewrite a block in scheduler module
@@ -62,131 +80,43 @@ public:
         std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
         bool writeNonces = true) = 0;
 
-    /**
-     * @brief async store txs in block when tx pool verify
-     * @param _txToStore tx bytes data list
-     * @param _txHashList tx hash list
-     * @param _onTxsStored callback
-     */
     virtual bcos::Error::Ptr storeTransactionsAndReceipts(
         bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) = 0;
 
-    /**
-     * @brief async get block by blockNumber
-     * @param _blockNumber number of block
-     * @param _blockFlag flag bit of what the block be callback contains,
-     *                   you can checkout all flags in LedgerTypeDef.h
-     * @param _onGetBlock
-     *
-     * @example
-     * asyncGetBlockDataByNumber(10, HEADER|TRANSACTIONS, [](error, block){ doSomething(); });
-     */
-    virtual void asyncGetBlockDataByNumber(protocol::BlockNumber _blockNumber, int32_t _blockFlag,
-        std::function<void(Error::Ptr, protocol::Block::Ptr)> _onGetBlock) = 0;
+    virtual task::Task<protocol::Block::Ptr> getBlockDataByNumber(
+        protocol::BlockNumber blockNumber, int32_t blockFlag) = 0;
 
-    /**
-     * @brief async get latest block number
-     * @param _onGetBlock
-     */
-    virtual void asyncGetBlockNumber(
-        std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock) = 0;
+    virtual task::Task<protocol::BlockNumber> getBlockNumber() = 0;
 
-    /**
-     * @brief async get block hash by block number
-     * @param _blockNumber the number of block to get
-     * @param _onGetBlock
-     */
-    virtual void asyncGetBlockHashByNumber(protocol::BlockNumber _blockNumber,
-        std::function<void(Error::Ptr, crypto::HashType)> _onGetBlock) = 0;
+    virtual task::Task<crypto::HashType> getBlockHashByNumber(
+        protocol::BlockNumber blockNumber) = 0;
 
-    /**
-     * @brief async get block number by block hash
-     * @param _blockHash the hash of block to get
-     * @param _onGetBlock
-     */
-    virtual void asyncGetBlockNumberByHash(crypto::HashType const& _blockHash,
-        std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock) = 0;
+    virtual task::Task<protocol::BlockNumber> getBlockNumberByHash(crypto::HashType blockHash) = 0;
 
-    /**
-     * @brief async get a batch of transaction by transaction hash list
-     * @param _txHashList transaction hash list, hash should be hex
-     * @param _withProof if true then it will callback MerkleProofPtr map in _onGetTx
-     *                   if false then MerkleProofPtr map will be nullptr
-     * @param _onGetTx return <error, [tx data in bytes], map<txHash, merkleProof>
-     */
-    virtual void asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _withProof,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr,
-            std::shared_ptr<std::map<std::string, MerkleProofPtr>>)>
-            _onGetTx) = 0;
+    virtual task::Task<BatchTransactionsResult> getBatchTxsByHashList(
+        crypto::HashListPtr txHashList, bool withProof) = 0;
 
-    /**
-     * @brief async get a transaction receipt by tx hash
-     * @param _txHash hash of transaction
-     * @param _withProof if true then it will callback MerkleProofPtr in _onGetTx
-     *                   if false then MerkleProofPtr will be nullptr
-     * @param _onGetTx
-     */
-    virtual void asyncGetTransactionReceiptByHash(crypto::HashType const& _txHash, bool _withProof,
-        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr, MerkleProofPtr)>
-            _onGetTx) = 0;
+    virtual task::Task<TransactionReceiptResult> getTransactionReceiptByHash(
+        crypto::HashType txHash, bool withProof) = 0;
 
-    /**
-     * @brief async get total transaction count and latest block number
-     * @param _callback callback totalTxCount, totalFailedTxCount, and latest block number
-     */
-    virtual void asyncGetTotalTransactionCount(
-        std::function<void(Error::Ptr, int64_t, int64_t, protocol::BlockNumber)> _callback) = 0;
+    virtual task::Task<TransactionCountResult> getTotalTransactionCount() = 0;
 
-    /**
-     * @brief async get current_state table to get total transaction count, archived block number
-     * and latest block number
-     * @param _callback callback totalTxCount, totalFailedTxCount, and latest block number
-     */
-    virtual void asyncGetCurrentStateByKey(std::string_view const& _key,
-        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) = 0;
+    virtual task::Task<std::optional<storage::Entry>> getCurrentStateByKey(
+        std::string_view key) = 0;
 
     virtual Error::Ptr setCurrentStateByKey(
         std::string_view const& _key, bcos::storage::Entry entry)
     {
         return nullptr;
     }
-    /**
-     * @brief async get system config by table key
-     * @param _key the key of row, you can checkout all key in LedgerTypeDef.h
-     * @param _onGetConfig callback when get config, <value, latest block number>
-     */
-    virtual void asyncGetSystemConfigByKey(std::string_view const& _key,
-        std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> _onGetConfig) = 0;
 
-    /**
-     * @brief async get node list by type, can be sealer or observer
-     * @param _type the type of node, CONSENSUS_SEALER or CONSENSUS_OBSERVER
-     * @param _onGetConfig
-     */
-    virtual void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) = 0;
+    virtual task::Task<SystemConfigEntry> getSystemConfigByKey(std::string_view key) = 0;
 
-    /**
-     * @brief async get a batch of nonce lists in blocks
-     * @param _startNumber start block number
-     * @param _offset batch offset, if batch is 0, then callback nonce list in start block number;
-     * if (_startNumber + _offset) > latest block number, then callback nonce lists in
-     * [_startNumber, latest number]
-     * @param _onGetList
-     */
-    virtual void asyncGetNonceList(protocol::BlockNumber _startNumber, int64_t _offset,
-        std::function<void(
-            Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
-            _onGetList) = 0;
+    virtual task::Task<consensus::ConsensusNodeList> getNodeListByType(std::string_view type) = 0;
 
-    virtual void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
-        bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::UniquePtr&&)> _callback) = 0;
+    virtual task::Task<NonceListResult> getNonceList(
+        protocol::BlockNumber startNumber, int64_t offset) = 0;
 
-    /**
-     * @brief remove expired tx nonces
-     * @param blockNumber the current block number
-     */
     virtual void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) = 0;
 
     /**
@@ -214,12 +144,12 @@ public:
     virtual task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
         protocol::BlockNumber _blockNumber)
     {
-        co_return bcos::ledger::SystemConfigs{};  // Return an empty SystemConfigs object
+        co_return bcos::ledger::SystemConfigs{};
     }
 
     virtual task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber _blockNumber)
     {
-        co_return bcos::ledger::Features{};  // Return an empty SystemConfigs object
+        co_return bcos::ledger::Features{};
     }
 
     /// Read ONE feature flag's enabled state at @p _blockNumber. The default implementation
@@ -257,10 +187,7 @@ public:
         co_return 0;
     }
 
-    virtual bcos::storage::StorageInterface::Ptr getStateStorage()
-    {
-        return nullptr;  // Default implementation, can be overridden
-    }
+    virtual bcos::storage::StorageInterface::Ptr getStateStorage() { return nullptr; }
 };
 
 }  // namespace bcos::ledger

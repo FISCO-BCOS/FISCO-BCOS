@@ -67,132 +67,133 @@ public:
         m_httpServer->setHttpStreamFactory(bcos::boostssl::http::HttpStreamFactory{});
         m_httpServer->setIOServicePool(m_ioServicePool);
         // m_httpServer->setThreadPool(std::make_shared<ThreadPool>("archiveThread", 1));
-        m_methodToFunc["deleteArchivedData"] = [this](const Json::Value& request,
-                                                   const std::function<void(
-                                                       bcos::Error::Ptr, Json::Value&)>& callback) {
-            auto startBlock = request[0].asInt64();
-            auto endBlock = request[1].asInt64();
-            std::promise<std::pair<Error::Ptr, bcos::protocol::BlockNumber>> promise;
-            m_ledger->asyncGetBlockNumber(
-                [&promise](const Error::Ptr& err, bcos::protocol::BlockNumber number) {
-                    promise.set_value(std::make_pair(err, number));
-                });
-            auto ret = promise.get_future().get();
-            Json::Value result;
-            if (ret.first)
-            {
-                result["status"] = "error, get block number failed, " + ret.first->errorMessage();
-                ARCHIVE_SERVICE_LOG(WARNING)
-                    << LOG_BADGE("deleteArchivedData GetBlockNumber failed")
-                    << LOG_KV("message", ret.first->errorMessage());
-                callback(nullptr, result);
-                return;
-            }
-            auto currentBlock = ret.second;
-            if (startBlock > currentBlock || endBlock > currentBlock || startBlock > endBlock ||
-                startBlock <= 0)
-            {
-                result["status"] = "error, invalid block range";
-                ARCHIVE_SERVICE_LOG(WARNING)
-                    << LOG_BADGE("deleteArchivedData invalid range") << LOG_KV("start", startBlock)
-                    << LOG_KV("end", endBlock) << LOG_KV("current", currentBlock);
-                callback(nullptr, result);
-                return;
-            }
-            // read archived block number to check the request range
-            std::promise<std::pair<Error::Ptr, std::optional<bcos::storage::Entry>>> statePromise;
-            m_ledger->asyncGetCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER,
-                [&statePromise](Error::Ptr&& err, std::optional<bcos::storage::Entry>&& entry) {
-                    statePromise.set_value(std::make_pair(err, entry));
-                });
-            auto archiveRet = statePromise.get_future().get();
-            if (archiveRet.first)
-            {
-                result["status"] =
-                    "error, get current state failed, " + archiveRet.first->errorMessage();
-                ARCHIVE_SERVICE_LOG(WARNING)
-                    << LOG_BADGE("deleteArchivedData get current state failed")
-                    << LOG_KV("message", archiveRet.first->errorMessage());
-                callback(nullptr, result);
-                return;
-            }
-            protocol::BlockNumber archivedBlockNumber = 0;
-            if (archiveRet.second)
-            {
+        m_methodToFunc["deleteArchivedData"] =
+            [this](const Json::Value& request,
+                const std::function<void(bcos::Error::Ptr, Json::Value&)>& callback) {
+                auto startBlock = request[0].asInt64();
+                auto endBlock = request[1].asInt64();
+                Json::Value result;
+                protocol::BlockNumber currentBlock = -1;
                 try
                 {
-                    archivedBlockNumber = boost::lexical_cast<int64_t>(archiveRet.second->get());
+                    currentBlock = task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
                 }
-                catch (boost::bad_lexical_cast& e)
+                catch (bcos::Error const& error)
                 {
-                    ARCHIVE_SERVICE_LOG(DEBUG)
-                        << "Lexical cast transaction count failed, entry value: "
-                        << archiveRet.second->get();
+                    result["status"] = "error, get block number failed, " + error.errorMessage();
+                    ARCHIVE_SERVICE_LOG(WARNING)
+                        << LOG_BADGE("deleteArchivedData GetBlockNumber failed")
+                        << LOG_KV("message", error.errorMessage());
+                    callback(nullptr, result);
+                    return;
                 }
-            }
-            if (archivedBlockNumber > 0 && startBlock != archivedBlockNumber)
-            {
-                result["status"] = "error, start block is not equal to archived block, " +
-                                   std::to_string(startBlock) +
-                                   " != " + std::to_string(archivedBlockNumber);
-                ARCHIVE_SERVICE_LOG(WARNING)
-                    << LOG_BADGE("deleteArchivedData start block is not equal to archived block")
-                    << LOG_KV("startBlock", startBlock)
-                    << LOG_KV("archivedNumber", archivedBlockNumber);
-                callback(nullptr, result);
-                return;
-            }
-            auto err = deleteArchivedData(startBlock, endBlock);
-            if (err)
-            {
-                ARCHIVE_SERVICE_LOG(WARNING)
-                    << LOG_BADGE("deleteArchivedData failed") << LOG_KV("start", startBlock)
-                    << LOG_KV("end", endBlock) << LOG_KV("message", err->errorMessage());
-                result["status"] = "deleteArchivedData failed, " + err->errorMessage();
-                callback(nullptr, result);
-            }
-            else
-            {
-                ARCHIVE_SERVICE_LOG(INFO) << LOG_BADGE("deleteArchivedData success")
-                                          << LOG_KV("start", startBlock) << LOG_KV("end", endBlock);
-                result["status"] = "success";
-                // update SYS_CURRENT_STATE SYS_KEY_ARCHIVED_NUMBER
-                storage::Entry archivedNumber;
-                archivedNumber.set(std::to_string(endBlock));
-                m_storage->asyncSetRow(ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_ARCHIVED_NUMBER,
-                    archivedNumber, [](Error::UniquePtr err) {
-                        if (err)
-                        {
-                            ARCHIVE_SERVICE_LOG(WARNING)
-                                << LOG_BADGE("deleteArchivedData set archived number failed")
-                                << LOG_KV("message", err->errorMessage());
-                        }
-                    });
-                callback(nullptr, result);
-            }
-            // TODO: should call compaction
-            // delete nonces of historical blocks
-            auto lastBlockToDeleteNonces =
-                currentBlock > 5000 ? currentBlock - 5000 : 1;  // MAX_BLOCK_LIMIT is 5000
-            if (lastBlockToDeleteNonces != 1)
-            {
-                auto numberRange =
-                    ::ranges::iota_view<uint64_t, uint64_t>(1, lastBlockToDeleteNonces);
-                auto numberList = numberRange |
-                                  ::ranges::views::transform([](protocol::BlockNumber blockNumber) {
-                                      return boost::lexical_cast<std::string>(blockNumber);
-                                  }) |
-                                  ::ranges::to<std::vector<std::string>>();
-                auto err = m_storage->deleteRows(ledger::SYS_BLOCK_NUMBER_2_NONCES, numberList);
+                if (startBlock > currentBlock || endBlock > currentBlock || startBlock > endBlock ||
+                    startBlock <= 0)
+                {
+                    result["status"] = "error, invalid block range";
+                    ARCHIVE_SERVICE_LOG(WARNING)
+                        << LOG_BADGE("deleteArchivedData invalid range")
+                        << LOG_KV("start", startBlock) << LOG_KV("end", endBlock)
+                        << LOG_KV("current", currentBlock);
+                    callback(nullptr, result);
+                    return;
+                }
+                // read archived block number to check the request range
+                std::optional<bcos::storage::Entry> archiveEntry;
+                try
+                {
+                    archiveEntry = task::syncWait(
+                        m_ledger->getCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER));
+                }
+                catch (bcos::Error const& error)
+                {
+                    result["status"] = "error, get current state failed, " + error.errorMessage();
+                    ARCHIVE_SERVICE_LOG(WARNING)
+                        << LOG_BADGE("deleteArchivedData get current state failed")
+                        << LOG_KV("message", error.errorMessage());
+                    callback(nullptr, result);
+                    return;
+                }
+                protocol::BlockNumber archivedBlockNumber = 0;
+                if (archiveEntry)
+                {
+                    try
+                    {
+                        archivedBlockNumber = boost::lexical_cast<int64_t>(archiveEntry->get());
+                    }
+                    catch (boost::bad_lexical_cast& e)
+                    {
+                        ARCHIVE_SERVICE_LOG(DEBUG)
+                            << "Lexical cast transaction count failed, entry value: "
+                            << archiveEntry->get();
+                    }
+                }
+                if (archivedBlockNumber > 0 && startBlock != archivedBlockNumber)
+                {
+                    result["status"] = "error, start block is not equal to archived block, " +
+                                       std::to_string(startBlock) +
+                                       " != " + std::to_string(archivedBlockNumber);
+                    ARCHIVE_SERVICE_LOG(WARNING)
+                        << LOG_BADGE(
+                               "deleteArchivedData start block is not equal to archived block")
+                        << LOG_KV("startBlock", startBlock)
+                        << LOG_KV("archivedNumber", archivedBlockNumber);
+                    callback(nullptr, result);
+                    return;
+                }
+                auto err = deleteArchivedData(startBlock, endBlock);
                 if (err)
                 {
                     ARCHIVE_SERVICE_LOG(WARNING)
-                        << LOG_BADGE("delete historical blocks nonces")
-                        << LOG_KV("lastBlockToDeleteNonces", lastBlockToDeleteNonces)
-                        << LOG_KV("message", err->errorMessage());
+                        << LOG_BADGE("deleteArchivedData failed") << LOG_KV("start", startBlock)
+                        << LOG_KV("end", endBlock) << LOG_KV("message", err->errorMessage());
+                    result["status"] = "deleteArchivedData failed, " + err->errorMessage();
+                    callback(nullptr, result);
                 }
-            }
-        };
+                else
+                {
+                    ARCHIVE_SERVICE_LOG(INFO)
+                        << LOG_BADGE("deleteArchivedData success") << LOG_KV("start", startBlock)
+                        << LOG_KV("end", endBlock);
+                    result["status"] = "success";
+                    // update SYS_CURRENT_STATE SYS_KEY_ARCHIVED_NUMBER
+                    storage::Entry archivedNumber;
+                    archivedNumber.set(std::to_string(endBlock));
+                    m_storage->asyncSetRow(ledger::SYS_CURRENT_STATE,
+                        ledger::SYS_KEY_ARCHIVED_NUMBER, archivedNumber, [](Error::UniquePtr err) {
+                            if (err)
+                            {
+                                ARCHIVE_SERVICE_LOG(WARNING)
+                                    << LOG_BADGE("deleteArchivedData set archived number failed")
+                                    << LOG_KV("message", err->errorMessage());
+                            }
+                        });
+                    callback(nullptr, result);
+                }
+                // TODO: should call compaction
+                // delete nonces of historical blocks
+                auto lastBlockToDeleteNonces =
+                    currentBlock > 5000 ? currentBlock - 5000 : 1;  // MAX_BLOCK_LIMIT is 5000
+                if (lastBlockToDeleteNonces != 1)
+                {
+                    auto numberRange =
+                        ::ranges::iota_view<uint64_t, uint64_t>(1, lastBlockToDeleteNonces);
+                    auto numberList =
+                        numberRange |
+                        ::ranges::views::transform([](protocol::BlockNumber blockNumber) {
+                            return boost::lexical_cast<std::string>(blockNumber);
+                        }) |
+                        ::ranges::to<std::vector<std::string>>();
+                    auto err = m_storage->deleteRows(ledger::SYS_BLOCK_NUMBER_2_NONCES, numberList);
+                    if (err)
+                    {
+                        ARCHIVE_SERVICE_LOG(WARNING)
+                            << LOG_BADGE("delete historical blocks nonces")
+                            << LOG_KV("lastBlockToDeleteNonces", lastBlockToDeleteNonces)
+                            << LOG_KV("message", err->errorMessage());
+                    }
+                }
+            };
         m_httpServer->setHttpReqHandler([this](const bcos::boostssl::http::HttpRequest& req,
                                             auto sender) {
             handleHttpRequest(req.body(), [sender = std::move(sender)](bcos::bytes resp) mutable {

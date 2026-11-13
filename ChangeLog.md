@@ -23,6 +23,7 @@
 **bcos-ledger 破坏性变更**：
 
 * 已安装公共头 `bcos-framework/ledger/LedgerInterface.h` 将 `void asyncPrewriteBlock(StorageInterface::Ptr, ConstTransactionsPtr, Block::ConstPtr, std::function<void(std::string, Error::Ptr&&)>, bool, std::optional<Features>, std::optional<HashType>, bool)` 替换为 `task::Task<std::string> prewriteBlock(StorageInterface::Ptr, ConstTransactionsPtr, Block::ConstPtr, bool, std::optional<HashType>, bool)`，同时删除回调和未使用的 `features` 参数；下游派生实现需改为协程 override，普通预写返回 hash-to-number 行的 primary key，系统合约部署分支只写 `SYS_KEY_CURRENT_NUMBER` 并返回空字符串，错误通过协程异常传播
+* 同一公共头的区块、交易/回执、系统配置、nonce、共识节点与状态查询接口由 callback 风格的 `async*` 纯虚函数迁移为原生 `task::Task` 协程；下游 `LedgerInterface` 实现和 mock 需同步更名及修改签名，调用方改用 `co_await` 获取结果，读错误通过协程异常传播。新增 `MerkleProofMapPtr`、`BatchTransactionsResult`、`TransactionReceiptResult`、`TransactionCountResult`、`NonceListResult` 等公共结果类型；其中 `TransactionReceiptResult` 仅允许真实回执与证明错误共存，回执读失败通过异常抛出
 * 已安装公共头 `bcos-framework/ledger/Ledger.h` 将 CPO `bcos::ledger::prewriteBlock` 更名为 `bcos::ledger::prewriteBlockRows`，避免与 `LedgerInterface::prewriteBlock` 成员函数混淆；下游 CPO 调用及对应 `tag_invoke` 需同步更名
 
 **后续跟进**：`WsStreamDelegate::setVerifyCallback` fail-closed（raw 流上请求证书校验时抛错）将在独立 PR 落地

@@ -1243,13 +1243,16 @@ void Initializer::initSysContract()
         return;
     }
     // check is it deploy first time
-    std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> getNumberPromise;
-    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, protocol::BlockNumber _number) {
-        getNumberPromise.set_value(std::make_tuple(std::move(_error), _number));
-    });
-    auto getNumberTuple = getNumberPromise.get_future().get();
-    if (std::get<0>(getNumberTuple) != nullptr ||
-        std::get<1>(getNumberTuple) > SYS_CONTRACT_DEPLOY_NUMBER)
+    protocol::BlockNumber blockNumber = -1;
+    try
+    {
+        blockNumber = task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
+    }
+    catch (bcos::Error const&)
+    {
+        return;
+    }
+    if (blockNumber > SYS_CONTRACT_DEPLOY_NUMBER)
     {
         return;
     }
@@ -1444,21 +1447,6 @@ protocol::BlockNumber Initializer::getCurrentBlockNumber(
             }
         });
     return blockNumberFuture.get_future().get();
-    // std::promise<protocol::BlockNumber> blockNumberFuture;
-    // m_ledger->asyncGetBlockNumber(
-    //     [&blockNumberFuture](Error::Ptr error, protocol::BlockNumber number) {
-    //         if (error)
-    //         {
-    //             INITIALIZER_LOG(ERROR)
-    //                 << LOG_DESC("get block number failed") << LOG_DESC(error->errorMessage());
-    //             blockNumberFuture.set_value(0);
-    //         }
-    //         else
-    //         {
-    //             blockNumberFuture.set_value(number);
-    //         }
-    //     });
-    // return blockNumberFuture.get_future().get();
 }
 
 void Initializer::prune()

@@ -24,6 +24,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include <bcos-task/Wait.h>
 #include <json/json.h>
 #include <chrono>
 #include <range/v3/algorithm/for_each.hpp>
@@ -899,49 +900,55 @@ void BlockSync::fetchAndSendBlock(
 {
     // only fetch blockHeader and transactions
     auto self = weak_from_this();
-    m_config->ledger()->asyncGetBlockDataByNumber(_number, _blockDataFlag,
-        [self, _peer = std::move(_peer), _number, _blockDataFlag](
-            auto&& _error, Block::Ptr _block) {
-            if (_error != nullptr)
+    auto ledger = m_config->ledger();
+    task::wait(
+        [](decltype(ledger) ledger, decltype(self) self, PublicPtr peer, BlockNumber number,
+            int32_t blockDataFlag) -> task::Task<void> {
+            Block::Ptr block;
+            try
+            {
+                block = co_await ledger::getBlockData(*ledger, number, blockDataFlag);
+            }
+            catch (bcos::Error const& error)
             {
                 BLKSYNC_LOG(WARNING)
                     << LOG_DESC("fetchAndSendBlock failed for asyncGetBlockDataByNumber failed")
-                    << LOG_KV("number", _number) << LOG_KV("code", _error->errorCode())
-                    << LOG_KV("message", _error->errorMessage());
-                return;
+                    << LOG_KV("number", number) << LOG_KV("code", error.errorCode())
+                    << LOG_KV("message", error.errorMessage());
+                co_return;
             }
             try
             {
                 auto sync = self.lock();
                 if (!sync)
                 {
-                    return;
+                    co_return;
                 }
-                auto blockHeader = _block->blockHeader();
+                auto blockHeader = block->blockHeader();
                 auto signature = blockHeader->signatureList();
                 auto config = sync->m_config;
                 auto blocksReq = config->msgFactory()->createBlocksMsg();
                 bytes blockData;
-                _block->encode(blockData);
+                block->encode(blockData);
                 blocksReq->appendBlockData(std::move(blockData));
-                blocksReq->setNumber(_number);
+                blocksReq->setNumber(number);
                 config->frontService()->sendMessageByNodeIDByOwnedPayload(
-                    ModuleID::BlockSync, _peer, blocksReq->encode());
+                    ModuleID::BlockSync, peer, blocksReq->encode());
                 BLKSYNC_LOG(DEBUG)
-                    << BLOCK_NUMBER(_number) << LOG_DESC("fetchAndSendBlock: response block")
-                    << LOG_KV("toPeer", _peer->shortHex())
+                    << BLOCK_NUMBER(number) << LOG_DESC("fetchAndSendBlock: response block")
+                    << LOG_KV("toPeer", peer->shortHex())
                     << LOG_KV("hash", blockHeader->hash().abridged())
                     << LOG_KV("signatureSize", signature.size())
-                    << LOG_KV("blockFlag", _blockDataFlag)
-                    << LOG_KV("transactionsSize", _block->transactionsSize());
+                    << LOG_KV("blockFlag", blockDataFlag)
+                    << LOG_KV("transactionsSize", block->transactionsSize());
             }
             catch (std::exception const& e)
             {
                 BLKSYNC_LOG(WARNING)
-                    << LOG_DESC("fetchAndSendBlock exception") << LOG_KV("number", _number)
+                    << LOG_DESC("fetchAndSendBlock exception") << LOG_KV("number", number)
                     << LOG_KV("message", boost::diagnostic_information(e));
             }
-        });
+        }(ledger, self, _peer, _number, _blockDataFlag));
 }
 
 void BlockSync::maintainPeersConnection()
@@ -1244,19 +1251,15 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
         // m_archivedBlockQueue.pop();
     }
 
-    std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
-    m_config->ledger()->asyncGetBlockDataByNumber(topBlockNumber, bcos::ledger::HEADER,
-        [&blockHeaderFuture](const Error::Ptr& error, const Block::Ptr& block) {
-            if (error)
-            {
-                blockHeaderFuture.set_value(nullptr);
-            }
-            else
-            {
-                blockHeaderFuture.set_value(block->blockHeader());
-            }
-        });
-    auto localBlockHeader = blockHeaderFuture.get_future().get();
+    protocol::BlockHeader::Ptr localBlockHeader;
+    try
+    {
+        auto localBlock = task::syncWait(
+            ledger::getBlockData(*m_config->ledger(), topBlockNumber, bcos::ledger::HEADER));
+        localBlockHeader = localBlock->blockHeader();
+    }
+    catch (bcos::Error const&)
+    {}
     if (!localBlockHeader)
     {
         BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync get local block header failed")

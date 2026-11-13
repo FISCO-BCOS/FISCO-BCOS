@@ -133,7 +133,7 @@ public:
         FakeLedger* m_ledger;
     };
     using Ptr = std::shared_ptr<FakeLedger>;
-    // m_ledgerConfig must exist even here: BOTH branches of asyncGetSystemConfigByKey read
+    // m_ledgerConfig must exist even here: BOTH branches of getSystemConfigByKey read
     // m_ledgerConfig->blockNumber(), so a default-constructed FakeLedger used only for system
     // config -- no block factory, no chain -- would dereference null.
     FakeLedger() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
@@ -263,7 +263,7 @@ public:
         updateLedgerConfig(_header);
     }
 
-    /// Map @p _hash to @p _number for asyncGetBlockNumberByHash, e.g. after a test rewrites a
+    /// Map @p _hash to @p _number for getBlockNumberByHash, e.g. after a test rewrites a
     /// header so its hash() changes (an OP header's RLP hash).
     void indexBlockHash(HashType const& _hash, BlockNumber _number)
     {
@@ -312,14 +312,10 @@ public:
         co_return std::nullopt;
     }
 
-    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
-        bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override
+    task::Task<void> preStoreBlockTxs(
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override
     {
-        if (!_callback)
-        {
-            return;
-        }
-        _callback(nullptr);
+        co_return;
     }
 
     // the txpool module use this interface to store txs
@@ -340,52 +336,40 @@ public:
     }
 
     // maybe sync module or rpc module need this interface to return header/txs/receipts
-    void asyncGetBlockDataByNumber(BlockNumber _number, int32_t,
-        std::function<void(Error::Ptr, Block::Ptr)> _callback) override
+    task::Task<Block::Ptr> getBlockDataByNumber(BlockNumber _number, int32_t) override
     {
         ReadGuard l(x_ledger);
         if (m_ledger.size() <= (size_t)(_number))
         {
-            _callback(BCOS_ERROR_UNIQUE_PTR(-1, "block not found"), nullptr);
-            return;
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "block not found"));
         }
-        auto block = m_ledger[_number];
-        _callback(nullptr, block);
+        co_return m_ledger[_number];
     }
 
-    void asyncGetBlockNumberByHash(crypto::HashType const& _hash,
-        std::function<void(Error::Ptr, BlockNumber)> _onGetBlock) override
+    task::Task<BlockNumber> getBlockNumberByHash(crypto::HashType _hash) override
     {
-        // Mirror Ledger::asyncGetBlockNumberByHash: a known hash answers its block number, an
-        // unknown one answers GetStorageError WITHOUT a chained STDError (the "not found" shape
-        // the eth_getProof hash branch discriminates from a storage fault).
+        // Mirror Ledger::getBlockNumberByHash: a known hash answers its block number, an unknown
+        // one answers GetStorageError WITHOUT a chained STDError (the "not found" shape the
+        // eth_getProof hash branch discriminates from a storage fault).
         auto const it = m_hash2Block.find(_hash);
         if (it != m_hash2Block.end())
         {
-            _onGetBlock(nullptr, it->second);
-            return;
+            co_return it->second;
         }
-        _onGetBlock(
-            BCOS_ERROR_PTR(LedgerError::GetStorageError, "GetBlockNumberByHash failed"), -1);
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(LedgerError::GetStorageError, "GetBlockNumberByHash failed"));
     }
 
-    void asyncGetBlockHashByNumber(BlockNumber _blockNumber,
-        std::function<void(Error::Ptr, crypto::HashType)> _onGetBlock) override
+    task::Task<crypto::HashType> getBlockHashByNumber(BlockNumber _blockNumber) override
     {
         ReadGuard l(x_ledger);
-        auto const& hash = m_ledger[_blockNumber]->blockHeader()->hash();
-        _onGetBlock(nullptr, hash);
+        co_return m_ledger[_blockNumber]->blockHeader()->hash();
     }
 
-    void asyncGetBlockNumber(std::function<void(Error::Ptr, BlockNumber)> _onGetBlock) override
-    {
-        _onGetBlock(nullptr, m_ledgerConfig->blockNumber());
-    }
+    task::Task<BlockNumber> getBlockNumber() override { co_return m_ledgerConfig->blockNumber(); }
 
-    void asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool,
-        std::function<void(
-            Error::Ptr, TransactionsPtr, std::shared_ptr<std::map<std::string, MerkleProofPtr>>)>
-            _onGetTx) override
+    task::Task<BatchTransactionsResult> getBatchTxsByHashList(
+        crypto::HashListPtr _txHashList, bool) override
     {
         ReadGuard l(x_txsHashToData);
         auto txs = std::make_shared<Transactions>();
@@ -402,14 +386,15 @@ public:
                 txs->emplace_back(tx);
             }
         }
-        _onGetTx(nullptr, txs, nullptr);
+        co_return BatchTransactionsResult{std::move(txs), nullptr};
     }
 
-    void asyncGetTransactionReceiptByHash(crypto::HashType const& _hash, bool,
-        std::function<void(Error::Ptr, TransactionReceipt::Ptr, MerkleProofPtr)> _onGetTx) override
+    task::Task<TransactionReceiptResult> getTransactionReceiptByHash(
+        crypto::HashType _hash, bool) override
     {
         auto it = m_storedReceipts.find(_hash);
-        _onGetTx(nullptr, it == m_storedReceipts.end() ? nullptr : it->second, nullptr);
+        co_return TransactionReceiptResult{
+            it == m_storedReceipts.end() ? nullptr : it->second, nullptr, nullptr};
     }
 
     /// Serve @p _tx and @p _receipt by the tx hash (getTransactions / getReceipt).
@@ -426,17 +411,14 @@ public:
         m_ledger[number] = std::move(_block);
     }
 
-    void asyncGetTotalTransactionCount(std::function<void(Error::Ptr, int64_t _totalTxCount,
-            int64_t _failedTxCount, BlockNumber _latestBlockNumber)>
-            _callback) override
+    task::Task<TransactionCountResult> getTotalTransactionCount() override
     {
-        _callback(nullptr, m_totalTxCount, 0, m_ledgerConfig->blockNumber());
+        co_return TransactionCountResult{m_totalTxCount, 0, m_ledgerConfig->blockNumber()};
     }
 
-    void asyncGetCurrentStateByKey(std::string_view const& _key,
-        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) override
+    task::Task<std::optional<bcos::storage::Entry>> getCurrentStateByKey(std::string_view) override
     {
-        _callback(nullptr, {});
+        co_return std::nullopt;
     }
     Error::Ptr setCurrentStateByKey(
         std::string_view const& _key, bcos::storage::Entry entry) override
@@ -444,20 +426,14 @@ public:
         return nullptr;
     }
 
-    void asyncGetSystemConfigByKey(std::string_view const& _key,
-        std::function<void(Error::Ptr, std::string, BlockNumber)> _onGetConfig) override
+    task::Task<SystemConfigEntry> getSystemConfigByKey(std::string_view _key) override
     {
-        std::string value = "";
-        if (m_systemConfig.contains(_key))
+        if (!m_systemConfig.contains(_key))
         {
-            value = m_systemConfig[std::string{_key}];
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(3008, "key not found"));
         }
-        else
-        {
-            _onGetConfig(BCOS_ERROR_PTR(3008, "key not found"), "", m_ledgerConfig->blockNumber());
-            return;
-        }
-        _onGetConfig(nullptr, value, m_ledgerConfig->blockNumber());
+        co_return SystemConfigEntry{
+            m_systemConfig[std::string{_key}], m_ledgerConfig->blockNumber()};
     }
 
     task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
@@ -471,26 +447,19 @@ public:
         co_return configs;
     }
 
-    void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetNodeList) override
+    task::Task<consensus::ConsensusNodeList> getNodeListByType(std::string_view _type) override
     {
         if (_type == CONSENSUS_SEALER)
         {
-            auto consensusNodes = m_ledgerConfig->consensusNodeList();
-            _onGetNodeList(nullptr, consensusNodes);
-            return;
+            co_return m_ledgerConfig->consensusNodeList();
         }
         if (_type == CONSENSUS_OBSERVER)
         {
-            auto observerNodes = m_ledgerConfig->observerNodeList();
-            _onGetNodeList(nullptr, observerNodes);
-            return;
+            co_return m_ledgerConfig->observerNodeList();
         }
         if (_type == CONSENSUS_CANDIDATE_SEALER)
         {
-            auto consensusNodes = m_ledgerConfig->candidateSealerNodeList();
-            _onGetNodeList(nullptr, consensusNodes);
-            return;
+            co_return m_ledgerConfig->candidateSealerNodeList();
         }
         if (_type.empty())
         {
@@ -498,19 +467,16 @@ public:
                 ::ranges::views::concat(m_ledgerConfig->consensusNodeList(),
                     m_ledgerConfig->observerNodeList(), m_ledgerConfig->candidateSealerNodeList()) |
                 ::ranges::to<std::vector>();
-            _onGetNodeList(nullptr, allNodes);
-            return;
+            co_return allNodes;
         }
-        _onGetNodeList(BCOS_ERROR_UNIQUE_PTR(-1, "invalid Type"), {});
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "invalid Type"));
     }
 
-    void asyncGetNonceList(BlockNumber _startNumber, int64_t _offset,
-        std::function<void(Error::Ptr, std::shared_ptr<std::map<BlockNumber, NonceListPtr>>)>
-            _onGetList) override
+    task::Task<NonceListResult> getNonceList(BlockNumber _startNumber, int64_t _offset) override
     {
         if (_startNumber > m_ledgerConfig->blockNumber())
         {
-            _onGetList(nullptr, nullptr);
+            co_return nullptr;
         }
         auto endNumber = std::min(_startNumber + _offset - 1, m_ledgerConfig->blockNumber());
         auto nonceList = std::make_shared<std::map<BlockNumber, NonceListPtr>>();
@@ -522,7 +488,7 @@ public:
             nonceList->insert(std::make_pair(
                 index, std::make_shared<NonceList>(::ranges::to<std::vector>(nonces))));
         }
-        _onGetList(nullptr, nonceList);
+        co_return std::move(nonceList);
     }
     void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}
 

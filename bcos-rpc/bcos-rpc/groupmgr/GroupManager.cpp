@@ -21,6 +21,7 @@
 #include "GroupManager.h"
 #include "bcos-framework/multigroup/GroupTypeDef.h"
 #include <bcos-framework/protocol/ServiceDesc.h>
+#include <bcos-task/Wait.h>
 
 using namespace bcos;
 using namespace bcos::group;
@@ -273,38 +274,43 @@ void GroupManager::initNodeInfo(
                     << LOG_KV("nodeName", _nodeName);
     auto ledger = _nodeService->ledger();
     auto self = std::weak_ptr<GroupManager>(shared_from_this());
-    ledger->asyncGetBlockNumber(
-        [self, _groupID, _nodeName](auto&& _error, BlockNumber _blockNumber) {
-            if (_error)
+    task::wait([](decltype(ledger) ledger, std::weak_ptr<GroupManager> self, std::string groupID,
+                   std::string nodeName) -> task::Task<void> {
+        BlockNumber blockNumber = -1;
+        try
+        {
+            blockNumber = co_await ledger->getBlockNumber();
+        }
+        catch (bcos::Error const& error)
+        {
+            GROUP_LOG(WARNING) << LOG_DESC("initNodeInfo error")
+                               << LOG_KV("code", error.errorCode())
+                               << LOG_KV("msg", error.errorMessage()) << LOG_KV("groupID", groupID)
+                               << LOG_KV("nodeName", nodeName);
+            co_return;
+        }
+        try
+        {
+            auto groupMgr = self.lock();
+            if (!groupMgr)
             {
-                GROUP_LOG(WARNING)
-                    << LOG_DESC("initNodeInfo error") << LOG_KV("code", _error->errorCode())
-                    << LOG_KV("msg", _error->errorMessage()) << LOG_KV("groupID", _groupID)
-                    << LOG_KV("nodeName", _nodeName);
-                return;
+                co_return;
             }
-            try
+            groupMgr->updateGroupBlockInfo(groupID, nodeName, blockNumber);
+            if (groupMgr->m_blockNumberNotifier)
             {
-                auto groupMgr = self.lock();
-                if (!groupMgr)
-                {
-                    return;
-                }
-                groupMgr->updateGroupBlockInfo(_groupID, _nodeName, _blockNumber);
-                if (groupMgr->m_blockNumberNotifier)
-                {
-                    groupMgr->m_blockNumberNotifier(_groupID, _nodeName, _blockNumber);
-                }
-                GROUP_LOG(INFO) << LOG_DESC("initNodeInfo success") << LOG_KV("group", _groupID)
-                                << LOG_KV("nodeName", _nodeName) << LOG_KV("number", _blockNumber);
+                groupMgr->m_blockNumberNotifier(groupID, nodeName, blockNumber);
             }
-            catch (std::exception const& e)
-            {
-                GROUP_LOG(WARNING) << LOG_DESC("initNodeInfo exception")
-                                   << LOG_KV("group", _groupID) << LOG_KV("nodeName", _nodeName)
-                                   << LOG_KV("message", boost::diagnostic_information(e));
-            }
-        });
+            GROUP_LOG(INFO) << LOG_DESC("initNodeInfo success") << LOG_KV("group", groupID)
+                            << LOG_KV("nodeName", nodeName) << LOG_KV("number", blockNumber);
+        }
+        catch (std::exception const& e)
+        {
+            GROUP_LOG(WARNING) << LOG_DESC("initNodeInfo exception") << LOG_KV("group", groupID)
+                               << LOG_KV("nodeName", nodeName)
+                               << LOG_KV("message", boost::diagnostic_information(e));
+        }
+    }(ledger, self, _groupID, _nodeName));
 }
 
 void GroupManager::removeUnreachableNodeService(
