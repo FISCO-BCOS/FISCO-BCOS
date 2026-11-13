@@ -26,6 +26,7 @@
 #include "../executive/TransactionExecutive.h"
 #include "VMInstance.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include <bcos-framework/executor/HostContextFault.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <list>
@@ -40,6 +41,10 @@ class TransactionExecutive;
 /// Host-provided hash for the KECCAK256 opcode; dispatches via GlobalHashImpl::g_hashImpl
 /// (SM3 on SM chains). Installed on evmone::VM by VMInstance.
 evmc_bytes32 evm_hash_fn(evmc_host_context* context, const uint8_t* data, size_t size);
+evmc_address evm_create_address_fn(
+    evmc_host_context* context, const evmc_address* sender, uint64_t nonce);
+evmc_address evm_create2_address_fn(evmc_host_context* context, const evmc_address* sender,
+    const evmc_bytes32* salt, const uint8_t* init_code, size_t init_code_size);
 
 class HostContext
 {
@@ -111,6 +116,26 @@ public:
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
+    /// EVMC callbacks cannot unwind through the VM's noexcept host adapter.
+    /// Record the first diagnostic and stop further host requests. Node-local faults
+    /// escape receipt mapping through HostContextFault; only a scheduler DEAD_LOCK
+    /// cancellation may use the non-halting path. A later fatal fault cannot soften.
+    void recordHostFault(std::string message, bool halting)
+    {
+        if (!m_hasHostFault)
+        {
+            m_hostFault = std::move(message);
+            m_hasHostFault = true;
+        }
+        m_hostFaultHalting = m_hostFaultHalting || halting;
+    }
+
+    /// R6 F3 read-side: a frame that already recorded a host fault stops driving
+    /// the host and the scheduler (translateHostFault / call short-circuit on it).
+    bool hasHostFault() const { return m_hasHostFault; }
+    std::string const& hostFault() const { return m_hostFault; }
+    void throwIfHostFault() const;
+
     virtual std::string_view myAddress() const;
     virtual std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
@@ -142,6 +167,18 @@ public:
     }
 
     evmc_bytes32 getBalance(const evmc_address* _addr);
+    uint64_t getNonce(const evmc_address* _addr);
+    /// CREATE-opcode address for a contract created by THIS contract, via the
+    /// evmone create_address_fn hook: keccak(rlp(sender, nonce)) on
+    /// feature_evm_address chains, the legacy replay-stable FISCO formula
+    /// otherwise (both mirroring TransactionExecutive::externalCall).
+    evmc_address createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const;
+    /// CREATE2 counterpart: the chain hasher over
+    /// 0xff || sender || salt || hash(initcode) — newCreate2EVMAddress's formula, kept
+    /// host-side so the opcode pushes the chain's own address (keccak256 upstream would
+    /// fork SM-crypto chains).
+    evmc_address create2AddressForOpcode(
+        const evmc_address& sender, const evmc_bytes32& salt, bytesConstRef initCode) const;
     bool selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary);
 
     CallParameters::UniquePtr&& takeCallParameters();
@@ -160,6 +197,18 @@ public:
     }
 
     evmc_revision revision() const { return toRevision(m_executive->blockContext().vmSchedule()); }
+
+    // #5430 removed the FISCO-lane EIP-2929 layer: no access state, no warm/cold
+    // metering (FISCO revisions never reach Berlin). Cold unconditionally.
+    evmc_access_status accessAccount(const evmc_address&, evmc_revision)
+    {
+        return EVMC_ACCESS_COLD;
+    }
+
+    evmc_access_status accessStorage(const evmc_address&, const evmc_bytes32&, evmc_revision)
+    {
+        return EVMC_ACCESS_COLD;
+    }
 
     std::string getContractTableName(const std::string_view& _address);
 
@@ -181,7 +230,9 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
-
+    std::string m_hostFault;
+    bool m_hasHostFault = false;
+    bool m_hostFaultHalting = false;
     struct EVMCAddrHash
     {
         size_t operator()(const evmc_address& a) const noexcept

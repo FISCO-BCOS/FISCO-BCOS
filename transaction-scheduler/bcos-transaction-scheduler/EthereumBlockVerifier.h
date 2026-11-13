@@ -179,7 +179,8 @@ inline evmc_revision evmcRevisionForTimestamp(
     }
     if (isForkActive(schedule.constantinopleTime, timestamp))
     {
-        return EVMC_CONSTANTINOPLE;
+        // evmc 0.24 (ABI 19) merged Constantinople into Petersburg — same revision.
+        return EVMC_PETERSBURG;
     }
     if (isForkActive(schedule.byzantiumTime, timestamp))
     {
@@ -387,7 +388,8 @@ inline u256 powBlockRewardFor(evmc_revision revision)
     {
         return kPoWBlockRewardFrontier;
     }
-    if (revision < EVMC_CONSTANTINOPLE)
+    // evmc 0.24 (ABI 19) merged Constantinople into Petersburg — same revision value.
+    if (revision < EVMC_PETERSBURG)
     {
         return kPoWBlockRewardByzantium;
     }

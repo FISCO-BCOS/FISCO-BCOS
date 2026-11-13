@@ -1,4 +1,4 @@
-file(GLOB_RECURSE SOURCES main.cpp testExecutorManager.cpp testKeyLocks.cpp testScheduler.cpp testChecksumAddress.cpp testDmcStepRecorder.cpp testExecutivePool.cpp testDmcExecutor.cpp testSchedulerImpl.cpp testBlockExecutive.cpp testShardingBlockExecutive.cpp testShardingKeyLocks.cpp testSchedulerFactory.cpp testSchedulerRequiresPool.cpp Issue5772_SendBackSeqTest.cpp )
+file(GLOB_RECURSE SOURCES main.cpp testExecutorManager.cpp testKeyLocks.cpp testScheduler.cpp testChecksumAddress.cpp testDmcStepRecorder.cpp testExecutivePool.cpp testDmcExecutor.cpp testSchedulerImpl.cpp testBlockExecutive.cpp testShardingBlockExecutive.cpp testShardingKeyLocks.cpp testDmcRealExecutorE2E.cpp testSchedulerFactory.cpp testSchedulerRequiresPool.cpp Issue5772_SendBackSeqTest.cpp )
 
 # cmake settings
 set(TEST_BINARY_NAME test-scheduler)
@@ -9,9 +9,14 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 
 find_package(Boost REQUIRED unit_test_framework serialization)
 
-target_link_libraries(${TEST_BINARY_NAME} scheduler ledger bcos-crypto
+target_include_directories(${TEST_BINARY_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/bcos-executor/src
+    ${CMAKE_SOURCE_DIR}/bcos-executor/include
+    ${CMAKE_SOURCE_DIR}/bcos-executor/test/unittest)
+target_link_libraries(${TEST_BINARY_NAME} scheduler executor ledger bcos-crypto
 Boost::unit_test_framework protocol-tars Boost::serialization storage security)
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("testDmcRealExecutorE2E.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # Standalone: this file needs range-v3 included before mock/MockDmcExecutor.h (which opens
 # namespace std at file scope); in a unity batch an earlier file decides that order.
 set_source_files_properties("Issue5772_SendBackSeqTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)

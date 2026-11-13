@@ -22,6 +22,7 @@
 #include "ExecutiveStackFlow.h"
 #include "../Common.h"
 #include "bcos-framework/executor/ExecuteError.h"
+#include <bcos-framework/executor/HostContextFault.h>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -147,6 +148,10 @@ void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
         }
 
         onFinished(nullptr);
+    }
+    catch (HostContextFault const& e)
+    {
+        onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, e.what()));
     }
     catch (std::exception& e)
     {

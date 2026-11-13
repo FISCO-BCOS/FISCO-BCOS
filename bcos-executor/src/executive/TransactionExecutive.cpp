@@ -145,24 +145,18 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     // a new address
     if (isCreate && std::empty(input->receiveAddress))
     {
-        if (input->createSalt)
+        // contract create contract (nested CREATE2 rides a pre-derived receiveAddress since
+        // evmc ABI 19 removed evmc_message::create2_salt — the executor no longer carries a
+        // salt here, so this branch only derives opcode-less internal creates)
+        if (m_blockContext.features().get(ledger::Features::Flag::feature_evm_address))
         {
-            newAddress = bcos::newCreate2EVMAddress(m_hashImpl, input->senderAddress,
-                bytesConstRef(input->data.data(), input->data.size()), *(input->createSalt));
+            auto senderBytes = fromHex(input->senderAddress);
+            newAddress = bcos::newLegacyEVMAddressString(ref(senderBytes), input->nonce);
         }
         else
         {
-            // contract create contract
-            if (m_blockContext.features().get(ledger::Features::Flag::feature_evm_address))
-            {
-                auto senderBytes = fromHex(input->senderAddress);
-                newAddress = bcos::newLegacyEVMAddressString(ref(senderBytes), input->nonce);
-            }
-            else
-            {
-                newAddress =
-                    bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
-            }
+            newAddress =
+                bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
         }
 
         input->receiveAddress = newAddress;
@@ -770,7 +764,11 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
         }
         precompiledCallParams->takeDataToCallParameter(callParameters);
     }
-    // NotEnoughCashError
+    catch (HostContextFault const&)
+    {
+        revert();
+        throw;
+    }
     catch (protocol::NotEnoughCashError const& e)
     {
         EXECUTIVE_LOG(DEBUG) << "Revert transaction: "
@@ -1071,7 +1069,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 evmcMessage.value = toEvmC(h256(0));
             }
-            evmcMessage.create2_salt = toEvmC(0x0_cppui256);
 
             evmcMessage.input_data = hostContext.data().data();
             evmcMessage.input_size = hostContext.data().size();
@@ -1110,6 +1107,10 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto vm = m_blockContext.getVMFactory()->create(
                 vmKind, revision, crypto::HashType(), code, true);
             auto ret = vm.execute(hostContext, &evmcMessage);
+            // A host-side fault recorded by a fail-closed callback cannot ride a
+            // sub-call failure the parent frame survives: rethrow it into the catch
+            // ladder arm its family would have reached (review F1).
+            hostContext.throwIfHostFault();
 
             auto callResults = hostContext.takeCallParameters();
             // clear unnecessary logs
@@ -1310,6 +1311,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 hostContext.codeHash(), bytes_view((uint8_t*)code.data(), code.size()));
             auto evmcMessage = getEVMCMessage(m_blockContext, hostContext);
             auto ret = vm.execute(hostContext, &evmcMessage);
+            // Same whole-frame fault check as the create branch (review F1).
+            hostContext.throwIfHostFault();
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
 
@@ -1329,6 +1332,11 @@ CallParameters::UniquePtr TransactionExecutive::go(
             return callResults;
         }
     }
+    catch (HostContextFault const&)
+    {
+        revert();
+        throw;
+    }
     catch (bcos::Error& e)
     {
         auto callResults = hostContext.takeCallParameters();
@@ -1339,6 +1347,10 @@ CallParameters::UniquePtr TransactionExecutive::go(
         callResults->type = CallParameters::REVERT;
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
+        // Do not force evmStatus=EVMC_REVERT solely because hasHostFault() is set.
+        // After F2, non-halting faults rethrow as ExecuteError::DEAD_LOCK and are
+        // classified by e.errorCode(); rewriting the frame's input evmStatus here
+        // would mislabel a host-fault/dead-lock revert as an ordinary EVM REVERT.
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput(e.errorMessage(), *callResults);
