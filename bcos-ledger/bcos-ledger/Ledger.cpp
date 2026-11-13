@@ -375,13 +375,15 @@ task::Task<std::optional<ledger::StorageState>> Ledger::getStorageState(
         co_return std::nullopt;
     }
     state.nonce = std::string(nonceEntry->get());
-    auto const balanceEntry =
-        co_await getStorageAt(_address, ACCOUNT_TABLE_FIELDS::BALANCE, _blockNumber);
-    if (!balanceEntry.has_value())
+    // A missing BALANCE row leaves the balance empty; it does not make the account absent
+    // (nullopt means no NONCE row). A sender whose balance nothing has written -- no transfer,
+    // no gas charged, the usual case on a free-gas v0/v1 chain -- has a NONCE row and no BALANCE
+    // row, and Web3NonceChecker reads an absent account as one it cannot judge.
+    if (auto const balanceEntry =
+            co_await getStorageAt(_address, ACCOUNT_TABLE_FIELDS::BALANCE, _blockNumber))
     {
-        co_return std::nullopt;
+        state.balance = std::string(balanceEntry->get());
     }
-    state.balance = std::string(balanceEntry->get());
     co_return state;
 }
 
