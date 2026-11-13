@@ -39,6 +39,11 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
     friend class bcos::concepts::ledger::LedgerBase;
 
 public:
+    using Ledger::getBlockHashByNumber;
+    using Ledger::getBlockNumberByHash;
+    using bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>::getBlockHashByNumber;
+    using bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>::getBlockNumberByHash;
+
     LedgerImpl(Hasher hasher, Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storageInterface, size_t blockLimit,
         bcos::storage::StorageInterface::Ptr blockStorage = nullptr,
