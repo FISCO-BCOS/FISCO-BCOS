@@ -32,6 +32,8 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <array>
+#include <chrono>
 #include <cstdio>
 #include <iostream>
 #include <mutex>
@@ -75,6 +77,25 @@ std::string BoostLogLevelResetHandler::configFile;
 /// handler to solve log rotate
 bool BoostLogInitializer::canRotate(size_t const& _index)
 {
+    // The file backend calls this predicate before EVERY line. Reading the wall
+    // clock through localtime() on that path costs two orders of magnitude more
+    // than the rest of a line's work, and the answer only changes once an hour,
+    // so consult the clock at most once per second. The per-sink timestamps are
+    // thread_local because the predicate only ever runs on the feeding thread.
+    constexpr size_t c_maxRotateSlots = 8;
+    thread_local std::array<std::chrono::steady_clock::time_point, c_maxRotateSlots> lastCheck{};
+
+    // Sinks beyond the slot count share the last slot; they are still checked,
+    // just throttled together.
+    size_t const slot = _index < c_maxRotateSlots ? _index : (c_maxRotateSlots - 1);
+    auto const nowSteady = std::chrono::steady_clock::now();
+    if (lastCheck[slot] != std::chrono::steady_clock::time_point{} &&
+        nowSteady - lastCheck[slot] < std::chrono::seconds(1))
+    {
+        return false;
+    }
+    lastCheck[slot] = nowSteady;
+
     const boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
     int hour = (int)now.time_of_day().hours();
     if (hour != m_currentHourVec[_index])
@@ -282,6 +303,10 @@ std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::ini
             targetDir, m_maxArchiveSize, m_minFreeSpace, m_maxArchiveFiles, m_compressArchive));
     }
     sink->locked_backend()->scan_for_files();
+    // log.flush=true means "durable per line"; the sink then stops batching, since
+    // the backend flushes once per consumeLine() call. Must be set before the
+    // sink is registered so no producer can enqueue a batched line first.
+    sink->setPerLinePersistence(m_autoFlush);
     if (m_enableLog)
     {
         bcos::log::registerLineSink(sink);
@@ -318,6 +343,8 @@ std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::ini
     sink->locked_backend()->set_rotation_size(m_rotateSize);
     /// set auto-flush according to log configuration
     sink->locked_backend()->auto_flush(m_autoFlush);
+    // See initLineLogSink: batching is incompatible with per-line durability.
+    sink->setPerLinePersistence(m_autoFlush);
     if (m_enableLog)
     {
         bcos::log::registerLineSink(sink);
@@ -334,6 +361,8 @@ BoostLogInitializer::initLineConsoleLogSink(boost::property_tree::ptree const& _
         boost::shared_ptr<std::ostream>(&std::cout, boost::null_deleter()));
     bool need_flush = _pt.get<bool>("log.flush", false);
     sink->locked_backend()->auto_flush(need_flush);
+    // See initLineLogSink: batching is incompatible with per-line durability.
+    sink->setPerLinePersistence(need_flush);
     if (m_enableLog)
     {
         bcos::log::registerLineSink(sink);
@@ -382,10 +411,13 @@ void BoostLogInitializer::stopLogging()
         return;
     }
     m_running.store(false);
-    // Unregister whole-line sinks first so new records stop arriving;
-    // unregisterLineSink takes the registry's unique lock, so it waits for
-    // in-flight producers (who hold the shared lock across writeLine) before
-    // the sinks below are stopped and destroyed.
+    // Unpublish the whole-line sinks first so no new records reach them. The
+    // registry is lock-free: unregisterLineSink() only clears the atomic slot, so
+    // it does NOT wait for in-flight producers. That is safe because the sink is
+    // never destroyed (ownership is parked in leakedSinks) and sink->stop() below
+    // sets the sink's own m_stop, which makes a late writeLine a counted no-op.
+    // The ordering guarantee callers rely on comes from stop() draining inline,
+    // not from this call.
     for (auto const& sink : m_lineSinks)
     {
         bcos::log::unregisterLineSink(sink.get());
