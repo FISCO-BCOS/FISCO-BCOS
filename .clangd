@@ -1,3 +1,4 @@
 CompileFlags:
-  Add: []
-  Remove: [-fconcepts-diagnostics-depth*, -fdiagnostics-all-candidates]
+  Add:
+    - -U__cpp_trivial_relocatability
+    - -Wno-builtin-macro-redefined
