@@ -296,8 +296,8 @@ BOOST_AUTO_TEST_CASE(finishedSessionClosesItsConnection)
     rlpx::RlpxClient client(clientKey, clientConfig(listener->port(), serverKey));
     auto established = client.connect();
     auto const begin = std::chrono::steady_clock::now();
-    BOOST_CHECK_EXCEPTION(
-        established.session.recvMessage(), std::runtime_error, [](std::runtime_error const& e) {
+    BOOST_CHECK_EXCEPTION((void)established.session.recvMessage(), std::runtime_error,
+        [](std::runtime_error const& e) {
             return std::string_view(e.what()).find("closed by peer") != std::string_view::npos;
         });
     // Well under the 15 s socket timeout (same bound as the other cases in this file; the
