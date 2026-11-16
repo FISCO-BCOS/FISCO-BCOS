@@ -42,7 +42,14 @@ private:
         // commitLine fans out under a shared lock, so producers on different
         // threads reach this concurrently — serialize the insertion, as the
         // base's synchronous_sink did.
-        void writeLine(LogLevel, std::string_view, std::string_view _message) override
+        //
+        // Signature must match LineSinkWriter::writeLine exactly, including the
+        // optional LineRecord parameter: a default argument only lets CALLERS
+        // omit it, it does not let a three-parameter function override a
+        // four-parameter virtual. This sink renders the whole line itself and has
+        // no queue to stamp, so it ignores the record.
+        void writeLine(LogLevel, std::string_view, std::string_view _message,
+            LineRecord const* = nullptr) override
         {
             std::lock_guard lock(m_mutex);
             *m_stream << _message << '\n';

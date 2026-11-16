@@ -303,9 +303,11 @@ std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::ini
             targetDir, m_maxArchiveSize, m_minFreeSpace, m_maxArchiveFiles, m_compressArchive));
     }
     sink->locked_backend()->scan_for_files();
-    // log.flush=true means "durable per line"; the sink then stops batching, since
-    // the backend flushes once per consumeLine() call. Must be set before the
-    // sink is registered so no producer can enqueue a batched line first.
+    // log.flush=true makes the backend flush once per line, so the sink must stop
+    // batching: the producer is still asynchronous either way, but per-line
+    // flushing bounds the crash window to the one line rather than a batch of up
+    // to 32. Must be set before the sink is registered so no producer can enqueue
+    // a batched line first.
     sink->setPerLinePersistence(m_autoFlush);
     if (m_enableLog)
     {

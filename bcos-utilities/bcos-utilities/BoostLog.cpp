@@ -858,6 +858,21 @@ std::uint64_t droppedLogLines() noexcept
     return total;
 }
 
+LogSinkStatus logSinkStatus() noexcept
+{
+    auto& reg = registry();
+    LogSinkStatus status;
+    for (auto const& slot : reg.sinks)
+    {
+        if (auto const* sink = slot.load(std::memory_order_acquire); sink != nullptr)
+        {
+            status.ringCount += sink->ringCount();
+            status.usingSharedRing = status.usingSharedRing || sink->usingSharedRing();
+        }
+    }
+    return status;
+}
+
 // Fans the record out to every registered whole-line sink.
 //
 // Reading the slots is lock-free: unregisterLineSink() only unpublishes, it does

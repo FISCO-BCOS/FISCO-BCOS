@@ -117,6 +117,20 @@ public:
     // Cumulative lines dropped on overflow since construction (0 for sinks
     // that never drop); summed by droppedLogLines() for the admin RPC.
     virtual std::uint64_t droppedTotal() const noexcept { return 0; }
+
+    // Pipeline diagnostics, aggregated by logSinkStatus() and surfaced through
+    // admin_getLogLevel. Defaults describe a sink that does not shard.
+    //
+    // These exist because the shared-overflow fallback is a silent performance
+    // cliff: past MaxQueueShards concurrently live producing threads, every
+    // further producer serialises on one mutex per line and reads the live head on
+    // every capacity check, i.e. it loses the entire point of this design, and it
+    // starts dropping from a single ring shared by everyone. An operator watching
+    // only the drop counter cannot tell that apart from "this node logs a lot".
+    /// Private rings currently allocated (one per concurrently logging thread).
+    virtual std::size_t ringCount() const noexcept { return 0; }
+    /// True once a producer had to fall back to the shared ring.
+    virtual bool usingSharedRing() const noexcept { return false; }
 };
 
 // Process-wide registry (implemented in BoostLog.cpp). The initializer
@@ -128,6 +142,16 @@ void commitLine(LineRecord const& _record, std::string_view _message);
 // Sum of droppedTotal() over every registered sink; read by the
 // admin_getLogLevel RPC so log loss is pollable.
 std::uint64_t droppedLogLines() noexcept;
+
+/// Aggregate of the per-sink pipeline diagnostics, also read by
+/// admin_getLogLevel. Separate from droppedLogLines() because the interesting
+/// state (fell back to the shared ring) is a boolean, not a count.
+struct LogSinkStatus
+{
+    std::size_t ringCount = 0;
+    bool usingSharedRing = false;
+};
+LogSinkStatus logSinkStatus() noexcept;
 // "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|" — the built-in line prefix.
 // Rendering is cheap and cache-friendly (one localtime_r per second), so it is
 // done on whichever thread consumes the record.
@@ -385,10 +409,17 @@ public:
         return m_droppedTotal.load(std::memory_order_relaxed);
     }
 
-    /// Tells the sink that the operator configured log.flush=true, i.e. that a
-    /// line must be durable by the time the producing statement returns. Batching
-    /// would turn that into "durable in groups of 32", so the sink switches to one
-    /// line per backend write. Called from initLog before the sink is registered.
+    /// Tells the sink that the operator configured log.flush=true.
+    ///
+    /// What that configuration means here, stated exactly: the feeder hands the
+    /// backend ONE line per consumeLine() call instead of a batch of up to 32, so
+    /// the backend's auto-flush runs per line rather than per batch. It does NOT
+    /// mean "durable by the time the producing statement returns" — the queue has
+    /// always been asynchronous, in this design and in the base, so the producer
+    /// still returns as soon as the line is enqueued. Batching would have widened
+    /// the crash window from one line to 31 already-built lines, which is the
+    /// regression this flag prevents. Called from initLog before the sink is
+    /// registered.
     void setPerLinePersistence(bool _enabled) noexcept
     {
         m_perLinePersistence.store(_enabled, std::memory_order_relaxed);
@@ -396,10 +427,20 @@ public:
 
     /// Number of private rings this sink has allocated. Diagnostic: it tells an
     /// operator whether the node is within MaxQueueShards and whether rings are
-    /// being reused instead of growing without bound.
-    std::size_t ringCount() const noexcept
+    /// being reused instead of growing without bound. Aggregated by
+    /// logSinkStatus() and surfaced through admin_getLogLevel.
+    std::size_t ringCount() const noexcept override
     {
         return m_shardCount.load(std::memory_order_acquire);
+    }
+
+    /// True once any producer had to fall back to the shared ring, i.e. this sink
+    /// is past its ring budget and its producers are serialising per line. The
+    /// pointer is published on first fallback, so a non-null value is exactly that
+    /// condition.
+    bool usingSharedRing() const noexcept override
+    {
+        return m_overflowShard.load(std::memory_order_acquire) != nullptr;
     }
 
     /// Lines enqueued but not yet handed to the backend. Useful as a backlog
@@ -1039,9 +1080,16 @@ private:
             // acknowledge a later flush() while lines were still buffered —
             // measured as "flush() returned with lines pending".
             std::uint64_t flushReqGen = 0;
+            std::uint64_t flushDoneGen = 0;
             {
                 std::lock_guard<std::mutex> lock(m_controlMutex);
                 flushReqGen = m_flushRequestGen;
+                // Snapshot the completion generation under the same lock, and use
+                // the snapshot below. stop() writes m_flushDoneGen under
+                // m_controlMutex while a pass may be running, and m_drainMutex does
+                // not cover that write, so reading the member later without the
+                // lock was a data race (it is a plain std::uint64_t).
+                flushDoneGen = m_flushDoneGen;
             }
             if (hasPendingLines())
             {
@@ -1058,8 +1106,9 @@ private:
             }
             // An explicit flush() request must reach the backend even when this
             // pass fed nothing: the caller asked for the file to be flushed, not
-            // merely for the queue to be empty.
-            bool const needFlush = fedAnything || m_flushDoneGen < flushReqGen;
+            // merely for the queue to be empty. Both generations come from the
+            // snapshot above, never from the members.
+            bool const needFlush = fedAnything || flushDoneGen < flushReqGen;
             if (needFlush)
             {
                 std::lock_guard<std::mutex> lock(m_controlMutex);

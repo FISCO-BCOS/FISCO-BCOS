@@ -921,6 +921,67 @@ BOOST_AUTO_TEST_CASE(failedBridgeOperandDoesNotSilenceLaterOnes)
         loggedMessage(LogLevel::INFO, [](bcos::LogStream& s) { s << fmt::Plain{}; }), "plain");
 }
 
+// Round-2 F3: the shared-overflow fallback is a silent performance cliff, so its
+// state has to be queryable. Assert that the aggregated status reports the ring
+// count before and after a producer overflows the budget, and flips
+// usingSharedRing.
+BOOST_AUTO_TEST_CASE(sharedRingFallbackIsObservable)
+{
+    constexpr std::size_t Rings = 2;
+    constexpr std::size_t Capacity = 8;
+    auto backend = boost::make_shared<FakeBackend>();
+    backend->gate = false;
+    // Two private rings plus the lazily allocated shared one.
+    bcos::log::LineAsyncSink<FakeBackend, Capacity, Rings> sink(backend);
+
+    // Park the worker so nothing drains and the ring budget is measurable.
+    sink.writeLine(LogLevel::INFO, "p|", "seed");
+    auto const deadline = std::chrono::steady_clock::now() + 2s;
+    while (backend->consumeEntered.load(std::memory_order_acquire) < 1 &&
+           std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::yield();
+    }
+    BOOST_REQUIRE_GE(backend->consumeEntered.load(std::memory_order_acquire), 1);
+
+    BOOST_CHECK_EQUAL(sink.ringCount(), 1u);
+    BOOST_CHECK(!sink.usingSharedRing());
+
+    // Each live thread claims one private ring until the budget is gone; the next
+    // one has to take the shared ring. The threads must overlap, so hold them on a
+    // barrier until every one owns a ring.
+    std::atomic<int> ready{0};
+    std::atomic<int> claimed{0};
+    constexpr int Threads = static_cast<int>(Rings) + 1;
+    std::vector<std::thread> pool;
+    pool.reserve(Threads);
+    for (int t = 0; t < Threads; ++t)
+    {
+        pool.emplace_back([&sink, &ready, &claimed] {
+            ++ready;
+            while (ready.load() != Threads)
+            {
+            }
+            sink.writeLine(LogLevel::INFO, "p|", "claim");
+            ++claimed;
+            while (claimed.load() != Threads)
+            {
+            }
+        });
+    }
+    for (auto& th : pool)
+    {
+        th.join();
+    }
+
+    BOOST_CHECK_EQUAL(sink.ringCount(), Rings);
+    BOOST_CHECK(sink.usingSharedRing());
+
+    backend->gate = true;
+    sink.flush();
+    sink.stop();
+}
+
 // F4: a thread that exits releases its ring for reuse, but only once that ring is
 // EMPTY. Handing a new producer a ring that still holds the previous owner's
 // undrained lines would present it as already full, so its first lines would be
