@@ -33,6 +33,7 @@ bash /path/to/FISCO-BCOS/tools/.ci/ci_check_air.sh false   # 参数为 true 才�
 | `CI_CHAINS` | 只跑子集，如 `"nonsm auth"`（本机调试） |
 | `CI_KEEP_NODES` | `true` 跑完不清链、节点继续运行（本机调试） |
 | `CI_FAIL_SCENARIO` | 在场景 n 之后注入失败，验证失败报告路径（本机调试） |
+| `FISCO_BCOS_OLD_BIN` | 第二个二进制：每条链的奇数号节点（node1、node3…，扩容节点同样按编号）用它启动，其余节点用 `FISCO_BCOS_BIN`。用于验证不该改变执行结果的重构：新旧节点状态一旦不一致就无法共识，链停止出块 |
 
 SM 链需要 `~/.fisco/tassl`；`jq` 必装；bash ≥ 4（`declare -A`、`${x,,}`，macOS 自带的 3.2 不行，用 Homebrew bash）。四条链的 build_chain 串行执行（并发会在 tassl 下载/安装与 `/tmp/secp256k1.param` 上互相踩），之后并行启动。清链先停 `nodes/127.0.0.1/stop_all.sh`（workflow 前一步 `rpcapi_ci_prepare.sh` 留下的四个节点占着 30300/20200），再只杀本工作目录 `nodes/` 下启动的进程，不会碰同机的其他链。
 

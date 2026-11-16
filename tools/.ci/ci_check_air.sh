@@ -28,6 +28,19 @@ fi
 # the binary under test; CI builds it at ../build relative to tools/
 fisco_bcos_path="${FISCO_BCOS_BIN:-${tools_dir}/../build/fisco-bcos-air/fisco-bcos}"
 fisco_bcos_path=$(cd "$(dirname "${fisco_bcos_path}")" && pwd)/$(basename "${fisco_bcos_path}")
+# optional second binary for a mixed chain: every odd-numbered node (node1, node3, ...) runs it,
+# the rest run the binary under test. A refactor that must not change execution is checked this
+# way: nodes whose state diverges cannot reach consensus, so the chain stops producing blocks.
+fisco_bcos_old_path="${FISCO_BCOS_OLD_BIN:-}"
+if [[ -n "${fisco_bcos_old_path}" ]]; then
+    [[ -x "${fisco_bcos_old_path}" ]] || { echo "FISCO_BCOS_OLD_BIN is not an executable: ${fisco_bcos_old_path}" >&2; exit 1; }
+    fisco_bcos_old_path=$(cd "$(dirname "${fisco_bcos_old_path}")" && pwd)/$(basename "${fisco_bcos_old_path}")
+    echo "mixed chains: FISCO_BCOS_BIN sha256 $(shasum -a 256 "${fisco_bcos_path}" | cut -d' ' -f1)"
+    echo "mixed chains: FISCO_BCOS_OLD_BIN sha256 $(shasum -a 256 "${fisco_bcos_old_path}" | cut -d' ' -f1)"
+    if cmp -s "${fisco_bcos_path}" "${fisco_bcos_old_path}"; then
+        echo "WARNING: FISCO_BCOS_OLD_BIN is the same file content as FISCO_BCOS_BIN; the chains are not mixed" >&2
+    fi
+fi
 build_chain_path="${tools_dir}/BcosAirBuilder/build_chain.sh"
 current_path=$(pwd)
 # "p2p,rpc,web3" of the nonsm chain; sm/v1/auth add 100 to p2p and rpc, 100 to web3; the
@@ -132,6 +145,24 @@ wait_and_start()
     return 1
 }
 
+# use_old_binary <node dir>: with FISCO_BCOS_OLD_BIN set and an odd node index, the node's
+# start.sh and stop.sh point at a copy of the old binary beside the shared one
+use_old_binary()
+{
+    local node="${1}"
+    [[ -n "${fisco_bcos_old_path}" ]] || return 0
+    local index="${node##*node}"
+    (( index % 2 == 1 )) || return 0
+    # copied once per chain: overwriting the file while node1 runs from it (the expanded node
+    # comes later) invalidates the running image, and macOS kills the next process started from it
+    local old_copy="$(dirname "${node}")/fisco-bcos-old"
+    [[ -f "${old_copy}" ]] || cp "${fisco_bcos_old_path}" "${old_copy}" || return 1
+    perl -p -i -e 's#^fisco_bcos=\$\{SHELL_FOLDER\}/\.\./fisco-bcos$#fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos-old#' \
+        "${node}/start.sh" "${node}/stop.sh"
+    grep -q 'fisco-bcos-old$' "${node}/start.sh" || { LOG_ERROR "$(basename "${node}"): start.sh not switched to the old binary"; return 1; }
+    LOG_INFO "$(basename "${node}"): old binary $("${fisco_bcos_old_path}" -v | head -n 1)"
+}
+
 # build_chain_for <chain>: build_chain + per-chain genesis/config tweaks. Runs serially for
 # the four chains before they start in parallel: concurrent build_chain runs race on
 # check_and_install_tassl (the same tgz curl'ed into the same cwd, then moved to
@@ -162,6 +193,7 @@ build_chain_for()
     for node in "$(chain_nodes_dir "${chain}")"/node*; do
         # every chain gets its own web3 port; only v1 (web3_test.sh) turns the listener on
         perl -p -i -e 's/listen_port=8545/listen_port='"${ports[2]}"'/g' "${node}/config.ini"
+        use_old_binary "${node}" || return 1
     done
     # AMOP (scenario 12) rides the WebSocket RPC, not the unix socket, and the ops commands
     # refuse a TLS port: node0's [rpc] listener goes plaintext and binds loopback only. Every
@@ -263,6 +295,7 @@ expand_node()
     sed -e 's/"nodes":\[/"nodes":\["127.0.0.1:'"$((ports[0] + 3))"'",/' "${node0}/nodes.json" > "${config}/nodes.json"
     bash "${build_chain_path}" -C expand -c "${config}" -d "${config}/ca" \
         -o "$(chain_node_dir "${chain}" "${index}")" -e "${fisco_bcos_path}" $(chain_sm_flag "${chain}") || return 1
+    use_old_binary "$(chain_node_dir "${chain}" "${index}")" || return 1
     bash "$(chain_node_dir "${chain}" "${index}")/start.sh"
     local expected=$(( index ))  # node0 sees every other node, the new one included
     local waited=0 peers
