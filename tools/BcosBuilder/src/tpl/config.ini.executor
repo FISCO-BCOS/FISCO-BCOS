@@ -14,7 +14,7 @@
 
 [storage]
     enable_cache=true
-    key_page_size=10240
+    key_page_size=0
 
 [executor]
     enable_dag=true
