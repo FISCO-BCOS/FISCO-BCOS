@@ -72,10 +72,6 @@ if(WITH_CPPSDK OR FULLNODE)
     add_subdirectory(bcos-sdk)
 endif()
 
-if(WITH_LIGHTNODE)
-    add_subdirectory(legacy/lightnode)
-endif()
-
 if(FULLNODE)
     find_package(group-sig CONFIG REQUIRED)
     find_package(paillier CONFIG REQUIRED)

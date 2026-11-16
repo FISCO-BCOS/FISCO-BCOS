@@ -26,12 +26,12 @@ public:
       : m_storage(std::move(_storage))
     {}
 
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
-        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
-        std::function<void(std::string, Error::Ptr&&)>, bool, std::optional<bcos::ledger::Features>,
+    task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr,
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr, bool,
         std::optional<bcos::crypto::HashType>, bool) override
     {
         BOOST_CHECK(false);  // Need implementations
+        return []() -> task::Task<std::string> { co_return std::string{}; }();
     };
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
         bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override

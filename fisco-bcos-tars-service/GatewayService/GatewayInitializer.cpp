@@ -70,7 +70,7 @@ void GatewayInitializer::init(std::string const& _configPath)
                              << LOG_KV("certPath", m_gatewayConfig->certPath())
                              << LOG_KV("nodePath", m_gatewayConfig->nodePath())
                              << LOG_KV("gatewayServiceName", gatewayServiceName);
-    auto gateway = factory.buildGateway(m_gatewayConfig, false, nullptr, gatewayServiceName);
+    auto gateway = factory.buildGateway(m_gatewayConfig, false, gatewayServiceName);
 
     m_gateway = gateway;
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateway success");

@@ -46,19 +46,19 @@ public:
     virtual ~LedgerInterface() = default;
 
     /**
-     * @brief async prewrite a block in scheduler module
+     * @brief prewrite a block in scheduler module
      * @param block the block to commit
-     * @param callback trigger this callback when write is finished
+     * @return the primary key of the hash-to-number row; empty for the system-contract-deploy
+     * block, where only SYS_KEY_CURRENT_NUMBER is written
      */
     // Default arguments live ONLY on this interface declaration. Virtual default arguments
     // resolve by the STATIC type at the call site and the compiler does not check that an
     // override's defaults agree — duplicating them per-override lets a later edit to one
     // silently change behaviour depending on which pointer type the caller holds. Callers
     // invoking through a concrete class must pass every argument explicitly.
-    virtual void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+    virtual task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts = true,
-        std::optional<bcos::ledger::Features> features = std::nullopt,
+        bool writeTxsAndReceipts = true,
         std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
         bool writeNonces = true) = 0;
 

@@ -22,7 +22,6 @@
 #pragma once
 #include "bcos-boostssl/websocket/WsConfig.h"
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
-#include "bcos-framework/election/LeaderEntryPointInterface.h"
 #include "bcos-framework/gateway/GatewayInterface.h"
 #include "bcos-framework/security/KeyEncryptInterface.h"
 #include "bcos-rpc/Rpc.h"
@@ -63,8 +62,7 @@ public:
     std::shared_ptr<boostssl::ws::WsService> buildWsService(
         bcos::boostssl::ws::WsConfig::Ptr _config);
 
-    Rpc::Ptr buildRpc(std::string const& _gatewayServiceName, std::string const& _rpcServiceName,
-        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
+    Rpc::Ptr buildRpc(std::string const& _gatewayServiceName, std::string const& _rpcServiceName);
     Rpc::Ptr buildLocalRpc(bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 
     Rpc::Ptr buildRpc(int sendTxTimeout, std::shared_ptr<boostssl::ws::WsService> _wsService,
@@ -83,8 +81,7 @@ public:
 
 protected:
     // for groupManager builder
-    GroupManager::Ptr buildGroupManager(std::string const& _rpcServiceName,
-        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
+    GroupManager::Ptr buildGroupManager(std::string const& _rpcServiceName);
     AirGroupManager::Ptr buildAirGroupManager(
         bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 

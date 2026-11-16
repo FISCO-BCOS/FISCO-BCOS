@@ -127,12 +127,10 @@ public:
         }
         bcos::test::sharedmock::g_stubFeatures = ledger::Features{};
 
-        fakeit::When(Method(mockLedger, asyncPrewriteBlock))
+        fakeit::When(Method(mockLedger, prewriteBlock))
             .AlwaysDo([](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
-                          protocol::Block::ConstPtr,
-                          std::function<void(std::string, Error::Ptr&&)> callback, bool,
-                          std::optional<ledger::Features>, std::optional<bcos::crypto::HashType>,
-                          bool) { callback({}, nullptr); });
+                          protocol::Block::ConstPtr, bool, std::optional<bcos::crypto::HashType>,
+                          bool) -> task::Task<std::string> { co_return std::string{}; });
 
         using HashView =
             ::ranges::any_view<h256, ::ranges::category::mask | ::ranges::category::sized>;
@@ -179,7 +177,7 @@ public:
     void writeBlock(const std::shared_ptr<bcostars::protocol::BlockImpl>& block)
     {
         auto blockHeader = block->blockHeader();
-        task::syncWait(ledger::prewriteBlock(mockLedger.get(),
+        task::syncWait(ledger::prewriteBlockRows(mockLedger.get(),
             std::make_shared<protocol::ConstTransactions>(), block, false, backendStorage));
         bcos::bytes headerBuffer;
         blockHeader->encode(headerBuffer);

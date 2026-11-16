@@ -66,7 +66,7 @@
     ; time_window_sec=3
 
     ; the module that does not limit bandwidth
-    ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
+    ; list of all modules: raft,pbft,amop,block_sync,txs_sync,cons_txs_sync
     ; modules_without_bw_limit=raft,pbft
 
     ; allow the msg exceed max permit pass

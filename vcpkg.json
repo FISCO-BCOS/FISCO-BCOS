@@ -90,20 +90,6 @@
         "paillier"
       ]
     },
-    "lightnode": {
-      "description": "Light node dependencies",
-      "dependencies": [
-        {
-          "name": "rocksdb",
-          "features": [
-            "zstd",
-            "tbb"
-          ]
-        },
-        "zstd",
-        "tarscpp"
-      ]
-    },
     "tests": {
       "description": "for test dependencies",
       "dependencies": [

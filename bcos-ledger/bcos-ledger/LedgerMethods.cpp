@@ -12,49 +12,8 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
     bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage,
     std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
 {
-    struct Awaitable
-    {
-        std::reference_wrapper<LedgerInterface> m_ledger;
-        decltype(transactions) m_transactions;
-        decltype(block) m_block;
-        bool m_withTransactionsAndReceipts{};
-        decltype(storage) m_storage;
-        std::optional<bcos::crypto::HashType> m_blockHashOverride;
-        bool m_writeNonces{true};
-        Error::Ptr m_error;
-
-        constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(std::coroutine_handle<> handle)
-        {
-            m_ledger.get().asyncPrewriteBlock(
-                m_storage, std::move(m_transactions), std::move(m_block),
-                [this, handle](std::string, Error::Ptr error) {
-                    if (error)
-                    {
-                        m_error = std::move(error);
-                    }
-                    handle.resume();
-                },
-                m_withTransactionsAndReceipts, std::nullopt, m_blockHashOverride, m_writeNonces);
-        }
-        void await_resume()
-        {
-            if (m_error)
-            {
-                BOOST_THROW_EXCEPTION(*m_error);
-            }
-        }
-    };
-
-    Awaitable awaitable{.m_ledger = ledger,
-        .m_transactions = std::move(transactions),
-        .m_block = std::move(block),
-        .m_withTransactionsAndReceipts = withTransactionsAndReceipts,
-        .m_storage = std::move(storage),
-        .m_blockHashOverride = std::move(blockHashOverride),
-        .m_writeNonces = writeNonces,
-        .m_error = {}};
-    co_await awaitable;
+    co_await ledger.prewriteBlock(std::move(storage), std::move(transactions), std::move(block),
+        withTransactionsAndReceipts, std::move(blockHashOverride), writeNonces);
 }
 
 bcos::ledger::PrewriteBlockRows bcos::ledger::buildPrewriteBlockRows(

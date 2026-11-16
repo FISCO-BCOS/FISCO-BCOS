@@ -79,7 +79,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
         m_nodeInitializer->protocolInitializer()->getKeyEncryptionByType(
             nodeConfig->keyEncryptionType()));
     gatewayFactory.setIOServicePool(ioServicePool);
-    auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
+    auto gateway = gatewayFactory.buildGateway(_configFilePath, true, "localGateway");
     m_gateway = gateway;
 
     // create the node
