@@ -204,8 +204,26 @@ public:
     LineRecord const& record() const noexcept { return m_record; }
 
     // --- string-like operands: copied straight into the buffer ---
+    //
+    // A `char const*` carries no length, so the only way to copy it is strlen, and
+    // the caller's contract is implicitly "NUL-terminated" — exactly the contract
+    // std::ostream::operator<<(char const*) has, which is what every log statement
+    // went through before this change. A CWE-126 style analyzer flags the strlen
+    // below because the over-read is inherent to that signature; it cannot be
+    // removed without changing the parameter to a length-bearing type at every
+    // call site (and converting a `char const*` to a string_view would just move
+    // the same strlen one frame down). It is therefore intended behaviour, not a
+    // defect: a caller that passes a non-terminated buffer was already invoking
+    // undefined behaviour through std::ostream.
+    //
+    // The null pointer is a different matter and IS handled here: std::ostream
+    // turns it into badbit and emits nothing, whereas strlen(nullptr) would fault.
     LogStream& operator<<(char const* _value)
     {
+        if (_value == nullptr)
+        {
+            return *this;
+        }
         append(_value, std::strlen(_value));
         return *this;
     }

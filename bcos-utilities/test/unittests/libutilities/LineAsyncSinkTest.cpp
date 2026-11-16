@@ -1028,5 +1028,21 @@ BOOST_AUTO_TEST_CASE(reclaimedRingMustBeEmptyBeforeReuse)
     sink.stop();
 }
 
+// A `char const*` operand is NUL-terminated by contract, so the strlen inside
+// LogStream is intended (see the comment there). The null pointer is the case that
+// IS a defect: std::ostream turns it into badbit and emits nothing, while
+// strlen(nullptr) faults. Reaching this needs a typed null pointer, since `nullptr`
+// alone is ambiguous between the char*, char const* and void* overloads.
+BOOST_AUTO_TEST_CASE(nullCharPointerDoesNotCrash)
+{
+    char const* nullPointer = nullptr;
+    char* nullMutable = nullptr;
+    BOOST_CHECK_EQUAL(
+        loggedMessage(LogLevel::INFO, [&](bcos::LogStream& s) { s << "a" << nullPointer << "b"; }),
+        "ab");
+    BOOST_CHECK_EQUAL(
+        loggedMessage(LogLevel::INFO, [&](bcos::LogStream& s) { s << nullMutable << "x"; }), "x");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
