@@ -307,18 +307,46 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
     if (!params->blockHash().empty())
     {  // when blockHash is not empty, match logs within the specified block
         auto matcher = m_matcher;
-        int64_t blockNumber = 0;
-        try
+        auto const requestedHash =
+            bcos::crypto::HashType(params->blockHash(), bcos::crypto::HashType::FromHex);
+        // EIP-234: a successful result must belong to the requested hash. The ledger resolves a
+        // hash to a height and reads the block at that height in two independent reads with no
+        // request-wide snapshot, so a legitimate reorg between them can make the second read
+        // return a different block (or none) for the same height. Answering it would report
+        // another block's logs under the hash the caller asked for. Re-resolve once with a fresh
+        // mapping and fail closed if the header still does not match: this closes the interleaving
+        // that returns another block's logs. It checks the header only; assembling the header,
+        // transaction list and receipts from one read snapshot is the complete fix and is tracked
+        // separately, because it needs a ledger/storage API this layer does not have.
+        protocol::Block::Ptr block;
+        for (int attempt = 0; attempt < 2; ++attempt)
         {
-            blockNumber = co_await ledger::getBlockNumber(*ledger,
-                bcos::crypto::HashType(params->blockHash(), bcos::crypto::HashType::FromHex));
+            int64_t blockNumber = 0;
+            try
+            {
+                blockNumber = co_await ledger::getBlockNumber(*ledger, requestedHash);
+            }
+            catch (std::exception& e)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "unknown block"));
+            }
+            block = co_await ledger::getBlockData(*ledger, blockNumber,
+                bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
+            if (block->blockHeader()->hash() == requestedHash)
+            {
+                break;
+            }
+            FILTER_LOG(WARNING) << LOG_BADGE("getLogsImpl") << LOG_DESC("block hash changed")
+                                << LOG_KV("requestedHash", requestedHash.hex())
+                                << LOG_KV("blockNumber", blockNumber)
+                                << LOG_KV("attempt", attempt);
+            block = nullptr;
         }
-        catch (std::exception& e)
+        if (block == nullptr)
         {
+            // Do not answer with whatever currently sits at the height the hash used to map to.
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "unknown block"));
         }
-        auto block = co_await ledger::getBlockData(*ledger, blockNumber,
-            bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
         Json::Value jArray(Json::arrayValue);
         // Derive the block position before matching: the matcher reads logIndex off the receipts,
         // and a stored value is not authoritative (historical rows may predate the field).
@@ -374,7 +402,7 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
                 "block range too large: requested " + std::to_string(blockRange) +
                     " blocks, limit is " + std::to_string(m_maxBlockRange) +
-                    " (web3_rpc.filter_max_block_range)"));
+                    " (filter_max_block_range)"));
         }
         params->setFromBlock(fromBlock);
         params->setToBlock(toBlock);

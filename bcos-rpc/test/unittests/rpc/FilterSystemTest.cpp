@@ -520,5 +520,48 @@ BOOST_AUTO_TEST_CASE(filterBlockTagResolvesAgainstHeadAndDepths)
     }
 }
 
+// EIP-234: the successful result must belong to the requested hash. The ledger resolves a hash
+// to a height and then reads that height in a separate call, so a reorg in between can make the
+// second read return a different block. This pins the fail-closed answer: the stale hash maps to
+// a height whose header is not that hash, and the query must error instead of reporting the logs
+// of whichever block now occupies the height.
+BOOST_AUTO_TEST_CASE(blockHashReorgBetweenLookupAndReadFailsClosed)
+{
+    auto const head = static_cast<size_t>(m_ledger->blockNumber());
+    BOOST_REQUIRE_GE(head, 1U);
+    auto const blocks = m_ledger->ledgerData();
+
+    auto const headHash = blocks[head]->blockHeader()->hash();
+
+    // A hash that indexes "the height where it used to live", while the block now stored there
+    // carries a different header -- the state a reorg leaves behind between the two reads.
+    auto const staleHash = blocks[head - 1]->blockHeader()->hash();
+    BOOST_REQUIRE(staleHash != headHash);
+    m_ledger->indexBlockHash(staleHash, static_cast<protocol::BlockNumber>(head));
+
+    auto const latest = filterSystem->getLatestBlockNumber();
+    Json::Reader reader;
+    auto parse = [&reader](std::string const& s) {
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(s, value));
+        return value;
+    };
+    auto const blockHashRequest = [&latest, &parse](crypto::HashType const& hash) {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"blockHash":")" + hash.hexPrefixed() + R"("})"), latest,
+            /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
+        return request;
+    };
+
+    // Control: the hash of the block actually stored at its height still answers.
+    auto const currentLogs = task::syncWait(filterSystem->getLogs(blockHashRequest(headHash)));
+    BOOST_TEST(currentLogs.isArray());
+
+    // The stale mapping must not answer with the logs of the block that replaced it.
+    BOOST_CHECK_THROW(
+        task::syncWait(filterSystem->getLogs(blockHashRequest(staleHash))),
+        bcos::rpc::JsonRpcException);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
