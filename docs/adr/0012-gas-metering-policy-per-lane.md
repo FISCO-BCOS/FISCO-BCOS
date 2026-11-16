@@ -35,7 +35,7 @@ v0 与 v1 的差异、各开关的作用，都写成下表的字段取值。每�
 |---|---|---|
 | `revision` | `feature_evm_cancun`、`_prague`、`_osaka` 与块版本；v1 下限为 Cancun | `bcos-executor/src/executive/BlockContext.cpp:123`，`transaction-executor/bcos-transaction-executor/vm/HostContext.h:266` |
 | `intrinsicUpfront` | `bugfix_tx_intrinsic_gas` | `bcos-executor/src/executive/TransactionExecutive.cpp:307`，`transaction-executor/bcos-transaction-executor/TransactionExecutorImpl.h:170` |
-| `accessListInIntrinsic` | v1 为真；v0 为假，调度器消息不带 access list | `TransactionExecutorImpl.h:177` |
+| `accessListInIntrinsic` | v0、v1 都为假；v0 调度器消息不带 access list，v1 接受该交易但不单独收取 list 附加费 | `TransactionExecutorImpl::upfrontGas()`（#5430 合并后） |
 | `calldataFloorUpfront` | v1，revision 不低于 Prague，且 `intrinsicUpfront` 为假 | `HostContext.h:543` |
 | `topCallGas` | v0：开 `feature_balance` 且带 value；v1：每个顶层 CALL；`intrinsicUpfront` 为真时两者都不收 | `TransactionExecutive.cpp:349`，`HostContext.h:850` |
 | `codeDepositPerByte` | `intrinsicUpfront` 为真取 200，否则取 20 | `BlockContext.cpp:147`，`HostContext.h:823` |
@@ -62,7 +62,7 @@ v0 与 v1 的差异、各开关的作用，都写成下表的字段取值。每�
 | 7 | v1 余额不足时，gasUsed 由罚金除以单价反推；属于钱的路径，不搬 | `TransactionExecutorImpl.h:291` |
 | 8 | Eth 执行器没有运行中的块 gas 计数，每笔都拿整块 gas limit 当余量 | `ethereum-executor/EthereumExecutor.h:424` |
 | 9 | v0 在 3.1.0 之前的块上，内置预编译的剩余 gas 计算有旧错误 | `bcos-executor/src/vm/HostContext.cpp:315` 所在函数 |
-| 10 | 准入对 Web3 交易总是检查以太坊 intrinsic；Fisco 执行只在开关打开时才收，且 v0 不计 access list | `bcos-tx-validator/bcos-tx-validator/TxValidator.cpp:667` |
+| 10 | 准入对 Web3 交易总是检查以太坊 intrinsic；Fisco 执行只在开关打开时才收，且 v0、v1 都不单独计 access list 附加费 | `bcos-tx-validator/bcos-tx-validator/TxValidator.cpp:667`，`TransactionExecutorImpl::upfrontGas()` |
 | 11 | v0 调度器：系统合约交易在 `bugfix_precompiled_gasused` 开、`bugfix_precompiled_gascalc` 关时，预算是 3000000000，算 gasUsed 却用链级 `tx_gas_limit` 去减；`tx_gas_limit` 低于 3000000000 时差为负，回执与区块的 gasUsed 按 u256 回绕。默认 `tx_gas_limit` 等于 3000000000，不触发 | `BlockExecutive.cpp:1703`（以 `298461a4a` 为准） |
 
 ## 特征测试（PR 1）
@@ -73,6 +73,7 @@ Fisco lane 没有外部裁判，重构前先用特征测试钉住今天的收费
 - 交易分三组。部署：成功、超出代码大小上限、只有旧价付得起的 code deposit、init code revert 或耗尽 gas。调用：转账、带 value 的转账（v0）、普通调用、嵌套调用、revert、EVM 异常、签了较小 gasLimit 的调用（v1）、带 access list 的 EIP-2930 交易（v1）。计量：SSTORE 各状态（含同一交易内对同一槽位写两次）、EVM 内置预编译 0x01–0x09、FISCO `CryptoPrecompiled` 与 `TableManagerPrecompiled.createKVTable`。
 - 配置：全关；每个开关单独打开（连同它的依赖）；`bugfix_tx_intrinsic_gas` 与其余开关两两组合；3.18.0 创世；创世上每个开关翻转一次（创世里有的关掉、没有的打开，EVM 分叉与 `feature_balance` 不在创世里）；v0 另有 3.0、3.1、3.2 块版本。开关组合遵守 `Features::getFeatureDependencies`。
 - 每条 lane 用追加式配置名列表分配固定块号。删除 EIP-2929 配置后仍保留原编号槽位，调整配置运行顺序也不改变已有地址、输出摘要和 calldata gas。
+- #5430 同时移除了 v1 的 access-list 独立计费。合并该基线后，12 条启用 intrinsic 的 `web3.accessList` 及对应 `block` 合计按实测更新：普通配置从 29856 变为 21256，Prague/Osaka 配置受 calldata floor 约束，变为 21640。其余行保持不变；这次更新记录目标分支已有行为，并非本 PR 修改计费规则。
 - `GasCharacterization_V1Test`（`test-transaction-executor`）同时记录 `protocol::normalizeReceipts` 求出的块 gas 合计，即 `BaselineScheduler` 写进区块头的值。
 - `GasCharacterization_V0Test`（`test-bcos-executor`）按串行（`executeTransactions`）和 DMC（`dmcExecuteTransaction` 加一个按 `DmcExecutor::handleExecutiveMessage`/`V2` 处理消息的驱动）各跑一遍。
 - v0 另有独立的代码大小用例：关闭 intrinsic，预算 8,000,000，部署返回 `0x50000` 字节的代码。3.0/3.1 应拒绝，3.2 应成功；串行和 DMC 各验证三个版本，并检查 gasUsed 与代码落库结果。共享脚本仍使用 3,000,000 预算，原有耗尽 gas 的行不变。

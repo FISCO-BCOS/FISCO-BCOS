@@ -81,7 +81,8 @@ constexpr std::string_view c_factoryRuntime =
     "60646000f3";
 
 // An EIP-2930 transaction with 16 non-zero calldata bytes, two addresses and two storage keys
-// in its access list, and a recipient without code. This pins access-list intrinsic gas.
+// in its access list, and a recipient without code. This pins current v1 typed-transaction gas;
+// v1 accepts the list without charging a separate access-list surcharge.
 constexpr std::string_view c_accessListTx =
     "0x01f8f205078506fc23ac008357b58494811a752c8cd697e3cb27279c330ed1ada745a8d7881bc16d674ec800"
     "00906ebaf477f83e051589c1188bcc6ddccdf872f85994de0b295669a9fd93d5f28d9ec85e40f4cb697baef842"
