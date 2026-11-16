@@ -31,6 +31,7 @@ class MockLedger3 : public bcos::ledger::LedgerInterface
 public:
     MockLedger3() : LedgerInterface() {}
     using Ptr = std::shared_ptr<MockLedger3>;
+
     task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
@@ -45,119 +46,118 @@ public:
         co_return std::string{};
     }
 
+    task::Task<void> preStoreBlockTxs(
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override
+    {
+        co_return;
+    }
+
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
         bcos::protocol::Block::ConstPtr block) override
     {
         return nullptr;
     }
 
-    void asyncGetBlockDataByNumber(protocol::BlockNumber _blockNumber, int32_t _blockFlag,
-        std::function<void(Error::Ptr, protocol::Block::Ptr)> _onGetBlock) override
+    task::Task<protocol::Block::Ptr> getBlockDataByNumber(
+        protocol::BlockNumber _blockNumber, int32_t _blockFlag) override
     {
         auto block = std::make_shared<bcostars::protocol::BlockImpl>();
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(_blockNumber);
         block->setBlockHeader(blockHeader);
-        // For testing, create a mock block with header
         if (_blockFlag & HEADER)
         {
-            // Return a mock block or error for testing
-            _onGetBlock(nullptr, nullptr);
+            co_return nullptr;
         }
+        co_return std::move(block);
     }
 
-    void asyncGetBlockNumber(
-        std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock) override
-    {
-        _onGetBlock(nullptr, commitBlockNumber);
-    }
+    task::Task<protocol::BlockNumber> getBlockNumber() override { co_return commitBlockNumber; }
 
-    void asyncGetBlockHashByNumber(protocol::BlockNumber _blockNumber,
-        std::function<void(Error::Ptr, crypto::HashType)> _onGetBlock) override
+    task::Task<crypto::HashType> getBlockHashByNumber(protocol::BlockNumber _blockNumber) override
     {
         BOOST_CHECK_EQUAL(_blockNumber, commitBlockNumber);
-        _onGetBlock(nullptr, h256(commitBlockNumber));
+        co_return h256(commitBlockNumber);
     }
 
-    void asyncGetBlockNumberByHash(crypto::HashType const& _blockHash,
-        std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock) override
-    {}
+    task::Task<protocol::BlockNumber> getBlockNumberByHash(crypto::HashType) override
+    {
+        co_return -1;
+    }
 
-    void asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _withProof,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr,
-            std::shared_ptr<std::map<std::string, MerkleProofPtr>>)>
-            _onGetTx) override
-    {}
+    task::Task<BatchTransactionsResult> getBatchTxsByHashList(crypto::HashListPtr, bool) override
+    {
+        co_return BatchTransactionsResult{};
+    }
 
-    void asyncGetTransactionReceiptByHash(crypto::HashType const& _txHash, bool _withProof,
-        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr, MerkleProofPtr)> _onGetTx)
-        override
-    {}
+    task::Task<TransactionReceiptResult> getTransactionReceiptByHash(
+        crypto::HashType, bool) override
+    {
+        co_return TransactionReceiptResult{};
+    }
 
-    void asyncGetTotalTransactionCount(std::function<void(Error::Ptr, int64_t _totalTxCount,
-            int64_t _failedTxCount, protocol::BlockNumber _latestBlockNumber)>
-            _callback) override
-    {}
+    task::Task<TransactionCountResult> getTotalTransactionCount() override
+    {
+        co_return TransactionCountResult{};
+    }
 
-    void asyncGetCurrentStateByKey(std::string_view const& _key,
-        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) override
-    {}
+    task::Task<std::optional<bcos::storage::Entry>> getCurrentStateByKey(std::string_view) override
+    {
+        co_return std::nullopt;
+    }
 
-    void asyncGetSystemConfigByKey(std::string_view const& _key,
-        std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> _onGetConfig) override
+    task::Task<SystemConfigEntry> getSystemConfigByKey(std::string_view _key) override
     {
         if (_key == ledger::SYSTEM_KEY_TX_COUNT_LIMIT)
         {
-            _onGetConfig(nullptr, "100", commitBlockNumber);
+            co_return SystemConfigEntry{"100", commitBlockNumber};
         }
-        else if (_key == ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD)
+        if (_key == ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD)
         {
-            _onGetConfig(nullptr, "300", commitBlockNumber);
+            co_return SystemConfigEntry{"300", commitBlockNumber};
         }
-        else if (_key == ledger::SYSTEM_KEY_TX_GAS_LIMIT)
+        if (_key == ledger::SYSTEM_KEY_TX_GAS_LIMIT)
         {
-            _onGetConfig(nullptr, "300000000", commitBlockNumber);
+            co_return SystemConfigEntry{"300000000", commitBlockNumber};
         }
-        else if (_key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
+        if (_key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
         {
-            _onGetConfig(nullptr, "0x1", commitBlockNumber);
+            co_return SystemConfigEntry{"0x1", commitBlockNumber};
         }
-        else if (_key == ledger::SYSTEM_KEY_COMPATIBILITY_VERSION)
+        if (_key == ledger::SYSTEM_KEY_COMPATIBILITY_VERSION)
         {
-            _onGetConfig(nullptr, bcos::protocol::RC4_VERSION_STR, commitBlockNumber);
+            co_return SystemConfigEntry{bcos::protocol::RC4_VERSION_STR, commitBlockNumber};
         }
-        else if (_key == ledger::SYSTEM_KEY_RPBFT_SWITCH)
+        if (_key == ledger::SYSTEM_KEY_RPBFT_SWITCH)
         {
-            _onGetConfig(nullptr, "1", commitBlockNumber);
+            co_return SystemConfigEntry{"1", commitBlockNumber};
         }
-        else if (_key == ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM)
+        if (_key == ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM)
         {
-            _onGetConfig(nullptr, "4", commitBlockNumber);
+            co_return SystemConfigEntry{"4", commitBlockNumber};
         }
-        else if (_key == ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM)
+        if (_key == ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM)
         {
-            _onGetConfig(nullptr, "1000", commitBlockNumber);
+            co_return SystemConfigEntry{"1000", commitBlockNumber};
         }
-        else if (_key == ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE)
+        if (_key == ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE)
         {
-            _onGetConfig(nullptr, "0", commitBlockNumber);
+            co_return SystemConfigEntry{"0", commitBlockNumber};
         }
-        else if (_key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
+        if (_key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
         {
-            _onGetConfig(nullptr, "20200", commitBlockNumber);
+            co_return SystemConfigEntry{"20200", commitBlockNumber};
         }
-        else if (::ranges::count(ledger::Features::featureKeys(), _key) > 0)
+        if (::ranges::count(ledger::Features::featureKeys(), _key) > 0)
         {
-            _onGetConfig(BCOS_ERROR_PTR(-1, "Not found!"), "0", commitBlockNumber);
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Not found!"));
         }
-        else if (_key == SYSTEM_KEY_AUTH_CHECK_STATUS)
+        if (_key == SYSTEM_KEY_AUTH_CHECK_STATUS)
         {
-            _onGetConfig(nullptr, "0", commitBlockNumber);
+            co_return SystemConfigEntry{"0", commitBlockNumber};
         }
-        else
-        {
-            BOOST_FAIL("Unknown query key: " + std::string(_key));
-        }
+        BOOST_FAIL("Unknown query key: " + std::string(_key));
+        co_return SystemConfigEntry{"", 0};
     }
 
     task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
@@ -174,25 +174,24 @@ public:
         systemConfig.set(ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, "4", commitBlockNumber);
         systemConfig.set(ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, "1000", commitBlockNumber);
         systemConfig.set(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "20200", commitBlockNumber);
-        co_return systemConfig;  // Return the populated SystemConfigs object
+        co_return systemConfig;
     }
 
-    void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override
+    task::Task<consensus::ConsensusNodeList> getNodeListByType(std::string_view _type) override
     {
         if (_type == ledger::CONSENSUS_SEALER)
         {
-            _onGetConfig(nullptr, consensus::ConsensusNodeList(1));
+            co_return consensus::ConsensusNodeList(1);
         }
-        else if (_type == ledger::CONSENSUS_OBSERVER)
+        if (_type == ledger::CONSENSUS_OBSERVER)
         {
-            _onGetConfig(nullptr, consensus::ConsensusNodeList(2));
+            co_return consensus::ConsensusNodeList(2);
         }
-        else if (_type == ledger::CONSENSUS_CANDIDATE_SEALER)
+        if (_type == ledger::CONSENSUS_CANDIDATE_SEALER)
         {
-            _onGetConfig(nullptr, consensus::ConsensusNodeList(2));
+            co_return consensus::ConsensusNodeList(2);
         }
-        else if (_type.empty())
+        if (_type.empty())
         {
             consensus::ConsensusNodeList nodeList(5);
             nodeList[0].type = consensus::Type::consensus_sealer;
@@ -200,24 +199,17 @@ public:
             nodeList[2].type = consensus::Type::consensus_observer;
             nodeList[3].type = consensus::Type::consensus_candidate_sealer;
             nodeList[4].type = consensus::Type::consensus_candidate_sealer;
-            _onGetConfig(nullptr, nodeList);
+            co_return std::move(nodeList);
         }
-        else
-        {
-            BOOST_FAIL("Unknown query type");
-        }
+        BOOST_FAIL("Unknown query type");
+        co_return consensus::ConsensusNodeList{};
     }
 
-    void asyncGetNonceList(protocol::BlockNumber _startNumber, int64_t _offset,
-        std::function<void(
-            Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
-            _onGetList) override
-    {}
+    task::Task<NonceListResult> getNonceList(protocol::BlockNumber, int64_t) override
+    {
+        co_return nullptr;
+    }
 
-    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
-        bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::UniquePtr&&)> _callback) override
-    {}
     void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}
 
     void commitSuccess(bool _success)

@@ -232,7 +232,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
 
     // SYS_HASH_2_TX — encoded transactions keyed by tx hash, deduped by the
     // storeToBackend flag (same shared logic as storeTransactionsAndReceipts /
-    // asyncPreStoreBlockTxs); txs already persisted are skipped.
+    // preStoreBlockTxs); txs already persisted are skipped.
     for (auto& pending : encodeUnsavedBlockTransactions(block, blockTxs))
     {
         storage::Entry txEntry;
@@ -274,8 +274,7 @@ task::Task<std::vector<bcos::crypto::HashType>> getBlockTransactionHashList(
     co_return hashes;
 }
 
-// Raw-byte-string flavor (NOT hex) of the hash list above — the form the deleted
-// Ledger::asyncGetBlockTransactionHashes returned; callers feed the strings back as
+// Raw-byte-string flavor (NOT hex) of the hash list above; callers feed the strings back as
 // SYS_HASH_2_TX / SYS_HASH_2_RECEIPT row keys.
 task::Task<std::vector<std::string>> getBlockTransactionHashStrings(
     storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
@@ -293,7 +292,7 @@ task::Task<std::vector<std::string>> getBlockTransactionHashStrings(
 // Shared two-storage block assembly. The header / tx-hash list / archived-number rows live
 // in the state storage (@p metaStorage), while the SYS_HASH_2_TX / SYS_HASH_2_RECEIPT rows
 // live in the block storage (@p dataStorage) — the same object unless the node runs with a
-// separate block storage (enableSeparateBlockAndState). Ledger::asyncGetBlockDataByNumber
+// separate block storage (enableSeparateBlockAndState). Ledger::getBlockDataByNumber
 // passes {m_stateStorage, getBlockStorage()}; the single-storage tag_invoke below passes the
 // same storage for both so the block assembly stays in exactly one place.
 task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
@@ -388,7 +387,7 @@ task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
             {
                 if (!receiptEntry)
                 {
-                    // Same fail-closed contract as the base asyncBatchGetReceipts path.
+                    // Same fail-closed contract as the batchGetReceipts path.
                     BOOST_THROW_EXCEPTION(
                         BCOS_ERROR(LedgerError::GetStorageError, "missing SYS_HASH_2_RECEIPT row"));
                 }

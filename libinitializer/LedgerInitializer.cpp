@@ -1,14 +1,11 @@
 #include "LedgerInitializer.h"
 #include "AccountTableMigration.h"
-#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-task/Wait.h>
 #include <bcos-tool/Exceptions.h>
 #include <bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h>
 #include <bcos-utilities/LogStream.h>
-#include <legacy/bcos-ledger/LedgerImpl.h>
-#include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <boost/throw_exception.hpp>
 #include <future>
 #include <tuple>
@@ -18,22 +15,9 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     bcos::tool::NodeConfig::Ptr nodeConfig, bcos::storage::StorageInterface::Ptr blockStorage,
     bcos::IOServicePool::Ptr ioServicePool, std::optional<AccountTableBoot> accountTableBoot)
 {
-    bcos::storage::StorageImpl storageWrapper(storage);
-    std::shared_ptr<bcos::ledger::Ledger> ledger;
-    if (nodeConfig->smCryptoType())
-    {
-        ledger = std::make_shared<bcos::ledger::LedgerImpl<
-            bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
-            bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
-            blockFactory, storage, nodeConfig->blockLimit(), blockStorage, ioServicePool);
-    }
-    else
-    {
-        ledger = std::make_shared<bcos::ledger::LedgerImpl<
-            bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
-            bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}, std::move(storageWrapper),
-            blockFactory, storage, nodeConfig->blockLimit(), blockStorage, ioServicePool);
-    }
+    std::shared_ptr<bcos::ledger::Ledger> ledger = std::make_shared<bcos::ledger::Ledger>(
+        blockFactory, storage, nodeConfig->blockLimit(), blockStorage,
+        bcos::ledger::Ledger::c_defaultMerkleTreeCacheSize, std::move(ioServicePool));
 
     // Publish the node-local account-table encoding BEFORE buildGenesisBlock: genesis state
     // loading (Ledger::importGenesisState / GenesisStateLoader) routes account-table names

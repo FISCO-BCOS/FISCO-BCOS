@@ -1070,23 +1070,17 @@ void SchedulerImpl::preExecuteBlock(
 
 bcos::protocol::BlockNumber SchedulerImpl::getBlockNumberFromStorage()
 {
-    std::promise<protocol::BlockNumber> blockNumberFuture;
-    m_ledger->asyncGetBlockNumber(
-        [&blockNumberFuture](Error::Ptr error, protocol::BlockNumber number) {
-            if (error)
-            {
-                SCHEDULER_LOG(ERROR)
-                    << "Get blockNumber from storage failed" << LOG_KV("msg", error->errorMessage())
-                    << LOG_KV("code", error->errorCode());
-                blockNumberFuture.set_value(-1);
-            }
-            else
-            {
-                blockNumberFuture.set_value(number);
-            }
-        });
-
-    return blockNumberFuture.get_future().get();
+    try
+    {
+        return task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
+    }
+    catch (bcos::Error const& error)
+    {
+        SCHEDULER_LOG(ERROR) << "Get blockNumber from storage failed"
+                             << LOG_KV("msg", error.errorMessage())
+                             << LOG_KV("code", error.errorCode());
+        return -1;
+    }
 }
 
 bcos::protocol::BlockNumber SchedulerImpl::getCurrentBlockNumber()
@@ -1108,20 +1102,17 @@ void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
     }
 
     {
-        std::promise<std::tuple<Error::Ptr, std::string>> p;
-        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_PRICE,
-            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
-                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
-                return;
-            });
-        auto [e, value] = p.get_future().get();
-        if (e)
+        std::string value;
+        try
+        {
+            value = std::get<0>(
+                task::syncWait(m_ledger->getSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_PRICE)));
+        }
+        catch (bcos::Error const& e)
         {
             SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(_number) << LOG_DESC("fetchGasPrice failed")
-                                 << LOG_KV("code", e->errorCode())
-                                 << LOG_KV("message", e->errorMessage());
-            // BOOST_THROW_EXCEPTION(
-            //     BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
+                                 << LOG_KV("code", e.errorCode())
+                                 << LOG_KV("message", e.errorMessage());
             value = "0x0";
         }
 
@@ -1132,40 +1123,37 @@ void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
                         << LOG_KV("requestBlockNumber", _number);
 
     {
-        std::promise<std::tuple<Error::Ptr, std::string>> p;
-        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
-                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
-                return;
-            });
-        auto [e, value] = p.get_future().get();
-        if (e)
+        std::string value;
+        try
+        {
+            value = std::get<0>(
+                task::syncWait(m_ledger->getSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT)));
+        }
+        catch (bcos::Error const& e)
         {
             SCHEDULER_LOG(WARNING)
                 << BLOCK_NUMBER(_number) << LOG_DESC("fetchGasLimit failed")
-                << LOG_KV("code", e->errorCode()) << LOG_KV("message", e->errorMessage());
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
+                << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.errorMessage());
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::fetchGasLimitError, e.errorMessage()));
         }
 
         // cast must be success
         m_gasLimit = boost::lexical_cast<uint64_t>(value);
     }
     {
-        std::promise<std::tuple<Error::Ptr, std::string>> p;
-        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION,
-            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
-                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
-                return;
-            });
-        auto [e, value] = p.get_future().get();
-        if (e)
+        std::string value;
+        try
+        {
+            value = std::get<0>(task::syncWait(
+                m_ledger->getSystemConfigByKey(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION)));
+        }
+        catch (bcos::Error const& e)
         {
             SCHEDULER_LOG(WARNING)
                 << BLOCK_NUMBER(_number) << LOG_DESC("fetchCompatibilityVersion failed")
-                << LOG_KV("code", e->errorCode()) << LOG_KV("message", e->errorMessage());
+                << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.errorMessage());
             BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(SchedulerError::InvalidBlockVersion, e->errorMessage()));
+                BCOS_ERROR(SchedulerError::InvalidBlockVersion, e.errorMessage()));
         }
 
         // cast must be success

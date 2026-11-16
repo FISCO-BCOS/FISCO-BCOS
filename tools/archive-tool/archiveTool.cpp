@@ -292,17 +292,16 @@ void archiveBlocks(auto archiveStorage, auto ledger,
     for (int64_t i = startBlockNumber; i < endBlockNumber; ++i)
     {
         // getBlockByNumber
-        std::promise<bcos::protocol::Block::Ptr> promise;
-        ledger->asyncGetBlockDataByNumber(
-            i, blockFlag, [&promise](const Error::Ptr& error, bcos::protocol::Block::Ptr block) {
-                if (error)
-                {
-                    std::cerr << "get block failed: " << error->errorMessage() << endl;
-                    exit(1);
-                }
-                promise.set_value(std::move(block));
-            });
-        auto block = promise.get_future().get();
+        bcos::protocol::Block::Ptr block;
+        try
+        {
+            block = task::syncWait(ledger::getBlockData(*ledger, i, blockFlag));
+        }
+        catch (bcos::Error const& error)
+        {
+            std::cerr << "get block failed: " << error.errorMessage() << endl;
+            exit(1);
+        }
         auto size = block->receiptsSize();
         std::vector<std::string> keys(size, "");
         std::vector<std::string> transactionValues(size, "");
@@ -654,18 +653,17 @@ int main(int argc, const char* argv[])
 
     auto ledger = LedgerInitializer::build(
         protocolInitializer->blockFactory(), localStorage, nodeConfig, localBlockStorage);
-    std::promise<int64_t> promise;
-    ledger->asyncGetBlockNumber(
-        [&promise](const Error::Ptr& error, bcos::protocol::BlockNumber number) {
-            if (error)
-            {
-                cout << "get block number failed: " << error->errorMessage() << endl;
-                exit(1);
-            }
-            promise.set_value(number);
-            cout << "current block number is " << number << endl;
-        });
-    auto currentBlockNumber = promise.get_future().get();
+    protocol::BlockNumber currentBlockNumber = -1;
+    try
+    {
+        currentBlockNumber = task::syncWait(ledger::getCurrentBlockNumber(*ledger));
+    }
+    catch (bcos::Error const& error)
+    {
+        cout << "get block number failed: " << error.errorMessage() << endl;
+        exit(1);
+    }
+    cout << "current block number is " << currentBlockNumber << endl;
     // verify the start and end block number, the genesis block should not be archived and the end
     // block number should not be larger than the latest block number
     if (startBlockNumber <= 0 || startBlockNumber >= currentBlockNumber || endBlockNumber <= 0 ||
@@ -676,12 +674,13 @@ int main(int argc, const char* argv[])
         return 1;
     }
     // read archived block number to check the request range
-    std::promise<std::pair<Error::Ptr, std::optional<bcos::storage::Entry>>> statePromise;
-    ledger->asyncGetCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER,
-        [&statePromise](Error::Ptr&& err, std::optional<bcos::storage::Entry>&& entry) {
-            statePromise.set_value(std::make_pair(err, entry));
-        });
-    auto entry = statePromise.get_future().get().second;
+    std::optional<bcos::storage::Entry> entry;
+    try
+    {
+        entry = task::syncWait(ledger->getCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER));
+    }
+    catch (bcos::Error const&)
+    {}
     protocol::BlockNumber archivedBlockNumber = 0;
     if (entry)
     {

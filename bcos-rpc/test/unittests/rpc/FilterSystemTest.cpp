@@ -182,9 +182,7 @@ BOOST_AUTO_TEST_CASE(test_filter_expiration)
 // defaults — and both the Web3 and legacy entries thread them explicitly.
 BOOST_AUTO_TEST_CASE(filterBlockTagResolvesAgainstHeadAndDepths)
 {
-    protocol::BlockNumber latest = -1;
-    m_ledger->asyncGetBlockNumber(
-        [&latest](Error::Ptr, protocol::BlockNumber number) { latest = number; });
+    protocol::BlockNumber latest = task::syncWait(m_ledger->getBlockNumber());
     BOOST_REQUIRE_GE(latest, 0);
 
     Json::Reader reader;
