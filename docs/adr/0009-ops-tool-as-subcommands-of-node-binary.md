@@ -25,5 +25,5 @@ Linux 生产机没有 JDK；装 JDK、拉控制台、配 `sdk.crt` 是三个额�
 ## Consequences
 
 - 新模块 `bcos-ops/`：`NodeStatus`、收集器（RPC / 挂接 / 日志）、判定器、日志解析、子命令、TUI。单测在 `bcos-ops/test/unittests/`，唯一注入点是 `RpcCall`。
-- 只有 AIR 二进制带子命令；tars 服务与 lightnode 不做。`CommandHelper` 的退出码改动是共享的：lightnode 的坏旗标与缺文件也从 `exit(0)` 变为 `exit(1)`。
+- 只有 AIR 二进制带子命令，tars 服务不做。`CommandHelper` 的退出码改动在节点初始化路径中共享：坏旗标与缺文件从 `exit(0)` 变为 `exit(1)`。
 - 输出契约：非 TTY 默认 JSON，退出码 0 / 1（用法或连接）/ 2（节点可达但判据失败或 auth 拒绝）。

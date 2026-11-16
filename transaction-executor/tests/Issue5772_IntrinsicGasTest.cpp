@@ -209,11 +209,9 @@ BOOST_AUTO_TEST_CASE(pragueCalldataFloorIsUnchanged)
     }
 }
 
-// The access list is part of the intrinsic gas: 2400 per address, 1900 per storage key. The
-// transaction is the EIP-2930 fixture of Web3AccessListResolverTest: 16 non-zero bytes of
-// calldata, two addresses, two storage keys. Its recipient has no code, so the frame fails
-// before running anything and the receipt shows the upfront charge alone.
-BOOST_AUTO_TEST_CASE(accessListIsPricedPerAddressAndKey)
+// Access-list transactions are accepted on the consortium v1 lane without separately pricing
+// the list. The recipient has no code, so the receipt shows only the base and calldata charges.
+BOOST_AUTO_TEST_CASE(accessListIsAcceptedWithoutSeparateCharge)
 {
     constexpr std::string_view rawTx =
         "0x01f8f205078506fc23ac008357b58494811a752c8cd697e3cb27279c330ed1ada745a8d7881bc16d674ec800"
@@ -266,7 +264,7 @@ BOOST_AUTO_TEST_CASE(accessListIsPricedPerAddressAndKey)
             BOOST_FAIL(boost::current_exception_diagnostic_information());
         }
         BOOST_CHECK_NE(receipt->status(), c_ok);
-        BOOST_CHECK_EQUAL(gasUsed(*receipt), flag ? 21000 + 16 * 16 + 2 * 2400 + 2 * 1900 : 21000);
+        BOOST_CHECK_EQUAL(gasUsed(*receipt), flag ? 21000 + 16 * 16 : 21000);
     }
 }
 

@@ -20,8 +20,8 @@
  */
 #pragma once
 #include "CampaignConfig.h"
-#include <bcos-framework/election/LeaderElectionInterface.h>
 #include <bcos-utilities/Timer.h>
+#include <legacy/bcos-framework/election/LeaderElectionInterface.h>
 #include <chrono>
 #include <memory>
 namespace bcos

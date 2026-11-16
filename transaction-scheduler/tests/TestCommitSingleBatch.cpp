@@ -267,67 +267,60 @@ public:
         g_sbFeatures = ledger::Features{};
         mockScheduler.m_plan = &plan;
 
-        // Unlike the no-op stubs in the sibling fixtures, this asyncPrewriteBlock
+        // Unlike the no-op stubs in the sibling fixtures, this prewriteBlock
         // writes the same three ledger index rows the production LedgerImpl
-        // writes (Ledger.cpp asyncPrewriteBlock: number->hash, hash->number,
+        // writes (Ledger.cpp prewriteBlock: number->hash, hash->number,
         // number->header) through the storage it is handed. coCommitBlock hands
         // it prewriteStorage (via prewriteBlockToBuffer's LegacyStorageWrapper),
         // so these rows MUST travel in the same single backend merge as the
         // block's state rows — which is exactly what the key-set assertions pin.
-        fakeit::When(Method(mockLedger, asyncPrewriteBlock))
-            .AlwaysDo(
-                [](storage::StorageInterface::Ptr storage, protocol::ConstTransactionsPtr,
-                    protocol::Block::ConstPtr block,
-                    std::function<void(std::string, Error::Ptr&&)> callback, bool,
-                    std::optional<ledger::Features>, std::optional<bcos::crypto::HashType>, bool) {
-                    auto header = block->blockHeader();
-                    auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
-                    auto hash = header->hash();
-                    auto hashView =
-                        std::string_view(reinterpret_cast<const char*>(hash.data()), hash.SIZE);
+        fakeit::When(Method(mockLedger, prewriteBlock))
+            .AlwaysDo([](storage::StorageInterface::Ptr storage, protocol::ConstTransactionsPtr,
+                          protocol::Block::ConstPtr block, bool,
+                          std::optional<bcos::crypto::HashType>, bool) -> task::Task<std::string> {
+                auto header = block->blockHeader();
+                auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
+                auto hash = header->hash();
+                auto hashView =
+                    std::string_view(reinterpret_cast<const char*>(hash.data()), hash.SIZE);
 
-                    storage::Entry hashEntry;
-                    hashEntry.set(hash.asBytes());
-                    storage->asyncSetRow(ledger::SYS_NUMBER_2_HASH, blockNumberStr,
-                        std::move(hashEntry), [](Error::UniquePtr) {});
+                storage::Entry hashEntry;
+                hashEntry.set(hash.asBytes());
+                storage->asyncSetRow(ledger::SYS_NUMBER_2_HASH, blockNumberStr,
+                    std::move(hashEntry), [](Error::UniquePtr) {});
 
-                    storage::Entry hash2NumberEntry;
-                    hash2NumberEntry.set(blockNumberStr);
-                    storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER, hashView,
-                        std::move(hash2NumberEntry), [](Error::UniquePtr) {});
+                storage::Entry hash2NumberEntry;
+                hash2NumberEntry.set(blockNumberStr);
+                storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER, hashView,
+                    std::move(hash2NumberEntry), [](Error::UniquePtr) {});
 
-                    bytes headerBuffer;
-                    header->encode(headerBuffer);
-                    storage::Entry number2HeaderEntry;
-                    number2HeaderEntry.set(std::move(headerBuffer));
-                    storage->asyncSetRow(ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr,
-                        std::move(number2HeaderEntry), [](Error::UniquePtr) {});
+                bytes headerBuffer;
+                header->encode(headerBuffer);
+                storage::Entry number2HeaderEntry;
+                number2HeaderEntry.set(std::move(headerBuffer));
+                storage->asyncSetRow(ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr,
+                    std::move(number2HeaderEntry), [](Error::UniquePtr) {});
 
-                    callback({}, nullptr);
-                });
+                co_return std::string{};
+            });
         using HashView =
             ::ranges::any_view<h256, ::ranges::category::mask | ::ranges::category::sized>;
         fakeit::When(Method(mockTxPool, getTransactions)).AlwaysDo([](HashView) {
             return emptyTxsTaskSB();
         });
-        fakeit::When(Method(mockLedger, asyncGetBlockNumber))
-            .AlwaysDo([](std::function<void(Error::Ptr, protocol::BlockNumber)> callback) {
-                callback(nullptr, -1);
+        fakeit::When(Method(mockLedger, getBlockNumber))
+            .AlwaysDo([]() -> task::Task<protocol::BlockNumber> { co_return -1; });
+        fakeit::When(Method(mockLedger, getNodeListByType))
+            .AlwaysDo([](std::string_view) -> task::Task<consensus::ConsensusNodeList> {
+                co_return consensus::ConsensusNodeList{};
             });
-        fakeit::When(Method(mockLedger, asyncGetNodeListByType))
-            .AlwaysDo([](std::string_view const&,
-                          std::function<void(Error::Ptr, consensus::ConsensusNodeList)> callback) {
-                callback(nullptr, {});
+        fakeit::When(Method(mockLedger, getBlockDataByNumber))
+            .AlwaysDo([](protocol::BlockNumber, int32_t) -> task::Task<protocol::Block::Ptr> {
+                co_return nullptr;
             });
-        fakeit::When(Method(mockLedger, asyncGetBlockDataByNumber))
-            .AlwaysDo([](protocol::BlockNumber, int32_t,
-                          std::function<void(Error::Ptr, protocol::Block::Ptr)> callback) {
-                callback(nullptr, nullptr);
-            });
-        fakeit::When(Method(mockLedger, asyncGetBlockHashByNumber))
-            .AlwaysDo([](protocol::BlockNumber,
-                          std::function<void(Error::Ptr, crypto::HashType)> callback) {
-                callback(nullptr, crypto::HashType{});
+        fakeit::When(Method(mockLedger, getBlockHashByNumber))
+            .AlwaysDo([](protocol::BlockNumber) -> task::Task<crypto::HashType> {
+                co_return crypto::HashType{};
             });
         fakeit::When(Method(mockLedger, fetchAllSystemConfigs)).AlwaysDo([](protocol::BlockNumber) {
             return emptySystemConfigsTaskSB();

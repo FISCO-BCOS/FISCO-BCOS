@@ -73,7 +73,7 @@ task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,
     std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
     bool writeNonces = true);
 
-task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInterface& ledger,
+task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockRows> /*unused*/, LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
     bool withTransactionsAndReceipts, auto& storage,
     std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt, bool writeNonces = true)
@@ -162,7 +162,7 @@ inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
     return out;
 }
 
-/// The metadata row set of a block prewrite (Ledger::asyncPrewriteBlock rows 1-6), in the
+/// The metadata row set of a block prewrite (Ledger::prewriteBlock rows 1-6), in the
 /// historical write order: number→hash, hash→number, number→header, (optional) number→
 /// nonces, current-number, number→tx-metadata. The SYS_KEY_TOTAL_* counter rows are NOT
 /// included — they depend on the totals already stored — and the sys-contract-deploy
@@ -171,7 +171,7 @@ struct PrewriteBlockRows
 {
     std::vector<std::pair<executor_v1::StateKey, storage::Entry>> rows;
     // The tx-metadata block backing the SYS_NUMBER_2_TXS row, kept for callers that key
-    // receipts by transactionHash(i) (Ledger::asyncPrewriteBlock's receipt fan-out).
+    // receipts by transactionHash(i) (Ledger::prewriteBlock's receipt fan-out).
     protocol::Block::Ptr transactionsBlock;
 };
 
@@ -200,11 +200,11 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     }
 
     // Phase 1: header / hash mappings / nonce / current-number / tx-meta via the
-    // existing prewriteBlock path. withTransactionsAndReceipts=false intentionally
+    // existing prewriteBlockRows path. withTransactionsAndReceipts=false intentionally
     // skips the tx/receipt writes that would otherwise go to m_blockStorage; we
     // route them through the same `storage` below to keep the commit atomic.
-    co_await prewriteBlock(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false, storage,
-        blockHashOverride, writeNonces);
+    co_await prewriteBlockRows(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false,
+        storage, blockHashOverride, writeNonces);
 
     auto txSize = std::max(block->transactionsSize(), block->transactionsMetaDataSize());
     if (txSize == 0)
@@ -232,7 +232,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
 
     // SYS_HASH_2_TX — encoded transactions keyed by tx hash, deduped by the
     // storeToBackend flag (same shared logic as storeTransactionsAndReceipts /
-    // asyncPreStoreBlockTxs); txs already persisted are skipped.
+    // preStoreBlockTxs); txs already persisted are skipped.
     for (auto& pending : encodeUnsavedBlockTransactions(block, blockTxs))
     {
         storage::Entry txEntry;
@@ -274,8 +274,7 @@ task::Task<std::vector<bcos::crypto::HashType>> getBlockTransactionHashList(
     co_return hashes;
 }
 
-// Raw-byte-string flavor (NOT hex) of the hash list above — the form the deleted
-// Ledger::asyncGetBlockTransactionHashes returned; callers feed the strings back as
+// Raw-byte-string flavor (NOT hex) of the hash list above; callers feed the strings back as
 // SYS_HASH_2_TX / SYS_HASH_2_RECEIPT row keys.
 task::Task<std::vector<std::string>> getBlockTransactionHashStrings(
     storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
@@ -293,7 +292,7 @@ task::Task<std::vector<std::string>> getBlockTransactionHashStrings(
 // Shared two-storage block assembly. The header / tx-hash list / archived-number rows live
 // in the state storage (@p metaStorage), while the SYS_HASH_2_TX / SYS_HASH_2_RECEIPT rows
 // live in the block storage (@p dataStorage) — the same object unless the node runs with a
-// separate block storage (enableSeparateBlockAndState). Ledger::asyncGetBlockDataByNumber
+// separate block storage (enableSeparateBlockAndState). Ledger::getBlockDataByNumber
 // passes {m_stateStorage, getBlockStorage()}; the single-storage tag_invoke below passes the
 // same storage for both so the block assembly stays in exactly one place.
 task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
@@ -388,7 +387,7 @@ task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
             {
                 if (!receiptEntry)
                 {
-                    // Same fail-closed contract as the base asyncBatchGetReceipts path.
+                    // Same fail-closed contract as the batchGetReceipts path.
                     BOOST_THROW_EXCEPTION(
                         BCOS_ERROR(LedgerError::GetStorageError, "missing SYS_HASH_2_RECEIPT row"));
                 }

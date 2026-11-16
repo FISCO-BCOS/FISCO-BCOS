@@ -16,15 +16,20 @@ target_include_directories(executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table bcos-protocol
         Boost::context evmone::evmone GroupSig Paillier blst)
-# Web3AccessListResolver decodes extraTransactionBytes via rpc::Web3Transaction RLP.
-# TODO: move typed-tx RLP decode to bcos-codec to drop executor -> rpc dependency.
-target_link_libraries(executor PRIVATE rpc)
 
 # Exclude CoroutineTransactionExecutive from unity build to allow per-file
 # ASan flags. boost::context coroutines trigger false-positive
 # stack-use-after-scope errors under -fsanitize-address-use-after-scope.
 set_source_files_properties(
     "src/executive/CoroutineTransactionExecutive.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# Exclude files whose global `using namespace std;` / `using namespace bcos::codec;`
+# would leak into sibling unity sources and break range-v3 / boost.coroutine2
+# includes (ambiguous `ranges` / `abi` under GCC 14).
+set_source_files_properties(
+    "src/executive/BlockContext.cpp"
+    "src/executive/ExecutiveDagFlow.cpp"
+    "src/executive/TransactionExecutive.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 if(SANITIZE_ADDRESS)
     set_source_files_properties(

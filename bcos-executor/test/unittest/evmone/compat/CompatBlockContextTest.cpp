@@ -61,6 +61,12 @@ BOOST_AUTO_TEST_CASE(FC_R_block_context_schedule_ladder)
         BOOST_CHECK(ctx->vmSchedule().enablePrague);
         BOOST_CHECK(!ctx->vmSchedule().enableOsaka);
     }
+    {
+        auto ctx = makeContext(CompatFeatureProfile::osakaEnabled(),
+            static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION));
+        BOOST_CHECK(ctx->vmSchedule().enablePrague);
+        BOOST_CHECK(ctx->vmSchedule().enableOsaka);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()  // CompatBlockContext

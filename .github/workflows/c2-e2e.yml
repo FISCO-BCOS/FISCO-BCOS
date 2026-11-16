@@ -230,7 +230,7 @@ jobs:
           cd build
           CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld \
             -DTESTS=ON -DCOVERAGE=OFF \
-            -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
+            -DWITH_CPPSDK=ON \
             -DWITH_TARS_SERVICES=OFF -DTOOL=OFF \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DVCPKG_TARGET_TRIPLET=x64-linux-release ..

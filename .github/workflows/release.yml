@@ -36,27 +36,19 @@ jobs:
         # project, so use every core the runner has.
         # No `make tar`: that target exists only with WITH_TARS_SERVICES=ON, which this
         # build does not set, so the step failed before any upload. The release ships the
-        # AIR node, the light node, build_chain.sh and BcosBuilder; the Pro service
-        # packages below upload only when a build produced them.
+        # AIR node, build_chain.sh and BcosBuilder; the Pro service packages below upload
+        # only when a build produced them.
         run: make -j"$(sysctl -n hw.ncpu)"
       - name: tar BcosBuilder
         run: mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
       - name: tar fisco-bcos for macOS
-        run: mv fisco-bcos-air/ bin/ && mv legacy/lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && strip fisco-bcos-lightnode && tar -cvzf lightnode.tar.gz fisco-bcos-lightnode && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: mv fisco-bcos-air/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - name: Upload fisco-bcos binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: bin/fisco-bcos.tar.gz
           asset_name: fisco-bcos-macOS-arm.tar.gz
-          tag: ${{ github.ref }}
-          overwrite: true
-      - name: Upload fisco-bcos-lightnode binaries to release
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: bin/lightnode.tar.gz
-          asset_name: fisco-bcos-lightnode-macOS-arm.tar.gz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosNodeService binaries to release

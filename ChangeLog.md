@@ -1,6 +1,15 @@
 
 ### v3.18.0
 
+**bcos-rpc/bcos-gateway/bcos-framework 破坏性变更**：
+
+* `RpcFactory::buildRpc` 和两个 `GatewayFactory::buildGateway` 重载删除 `LeaderEntryPointInterface::Ptr` 参数，`RpcFactory::buildGroupManager` 同步删除该参数；下游调用方及派生类需移除对应实参或形参，`RpcFactory::buildGroupManager` 固定返回 `TarsGroupManager`（AIR 本地 RPC 仍使用 `AirGroupManager`），Pro Gateway 固定使用 `ProGatewayNodeManager`
+* 公共头目录 `bcos-framework/election/` 自 bcos-framework 安装内容中移除，不再随安装包分发，仅在源码树中归档于 `legacy/bcos-framework/election/`；源码树内如仍需引用归档接口，可改为 `<legacy/bcos-framework/election/...>`，基于 etcd leader election 的 RPC/Gateway 故障转移不再可用
+
+**Lightnode 破坏性变更**：
+
+* Lightnode 已废弃并归档，不再提供 `WITH_LIGHTNODE` 构建选项，不再构建或发布 `fisco-bcos-lightnode`；节点侧 Lightnode 初始化和 `light_node` 限流配置支持同步移除
+
 **bcos-utilities 日志破坏性变更**：
 
 * 日志管线替换为整行异步 fast path；`log.format` 自定义格式恢复支持——配置串在 initLog 时编译为整行布局、由生产者线程直接渲染（支持字面量、`%%` 转义及 `%Severity%`、`%TimeStamp(format="...")%`、`%ThreadName%`、`%ThreadID%`、`%LineID%`、`%ProcessID%`、`%Message%`，TimeStamp 支持 date_time 标志 `%Y %y %m %d %H %M %S %f %%`），不支持的语法回退内置布局并在 stderr 与日志中输出 ERROR；格式串缺少 `%Message%` 占位符时日志内容不被渲染，布局仍然生效，但同样在 stderr 与日志中输出告警；`log.flush` 默认值由 `true` 改为 `false`（改为队列排空时刷盘，持续洪泛下兜底上界为 100ms + 至多 63 行的写盘延迟，逐行刷盘可显式配置 `flush=true` 恢复）
@@ -10,6 +19,12 @@
 * 合入 upstream release-3.18.0 的 per-module 日志级别（`BCOS_MODULE_LOG`/`setModuleLogLevel`，实现移植到整行 fast path，不经过 boost::log core）、`log.enable_block_stat` BlockStat 开关及共识路径命名事件日志；测试工具 `LogCapture` 改为注册 whole-line sink 捕获日志
 
 **bcos-boostssl/bcos-cpp-sdk 破坏性变更**：删除 MessageFace 及工厂、WsMessage 改 move-only、回调改按值传 WsMessage、WsSession/WsService 去虚、发送路径签名改 const WsMessage&（迁移详见 PR #5464）
+
+**bcos-ledger 破坏性变更**：
+
+* 已安装公共头 `bcos-framework/ledger/LedgerInterface.h` 将 `void asyncPrewriteBlock(StorageInterface::Ptr, ConstTransactionsPtr, Block::ConstPtr, std::function<void(std::string, Error::Ptr&&)>, bool, std::optional<Features>, std::optional<HashType>, bool)` 替换为 `task::Task<std::string> prewriteBlock(StorageInterface::Ptr, ConstTransactionsPtr, Block::ConstPtr, bool, std::optional<HashType>, bool)`，同时删除回调和未使用的 `features` 参数；下游派生实现需改为协程 override，普通预写返回 hash-to-number 行的 primary key，系统合约部署分支只写 `SYS_KEY_CURRENT_NUMBER` 并返回空字符串，错误通过协程异常传播
+* 同一公共头的区块、交易/回执、系统配置、nonce、共识节点与状态查询接口由 callback 风格的 `async*` 纯虚函数迁移为原生 `task::Task` 协程；下游 `LedgerInterface` 实现和 mock 需同步更名及修改签名，调用方改用 `co_await` 获取结果，读错误通过协程异常传播。新增 `MerkleProofMapPtr`、`BatchTransactionsResult`、`TransactionReceiptResult`、`TransactionCountResult`、`NonceListResult` 等公共结果类型；其中 `TransactionReceiptResult` 仅允许真实回执与证明错误共存，回执读失败通过异常抛出
+* 已安装公共头 `bcos-framework/ledger/Ledger.h` 将 CPO `bcos::ledger::prewriteBlock` 更名为 `bcos::ledger::prewriteBlockRows`，避免与 `LedgerInterface::prewriteBlock` 成员函数混淆；下游 CPO 调用及对应 `tag_invoke` 需同步更名
 
 **后续跟进**：`WsStreamDelegate::setVerifyCallback` fail-closed（raw 流上请求证书校验时抛错）将在独立 PR 落地
 
@@ -57,6 +72,10 @@
 | config.genesis（v2/v3） | `[ethereum] mode`、`[executor] evm_revision`/`evm_revision_forks`、`[op_fork_schedule]`、`[web3]`、`[version]`、`[features]` | `[fork_timestamps]`（v2）/ `[op_fork_timestamps]`（v3）；chain_id 写 `[chain] chain_id`；v2/v3 运行在固定兼容版本上，不读 `[version]`/`[features]` |
 
 **build_chain.sh / BcosBuilder 默认兼容版本**：不带 `-v` 建链现在写 `compatibility_version=3.18.0`（此前为 `v3.16.0`，导致新链不激活 3.17.0 与 3.18.0 注册的 bugfix flag）；BcosBuilder 配置缺省 `compatibility_version` 时由 `3.1.0` 改为 `3.18.0`；两处与 `docs/README_EN.md` 的版本行一并纳入 `tools/version_sync.sh --check`
+
+**修复**
+
+* 修复 Web3 交易 nonce 准入对没有余额记录的账户的判断（`Ledger::getStorageState` 不再因账户缺少 balance 行而按账户不存在返回）
 
 **升级描述**
 

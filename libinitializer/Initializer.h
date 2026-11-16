@@ -43,9 +43,6 @@
 #include <oneapi/tbb/global_control.h>
 #include <memory>
 #include <optional>
-#ifdef WITH_LIGHTNODE
-#include "LightNodeInitializer.h"
-#endif
 
 namespace rocksdb
 {
@@ -246,11 +243,6 @@ private:
     std::shared_ptr<bcos::txvalidator::TxValidator> m_memPoolValidator;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
-#ifdef WITH_LIGHTNODE
-    // Note: since LightNodeInitializer use weak_ptr of shared_from_this, this object must be exists
-    // for the whole life time
-    std::shared_ptr<LightNodeInitializer> m_lightNodeInitializer;
-#endif
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     std::shared_ptr<scheduler_v1::MultiVersionScheduler> m_scheduler;
     std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;

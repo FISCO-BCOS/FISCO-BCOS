@@ -58,7 +58,7 @@ void RpcInitializer::init(std::string const& _configDir)
     auto rpcServiceName = bcostars::getProxyDesc(bcos::protocol::RPC_SERVANT_NAME);
     RPCSERVICE_LOG(INFO) << LOG_DESC("init rpc factory success")
                          << LOG_KV("rpcServiceName", rpcServiceName);
-    auto rpc = factory->buildRpc(m_nodeConfig->gatewayServiceName(), rpcServiceName, nullptr);
+    auto rpc = factory->buildRpc(m_nodeConfig->gatewayServiceName(), rpcServiceName);
     m_rpc = rpc;
 }
 

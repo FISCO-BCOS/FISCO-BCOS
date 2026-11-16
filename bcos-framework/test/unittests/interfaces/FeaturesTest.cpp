@@ -195,7 +195,6 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_balance_precompiled",
         "feature_balance_policy1",
         "feature_paillier_add_raw",
-        "feature_evm_eip2929",
         "feature_evm_cancun",
         "feature_evm_prague",
         "feature_evm_osaka",
@@ -238,6 +237,21 @@ BOOST_AUTO_TEST_CASE(retiredNamesAreRejected)
         BOOST_CHECK(!Features::contains(name));
         BOOST_CHECK_THROW(Features::string2Flag(name), NoSuchFeatureError);
     }
+}
+
+BOOST_AUTO_TEST_CASE(featureDependenciesRequireEnabledFlag)
+{
+    Features features;
+    BOOST_CHECK_THROW(
+        features.validate("feature_balance_precompiled"), bcos::tool::InvalidSetFeature);
+    BOOST_CHECK_THROW(features.validate("feature_balance_policy1"), bcos::tool::InvalidSetFeature);
+
+    features.set(Features::Flag::feature_balance);
+    BOOST_CHECK_NO_THROW(features.validate("feature_balance_precompiled"));
+    BOOST_CHECK_THROW(features.validate("feature_balance_policy1"), bcos::tool::InvalidSetFeature);
+
+    features.set(Features::Flag::feature_balance_precompiled);
+    BOOST_CHECK_NO_THROW(features.validate("feature_balance_policy1"));
 }
 
 BOOST_AUTO_TEST_CASE(evmForkFlagsRequireThePreviousFork)

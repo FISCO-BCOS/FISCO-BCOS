@@ -102,6 +102,12 @@ BOOST_AUTO_TEST_CASE(enableOrderPutsDependenciesFirst)
     BOOST_CHECK_EQUAL(mixed[0], "feature_balance");
     BOOST_CHECK_THROW(featureEnableOrder({"feature_nope"}), OpsError);
     BOOST_CHECK(featureDependencies("bugfix_revert").empty());
+
+    auto evmOrder = featureEnableOrder({"feature_evm_osaka"});
+    BOOST_REQUIRE_EQUAL(evmOrder.size(), 3U);
+    BOOST_CHECK_EQUAL(evmOrder[0], "feature_evm_cancun");
+    BOOST_CHECK_EQUAL(evmOrder[1], "feature_evm_prague");
+    BOOST_CHECK_EQUAL(evmOrder[2], "feature_evm_osaka");
 }
 
 BOOST_AUTO_TEST_CASE(readStatesMarksOnOffAndDeprecated)

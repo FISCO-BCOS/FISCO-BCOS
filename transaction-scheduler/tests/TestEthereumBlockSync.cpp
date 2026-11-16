@@ -498,7 +498,7 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
                         }
                         BOOST_REQUIRE(result.valid);
                         BOOST_CHECK(result.error.empty());
-                        // FakeLedger::asyncPrewriteBlock is a no-op, so the commit does
+                        // FakeLedger::prewriteBlock is a no-op, so the commit does
                         // not advance SYS_KEY_CURRENT_NUMBER the way the real
                         // Ledger::prewriteBlock (Ledger.cpp:296-300) does — write the
                         // row the real commit would have written, so the verifier's
@@ -959,7 +959,7 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
                 block.uncles, 0, decoder, stateRootCalc));
             BOOST_REQUIRE_MESSAGE(
                 result.valid, "peer-1 block " << block.number() << " invalid: " << result.error);
-            // FakeLedger::asyncPrewriteBlock is a no-op, so the commit does not
+            // FakeLedger::prewriteBlock is a no-op, so the commit does not
             // advance SYS_KEY_CURRENT_NUMBER the way the real Ledger::prewriteBlock
             // (Ledger.cpp:296-300) does — write the row the real commit would have
             // written, so the verifier's head+1 guard sees the advanced head for the

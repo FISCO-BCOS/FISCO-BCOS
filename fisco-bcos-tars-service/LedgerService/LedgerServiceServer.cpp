@@ -25,8 +25,10 @@
 #include <bcos-tars-protocol/protocol/BlockImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
+#include <bcos-task/Wait.h>
 
 using namespace bcostars;
+using namespace bcos;
 
 bcostars::Error LedgerServiceServer::asyncGetBatchTxsByHashList(
     const std::vector<std::vector<tars::Char>>& _txsHashList, tars::Bool _withProof,
@@ -44,38 +46,45 @@ bcostars::Error LedgerServiceServer::asyncGetBatchTxsByHashList(
         hashList->emplace_back(bcos::crypto::HashType(
             reinterpret_cast<const bcos::byte*>(hash.data()), bcos::crypto::HashType::SIZE));
     }
-    m_ledger->asyncGetBatchTxsByHashList(hashList, _withProof,
-        [current](bcos::Error::Ptr _error, bcos::protocol::TransactionsPtr _txsList,
-            std::shared_ptr<std::map<std::string, bcos::ledger::MerkleProofPtr>> _proofList) {
-            // to tars transaction
-            std::vector<bcostars::Transaction> tarsTxs;
-            if (_txsList)
+    task::wait([](bcos::ledger::LedgerInterface::Ptr ledger, bcos::crypto::HashListPtr txHashList,
+                   bool withProof, tars::TarsCurrentPtr current) -> task::Task<void> {
+        bcos::Error::Ptr error;
+        bcos::ledger::BatchTransactionsResult result;
+        try
+        {
+            result = co_await ledger->getBatchTxsByHashList(std::move(txHashList), withProof);
+        }
+        catch (bcos::Error& e)
+        {
+            error = std::make_shared<bcos::Error>(std::move(e));
+        }
+
+        std::vector<bcostars::Transaction> tarsTxs;
+        if (result.first)
+        {
+            for (auto const& tx : *result.first)
             {
-                for (auto const& tx : *_txsList)
-                {
-                    tarsTxs.emplace_back(
-                        std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx)
-                            ->inner());
-                }
+                tarsTxs.emplace_back(
+                    std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx)->inner());
             }
-            // to tars proof
-            std::map<std::string, std::vector<std::string>> tarsMerkleProofs;
-            if (_proofList)
+        }
+        std::map<std::string, std::vector<std::string>> tarsMerkleProofs;
+        if (result.second)
+        {
+            for (auto const& it : *result.second)
             {
-                for (auto const& it : *_proofList)
+                std::vector<std::string> tarsMerkleItem;
+                auto const& proofs = it.second;
+                for (auto const& proof : *proofs)
                 {
-                    std::vector<std::string> tarsMerkleItem;
-                    auto const& proofs = it.second;
-                    for (auto const& proof : *proofs)
-                    {
-                        tarsMerkleItem.emplace_back(proof.hex());
-                    }
-                    tarsMerkleProofs[it.first] = tarsMerkleItem;
+                    tarsMerkleItem.emplace_back(proof.hex());
                 }
+                tarsMerkleProofs[it.first] = tarsMerkleItem;
             }
-            async_response_asyncGetBatchTxsByHashList(
-                current, toTarsError(_error), tarsTxs, tarsMerkleProofs);
-        });
+        }
+        async_response_asyncGetBatchTxsByHashList(
+            current, toTarsError(error), tarsTxs, tarsMerkleProofs);
+    }(m_ledger, std::move(hashList), _withProof, current));
     return bcostars::Error();
 }
 
@@ -83,16 +92,27 @@ bcostars::Error LedgerServiceServer::asyncGetBlockDataByNumber(tars::Int64 _bloc
     tars::Int64 _blockFlag, bcostars::Block&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_ledger->asyncGetBlockDataByNumber(_blockNumber, _blockFlag,
-        [current](bcos::Error::Ptr _error, bcos::protocol::Block::Ptr _block) {
-            bcostars::Block tarsBlock;
-            if (_block)
-            {
-                tarsBlock =
-                    std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(_block)->inner();
-            }
-            async_response_asyncGetBlockDataByNumber(current, toTarsError(_error), tarsBlock);
-        });
+    task::wait([](bcos::ledger::LedgerInterface::Ptr ledger,
+                   bcos::protocol::BlockNumber blockNumber, int32_t blockFlag,
+                   tars::TarsCurrentPtr current) -> task::Task<void> {
+        bcos::Error::Ptr error;
+        bcos::protocol::Block::Ptr block;
+        try
+        {
+            block = co_await ledger->getBlockDataByNumber(blockNumber, blockFlag);
+        }
+        catch (bcos::Error& e)
+        {
+            error = std::make_shared<bcos::Error>(std::move(e));
+        }
+
+        bcostars::Block tarsBlock;
+        if (block)
+        {
+            tarsBlock = std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(block)->inner();
+        }
+        async_response_asyncGetBlockDataByNumber(current, toTarsError(error), tarsBlock);
+    }(m_ledger, _blockNumber, _blockFlag, current));
     return bcostars::Error();
 }
 
@@ -100,29 +120,52 @@ bcostars::Error LedgerServiceServer::asyncGetBlockHashByNumber(
     tars::Int64 _blockNumber, std::vector<tars::Char>&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_ledger->asyncGetBlockHashByNumber(
-        _blockNumber, [current](bcos::Error::Ptr _error, bcos::crypto::HashType const& _blockHash) {
-            if (_error)
+    task::wait(
+        [](bcos::ledger::LedgerInterface::Ptr ledger, bcos::protocol::BlockNumber blockNumber,
+            tars::TarsCurrentPtr current) -> task::Task<void> {
+            bcos::Error::Ptr error;
+            bcos::crypto::HashType blockHash;
+            try
+            {
+                blockHash = co_await ledger->getBlockHashByNumber(blockNumber);
+            }
+            catch (bcos::Error& e)
+            {
+                error = std::make_shared<bcos::Error>(std::move(e));
+            }
+
+            if (error)
             {
                 async_response_asyncGetBlockHashByNumber(
-                    current, toTarsError(_error), std::vector<tars::Char>());
-                return;
+                    current, toTarsError(error), std::vector<tars::Char>());
+                co_return;
             }
-            std::vector<tars::Char> blockHash(_blockHash.begin(), _blockHash.end());
-            async_response_asyncGetBlockHashByNumber(current, toTarsError(_error), blockHash);
-        });
+            std::vector<tars::Char> hashBytes(blockHash.begin(), blockHash.end());
+            async_response_asyncGetBlockHashByNumber(current, toTarsError(error), hashBytes);
+        }(m_ledger, _blockNumber, current));
     return bcostars::Error();
 }
 
 bcostars::Error LedgerServiceServer::asyncGetBlockNumber(tars::Int64&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_ledger->asyncGetBlockNumber(
-        [current](bcos::Error::Ptr _error, bcos::protocol::BlockNumber _blockNumber) {
-            async_response_asyncGetBlockNumber(current, toTarsError(_error), _blockNumber);
-        });
+    task::wait([](bcos::ledger::LedgerInterface::Ptr ledger,
+                   tars::TarsCurrentPtr current) -> task::Task<void> {
+        bcos::protocol::BlockNumber blockNumber = -1;
+        bcos::Error::Ptr error;
+        try
+        {
+            blockNumber = co_await ledger->getBlockNumber();
+        }
+        catch (bcos::Error& e)
+        {
+            error = std::make_shared<bcos::Error>(std::move(e));
+        }
+        async_response_asyncGetBlockNumber(current, toTarsError(error), blockNumber);
+    }(m_ledger, current));
     return bcostars::Error();
 }
+
 bcostars::Error LedgerServiceServer::asyncGetBlockNumberByHash(
     const std::vector<tars::Char>& _blockHash, tars::Int64&, tars::TarsCurrentPtr current)
 {
@@ -133,11 +176,20 @@ bcostars::Error LedgerServiceServer::asyncGetBlockNumberByHash(
         blockHash = bcos::crypto::HashType(
             reinterpret_cast<const bcos::byte*>(_blockHash.data()), bcos::crypto::HashType::SIZE);
     }
-    // _blockHash
-    m_ledger->asyncGetBlockNumberByHash(
-        blockHash, [current](bcos::Error::Ptr _error, bcos::protocol::BlockNumber _blockNumber) {
-            async_response_asyncGetBlockNumberByHash(current, toTarsError(_error), _blockNumber);
-        });
+    task::wait([](bcos::ledger::LedgerInterface::Ptr ledger, bcos::crypto::HashType blockHash,
+                   tars::TarsCurrentPtr current) -> task::Task<void> {
+        bcos::protocol::BlockNumber blockNumber = -1;
+        bcos::Error::Ptr error;
+        try
+        {
+            blockNumber = co_await ledger->getBlockNumberByHash(std::move(blockHash));
+        }
+        catch (bcos::Error& e)
+        {
+            error = std::make_shared<bcos::Error>(std::move(e));
+        }
+        async_response_asyncGetBlockNumberByHash(current, toTarsError(error), blockNumber);
+    }(m_ledger, blockHash, current));
     return bcostars::Error();
 }
 
@@ -145,12 +197,21 @@ bcostars::Error LedgerServiceServer::asyncGetNodeListByType(
     const std::string& _type, std::vector<bcostars::ConsensusNode>&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_ledger->asyncGetNodeListByType(
-        _type, [current](bcos::Error::Ptr _error, bcos::consensus::ConsensusNodeList _nodeList) {
-            async_response_asyncGetNodeListByType(
-                current, toTarsError(_error), toTarsConsensusNodeList(_nodeList));
-            return;
-        });
+    task::wait([](bcos::ledger::LedgerInterface::Ptr ledger, std::string type,
+                   tars::TarsCurrentPtr current) -> task::Task<void> {
+        bcos::Error::Ptr error;
+        bcos::consensus::ConsensusNodeList nodeList;
+        try
+        {
+            nodeList = co_await ledger->getNodeListByType(type);
+        }
+        catch (bcos::Error& e)
+        {
+            error = std::make_shared<bcos::Error>(std::move(e));
+        }
+        async_response_asyncGetNodeListByType(
+            current, toTarsError(error), toTarsConsensusNodeList(nodeList));
+    }(m_ledger, _type, current));
     return bcostars::Error();
 }
 
@@ -158,23 +219,43 @@ bcostars::Error LedgerServiceServer::asyncGetSystemConfigByKey(
     const std::string& _key, std::string&, tars::Int64&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_ledger->asyncGetSystemConfigByKey(_key, [current](bcos::Error::Ptr _error, std::string _value,
-                                                  bcos::protocol::BlockNumber _blockNumber) {
+    task::wait([](bcos::ledger::LedgerInterface::Ptr ledger, std::string key,
+                   tars::TarsCurrentPtr current) -> task::Task<void> {
+        bcos::ledger::SystemConfigEntry config{"", -1};
+        bcos::Error::Ptr error;
+        try
+        {
+            config = co_await ledger->getSystemConfigByKey(key);
+        }
+        catch (bcos::Error& e)
+        {
+            error = std::make_shared<bcos::Error>(std::move(e));
+        }
         async_response_asyncGetSystemConfigByKey(
-            current, toTarsError(_error), _value, _blockNumber);
-    });
+            current, toTarsError(error), std::get<0>(config), std::get<1>(config));
+    }(m_ledger, _key, current));
     return bcostars::Error();
 }
+
 bcostars::Error LedgerServiceServer::asyncGetTotalTransactionCount(
     tars::Int64&, tars::Int64&, tars::Int64&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_ledger->asyncGetTotalTransactionCount(
-        [current](bcos::Error::Ptr _error, int64_t _totalTxCount, int64_t _failedTxCount,
-            bcos::protocol::BlockNumber _latestBlockNumber) {
-            async_response_asyncGetTotalTransactionCount(
-                current, toTarsError(_error), _totalTxCount, _failedTxCount, _latestBlockNumber);
-        });
+    task::wait([](bcos::ledger::LedgerInterface::Ptr ledger,
+                   tars::TarsCurrentPtr current) -> task::Task<void> {
+        bcos::ledger::TransactionCountResult count{-1, -1, -1};
+        bcos::Error::Ptr error;
+        try
+        {
+            count = co_await ledger->getTotalTransactionCount();
+        }
+        catch (bcos::Error& e)
+        {
+            error = std::make_shared<bcos::Error>(std::move(e));
+        }
+        async_response_asyncGetTotalTransactionCount(current, toTarsError(error),
+            std::get<0>(count), std::get<1>(count), std::get<2>(count));
+    }(m_ledger, current));
     return bcostars::Error();
 }
 
@@ -190,30 +271,37 @@ bcostars::Error LedgerServiceServer::asyncGetTransactionReceiptByHash(
             reinterpret_cast<const bcos::byte*>(_txHash.data()), bcos::crypto::HashType::SIZE);
     }
 
-    m_ledger->asyncGetTransactionReceiptByHash(txHash, _withProof,
-        [current](bcos::Error::Ptr _error, bcos::protocol::TransactionReceipt::Ptr _receipt,
-            bcos::ledger::MerkleProofPtr _merkleProofList) {
-            // get tars receipt
-            bcostars::TransactionReceipt tarsReceipt;
-            if (_receipt)
+    task::wait([](bcos::ledger::LedgerInterface::Ptr ledger, bcos::crypto::HashType txHash,
+                   bool withProof, tars::TarsCurrentPtr current) -> task::Task<void> {
+        bcos::ledger::TransactionReceiptResult result;
+        try
+        {
+            result = co_await ledger->getTransactionReceiptByHash(std::move(txHash), withProof);
+        }
+        catch (bcos::Error& e)
+        {
+            result.error = std::make_shared<bcos::Error>(std::move(e));
+        }
+
+        bcostars::TransactionReceipt tarsReceipt;
+        if (result.receipt)
+        {
+            auto mutableReceipt =
+                std::const_pointer_cast<bcos::protocol::TransactionReceipt>(result.receipt);
+            tarsReceipt = std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(
+                mutableReceipt)
+                              ->inner();
+        }
+        std::vector<std::string> tarsMerkleItemList;
+        if (result.proof)
+        {
+            for (auto const& merkle : *result.proof)
             {
-                auto mutableReceipt =
-                    std::const_pointer_cast<bcos::protocol::TransactionReceipt>(_receipt);
-                tarsReceipt = std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(
-                    mutableReceipt)
-                                  ->inner();
+                tarsMerkleItemList.emplace_back(merkle.hex());
             }
-            // get tars merkle
-            std::vector<std::string> tarsMerkleItemList;
-            if (_merkleProofList)
-            {
-                for (auto const& merkle : *_merkleProofList)
-                {
-                    tarsMerkleItemList.emplace_back(merkle.hex());
-                }
-            }
-            async_response_asyncGetTransactionReceiptByHash(
-                current, toTarsError(_error), tarsReceipt, tarsMerkleItemList);
-        });
+        }
+        async_response_asyncGetTransactionReceiptByHash(
+            current, toTarsError(result.error), tarsReceipt, tarsMerkleItemList);
+    }(m_ledger, txHash, _withProof, current));
     return bcostars::Error();
 }
