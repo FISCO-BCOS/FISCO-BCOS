@@ -481,10 +481,6 @@ BOOST_AUTO_TEST_CASE(swappedExecutorsEquivalentThroughManager)
         checkManager(8, "alt_bn128_pairing_product", input);
     }
 
-    // BLS (0x0b-0x11) and p256verify (0x0100) are feature-gated in production,
-    // but getPrecompiled(address) performs no feature filtering, so the test
-    // drives them through the manager exactly like 0x02 — pinning the
-    // production execute/analyze pairing for every adapter-routed entry.
     std::vector<bytes> blsCorpus = genericCorpus();
     blsCorpus.push_back(zeroBytes(256));  // g1add shaped (infinity + infinity)
     blsCorpus.push_back(zeroBytes(512));  // g2add shaped

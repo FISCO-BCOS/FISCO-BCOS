@@ -6,7 +6,7 @@ if(WITH_TIKV)
     target_include_directories(storage-tikv PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/bcos-storage)
-    target_link_libraries(storage-tikv PUBLIC bcos-framework bcos-utilities kv_client bcos-legacy ittapi)
+    target_link_libraries(storage-tikv PUBLIC bcos-framework bcos-utilities kv_client ittapi)
 endif()
 
 if(TESTS)

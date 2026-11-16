@@ -22,6 +22,7 @@
 #include "libinitializer/AddressTableModeDetection.h"
 #include <bcos-tool/Exceptions.h>
 #include <rocksdb/db.h>
+#include <unistd.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 
@@ -41,7 +42,12 @@ std::string binaryTable(std::string_view hexTable)
 
 struct TempRocksDB
 {
-    TempRocksDB() : dir(std::filesystem::temp_directory_path() / "account_table_migration_test")
+    // Per process: ctest registers every case as its own test, so under ctest -j two cases of
+    // this suite run as two processes; a shared path lets one remove_all or hold the LOCK of
+    // the other's database.
+    TempRocksDB()
+      : dir(std::filesystem::temp_directory_path() /
+            ("account_table_migration_test-" + std::to_string(::getpid())))
     {
         std::filesystem::remove_all(dir);
         std::filesystem::create_directories(dir);

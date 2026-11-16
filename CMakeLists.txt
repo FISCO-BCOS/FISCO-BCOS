@@ -64,16 +64,10 @@ if(NOT ONLY_CPP_SDK)
     find_package(ittapi CONFIG REQUIRED)
 endif ()
 
-add_subdirectory(legacy)
-
 # bcos-ops (the operator subcommands of the AIR binary) links bcos-cpp-sdk, so a full node
 # always builds the SDK library; WITH_CPPSDK alone still works for SDK-only builds
 if(WITH_CPPSDK OR FULLNODE)
     add_subdirectory(bcos-sdk)
-endif()
-
-if(WITH_LIGHTNODE)
-    add_subdirectory(legacy/lightnode)
 endif()
 
 if(FULLNODE)

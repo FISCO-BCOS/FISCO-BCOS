@@ -1,6 +1,15 @@
 
 ### v3.18.0
 
+**bcos-rpc/bcos-gateway/bcos-framework 破坏性变更**：
+
+* `RpcFactory::buildRpc` 和两个 `GatewayFactory::buildGateway` 重载删除 `LeaderEntryPointInterface::Ptr` 参数，`RpcFactory::buildGroupManager` 同步删除该参数；下游调用方及派生类需移除对应实参或形参，`RpcFactory::buildGroupManager` 固定返回 `TarsGroupManager`（AIR 本地 RPC 仍使用 `AirGroupManager`），Pro Gateway 固定使用 `ProGatewayNodeManager`
+* 公共头目录 `bcos-framework/election/` 自 bcos-framework 安装内容中移除，不再随安装包分发，仅在源码树中归档于 `legacy/bcos-framework/election/`；源码树内如仍需引用归档接口，可改为 `<legacy/bcos-framework/election/...>`，基于 etcd leader election 的 RPC/Gateway 故障转移不再可用
+
+**Lightnode 破坏性变更**：
+
+* Lightnode 已废弃并归档，不再提供 `WITH_LIGHTNODE` 构建选项，不再构建或发布 `fisco-bcos-lightnode`；节点侧 Lightnode 初始化和 `light_node` 限流配置支持同步移除
+
 **bcos-utilities 日志破坏性变更**：
 
 * 日志管线替换为整行异步 fast path；`log.format` 自定义格式恢复支持——配置串在 initLog 时编译为整行布局、由生产者线程直接渲染（支持字面量、`%%` 转义及 `%Severity%`、`%TimeStamp(format="...")%`、`%ThreadName%`、`%ThreadID%`、`%LineID%`、`%ProcessID%`、`%Message%`，TimeStamp 支持 date_time 标志 `%Y %y %m %d %H %M %S %f %%`），不支持的语法回退内置布局并在 stderr 与日志中输出 ERROR；格式串缺少 `%Message%` 占位符时日志内容不被渲染，布局仍然生效，但同样在 stderr 与日志中输出告警；`log.flush` 默认值由 `true` 改为 `false`（改为队列排空时刷盘，持续洪泛下兜底上界为 100ms + 至多 63 行的写盘延迟，逐行刷盘可显式配置 `flush=true` 恢复）
@@ -13,6 +22,12 @@
 
 **bcos-crypto 破坏性变更**：`SignatureCrypto` 的 `sign` 改为返回 `bytes`，`recover` 改为返回 `KeyImpl`，公钥、私钥和哈希参数改用引用或 `bytesConstRef`；三参数 `recoverAddress` 直接返回 `bytes` 并以异常报告失败；原始字节公钥的 `verify` 要求精确长度并对不匹配抛出 `InvalidKey`，`const Public&` 形式归一化为返回 `false`；`createKeyPair` 的 `SecretPtr` 按值重载保持签名并在内部移动所有权，另新增非虚 `const Secret&` 借用重载，下游实现无需为该重载添加 override。SWIG Java/Python 绑定同步调整；下游 `SignatureCrypto` 实现及调用方需同步迁移（PR #5763）
 
+**bcos-ledger 破坏性变更**：
+
+* 已安装公共头 `bcos-framework/ledger/LedgerInterface.h` 将 `void asyncPrewriteBlock(StorageInterface::Ptr, ConstTransactionsPtr, Block::ConstPtr, std::function<void(std::string, Error::Ptr&&)>, bool, std::optional<Features>, std::optional<HashType>, bool)` 替换为 `task::Task<std::string> prewriteBlock(StorageInterface::Ptr, ConstTransactionsPtr, Block::ConstPtr, bool, std::optional<HashType>, bool)`，同时删除回调和未使用的 `features` 参数；下游派生实现需改为协程 override，普通预写返回 hash-to-number 行的 primary key，系统合约部署分支只写 `SYS_KEY_CURRENT_NUMBER` 并返回空字符串，错误通过协程异常传播
+* 同一公共头的区块、交易/回执、系统配置、nonce、共识节点与状态查询接口由 callback 风格的 `async*` 纯虚函数迁移为原生 `task::Task` 协程；下游 `LedgerInterface` 实现和 mock 需同步更名及修改签名，调用方改用 `co_await` 获取结果，读错误通过协程异常传播。新增 `MerkleProofMapPtr`、`BatchTransactionsResult`、`TransactionReceiptResult`、`TransactionCountResult`、`NonceListResult` 等公共结果类型；其中 `TransactionReceiptResult` 仅允许真实回执与证明错误共存，回执读失败通过异常抛出
+* 已安装公共头 `bcos-framework/ledger/Ledger.h` 将 CPO `bcos::ledger::prewriteBlock` 更名为 `bcos::ledger::prewriteBlockRows`，避免与 `LedgerInterface::prewriteBlock` 成员函数混淆；下游 CPO 调用及对应 `tag_invoke` 需同步更名
+
 **后续跟进**：`WsStreamDelegate::setVerifyCallback` fail-closed（raw 流上请求证书校验时抛错）将在独立 PR 落地
 
 **执行模式（lane）由 genesis `[executor] version` 唯一决定**：
@@ -21,6 +36,16 @@
 * genesis 没写 `[executor] version` 的链按 `version=0` 运行（BcosBuilder 模板 `tools/BcosBuilder/src/tpl/config.genesis` 与早期 build_chain.sh 建的 AIR 链都是）。3.18.0 修复了 v0 lane 启动即崩（`SchedulerFactory`/`LedgerInitializer` 不传 IOServicePool，`Initializer::initSysContract` 解空指针）与 v0 lane 落块死锁（`Ledger::storeTransactionsAndReceipts` 把回执写入 post 到共享 IOServicePool 再同步等待，`thread_pool.io_thread_count=1` 时唯一 worker 等待自己队列里的任务；现改为 dispatch，调用方已在池内 worker 时就地执行）；**不含这两处修复的 3.18.0 构建不能用于 v0 链**，v1 链不受影响
 * `[engine_rpc]`（默认 `listen_ip=127.0.0.1`、`listen_port=8551`、`jwt_secret_file=conf/engine/jwt.hex`）只在 `version=2/3` 且未启用 `[debug]` 驱动时监听；v0/v1 不开该端口，`[engine_rpc] enable` 键已删除（见下）
 * `[debug] enable=true` 只允许 `version=1/2`：v0 与 OP lane 上设置该键拒绝启动；`[debug] follow_devp2p` 只允许 OP lane，且与 `[debug] enable` 互斥
+
+**FISCO lane（`version=0/1`）gas 计费变更：`bugfix_tx_intrinsic_gas`（#5772）**：
+
+* 此前 v0 lane 把交易的全部 gas 预算原样交给 EVM，只有带金额的顶层转账收 21000；v1 lane 只对顶层 CALL 收 21000；两条 lane 的代码存储费都是 20 gas/字节。结果是合约部署比转账便宜（实测一笔部署 7589 gas），calldata 不计费
+* 开关开启后，交易在顶层帧执行前先扣以太坊 intrinsic gas（`bcos-framework/protocol/TxGasModel.h` `compute_tx_upfront_cost()`）：基础 21000、创建 32000、calldata 零字节 4/非零字节 16、Shanghai 起 init code 每 32 字节 2、v1 lane 的 access list 每地址 2400/每 key 1900；Prague 起取它与 EIP-7623 下限（21000 + 10 × token）的较大值。代码存储费改为 200 gas/字节。v1 lane 原有的 21000 与 Prague calldata 扣费并入其中，不重复收
+* gas 预算低于 intrinsic gas 的交易不执行 EVM，回执状态为 `OutOfGas`，`gasUsed` 等于预算
+* v0 lane 上代码存储费付不起或代码超出 `maxEvmCodeSize` 的创建帧烧掉该帧的全部 gas，此前只收实际消耗；存储费付不起的结果与 v1 lane 一致，v1 lane 没有代码大小上限。嵌套创建只烧转发给子帧的 gas，父帧拿到地址 0 继续执行
+* v1 lane 上 Web3 交易在 `bugfix_gas_payment_balance_precheck` 开启且 gas price 大于 0 时，余额不足以预扣 gas 的罚金由固定 21000 gas 改为该交易的 `compute_tx_upfront_cost()`，不超过其 gas 预算
+* 同一开关下，DAG 路径退回（SEND_BACK）的交易由调度器从 seq 0 重新派发（`DmcExecutor::handleCreateMessage`）。此前这类交易的顶层帧以 seq 1 进入执行器，而执行器按 seq 0 识别顶层帧，结果是不收 intrinsic gas、不收顶层转账的 21000、不做 EIP-2929 预热；带 DAG 标记的部署交易其合约地址也由 seq 1 推导，开关开启后改为 seq 0，与不带 DAG 标记的部署一致
+* 该开关登记在 3.18.0 的升级列表中：`compatibility_version` 升到 3.18.0 即生效，3.18.0 新链的 genesis 自带。它改变 `gasUsed`、回执根和账户余额，属于硬分叉；以太坊 lane（`version>=2`）不受影响
 
 **配置项变更：`enable_single_node_consensus` 由 `[debug]` 段替代**：
 
@@ -50,11 +75,16 @@
 
 **build_chain.sh / BcosBuilder 默认兼容版本**：不带 `-v` 建链现在写 `compatibility_version=3.18.0`（此前为 `v3.16.0`，导致新链不激活 3.17.0 与 3.18.0 注册的 bugfix flag）；BcosBuilder 配置缺省 `compatibility_version` 时由 `3.1.0` 改为 `3.18.0`；两处与 `docs/README_EN.md` 的版本行一并纳入 `tools/version_sync.sh --check`
 
+**修复**
+
+* 修复 Web3 交易 nonce 准入对没有余额记录的账户的判断（`Ledger::getStorageState` 不再因账户缺少 balance 行而按账户不存在返回）
+
 **升级描述**
 
 * v1 EVM 链（build_chain.sh 建的 AIR 链默认）：直接替换二进制，不需要改配置；genesis 字节不变（`NodeConfigV1GenesisPinGoldenTest` 钉住 3.0.0/3.1.0/3.6.0/3.17.0/3.18.0 × pbft/rpbft 的黄金值）
 * v0 EVM 链（genesis 无 `[executor] version`，含 BcosBuilder 建的 Pro 链）：同样直接替换二进制，但必须使用含 v0 lane IOServicePool 修复的构建
 * **WASM 链（genesis `[executor] is_wasm=true`）不能按上述方式升级**：3.18.0 已移除 WASM 执行器，`NodeConfig::loadExecutorConfig()` 读到 `executor.is_wasm=true` 即拒绝启动（`executor.is_wasm=true is not supported: WASM support was removed in FISCO-BCOS 3.18`），没有把 WASM 链迁到 EVM 的路径；这类链请留在 3.17.x
+* **把 `compatibility_version` 升到 3.18.0 之前先核对 gas 上限**：`bugfix_tx_intrinsic_gas` 生效后，交易在顶层帧运行前先付 intrinsic gas（基础 21000；部署再加 32000；calldata 零字节 4、非零字节 16；Shanghai 起部署再加 init code 每 32 字节 2；v1 lane 的 access list 每地址 2400、每 storage key 1900，v0 lane 不收；Prague 起取它与 21000 + 10 × calldata token 的较大值），部署的代码存储费由 20 改为 200 gas/字节（24KB 合约的存储费约 490 万，比旧规则多约 442 万）。相对旧规则的增量因 lane 而异。v0 lane：调用和部署多付上述 intrinsic gas；带 value 的顶层转账原本已付 21000，不重复收。v1 lane，Prague 之前：调用和转账原本已付 21000，只多 calldata 与 access list 费用，部署多付全部 intrinsic gas。v1 lane，Prague 起：原本已预扣 21000（仅调用）与 calldata 下限，部署与 access list 的增量会被下限吸收一部分，以上面的较大值为准。gas 预算低于新费用的交易会以 `OutOfGas` 失败：v0 lane 的预算是链的 `tx_gas_limit`（交易自带的 gasLimit 不参与）；v1 lane 在 `bugfix_gas_payment_balance_precheck` 开启且交易带 gasLimit 时取它与 `tx_gas_limit` 的较小值，否则同样是 `tx_gas_limit`。`eth_call`/`eth_estimateGas` 走同一条路径，估算值包含 intrinsic gas。只替换二进制、不升 `compatibility_version` 的链共识行为不变；可见差异只有一处：`feature_evm_*` 下一块才生效的那个高度上，`eth_call`/`eth_estimateGas` 的 schedule 与 EVM revision 按下一块取
 * 上表中的死键不改也能启动，只多几行 WARNING；`enable_single_node_consensus` 的单节点开发链若要继续自出块，须改写为 `[debug] enable=true`
 
 ---

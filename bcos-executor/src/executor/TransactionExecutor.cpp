@@ -2783,16 +2783,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->transactionType = input.txType();
     callParameters->nonce = hex2u(input.nonce());
 
-    // TODO(C2): EIP-2930 accessList pre-warm is NOT wired in the bcos-executor path.
-    // The transaction-executor path (TransactionExecutorImpl + HostContext) already handles W2
-    // correctly via resolveWeb3AccessList() + warmUpAccessList().
-    // This path must be fixed before bcos-executor can support EIP-2930/1559 access lists:
-    //   1. Call resolveWeb3AccessList(tx) here to obtain Eip2930AccessList.
-    //   2. Assign resolved.web3TypedTxKind → callParameters->web3TypedTxKind.
-    //   3. Assign resolved.accessList      → callParameters->eip2930AccessList.
-    //   4. In TransactionExecutive::execute(), call warmUpEip2930AccessList(*callParameters)
-    //      right after warmUpEip2929InitialSet(*callParameters) (see ~line 478).
-
     if (!callParameters->create)
     {
         constexpr static auto addressSize = Address::SIZE * 2;
@@ -2868,43 +2858,30 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
 
 protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()
 {
-    std::promise<protocol::BlockNumber> blockNumberFuture;
-    m_ledger->asyncGetBlockNumber(
-        [this, &blockNumberFuture](Error::Ptr error, protocol::BlockNumber number) {
-            if (error)
-            {
-                EXECUTOR_NAME_LOG(INFO) << "Get blockNumber from storage failed";
-                blockNumberFuture.set_value(-1);
-            }
-            else
-            {
-                blockNumberFuture.set_value(number);
-            }
-        });
-
-    return blockNumberFuture.get_future().get();
+    try
+    {
+        return task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
+    }
+    catch (std::exception const&)
+    {
+        EXECUTOR_NAME_LOG(INFO) << "Get blockNumber from storage failed";
+        return -1;
+    }
 }
 
 protocol::BlockHeader::Ptr TransactionExecutor::getBlockHeaderInStorage(
     protocol::BlockNumber number)
 {
-    std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
-
-    m_ledger->asyncGetBlockDataByNumber(number, bcos::ledger::HEADER,
-        [this, &blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
-            if (error)
-            {
-                EXECUTOR_NAME_LOG(INFO) << "Get getBlockHeader from storage failed";
-                blockHeaderFuture.set_value(nullptr);
-            }
-            else
-            {
-                blockHeaderFuture.set_value(block->blockHeader());
-            }
-        });
-
-
-    return blockHeaderFuture.get_future().get();
+    try
+    {
+        auto block = task::syncWait(ledger::getBlockData(*m_ledger, number, bcos::ledger::HEADER));
+        return block->blockHeader();
+    }
+    catch (std::exception const&)
+    {
+        EXECUTOR_NAME_LOG(INFO) << "Get getBlockHeader from storage failed";
+        return nullptr;
+    }
 }
 
 std::string TransactionExecutor::getCodeHash(

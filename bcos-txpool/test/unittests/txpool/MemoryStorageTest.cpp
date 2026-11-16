@@ -668,9 +668,8 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     // distinct txHash for the same logical transaction. The low-s
     // baseline is the positive control (deleting the hook flips the second check green).
     {
-        fakeit::When(Method(mockLedger, asyncGetBlockNumber)).AlwaysDo([](auto) -> long long {
-            return 0;
-        });
+        fakeit::When(Method(mockLedger, getBlockNumber))
+            .AlwaysDo([]() -> task::Task<protocol::BlockNumber> { co_return 0; });
         fakeit::When(Method(mockLedger, getStateStorage)).AlwaysReturn(nullptr);
         auto ledgerNonceChecker = std::make_shared<txvalidator::LedgerNonceChecker>(
             nullptr, /*blockNumber*/ 0, /*blockLimit*/ 1000, /*checkBlockLimit*/ false);
@@ -1298,19 +1297,31 @@ BOOST_AUTO_TEST_CASE(proposalVerificationReadsNothingFromTheLedger)
         /*checkSig*/ false);
     MemoryStorage storageNoSig(configNoSig, *ioServicePool->getIOService());
 
-    fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
-        .AlwaysDo([](auto const& /*key*/,
-                      std::function<void(Error::Ptr, std::string, protocol::BlockNumber)>) {
-            throw std::runtime_error("storage unavailable");
+    auto systemConfigReads = std::make_shared<std::atomic<int>>(0);
+    auto storageStateReads = std::make_shared<std::atomic<int>>(0);
+    auto blockNumberReads = std::make_shared<std::atomic<int>>(0);
+    fakeit::When(Method(mockLedger, getSystemConfigByKey))
+        .AlwaysDo([systemConfigReads](std::string_view) -> task::Task<ledger::SystemConfigEntry> {
+            ++(*systemConfigReads);
+            return []() -> task::Task<ledger::SystemConfigEntry> {
+                throw std::runtime_error("storage unavailable");
+                co_return ledger::SystemConfigEntry{};
+            }();
         });
     fakeit::When(Method(mockLedger, getStorageState))
-        .AlwaysDo([](std::string_view,
+        .AlwaysDo([storageStateReads](std::string_view,
                       protocol::BlockNumber) -> task::Task<std::optional<ledger::StorageState>> {
+            ++(*storageStateReads);
             throw std::runtime_error("storage unavailable");
         });
-    fakeit::When(Method(mockLedger, asyncGetBlockNumber)).AlwaysDo([](auto) -> long long {
-        throw std::runtime_error("storage unavailable");
-    });
+    fakeit::When(Method(mockLedger, getBlockNumber))
+        .AlwaysDo([blockNumberReads]() -> task::Task<protocol::BlockNumber> {
+            ++(*blockNumberReads);
+            return []() -> task::Task<protocol::BlockNumber> {
+                throw std::runtime_error("storage unavailable");
+                co_return -1;
+            }();
+        });
 
     auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
         std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
@@ -1321,6 +1332,9 @@ BOOST_AUTO_TEST_CASE(proposalVerificationReadsNothingFromTheLedger)
     bool accepted = false;
     BOOST_CHECK_NO_THROW(accepted = storageNoSig.batchVerifyAndSubmitTransaction(nullptr, txs));
     BOOST_CHECK(accepted);
+    BOOST_CHECK_EQUAL(systemConfigReads->load(), 0);
+    BOOST_CHECK_EQUAL(storageStateReads->load(), 0);
+    BOOST_CHECK_EQUAL(blockNumberReads->load(), 0);
 }
 
 // The pool path's counterpart. Unlike proposal verification, pool admission of a Web3 transaction

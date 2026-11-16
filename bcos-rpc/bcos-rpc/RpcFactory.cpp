@@ -35,7 +35,6 @@
 #include <bcos-rpc/jwtAuth/JwtConfig.h>
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
-#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/LogStream.h>
@@ -570,12 +569,12 @@ bcos::event::EventSub::Ptr RpcFactory::buildEventSub(
     return eventSub;
 }
 
-Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName,
-    std::string const& _rpcServiceName, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
+Rpc::Ptr RpcFactory::buildRpc(
+    std::string const& _gatewayServiceName, std::string const& _rpcServiceName)
 {
     auto config = initConfig(m_nodeConfig);
     auto wsService = buildWsService(config);
-    auto groupManager = buildGroupManager(_rpcServiceName, std::move(_entryPoint));
+    auto groupManager = buildGroupManager(_rpcServiceName);
     auto amopClient = buildAMOPClient(wsService, _gatewayServiceName);
 
     RPC_LOG(INFO) << LOG_KV("listenIP", config->listenIP())
@@ -700,44 +699,12 @@ Rpc::Ptr RpcFactory::buildRpc(int sendTxTimeout,
 
 // Note: _rpcServiceName is used to check the validation of groupInfo when groupManager update
 // groupInfo
-GroupManager::Ptr RpcFactory::buildGroupManager(
-    std::string const& _rpcServiceName, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
+GroupManager::Ptr RpcFactory::buildGroupManager(std::string const& _rpcServiceName)
 {
     auto nodeServiceFactory = std::make_shared<NodeServiceFactory>();
-    if (!_entryPoint)
-    {
-        RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
-        return std::make_shared<TarsGroupManager>(*m_ioServicePool->getIOService(), _rpcServiceName,
-            m_chainID, nodeServiceFactory, m_nodeConfig);
-    }
-    RPC_LOG(INFO) << LOG_DESC("buildGroupManager with leaderEntryPoint to manager the node info");
-    auto groupManager = std::make_shared<GroupManager>(
-        _rpcServiceName, m_chainID, nodeServiceFactory, m_nodeConfig);
-    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
-    _entryPoint->addMemberChangeNotificationHandler(
-        [groupManager, groupInfoCodec](
-            std::string const& _key, bcos::protocol::MemberInterface::Ptr _member) {
-            auto const& groupInfoStr = _member->memberConfig();
-            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
-            groupManager->updateGroupInfo(groupInfo);
-            RPC_LOG(INFO) << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _key)
-                          << LOG_KV("memberID", _member->memberID())
-                          << LOG_KV("modifyIndex", _member->seq())
-                          << LOG_KV("groupID", groupInfo->groupID());
-        });
-
-    _entryPoint->addMemberDeleteNotificationHandler(
-        [groupManager, groupInfoCodec](
-            std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
-            auto const& groupInfoStr = _leader->memberConfig();
-            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
-            RPC_LOG(INFO) << LOG_DESC("The leader entryPoint has been deleted")
-                          << LOG_KV("key", _leaderKey) << LOG_KV("memberID", _leader->memberID())
-                          << LOG_KV("modifyIndex", _leader->seq())
-                          << LOG_KV("groupID", groupInfo->groupID());
-            groupManager->removeGroupNodeList(groupInfo);
-        });
-    return groupManager;
+    RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
+    return std::make_shared<TarsGroupManager>(*m_ioServicePool->getIOService(), _rpcServiceName,
+        m_chainID, nodeServiceFactory, m_nodeConfig);
 }
 
 AirGroupManager::Ptr RpcFactory::buildAirGroupManager(

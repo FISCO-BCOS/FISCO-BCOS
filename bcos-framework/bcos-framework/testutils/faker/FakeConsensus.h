@@ -24,16 +24,18 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-pbft/pbft/config/PBFTConfig.h>
 #include <bcos-utilities/IOServicePool.h>
-using namespace bcos;
-using namespace bcos::consensus;
-using namespace bcos::crypto;
-using namespace bcos::protocol;
-using namespace bcos::ledger;
 
 namespace bcos
 {
 namespace test
 {
+// Using-directives live INSIDE bcos::test on purpose: at global scope they leak into every
+// consumer TU and every unity-build batch-mate (see FakeLedger.h).
+using namespace bcos::consensus;
+using namespace bcos::crypto;
+using namespace bcos::protocol;
+using namespace bcos::ledger;
+
 class FakeConsensusConfig : public ConsensusConfig
 {
 public:

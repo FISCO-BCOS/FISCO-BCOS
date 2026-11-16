@@ -32,14 +32,14 @@ namespace bcos::test
 BOOST_FIXTURE_TEST_SUITE(testRPC, RPCFixture)
 BOOST_AUTO_TEST_CASE(buildTest)
 {
-    auto rpc = factory->buildRpc("gateway", "rpc", nullptr);
+    auto rpc = factory->buildRpc("gateway", "rpc");
     auto groupManager = rpc->groupManager();
     BOOST_CHECK(groupManager != nullptr);
 
     nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
     nodeConfig->loadConfigFromString(wrongConfigini);
     factory->setNodeConfig(nodeConfig);
-    BOOST_CHECK_THROW(factory->buildRpc("gateway", "rpc", nullptr), InvalidParameter);
+    BOOST_CHECK_THROW(factory->buildRpc("gateway", "rpc"), InvalidParameter);
 
     rpc::RPCApplication rpcApplication(nullptr);
     rpcApplication.destroyApp();

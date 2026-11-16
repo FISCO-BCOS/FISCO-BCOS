@@ -196,7 +196,7 @@ BOOST_AUTO_TEST_CASE(test_encode_golden_raw)
 }
 
 // move-only semantics: payload/seq must survive move construction/assignment
-// (the bug class the lightnode dangling-payload fix demonstrated)
+// (the bug class a previous dangling-payload fix demonstrated)
 BOOST_AUTO_TEST_CASE(test_move_roundtrip)
 {
     WsMessage src;

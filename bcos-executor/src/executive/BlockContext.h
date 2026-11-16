@@ -21,7 +21,6 @@
 
 #pragma once
 #include "../Common.h"
-#include "../vm/Eip2929AccessState.h"
 #include "ExecutiveFactory.h"
 #include "ExecutiveFlowInterface.h"
 #include "LedgerCache.h"
@@ -65,13 +64,10 @@ public:
 
     std::shared_ptr<storage::StateStorageInterface> storage() const { return m_storage; }
     using transientStorageMap = BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
-    using Eip2929AccessMap = BucketMap<int64_t, std::shared_ptr<Eip2929AccessState>>;
     std::shared_ptr<transientStorageMap> getTransientStorageMap() const
     {
         return m_transientStorageMap;
     }
-
-    std::shared_ptr<Eip2929AccessMap> getEip2929AccessMap() const { return m_eip2929AccessMap; }
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
@@ -111,7 +107,15 @@ public:
 
     const ledger::Features& features() const;
     const ledger::SystemConfigs& configs() const;
-    void setFeatures(ledger::Features features) { m_features = std::move(features); }
+    // the VM schedule derives from the features, so it is recomputed with them: the call path
+    // (createBlockContextForCall) swaps in the features of the next block after construction,
+    // and an eth_call therefore runs under that block's schedule and EVM revision. Block
+    // execution reads its features in the constructor and does not come through here.
+    void setFeatures(ledger::Features features)
+    {
+        m_features = std::move(features);
+        setVMSchedule();
+    }
     void setConfigs(ledger::SystemConfigs configs) { m_configs = std::move(configs); }
     storage::EntryCachePtr getCodeCache() const { return m_codeCache; }
     storage::EntryCachePtr getCodeHashCache() const { return m_codeHashCache; }
@@ -131,7 +135,6 @@ private:
     bool m_isAuthCheck = false;
     std::shared_ptr<storage::StateStorageInterface> m_storage;
     transientStorageMap::Ptr m_transientStorageMap;
-    Eip2929AccessMap::Ptr m_eip2929AccessMap;
     crypto::Hash::Ptr m_hashImpl;
     std::function<void()> f_onNeedSwitchEvent;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;

@@ -58,9 +58,10 @@ struct FailingBlockNumberLedger : bcos::test::FakeLedger
 {
     using FakeLedger::FakeLedger;
 
-    void asyncGetBlockNumber(std::function<void(Error::Ptr, BlockNumber)> callback) override
+    bcos::task::Task<BlockNumber> getBlockNumber() override
     {
-        callback(BCOS_ERROR_PTR(-1, "storage read failed"), 0);
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "storage read failed"));
+        co_return -1;
     }
 };
 

@@ -1,7 +1,7 @@
 /*
  *  Copyright (C) 2024 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
- *  @brief FC-S*: light HostContext smoke (identity precompile) — same path as Prague/BLS gating.
+ *  @brief FC-S*: light HostContext smoke (identity precompile).
  *  @note Top-level TXHASH to 0x04 does not hit callBuiltInPrecompiled; use host hook here.
  *  @file CompatSmokeTest.cpp
  */
@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE(FC_S_cancun_only_identity_precompile)
 
 BOOST_AUTO_TEST_CASE(FC_S_legacy_tx_no_prague_path)
 {
-    // FC-06: ordinary pre-Cancun-Prague path — identity precompile on cancun-only profile.
+    // FC-06: identity precompile on the cancun-only profile (not a pre-Cancun path).
     using compat::CompatFeatureProfile;
 
     auto host =
@@ -42,8 +42,6 @@ BOOST_AUTO_TEST_CASE(FC_S_legacy_tx_no_prague_path)
 
 BOOST_AUTO_TEST_CASE(FC_S_cancun_only_no_prague_precompile)
 {
-    // Without feature_evm_prague, BLS addresses halt non-exceptionally (EVMC_SUCCESS), not REVERT.
-    // See HostContext::callBuiltInPrecompiled and FC_P_bls_success_without_prague.
     namespace addr = bcos::test::compat::compat_addr;
     using compat::CompatFeatureProfile;
 
@@ -52,11 +50,20 @@ BOOST_AUTO_TEST_CASE(FC_S_cancun_only_no_prague_precompile)
     BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
 }
 
-BOOST_AUTO_TEST_CASE(FC_S_cancun_only_legacy_gas_smoke)
+BOOST_AUTO_TEST_CASE(FC_S_access_always_cold)
 {
-    BOOST_TEST_MESSAGE(
-        "FC-01b: full legacy gas regression is FC-S scope only; EIP-2929 off stays cold in "
-        "FC-A/TE-FC. Run --run_test=CompatEip2929 for account/storage warm behaviour.");
+    auto host = makeCompatHostContext(*this, compat::CompatFeatureProfile::cancunOnly());
+    auto* context = reinterpret_cast<evmc_host_context*>(&host);
+    evmc_address address{};
+    evmc_bytes32 key{};
+
+    BOOST_REQUIRE(host.hostInterface != nullptr);
+    BOOST_CHECK_EQUAL(host.hostInterface->access_account(context, &address), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.hostInterface->access_account(context, &address), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(
+        host.hostInterface->access_storage(context, &address, &key), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(
+        host.hostInterface->access_storage(context, &address, &key), EVMC_ACCESS_COLD);
 }
 
 BOOST_AUTO_TEST_SUITE_END()  // CompatSmoke

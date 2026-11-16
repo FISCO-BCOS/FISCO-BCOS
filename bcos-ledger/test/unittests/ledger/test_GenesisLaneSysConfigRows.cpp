@@ -58,7 +58,8 @@ GenesisConfig makeV1Genesis()
     return genesis;
 }
 
-// Captured on the pre-cleanup baseline (0de81a31b) from makeV1Genesis().
+// Captured on the pre-cleanup baseline (0de81a31b) from makeV1Genesis(), plus
+// bugfix_tx_intrinsic_gas, which #5772 registered at V3_18_0 afterwards.
 const std::set<std::string> c_v1BaselineKeys = {
     "auth_check_status",
     "balance_transfer",
@@ -101,6 +102,7 @@ const std::set<std::string> c_v1BaselineKeys = {
     "bugfix_statestorage_hash_v3_17",
     "bugfix_staticcall_noaddr_return",
     "bugfix_support_transfer_receive_fallback",
+    "bugfix_tx_intrinsic_gas",
     "bugfix_v1_error_handling",
     "bugfix_v1_timestamp",
     "compatibility_version",

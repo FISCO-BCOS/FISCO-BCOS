@@ -24,6 +24,7 @@
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-storage/MPTNodeReadStorage.h>
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <string>
@@ -260,9 +261,7 @@ BOOST_AUTO_TEST_CASE(numericTagAtTheTipIsLatest)
     auto web3 = buildWeb3Rpc(recording);
 
     // The fake ledger's current height, given as an explicit number, is the latest state.
-    protocol::BlockNumber latest = -1;
-    m_ledger->asyncGetBlockNumber(
-        [&latest](Error::Ptr, protocol::BlockNumber number) { latest = number; });
+    protocol::BlockNumber latest = task::syncWait(m_ledger->getBlockNumber());
     BOOST_REQUIRE_GE(latest, 0);
 
     std::ostringstream quantity;

@@ -23,6 +23,25 @@ amop_wait_subscribed()
     return 1
 }
 
+# amop_diagnose <work dir> <subscriber pid> <node_dir>: what the subscriber and node0 saw when a
+# publish failed (#5754). The publisher's JSON alone cannot tell which side lost its session:
+# whether the subscriber is still running, what it printed, and node0's AMOP and websocket
+# session lines answer that.
+amop_diagnose()
+{
+    local work="${1}" sub_pid="${2}" node_dir="${3}" sub_rc
+    if kill -0 "${sub_pid}" 2>/dev/null; then
+        echo "[scenario 12] subscriber ${sub_pid} is still running"
+    else
+        wait "${sub_pid}" 2>/dev/null && sub_rc=0 || sub_rc=$?
+        echo "[scenario 12] subscriber ${sub_pid} already exited ${sub_rc}"
+    fi
+    echo "[scenario 12] subscriber stdout: $(head -c 2000 "${work}/sub.out" 2>/dev/null)"
+    echo "[scenario 12] subscriber stderr: $(head -c 2000 "${work}/sub.err" 2>/dev/null)"
+    echo "[scenario 12] $(basename "${node_dir}") AMOP and websocket session lines (last 60):"
+    cat "${node_dir}"/log/* 2>/dev/null | /usr/bin/grep -E '\[AMOP\]|AMOPClient|\[WS\]\[SESSION\]' | tail -n 60
+} >&2
+
 scenario_12_amop()
 {
     local chain="${1}"
@@ -54,6 +73,7 @@ scenario_12_amop()
             continue
         fi
         scenario_fail "amop pub ${topic} exited ${rc}: ${published}"
+        amop_diagnose "${work}" "${sub_pid}" "${node_dir}"
         kill "${sub_pid}" 2>/dev/null
         rm -rf "${work}"
         return 1

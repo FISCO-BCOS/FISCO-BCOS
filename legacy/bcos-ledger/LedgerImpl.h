@@ -136,8 +136,8 @@ protected:
     {
         // Mode-aware derivation (account::accountTableName — the same rule EVMAccount writes
         // state with): this LedgerImpl serves light-client LIGHTNODE_GET_ABI requests on the
-        // FULL node (libinitializer/LightNodeInitializer::initLedgerServer, wired in
-        // Initializer.cpp under WITH_LIGHTNODE) against the node's own local state DB, in the
+        // FULL node (archived legacy/lightnode/libinitializer/LightNodeInitializer)
+        // against the node's own local state DB, in the
         // same process that published nodeAddressTableMode() at boot — so the singleton is
         // authoritative here, and a binary-layout node must read codeHash under
         // "/s/<20 raw bytes>". The light-client side never resolves table names against the

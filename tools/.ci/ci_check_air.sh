@@ -209,7 +209,7 @@ check_consensus()
         done
         if (( waited >= 90 )); then
             LOG_ERROR "chain ${chain}: $(basename "${node}") not in consensus after ${waited}s; cons lines:"
-            cat "${node}"/log/* 2>/dev/null | grep -i cons | tail -n 50
+            cat "${node}"/log/* 2>/dev/null | grep -ai cons | tail -n 50
             return 1
         fi
     done
@@ -289,10 +289,35 @@ print_chain_failure()
     for node in "$(chain_nodes_dir "${chain}")"/node*; do
         [[ -d "${node}" ]] || continue
         LOG_ERROR "============= chain ${chain} $(basename "${node}") error|warn lines ============="
-        cat "${node}"/log/* 2>/dev/null | grep -iE 'error|warn' | tail -n 100
+        # -a: one binary byte in a log makes grep print "binary file matches" and no lines
+        cat "${node}"/log/* 2>/dev/null | grep -aiE 'error|warn' | tail -n 100
         LOG_ERROR "============= chain ${chain} $(basename "${node}") nohup ============="
         cat "${node}/nohup.out" 2>/dev/null | tail -n 50
     done
+    archive_chain_logs "${chain}"
+}
+
+# archive_chain_logs <chain>: the failing chain's complete node logs into logs/, which the
+# workflow uploads when this step fails. The tails printed above keep only error|warn lines,
+# and the diagnosis of a stalled chain needs the info lines around them (#5757).
+archive_chain_logs()
+{
+    local chain="${1}" nodes_dir archive
+    nodes_dir=$(chain_nodes_dir "${chain}")
+    archive="${current_path}/logs/${chain}-node-logs.tar.gz"
+    [[ -d "${nodes_dir}" ]] || return 0
+    local -a members=()
+    local node
+    for node in "${nodes_dir}"/node*; do
+        [[ -d "${node}/log" ]] && members+=("$(basename "${node}")/log")
+        [[ -f "${node}/nohup.out" ]] && members+=("$(basename "${node}")/nohup.out")
+    done
+    (( ${#members[@]} > 0 )) || return 0
+    if tar -czf "${archive}" -C "${nodes_dir}" "${members[@]}" 2>/dev/null; then
+        LOG_ERROR "chain ${chain}: node logs archived to ${archive}"
+    else
+        LOG_ERROR "chain ${chain}: could not archive the node logs under ${nodes_dir}"
+    fi
 }
 
 # ---------------------------------------------------------------------------- web3

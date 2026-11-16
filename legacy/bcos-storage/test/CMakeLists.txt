@@ -18,7 +18,7 @@ if(WITH_TIKV)
 
     target_link_libraries(${TEST_BINARY_NAME} PUBLIC
         storage-tikv table bcos-crypto RocksDB::rocksdb
-        Boost::unit_test_framework Boost::log fmt::fmt bcos-legacy)
+        Boost::unit_test_framework Boost::log fmt::fmt)
 
     add_test(NAME ${TEST_BINARY_NAME} COMMAND ${TEST_BINARY_NAME})
 endif()

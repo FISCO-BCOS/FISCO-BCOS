@@ -225,7 +225,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     {
         bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
         gatewayFactory.setIOServicePool(ioServicePool);
-        gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
+        gateway = gatewayFactory.buildGateway(configFile, true, "localGateway");
         auto protocolInfo = bcos::protocol::g_BCOSConfig.protocolInfo(
             bcos::protocol::ProtocolModuleID::GatewayService);
         gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),

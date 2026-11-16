@@ -40,7 +40,29 @@ SEPOLIA_URL=https://sepolia.infura.io/v3/your_infura_api_key_here
 GOERLI_URL=https://goerli.infura.io/v3/your_infura_api_key_here
 EOF
 
-npx hardhat test --network bcosnet
+# The three eth_sendRawTransaction_*.js files wait with ethers' own
+# JsonRpcProvider.waitForTransaction, which looks for the receipt only when a "block" event
+# fires. Its block poller starts after the first receipt lookup and takes the height it sees
+# first as its baseline without emitting it, so a block committed between that lookup and the
+# poller's first eth_blockNumber is never announced. This chain seals no empty blocks: nothing
+# follows, and the case sits until mocha's 600 s timeout with the receipt long on chain
+# (#5757). Poll the receipt instead, as the Hardhat provider behind the other cases does.
+# The wrapper config keeps the pinned corpus untouched.
+cat << 'EOF' > hardhat.ci.config.js
+const { AbstractProvider } = require("ethers");
+AbstractProvider.prototype.waitForTransaction = async function (hash) {
+  for (;;) {
+    const receipt = await this.getTransactionReceipt(hash);
+    if (receipt != null) {
+      return receipt;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+};
+module.exports = require("./hardhat.config.js");
+EOF
+
+npx hardhat --config hardhat.ci.config.js test --network bcosnet
 # Propagate the hardhat result: everything below (the dormant websocket-env rewrite)
 # would otherwise reset $? to 0 and turn 22 failing tests into "web3 test success".
 hardhat_rc=$?

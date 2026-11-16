@@ -25,14 +25,12 @@
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
-#include "bcos-tars-protocol/protocol/GroupInfoCodecImpl.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/FileUtility.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/LogStream.h"
-#include <bcos-task/Wait.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
 #include <boost/exception_ptr.hpp>
@@ -547,9 +545,8 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
  * @param _configPath: config.ini path
  * @return void
  */
-std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _configPath,
-    bool _airVersion, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
-    std::string const& _gatewayServiceName)
+std::shared_ptr<Gateway> GatewayFactory::buildGateway(
+    const std::string& _configPath, bool _airVersion, std::string const& _gatewayServiceName)
 {
     auto config = std::make_shared<GatewayConfig>();
     // load config
@@ -565,7 +562,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
     }
     config->loadP2pConnectedNodes();
     config->setConfigFile(_configPath);
-    return buildGateway(config, _airVersion, _entryPoint, _gatewayServiceName);
+    return buildGateway(config, _airVersion, _gatewayServiceName);
 }
 
 std::shared_ptr<gateway::ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRateLimiter(
@@ -768,9 +765,8 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
  */
 // Note: _gatewayServiceName is used to check the validation of groupInfo when localRouter
 // update groupInfo
-std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config, bool _airVersion,
-    bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
-    std::string const& _gatewayServiceName)
+std::shared_ptr<Gateway> GatewayFactory::buildGateway(
+    GatewayConfig::Ptr _config, bool _airVersion, std::string const& _gatewayServiceName)
 {
     try
     {
@@ -792,17 +788,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         }
         else
         {
-            // Note: no need to use nodeAliveDetector when enable failover
-            if (_entryPoint)
-            {
-                gatewayNodeManager = std::make_shared<GatewayNodeManager>(
-                    _config->uuid(), pubHex, keyFactory, service, *m_ioServicePool->getIOService());
-            }
-            else
-            {
-                gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
-                    _config->uuid(), pubHex, keyFactory, service, *m_ioServicePool->getIOService());
-            }
+            gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
+                _config->uuid(), pubHex, keyFactory, service, *m_ioServicePool->getIOService());
 
             if (!_config->readonly())
             {
@@ -938,12 +925,6 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         }
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");
-        if (!_entryPoint)
-        {
-            return gateway;
-        }
-        initFailOver(gateway, _entryPoint);
-
         return gateway;
     }
     catch (const std::exception& e)
@@ -952,54 +933,6 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                                    << LOG_KV("message", boost::diagnostic_information(e));
         boost::rethrow_exception(boost::current_exception());
     }
-}
-
-void GatewayFactory::initFailOver(
-    std::shared_ptr<Gateway> _gateWay, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
-{
-    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
-    _entryPoint->addMemberChangeNotificationHandler(
-        [_gateWay, groupInfoCodec](
-            std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
-            auto const& groupInfoStr = _leader->memberConfig();
-            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
-            GATEWAY_FACTORY_LOG(INFO)
-                << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _leaderKey)
-                << LOG_KV("memberID", _leader->memberID()) << LOG_KV("modifyIndex", _leader->seq())
-                << LOG_KV("groupID", groupInfo->groupID());
-            task::wait([](std::shared_ptr<Gateway> _gateWay,
-                           bcos::group::GroupInfo::Ptr _groupInfo) -> task::Task<void> {
-                auto error = co_await _gateWay->notifyGroupInfo(std::move(_groupInfo));
-                if (error)
-                {
-                    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification failed")
-                                              << LOG_KV("code", error->errorCode())
-                                              << LOG_KV("msg", error->errorMessage());
-                    co_return;
-                }
-                GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification success");
-            }(_gateWay, std::move(groupInfo)));
-        });
-
-    _entryPoint->addMemberDeleteNotificationHandler(
-        [_gateWay, groupInfoCodec](
-            std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
-            auto const& groupInfoStr = _leader->memberConfig();
-            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
-            GATEWAY_FACTORY_LOG(INFO)
-                << LOG_DESC("The leader entryPoint has been deleted") << LOG_KV("key", _leaderKey)
-                << LOG_KV("memberID", _leader->memberID()) << LOG_KV("modifyIndex", _leader->seq())
-                << LOG_KV("groupID", groupInfo->groupID());
-            auto nodeInfos = groupInfo->nodeInfos();
-            for (auto const& node : nodeInfos)
-            {
-                _gateWay->unregisterNode(groupInfo->groupID(), node.second->nodeID());
-                GATEWAY_FACTORY_LOG(INFO)
-                    << LOG_DESC("unregisterNode") << LOG_KV("group", groupInfo->groupID())
-                    << LOG_KV("node", node.second->nodeID());
-            }
-        });
-    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("initFailOver for gateway success");
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(

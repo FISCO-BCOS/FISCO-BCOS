@@ -32,5 +32,6 @@ DERIVE_BCOS_EXCEPTION(InvalidSignatureData);
 DERIVE_BCOS_EXCEPTION(InvalidKey);
 DERIVE_BCOS_EXCEPTION(GenerateKeyPairException);
 DERIVE_BCOS_EXCEPTION(InvalidSecretKey);
+DERIVE_BCOS_EXCEPTION(SM2CurveUnavailable);
 }  // namespace crypto
 }  // namespace bcos

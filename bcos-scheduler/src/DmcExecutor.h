@@ -92,6 +92,9 @@ public:
 
     void setEnablePreFinishType(bool enable);
 
+    // #5772 (bugfix_tx_intrinsic_gas): re-dispatch a sent-back transaction at seq 0
+    void setRestartSeqOnSendBack(bool enable);
+
 protected:
     virtual void executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
@@ -132,6 +135,7 @@ protected:
     bool m_hasContractTableChanged = false;
     bool m_isCall;
     bool m_enablePreFinishType = false;
+    bool m_restartSeqOnSendBack = false;
 
 
     mutable SharedMutex x_concurrentLock;

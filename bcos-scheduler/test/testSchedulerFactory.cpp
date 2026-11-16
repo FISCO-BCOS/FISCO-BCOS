@@ -33,6 +33,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
+#include <unistd.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <future>
@@ -57,7 +58,9 @@ BOOST_AUTO_TEST_CASE(builtSchedulerExecutesBlockOnTheGivenPool)
 
     // Drop a database left in the working directory by older revisions of this test.
     std::filesystem::remove_all("./unittestdb-scheduler-factory");
-    auto dbPath = std::filesystem::temp_directory_path() / "unittestdb-scheduler-factory";
+    // per process: ctest -j can run this binary's cases as concurrent processes
+    auto dbPath = std::filesystem::temp_directory_path() /
+                  ("unittestdb-scheduler-factory-" + std::to_string(::getpid()));
     std::filesystem::remove_all(dbPath);
     rocksdb::DB* db = nullptr;
     rocksdb::Options options;

@@ -94,20 +94,17 @@ public:
         // file's mocks historically produced.
         BOOST_REQUIRE(mockScheduler.m_receiptsWithLogs);
 
-        // Ledger: asyncPrewriteBlock => invoke callback(success)
-        fakeit::When(Method(mockLedger, asyncPrewriteBlock))
+        // Ledger: prewriteBlock => successful coroutine, or the configured exception
+        fakeit::When(Method(mockLedger, prewriteBlock))
             .AlwaysDo([this](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
-                          protocol::Block::ConstPtr,
-                          std::function<void(std::string, Error::Ptr&&)> callback, bool,
-                          std::optional<ledger::Features>, std::optional<bcos::crypto::HashType>,
-                          bool) {
+                          protocol::Block::ConstPtr, bool, std::optional<bcos::crypto::HashType>,
+                          bool) -> task::Task<std::string> {
                 if (prewriteBlockFails)
                 {
-                    callback({},
-                        BCOS_ERROR_PTR(scheduler::SchedulerError::UnknownError, prewriteFailure));
-                    return;
+                    BOOST_THROW_EXCEPTION(
+                        BCOS_ERROR(scheduler::SchedulerError::UnknownError, prewriteFailure));
                 }
-                callback({}, nullptr);
+                co_return std::string{};
             });
         // FIB-104: storeTransactionsAndReceipts is no longer called by coCommitBlock
         // (the unified prewriteBlockToBuffer path writes txs/receipts directly into
@@ -120,16 +117,15 @@ public:
             return emptyTxsTaskFIB();
         });
 
-        fakeit::When(Method(mockLedger, asyncGetBlockNumber))
-            .AlwaysDo([this](std::function<void(Error::Ptr, protocol::BlockNumber)> callback) {
-                callback(nullptr, ledgerBlockNumber);
-            });
+        fakeit::When(Method(mockLedger, getBlockNumber))
+            .AlwaysDo(
+                [this]() -> task::Task<protocol::BlockNumber> { co_return ledgerBlockNumber; });
     }
 
     void writeBlock(std::shared_ptr<bcostars::protocol::BlockImpl> block)
     {
         auto bh = block->blockHeader();
-        task::syncWait(ledger::prewriteBlock(mockLedger.get(),
+        task::syncWait(ledger::prewriteBlockRows(mockLedger.get(),
             std::make_shared<protocol::ConstTransactions>(), block, false, backendStorage));
         bytes headerBuffer;
         bh->encode(headerBuffer);
@@ -379,25 +375,20 @@ BOOST_AUTO_TEST_CASE(blockStatExecMsBelongsToTheCommittedBlock)
     BOOST_REQUIRE(executeOneBlock(801));
 
     // what a successful commit reads after the merge (ledger::getLedgerConfig) and notifies
-    fakeit::When(Method(mockLedger, asyncGetBlockNumber))
-        .AlwaysDo([](std::function<void(Error::Ptr, protocol::BlockNumber)> callback) {
-            callback(nullptr, 799);
+    fakeit::When(Method(mockLedger, getBlockNumber))
+        .AlwaysDo([]() -> task::Task<protocol::BlockNumber> { co_return 799; });
+    fakeit::When(Method(mockLedger, getNodeListByType))
+        .AlwaysDo([](std::string_view) -> task::Task<consensus::ConsensusNodeList> {
+            co_return consensus::ConsensusNodeList{};
         });
-    fakeit::When(Method(mockLedger, asyncGetNodeListByType))
-        .AlwaysDo([](std::string_view const&,
-                      std::function<void(Error::Ptr, consensus::ConsensusNodeList)> callback) {
-            callback(nullptr, {});
+    fakeit::When(Method(mockLedger, getBlockDataByNumber))
+        .AlwaysDo([](protocol::BlockNumber, int32_t) -> task::Task<protocol::Block::Ptr> {
+            co_return nullptr;
         });
-    fakeit::When(Method(mockLedger, asyncGetBlockDataByNumber))
-        .AlwaysDo([](protocol::BlockNumber, int32_t,
-                      std::function<void(Error::Ptr, protocol::Block::Ptr)> callback) {
-            callback(nullptr, nullptr);
+    fakeit::When(Method(mockLedger, getBlockHashByNumber))
+        .AlwaysDo([](protocol::BlockNumber) -> task::Task<crypto::HashType> {
+            co_return crypto::HashType{};
         });
-    fakeit::When(Method(mockLedger, asyncGetBlockHashByNumber))
-        .AlwaysDo(
-            [](protocol::BlockNumber, std::function<void(Error::Ptr, crypto::HashType)> callback) {
-                callback(nullptr, crypto::HashType{});
-            });
     fakeit::When(Method(mockLedger, fetchAllSystemConfigs))
         .AlwaysDo([](protocol::BlockNumber) -> task::Task<ledger::SystemConfigs> {
             co_return ledger::SystemConfigs{};

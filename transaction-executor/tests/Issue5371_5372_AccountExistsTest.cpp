@@ -13,7 +13,6 @@
 #include "../bcos-transaction-executor/EVMCResult.h"
 #include "../bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "../bcos-transaction-executor/vm/HostContext.h"
-#include "Eip2929TestHelpers.h"
 #include "TestMemoryStorage.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -73,9 +72,8 @@ struct AccountExistsFixture
         return a;
     }
 
-    /// Runner (code-bearing) addresses get a suite-specific prefix: the executable cache is
-    /// process-wide and keyed by address alone, and the EIP-2929 helpers in this binary already
-    /// put other code at 0x..71 / 0x..72.
+    /// Runner (code-bearing) addresses get a suite-specific prefix because the executable cache
+    /// is process-wide and keyed by address alone.
     static evmc_address runnerAddr(uint8_t tag)
     {
         evmc_address a{};
@@ -99,14 +97,9 @@ struct AccountExistsFixture
 
     h256 emptyCodeHash() const { return hashImpl->emptyHash(); }
 
-    /// The fixture contract eip2929::detail::measureProbeGasTask drives: the first eight
-    /// parameters of CompatTEHostFixture::makeHost (no EIP-2929 access-state override here), so
-    /// both suites build their host the same way.
     HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> makeHost(
         ledger::Features const& features, uint32_t blockHeaderVersion, evmc_address originIn,
-        evmc_address recipientIn, evmc_call_kind kindIn,
-        std::shared_ptr<const bcos::executor::Eip2930AccessList> /*eip2930AccessList*/,
-        uint8_t /*web3TypedTxKindForAccessList*/, int64_t gas)
+        evmc_address recipientIn, evmc_call_kind kindIn, int64_t gas)
     {
         ledgerConfig.setFeatures(features);
         blockHeader.setVersion(blockHeaderVersion);
@@ -128,8 +121,30 @@ struct AccountExistsFixture
     task::Task<EVMCResult> runBytecode(
         ledger::Features features, bytes const& code, uint8_t runnerTag, int64_t startGas)
     {
-        co_return co_await eip2929::detail::measureProbeGasTask(
-            *this, features, code, runnerAddr(runnerTag), startGas, u256(1) << 96);
+        evmc_address origin{};
+        origin.bytes[19] = 0x70;
+        auto originAcc = account(origin);
+        if (!co_await originAcc.exists())
+        {
+            co_await originAcc.create();
+        }
+        co_await originAcc.setBalance(u256(1) << 96);
+
+        auto runner = runnerAddr(runnerTag);
+        auto runnerAcc = account(runner);
+        if (!co_await runnerAcc.exists())
+        {
+            co_await runnerAcc.create();
+        }
+        co_await runnerAcc.setBalance(u256(1) << 96);
+        auto const hash = hashImpl->hash(bcos::bytesConstRef(code.data(), code.size()));
+        co_await runnerAcc.setCode(code, "", hash);
+
+        auto host = makeHost(features, static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION),
+            origin, runner, EVMC_CALL, startGas);
+        host.mutableMessage().code_address = runner;
+        co_await host.prepare();
+        co_return co_await host.execute();
     }
 
     static ledger::Features featuresWithFix(bool on)

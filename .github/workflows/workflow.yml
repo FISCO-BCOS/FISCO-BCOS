@@ -93,6 +93,11 @@ jobs:
         id: vcpkg-revision
         shell: bash
         run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Bootstrap vcpkg through GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: bash tools/.ci/bootstrap-vcpkg.sh
       - uses: lukka/get-cmake@latest
         with:
           cmakeVersion: 3.28.3
@@ -208,13 +213,13 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for linux arm
         if: matrix.os == 'ubuntu-26.04-arm'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
         if: matrix.os == 'macos-26'
         run: |
@@ -224,13 +229,13 @@ jobs:
           mkdir -p build
           cd build
           ARCH=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
-          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=${ARCH}-osx-release ${EXTRA_FLAGS} ..
+          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=${ARCH}-osx-release ${EXTRA_FLAGS} ..
       - name: Configure for windows
         if: matrix.os == 'windows-2025'
         run: |
           mkdir build -Force
           cd build
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DALLOCATOR=default -DTESTS=OFF -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_TARS_SERVICES=OFF -DWITH_CPPSDK=ON -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static-release ..
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DALLOCATOR=default -DTESTS=OFF -DFULLNODE=OFF -DWITH_TARS_SERVICES=OFF -DWITH_CPPSDK=ON -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static-release ..
       # vcpkg installs during Configure; nothing past this point writes to
       # build/vcpkg_installed, so strip and save the tree right here instead of at the end
       # of the job: a flake in the build, the unit tests or any of the E2E gates would
@@ -378,15 +383,18 @@ jobs:
           done
       - name: Download EEST fixtures
         if: matrix.os != 'windows-2025'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd ${{ github.workspace }}
           # execution-spec-tests is archived; mainnet fixture releases are the
           # `tests@vX.Y.Z` tags of ethereum/execution-specs (one fixtures.tar.gz,
           # every fork up to the latest mainnet one). The tag is pinned: a bump is
           # a reviewed change, together with tools/eest/known-failures.txt.
-          # --fail: a 404 would otherwise write the error page into the tarball
-          # and surface as a confusing tar error; --retry handles release hiccups.
-          curl --fail --retry 3 -L -o fixtures.tar.gz https://github.com/ethereum/execution-specs/releases/download/tests%40v20.0.2/fixtures.tar.gz
+          # gh downloads through the release-asset API, avoiding intermittent 504s
+          # from the github.com release download redirect.
+          gh release download 'tests@v20.0.2' --repo ethereum/execution-specs \
+            --pattern fixtures.tar.gz --dir "${PWD}" --clobber
           tar -xzf fixtures.tar.gz
           test -d fixtures/state_tests
       - name: Run EEST fixture tests
@@ -439,6 +447,17 @@ jobs:
         run: |
           cd tools
           bash .ci/ci_check_air.sh "true"
+      - name: Upload Air chain logs on failure
+        # ci_check_air.sh archives the failing chain's complete node logs into tools/logs/
+        # next to the per-chain scenario log; the job output only shows error|warn tails.
+        if: failure() && (matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm')
+        uses: actions/upload-artifact@v4
+        with:
+          name: air-integration-logs-${{ matrix.os }}
+          path: tools/logs/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 7
       - name: Ethereum executor integration test (executor_version=2)
         # Runs a single-node L2 chain with executor_version=2 (ethereum-executor),
         # pre-funds an EOA via genesis alloc, and drives a simple value transfer
@@ -578,6 +597,11 @@ jobs:
         id: vcpkg-revision
         shell: bash
         run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Bootstrap vcpkg through GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: bash tools/.ci/bootstrap-vcpkg.sh
       - name: Restore vcpkg cache
         uses: actions/cache/restore@v4
         id: vcpkg-cache
@@ -655,7 +679,7 @@ jobs:
           # because Debug makes vcpkg link the debug/ dependency variants, which
           # the x64-linux-release triplet does not build. Benchmarks are never
           # run by ctest, so building them instrumented produces no coverage data.
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DUNITY_BUILD=OFF -DWITH_BENCHMARK=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DUNITY_BUILD=OFF -DWITH_BENCHMARK=OFF -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       # vcpkg installs during Configure, so save right after it (same reasoning as the
       # build matrix): a later flake must not discard a freshly built dependency tree.
       - name: Save vcpkg cache

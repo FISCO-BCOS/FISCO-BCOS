@@ -73,7 +73,10 @@ public:
     AsyncTask& operator=(const AsyncTask&) = delete;
     AsyncTask& operator=(AsyncTask&& task) = delete;
     ~AsyncTask() noexcept = default;
-    void start() { m_handle.resume(); }
+    // The first resume of a detached chain. It goes through the one resume boundary: if the
+    // chain escapes with an exception, the frame unhandled_exception() registered above is
+    // reclaimed before the exception reaches the caller.
+    void start() { detail::resumeDetached(m_handle); }
 
 private:
     std::coroutine_handle<promise_type> m_handle;

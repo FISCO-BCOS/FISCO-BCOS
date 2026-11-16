@@ -23,8 +23,6 @@
 #include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../vm/DelegateHostContext.h"
-#include "../vm/Eip2929TransactionPrewarm.h"
-#include "../vm/Eip2929Util.h"
 #include "../vm/HostContext.h"
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
@@ -33,10 +31,12 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-table/src/ContractShardUtils.h"
 #include "bcos-utilities/Exceptions.h"
 #include <optional>
 #include <range/v3/view/reverse.hpp>
+#include <span>
 
 #include "BlockContext.h"
 #include "ExecutiveFactory.h"
@@ -294,6 +294,38 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         callParameters->value = 0;
     }
 
+    // #5772 (bugfix_tx_intrinsic_gas): a transaction's top-level frame pays its intrinsic gas
+    // before anything runs. The top-level frame is the one at seq 0: nested frames and DMC hops
+    // carry seq > 0, and the scheduler dispatches every transaction's first frame at seq 0,
+    // including one sent back from the DAG path (DmcExecutor::handleCreateMessage restarts its
+    // seq under the same flag). The frame is priced
+    // from the scheduler's message: this lane neither warms nor prices an access list. A budget
+    // below the charge fails the transaction with every unit consumed, like any other
+    // out-of-gas, because the transaction is already in a block.
+    const bool chargeIntrinsicGas =
+        callParameters->seq == 0 &&
+        m_blockContext.features().get(ledger::Features::Flag::bugfix_tx_intrinsic_gas);
+    if (chargeIntrinsicGas)
+    {
+        const auto upfrontGas = protocol::gas::compute_tx_upfront_cost(
+            toRevision(m_blockContext.vmSchedule()), callParameters->create,
+            std::span<const uint8_t>{callParameters->data.data(), callParameters->data.size()}, 0);
+        if (callParameters->gas < upfrontGas)
+        {
+            EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute") << "out of gas on the intrinsic charge"
+                                 << LOG_KV("gas", callParameters->gas)
+                                 << LOG_KV("intrinsic", upfrontGas);
+            callParameters->type = CallParameters::REVERT;
+            callParameters->status = (int32_t)TransactionStatus::OutOfGas;
+            callParameters->evmStatus = EVMC_OUT_OF_GAS;
+            callParameters->gas = 0;
+            callParameters->create = false;
+            writeErrInfoToOutput("Intrinsic gas too low", *callParameters);
+            return callParameters;
+        }
+        callParameters->gas -= upfrontGas;
+    }
+
     if (m_blockContext.features().get(ledger::Features::Flag::feature_balance) &&
         callParameters->value > 0)
     {
@@ -311,7 +343,8 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
 
 
         bool transferFromEVM = callParameters->seq != 0;
-        int64_t requiredGas = transferFromEVM ? 0 : BALANCE_TRANSFER_GAS;
+        // the intrinsic charge above already holds the 21000 base cost of a top-level transfer
+        int64_t requiredGas = (transferFromEVM || chargeIntrinsicGas) ? 0 : BALANCE_TRANSFER_GAS;
         auto currentContextAddress = callParameters->receiveAddress;
 
         // 启用policy2且sender和receiver都不在白名单，拒绝转账
@@ -437,11 +470,6 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                 }(std::move(address), callParameters->nonce));
             }
         }
-    }
-
-    if (callParameters->seq == 0)
-    {
-        warmUpEip2929InitialSet(*callParameters);
     }
 
     if (callParameters->create)
@@ -1123,6 +1151,13 @@ CallParameters::UniquePtr TransactionExecutive::go(
             if (outputRef.size() > maxCodeSize)
             {
                 revert();
+                // #5772: an exceptional abort consumes the frame's budget, as on Ethereum.
+                // executor_version 1 has no code size limit, so this branch has no counterpart
+                // there.
+                if (m_blockContext.features().get(ledger::Features::Flag::bugfix_tx_intrinsic_gas))
+                {
+                    callResults->gas = 0;
+                }
                 callResults->type = CallParameters::REVERT;
                 callResults->status = (int32_t)TransactionStatus::OutOfGas;
                 callResults->message =
@@ -1161,6 +1196,13 @@ CallParameters::UniquePtr TransactionExecutive::go(
                         << LOG_KV("message", callResults->message)
                         << LOG_KV("number", m_blockContext.number())
                         << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
+                    // #5772: an exceptional abort consumes the frame's budget, as on Ethereum
+                    // and executor_version 1
+                    if (m_blockContext.features().get(
+                            ledger::Features::Flag::bugfix_tx_intrinsic_gas))
+                    {
+                        callResults->gas = 0;
+                    }
                     return callResults;
                 }
             }
@@ -2076,74 +2118,4 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
         }
     }
     return transientStorage;
-}
-
-std::shared_ptr<Eip2929AccessState> TransactionExecutive::getEip2929AccessState(int64_t contextID)
-{
-    auto accessMap = blockContext().getEip2929AccessMap();
-    std::shared_ptr<Eip2929AccessState> accessState;
-    bool has = false;
-    {
-        BlockContext::Eip2929AccessMap::ReadAccessor readAccessor;
-        has =
-            accessMap->find<BlockContext::Eip2929AccessMap::ReadAccessor>(readAccessor, contextID);
-        if (has)
-        {
-            accessState = readAccessor.value();
-        }
-    }
-    if (!has)
-    {
-        BlockContext::Eip2929AccessMap::WriteAccessor writeAccessor;
-        auto hasWrite = accessMap->find<BlockContext::Eip2929AccessMap::WriteAccessor>(
-            writeAccessor, contextID);
-        if (!hasWrite)
-        {
-            accessState = std::make_shared<Eip2929AccessState>();
-            accessMap->insert(writeAccessor, {contextID, accessState});
-        }
-        else
-        {
-            accessState = writeAccessor.value();
-        }
-    }
-    return accessState;
-}
-
-void TransactionExecutive::warmUpEip2929InitialSet(CallParameters const& params)
-{
-    auto const revision = toRevision(blockContext().vmSchedule());
-    if (!eip2929Enabled(revision, blockContext().features()))
-    {
-        return;
-    }
-
-    auto const originSv = params.origin.empty() ? std::string_view{params.senderAddress} :
-                                                  std::string_view{params.origin};
-
-    Eip2929TxPrewarmInput input;
-    input.revision = revision;
-    input.origin = unhexAddress(originSv);
-    if (!params.create && !params.receiveAddress.empty())
-    {
-        input.callee = unhexAddress(std::string_view{params.receiveAddress});
-    }
-    // TODO(EIP-3651): set input.coinbase from block sealer at revision >= EVMC_SHANGHAI.
-    input.web3TypedTxKind = params.web3TypedTxKind;
-    input.accessList = &params.eip2930AccessList;
-
-    warmEip2929AtTransactionEntry(*getEip2929AccessState(m_contextID), input,
-        [](bcos::Address const& addr) { return toEvmC(addr); });
-}
-
-void TransactionExecutive::warmUpEip2930AccessList(CallParameters const& params)
-{
-    auto const revision = toRevision(blockContext().vmSchedule());
-    if (!eip2929Enabled(revision, blockContext().features()))
-    {
-        return;
-    }
-
-    warmEip2930AccessListOnly(*getEip2929AccessState(m_contextID), params.web3TypedTxKind,
-        params.eip2930AccessList, [](bcos::Address const& addr) { return toEvmC(addr); });
 }
