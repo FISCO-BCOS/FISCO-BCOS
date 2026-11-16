@@ -284,9 +284,9 @@ void appendRecordPrefix(std::string& _out, LineRecord const& _record)
 #else
         localtime_r(&secs, &tm);
 #endif
-        auto const formatted = fmt::format_to_n(dateBuf, sizeof(dateBuf),
-            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-            tm.tm_hour, tm.tm_min, tm.tm_sec);
+        auto const formatted =
+            fmt::format_to_n(dateBuf, sizeof(dateBuf), "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
         if (static_cast<std::size_t>(formatted.size) != sizeof(dateBuf))
         {
             // Defensive: an out-of-range year must not leave stale bytes behind.
@@ -340,8 +340,7 @@ LineRecord sampleLineRecord(LogLevel _level)
 #ifdef _WIN32
     record.threadId = static_cast<std::uint64_t>(::GetCurrentThreadId());
 #else
-    record.threadId =
-        static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(pthread_self()));
+    record.threadId = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(pthread_self()));
 #endif
     auto const& name = bcos::pthread_getThreadNameRef();
     auto const copyLen = name.size() < (sizeof(record.threadName) - 1) ?
@@ -724,8 +723,7 @@ LineLayout const* lineLayout() noexcept
     return s_lineLayout.load(std::memory_order_acquire);
 }
 
-void appendLayoutLine(
-    std::string& _out, LineLayout const& _layout, LineRecord const& _record,
+void appendLayoutLine(std::string& _out, LineLayout const& _layout, LineRecord const& _record,
     std::string_view _message)
 {
     // The clock is read only when the layout actually prints a timestamp, and
@@ -802,8 +800,8 @@ void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
     for (auto& slot : reg.sinks)
     {
         LineSinkWriter* expected = nullptr;
-        if (slot.compare_exchange_strong(expected, _sink.get(), std::memory_order_acq_rel,
-                std::memory_order_relaxed))
+        if (slot.compare_exchange_strong(
+                expected, _sink.get(), std::memory_order_acq_rel, std::memory_order_relaxed))
         {
             // Park ownership for the rest of the process so a producer holding
             // the pointer can never touch a destroyed sink.
@@ -830,8 +828,8 @@ void unregisterLineSink(LineSinkWriter const* _sink)
         // caller's stop() has already set the sink's m_stop, so a producer that
         // loaded the pointer before this clear writes nothing.
         LineSinkWriter* expected = const_cast<LineSinkWriter*>(_sink);
-        if (slot.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel,
-                std::memory_order_relaxed))
+        if (slot.compare_exchange_strong(
+                expected, nullptr, std::memory_order_acq_rel, std::memory_order_relaxed))
         {
             reg.count.fetch_sub(1, std::memory_order_release);
             return;

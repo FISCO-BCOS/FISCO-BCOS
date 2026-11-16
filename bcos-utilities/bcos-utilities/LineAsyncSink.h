@@ -259,9 +259,9 @@ public:
             return;
         }
         m_clients.erase(it);
-        m_idleCv.wait(
-            lock, [this, _client] { return std::find(m_active.begin(), m_active.end(), _client) ==
-                                           m_active.end(); });
+        m_idleCv.wait(lock, [this, _client] {
+            return std::find(m_active.begin(), m_active.end(), _client) == m_active.end();
+        });
     }
 
 private:
@@ -448,8 +448,9 @@ public:
     std::size_t pendingLines() const noexcept
     {
         auto const pendingOf = [](QueueShard const* _shard) -> std::size_t {
-            return _shard == nullptr ? 0 : _shard->tail.load(std::memory_order_acquire) -
-                                                _shard->head.load(std::memory_order_acquire);
+            return _shard == nullptr ? 0 :
+                                       _shard->tail.load(std::memory_order_acquire) -
+                                           _shard->head.load(std::memory_order_acquire);
         };
         std::size_t pending = 0;
         auto const count = m_shardCount.load(std::memory_order_acquire);
@@ -813,8 +814,7 @@ private:
     /// shard's sole producer. Returns false when the line was dropped because the
     /// ring was full.
     bool push(QueueShard* _shard, LogLevel _level, LineRecord const* _record,
-        std::string_view _prefix, std::string_view _message, bool _needsPrefix,
-        bool _useCachedHead)
+        std::string_view _prefix, std::string_view _message, bool _needsPrefix, bool _useCachedHead)
     {
         // The producer owns tail, so a plain load is enough. cachedHead is only
         // refreshed when the ring looks full, so the common path never touches
@@ -1248,10 +1248,7 @@ private:
     // Takes the pending drop count for the marker. m_droppedLines is the single
     // authoritative counter (countDrop() raises it once per dropped line); the
     // per-shard counters are informational and must not be summed in here.
-    std::uint64_t takeDropped()
-    {
-        return m_droppedLines.exchange(0, std::memory_order_relaxed);
-    }
+    std::uint64_t takeDropped() { return m_droppedLines.exchange(0, std::memory_order_relaxed); }
 
     // Appends one slot's line (rendering the prefix first when deferred).
     void appendSlotLine(std::string& _out, Slot& _slot)

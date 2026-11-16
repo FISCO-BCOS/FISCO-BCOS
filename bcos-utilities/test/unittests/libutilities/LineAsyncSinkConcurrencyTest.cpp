@@ -27,8 +27,8 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <atomic>
-#include <functional>
 #include <chrono>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <set>
@@ -176,8 +176,8 @@ BOOST_AUTO_TEST_CASE(concurrentProducersDeliverEveryLineExactlyOnce)
             }
             for (int i = 0; i < kLinesPerThread; ++i)
             {
-                sink->writeLine(bcos::LogLevel::INFO, "", "t" + std::to_string(t) + "-" +
-                                                             std::to_string(i));
+                sink->writeLine(
+                    bcos::LogLevel::INFO, "", "t" + std::to_string(t) + "-" + std::to_string(i));
             }
         });
     }
@@ -197,9 +197,8 @@ BOOST_AUTO_TEST_CASE(concurrentProducersDeliverEveryLineExactlyOnce)
         for (int i = 0; i < kLinesPerThread; ++i)
         {
             auto const tag = "t" + std::to_string(t) + "-" + std::to_string(i);
-            BOOST_REQUIRE_MESSAGE(counts.count(tag) == 1, "line " << tag << " seen "
-                                                                 << counts.count(tag)
-                                                                 << " times");
+            BOOST_REQUIRE_MESSAGE(counts.count(tag) == 1,
+                "line " << tag << " seen " << counts.count(tag) << " times");
         }
     }
 }
@@ -224,8 +223,8 @@ BOOST_AUTO_TEST_CASE(moreProducersThanRingsStayCorrect)
             }
             for (int i = 0; i < kLinesPerThread; ++i)
             {
-                sink->writeLine(bcos::LogLevel::INFO, "", "s" + std::to_string(t) + "-" +
-                                                             std::to_string(i));
+                sink->writeLine(
+                    bcos::LogLevel::INFO, "", "s" + std::to_string(t) + "-" + std::to_string(i));
             }
         });
     }
@@ -248,8 +247,8 @@ BOOST_AUTO_TEST_CASE(moreProducersThanRingsStayCorrect)
                 counts.count(tag) <= 1, "line " << tag << " duplicated " << counts.count(tag));
         }
     }
-    BOOST_CHECK_EQUAL(lines.size() + sink->droppedTotal(),
-        static_cast<std::size_t>(kThreads * kLinesPerThread));
+    BOOST_CHECK_EQUAL(
+        lines.size() + sink->droppedTotal(), static_cast<std::size_t>(kThreads * kLinesPerThread));
 }
 
 // Regression: stop() used to wait for the worker to drain "until empty", which
@@ -274,8 +273,8 @@ BOOST_AUTO_TEST_CASE(stopReturnsWhileProducersAreFlooding)
             }
             while (!stopProducing.load(std::memory_order_relaxed))
             {
-                sink->writeLine(bcos::LogLevel::INFO, "", "f" + std::to_string(t) + "-" +
-                                                             std::to_string(produced.load()));
+                sink->writeLine(bcos::LogLevel::INFO, "",
+                    "f" + std::to_string(t) + "-" + std::to_string(produced.load()));
                 produced.fetch_add(1, std::memory_order_relaxed);
             }
         });
@@ -364,25 +363,28 @@ BOOST_AUTO_TEST_CASE(flushWhileProducersWrite)
             }
             for (int i = 0; i < 200; ++i)
             {
-                sink->writeLine(bcos::LogLevel::INFO, "", "q" + std::to_string(t) + "-" +
-                                                             std::to_string(i));
+                sink->writeLine(
+                    bcos::LogLevel::INFO, "", "q" + std::to_string(t) + "-" + std::to_string(i));
             }
         });
     }
 
     std::thread flusher;
     std::atomic<bool> flushed{false};
-    bool const ok = finishesWithin(15s, [&] {
-        // A bounded number of flush() calls, spaced out: calling flush() in a
-        // tight loop under a flood would legitimately wait out FlushWaitTimeout
-        // each time (the worker's drained branch never runs), which is the
-        // documented behaviour, not a bug.
-        for (int i = 0; i < 5 && !done.load(std::memory_order_acquire); ++i)
-        {
-            sink->flush();
-            std::this_thread::sleep_for(2ms);
-        }
-    }, flusher, flushed);
+    bool const ok = finishesWithin(
+        15s,
+        [&] {
+            // A bounded number of flush() calls, spaced out: calling flush() in a
+            // tight loop under a flood would legitimately wait out FlushWaitTimeout
+            // each time (the worker's drained branch never runs), which is the
+            // documented behaviour, not a bug.
+            for (int i = 0; i < 5 && !done.load(std::memory_order_acquire); ++i)
+            {
+                sink->flush();
+                std::this_thread::sleep_for(2ms);
+            }
+        },
+        flusher, flushed);
     for (auto& p : producers)
     {
         p.join();

@@ -161,7 +161,8 @@ std::vector<std::pair<std::string, LogLevel>> moduleLogLevels();
 struct LineRecord
 {
     LogLevel level = LogLevel::TRACE;
-    std::int64_t secs = 0;       // wall-clock seconds since the epoch (local time zone applied at render)
+    std::int64_t secs =
+        0;  // wall-clock seconds since the epoch (local time zone applied at render)
     std::uint32_t micros = 0;    // 0..999999
     std::uint64_t threadId = 0;  // pthread_self() as an integer
     /// Thread name, NUL terminated. bcos::pthread_getThreadNameRef() is itself
@@ -413,10 +414,7 @@ private:
     /// After a bridged operand, fold the base it left behind back into m_base so
     /// the fast-path integers and floats that follow in the same statement agree
     /// with what the bridge would have printed.
-    void syncBaseFromBridge()
-    {
-        m_base = baseOf(bridgeStream().flags());
-    }
+    void syncBaseFromBridge() { m_base = baseOf(bridgeStream().flags()); }
 
     /// Selects the integral base for both the fast path and (if it is already in
     /// use) the bridge, so the two cannot disagree within one statement.
@@ -460,8 +458,8 @@ private:
         if (m_base != 10)
         {
             using UnsignedT = std::make_unsigned_t<T>;
-            result = std::to_chars(
-                m_cur, m_cur + c_maxDigits, static_cast<UnsignedT>(_value), m_base);
+            result =
+                std::to_chars(m_cur, m_cur + c_maxDigits, static_cast<UnsignedT>(_value), m_base);
         }
         else
         {
@@ -478,8 +476,8 @@ private:
         // LC_NUMERIC and could print ',' — std::to_chars is locale-independent
         // and its precision overload is specified as printf-style %g.
         char buf[64];
-        auto const result = std::to_chars(
-            buf, buf + sizeof(buf), _value, std::chars_format::general, 6);
+        auto const result =
+            std::to_chars(buf, buf + sizeof(buf), _value, std::chars_format::general, 6);
         if (result.ec == std::errc())
         {
             append(buf, static_cast<std::size_t>(result.ptr - buf));
@@ -493,8 +491,8 @@ private:
         char buf[24];
         buf[0] = '0';
         buf[1] = 'x';
-        auto const result = std::to_chars(buf + 2, buf + sizeof(buf),
-            reinterpret_cast<std::uintptr_t>(_value), 16);
+        auto const result =
+            std::to_chars(buf + 2, buf + sizeof(buf), reinterpret_cast<std::uintptr_t>(_value), 16);
         append(buf, static_cast<std::size_t>(result.ptr - buf));
     }
 

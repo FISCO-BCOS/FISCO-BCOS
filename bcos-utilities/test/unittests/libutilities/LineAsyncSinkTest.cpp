@@ -24,8 +24,8 @@
 #include <vector>
 
 #ifdef _WIN32
-#include <windows.h>
 #include <psapi.h>
+#include <windows.h>
 #else
 #include <sys/resource.h>
 #endif
@@ -213,8 +213,9 @@ struct BaseProbe
 inline std::ostream& operator<<(std::ostream& _out, BaseProbe const&)
 {
     auto const base = _out.flags() & std::ios_base::basefield;
-    return _out << (base == std::ios_base::hex ? "hex"
-                                               : base == std::ios_base::oct ? "oct" : "dec");
+    return _out << (base == std::ios_base::hex ? "hex" :
+                    base == std::ios_base::oct ? "oct" :
+                                                 "dec");
 }
 
 // A sloppy user operator that switches the stream to hex and never restores it.
@@ -283,8 +284,7 @@ BOOST_AUTO_TEST_CASE(prefixLayoutMatchesDocumentedFormat)
     auto sink = std::make_shared<FakeSink>(backend);
     bcos::log::registerLineSink(sink);
 
-    bcos::log::commitLine(
-        bcos::log::sampleLineRecord(LogLevel::WARNING), "prefixLayoutMessage");
+    bcos::log::commitLine(bcos::log::sampleLineRecord(LogLevel::WARNING), "prefixLayoutMessage");
     sink->flush();
     bcos::log::unregisterLineSink(sink.get());
 
@@ -312,8 +312,7 @@ BOOST_AUTO_TEST_CASE(unnamedThreadKeepsUnnamedThreadField)
 
     std::thread worker([]() {
         bcos::pthread_setThreadName("");  // unnamed thread (always the case on Windows)
-        bcos::log::commitLine(
-            bcos::log::sampleLineRecord(LogLevel::INFO), "unnamedThreadMessage");
+        bcos::log::commitLine(bcos::log::sampleLineRecord(LogLevel::INFO), "unnamedThreadMessage");
     });
     worker.join();
     sink->flush();
@@ -666,7 +665,7 @@ BOOST_AUTO_TEST_CASE(layoutPathLinesAreMergedByTimestamp)
     // Park the worker so nothing is consumed until both lines are published.
     bcos::LineRecord seedRecord;
     seedRecord.secs = std::chrono::duration_cast<std::chrono::seconds>(
-                          std::chrono::system_clock::now().time_since_epoch())
+        std::chrono::system_clock::now().time_since_epoch())
                           .count();
     sink.writeLine(LogLevel::INFO, "seed|", "", &seedRecord);
     auto const deadline = std::chrono::steady_clock::now() + 2s;
@@ -867,10 +866,10 @@ BOOST_AUTO_TEST_CASE(bridgeSeesTheStatementsBase)
     BOOST_CHECK_EQUAL(
         loggedMessage(LogLevel::INFO, [](bcos::LogStream& s) { s << fmt::BaseProbe{}; }), "dec");
     BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO,
-                         [](bcos::LogStream& s) { s << std::hex << fmt::BaseProbe{}; }),
+                          [](bcos::LogStream& s) { s << std::hex << fmt::BaseProbe{}; }),
         "hex");
     BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO,
-                         [](bcos::LogStream& s) { s << std::oct << fmt::BaseProbe{}; }),
+                          [](bcos::LogStream& s) { s << std::oct << fmt::BaseProbe{}; }),
         "oct");
 }
 
@@ -883,8 +882,7 @@ BOOST_AUTO_TEST_CASE(bridgeStateDoesNotLeakBetweenStatements)
         loggedMessage(LogLevel::INFO, [](bcos::LogStream& s) { s << fmt::HexLeaker{}; }), "1f");
     BOOST_CHECK_EQUAL(
         loggedMessage(LogLevel::INFO, [](bcos::LogStream& s) { s << fmt::BaseProbe{}; }), "dec");
-    BOOST_CHECK_EQUAL(
-        loggedMessage(LogLevel::INFO, [](bcos::LogStream& s) { s << 31; }), "31");
+    BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO, [](bcos::LogStream& s) { s << 31; }), "31");
 }
 
 // Within one statement a custom operator's flags must survive for the operands
@@ -896,15 +894,16 @@ BOOST_AUTO_TEST_CASE(customOperatorFlagsComposeWithinOneStatement)
 {
     // Old pipeline: "1f" + hex-seeing probe + 255 in hex.
     BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO,
-                         [](bcos::LogStream& s) { s << fmt::HexLeaker{} << fmt::BaseProbe{}; }),
+                          [](bcos::LogStream& s) { s << fmt::HexLeaker{} << fmt::BaseProbe{}; }),
         "1fhex");
     // The base a custom operator set must reach the fast path as well.
-    BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO,
-                         [](bcos::LogStream& s) { s << fmt::HexLeaker{} << 255; }),
+    BOOST_CHECK_EQUAL(
+        loggedMessage(LogLevel::INFO, [](bcos::LogStream& s) { s << fmt::HexLeaker{} << 255; }),
         "1fff");
     // And an explicit manipulator must keep applying after a bridged operand.
-    BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO,
-                         [](bcos::LogStream& s) { s << fmt::Plain{} << std::hex << fmt::BaseProbe{}; }),
+    BOOST_CHECK_EQUAL(
+        loggedMessage(LogLevel::INFO,
+            [](bcos::LogStream& s) { s << fmt::Plain{} << std::hex << fmt::BaseProbe{}; }),
         "plainhex");
 }
 
@@ -914,7 +913,7 @@ BOOST_AUTO_TEST_CASE(customOperatorFlagsComposeWithinOneStatement)
 BOOST_AUTO_TEST_CASE(failedBridgeOperandDoesNotSilenceLaterOnes)
 {
     BOOST_CHECK_EQUAL(loggedMessage(LogLevel::INFO,
-                         [](bcos::LogStream& s) { s << fmt::BreaksStream{} << fmt::Plain{}; }),
+                          [](bcos::LogStream& s) { s << fmt::BreaksStream{} << fmt::Plain{}; }),
         "plain");
     // ...and the next statement on the same thread is unaffected too.
     BOOST_CHECK_EQUAL(

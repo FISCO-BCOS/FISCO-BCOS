@@ -101,8 +101,7 @@ LineLayout const* lineLayout() noexcept;
 
 // Renders one complete line (message included) per the layout. The record
 // supplies the level, the sampled timestamp and the thread identity.
-void appendLayoutLine(
-    std::string& _out, LineLayout const& _layout, LineRecord const& _record,
+void appendLayoutLine(std::string& _out, LineLayout const& _layout, LineRecord const& _record,
     std::string_view _message);
 
 // One complete line with the custom layout when installed, built-in
