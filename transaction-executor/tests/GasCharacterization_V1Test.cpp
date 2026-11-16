@@ -54,6 +54,30 @@ const std::vector<std::pair<std::string_view, Flag>> c_flags = {
     {"balancePrecheck", Flag::bugfix_gas_payment_balance_precheck},
 };
 
+// Append new IDs so configuration order cannot change existing contract addresses.
+constexpr std::array<std::string_view, 20> c_configBlockIDs = {
+    "none",
+    "none+intrinsic",
+    "none+prague",
+    "none+osaka",
+    "none+storageStatus",
+    "none+v1ErrorHandling",
+    "none+balancePrecheck",
+    "none+intrinsic+prague",
+    "none+intrinsic+osaka",
+    "none+intrinsic+storageStatus",
+    "none+intrinsic+v1ErrorHandling",
+    "none+intrinsic+balancePrecheck",
+    "genesis",
+    "genesis-intrinsic",
+    "genesis+prague",
+    "genesis+osaka",
+    "genesis-storageStatus",
+    "genesis-v1ErrorHandling",
+    "genesis-balancePrecheck",
+    "v3.1:none",
+};
+
 struct GasCharacterizationV1Fixture
 {
     std::shared_ptr<crypto::CryptoSuite> cryptoSuite = std::make_shared<crypto::CryptoSuite>(
@@ -1075,10 +1099,10 @@ BOOST_FIXTURE_TEST_SUITE(GasCharacterization_V1Test, GasCharacterizationV1Fixtur
 BOOST_AUTO_TEST_CASE(scriptUnderEachConfiguration)
 {
     Recorder recorder;
-    protocol::BlockNumber blockNumber = 12'001'000;
+    constexpr protocol::BlockNumber firstBlock = 12'001'000;
     for (auto const& config : configs(c_flags, {{"v3.1", protocol::BlockVersion::V3_1_VERSION}}))
     {
-        run(config, blockNumber++, recorder);
+        run(config, blockNumberFor(config.name, c_configBlockIDs, firstBlock), recorder);
     }
     recorder.check(c_expected);
 }

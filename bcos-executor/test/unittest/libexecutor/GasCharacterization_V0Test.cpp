@@ -55,13 +55,44 @@ const std::vector<std::pair<std::string_view, Flag>> c_flags = {
     {"prague", Flag::feature_evm_prague},
     {"osaka", Flag::feature_evm_osaka},
     {"storageStatus", Flag::bugfix_evm_storage_status},
-    {"eip2929", Flag::feature_evm_eip2929},
     {"exceptionGasUsed", Flag::bugfix_evm_exception_gas_used},
 };
 const std::vector<std::pair<std::string_view, protocol::BlockVersion>> c_olderVersions = {
     {"v3.0", protocol::BlockVersion::V3_0_VERSION},
     {"v3.1", protocol::BlockVersion::V3_1_VERSION},
     {"v3.2", protocol::BlockVersion::V3_2_VERSION},
+};
+
+// Append new IDs; the removed EIP-2929 configurations reserve their original block numbers.
+constexpr std::array<std::string_view, 28> c_configBlockIDs = {
+    "none",
+    "none+intrinsic",
+    "none+balance",
+    "none+cancun",
+    "none+prague",
+    "none+osaka",
+    "none+storageStatus",
+    "none+eip2929",
+    "none+exceptionGasUsed",
+    "none+intrinsic+balance",
+    "none+intrinsic+cancun",
+    "none+intrinsic+prague",
+    "none+intrinsic+osaka",
+    "none+intrinsic+storageStatus",
+    "none+intrinsic+eip2929",
+    "none+intrinsic+exceptionGasUsed",
+    "genesis",
+    "genesis-intrinsic",
+    "genesis+balance",
+    "genesis+cancun",
+    "genesis+prague",
+    "genesis+osaka",
+    "genesis-storageStatus",
+    "genesis+eip2929",
+    "genesis-exceptionGasUsed",
+    "v3.0:none",
+    "v3.1:none",
+    "v3.2:none",
 };
 
 enum class Mode : uint8_t
@@ -308,7 +339,7 @@ struct GasCharacterizationV0Fixture : CompatExecutorSmokeFixture
         }
     }
 
-    void runAll(Mode mode, protocol::BlockNumber number, Recorder& recorder)
+    void runAll(Mode mode, protocol::BlockNumber firstBlock, Recorder& recorder)
     {
         for (auto const& config : configs(c_flags, c_olderVersions))
         {
@@ -322,10 +353,9 @@ struct GasCharacterizationV0Fixture : CompatExecutorSmokeFixture
             if (mode == Mode::dmc && config.features.get(Flag::feature_evm_prague) &&
                 !config.features.get(Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
             {
-                ++number;
                 continue;
             }
-            run(mode, config, number++, recorder);
+            run(mode, config, blockNumberFor(config.name, c_configBlockIDs, firstBlock), recorder);
         }
     }
 };
@@ -640,50 +670,6 @@ const std::vector<Row> c_expectedSerial = {
         {"none+storageStatus", "nested.create", 0, 34057, "bac3288a661f5e0d"},
         {"none+storageStatus", "fisco.keccak", 0, 9, "b8e12eedbb60e532"},
         {"none+storageStatus", "fisco.createKVTable", 15, 0, "0110a620bf3f5175"},
-        {"none+eip2929", "store", 0, 164, "25e5490f48a050f3"},
-        {"none+eip2929", "store2", 0, 284, "b6c9b7ada421bd88"},
-        {"none+eip2929", "revert", 0, 224, "b8b2fc577af63766"},
-        {"none+eip2929", "invalid", 0, 44, "ed7a4577163dd901"},
-        {"none+eip2929", "loop", 0, 104, "16fd8e0392b46fc7"},
-        {"none+eip2929", "gaslimit", 0, 204, "8ead490efb5c354c"},
-        {"none+eip2929", "proxy", 0, 664, "217cce56044d0517"},
-        {"none+eip2929", "caller", 0, 484, "1b3b9c768a4767d1"},
-        {"none+eip2929", "factory", 0, 564, "0517497b17cc684e"},
-        {"none+eip2929", "deploy.overMaxSize", 12, 2195593, "f6ce409b8fe309fa"},
-        {"none+eip2929", "deploy.depositPricey", 0, 660486, "2698ad83cd5cee30"},
-        {"none+eip2929", "deploy.initRevert", 16, 6, ""},
-        {"none+eip2929", "deploy.initLoop", 12, 3000000, "984705b23b630c84"},
-        {"none+eip2929", "transfer", 19, 0, "80fbc8f8f83d7a74"},
-        {"none+eip2929", "transfer.value", 19, 0, "80fbc8f8f83d7a74"},
-        {"none+eip2929", "store.add", 0, 5009, ""},
-        {"none+eip2929", "store.modify", 0, 5009, ""},
-        {"none+eip2929", "store.same", 0, 5009, ""},
-        {"none+eip2929", "store.delete", 0, 5009, ""},
-        {"none+eip2929", "store.readd", 0, 5009, ""},
-        {"none+eip2929", "store2.addDelete", 0, 7918, ""},
-        {"none+eip2929", "store2.addModify", 0, 7918, ""},
-        {"none+eip2929", "store2.modifyRestore", 0, 7918, ""},
-        {"none+eip2929", "call.revert", 16, 18, "beced09521047d05"},
-        {"none+eip2929", "call.invalid", 10, 0, "d07a663483805d25"},
-        {"none+eip2929", "call.loop", 12, 3000000, "984705b23b630c84"},
-        {"none+eip2929", "call.gaslimit", 0, 17, "40ea3c03c8f719cb"},
-        {"none+eip2929", "pre.ecrecover", 0, 3180, ""},
-        {"none+eip2929", "pre.sha256", 0, 237, "6b273558f4f016a3"},
-        {"none+eip2929", "pre.ripemd160", 0, 885, "592a516381074890"},
-        {"none+eip2929", "pre.identity", 0, 195, "f7363c7e1636e179"},
-        {"none+eip2929", "pre.modexp", 0, 183, "69c322e3248a5dfc"},
-        {"none+eip2929", "pre.ecadd", 0, 336, "ad3228b676f7d3cd"},
-        {"none+eip2929", "pre.ecmul", 0, 6180, "ad3228b676f7d3cd"},
-        {"none+eip2929", "pre.ecpairing", 0, 45162, "b10e2d527612073b"},
-        {"none+eip2929", "pre.blake2f", 0, 216, "516f9e1d688a5036"},
-        {"none+eip2929", "pre.fiscoKeccak", 0, 2692, "b8e12eedbb60e532"},
-        {"none+eip2929", "nested.store", 0, 7647, "b10e2d527612073b"},
-        {"none+eip2929", "nested.revert", 0, 2656, "290decd9548b62a8"},
-        {"none+eip2929", "nested.invalid", 0, 2638, "290decd9548b62a8"},
-        {"none+eip2929", "nested.noCode", 0, 2638, "b10e2d527612073b"},
-        {"none+eip2929", "nested.create", 0, 34057, "26710ef08b2f2a02"},
-        {"none+eip2929", "fisco.keccak", 0, 9, "b8e12eedbb60e532"},
-        {"none+eip2929", "fisco.createKVTable", 15, 0, "0110a620bf3f5175"},
         {"none+exceptionGasUsed", "store", 0, 164, "82f7b713c8f1c68b"},
         {"none+exceptionGasUsed", "store2", 0, 284, "08df6b9452165468"},
         {"none+exceptionGasUsed", "revert", 0, 224, "f19a506955fc5bd5"},
@@ -948,50 +934,6 @@ const std::vector<Row> c_expectedSerial = {
         {"none+intrinsic+storageStatus", "nested.create", 0, 73057, "15b06b1b3b655c35"},
         {"none+intrinsic+storageStatus", "fisco.keccak", 0, 21517, "b8e12eedbb60e532"},
         {"none+intrinsic+storageStatus", "fisco.createKVTable", 15, 22408, "0110a620bf3f5175"},
-        {"none+intrinsic+eip2929", "store", 0, 54668, "d7230e90383cc5dd"},
-        {"none+intrinsic+eip2929", "store2", 0, 55952, "33edfd5874da0e7a"},
-        {"none+intrinsic+eip2929", "revert", 0, 55328, "d3c32a3ff8563163"},
-        {"none+intrinsic+eip2929", "invalid", 0, 53408, "0716aa98b309880c"},
-        {"none+intrinsic+eip2929", "loop", 0, 54044, "c049f1a0da027e27"},
-        {"none+intrinsic+eip2929", "gaslimit", 0, 55112, "68cd5eaa6c22cf86"},
-        {"none+intrinsic+eip2929", "proxy", 0, 60008, "eae6eaeac28f92e4"},
-        {"none+intrinsic+eip2929", "caller", 0, 58064, "bceaf8edc2d11f3d"},
-        {"none+intrinsic+eip2929", "factory", 0, 58952, "209e512d533df2e1"},
-        {"none+intrinsic+eip2929", "deploy.overMaxSize", 12, 3000000, "f6ce409b8fe309fa"},
-        {"none+intrinsic+eip2929", "deploy.depositPricey", 12, 3000000, "ae528383702d50cf"},
-        {"none+intrinsic+eip2929", "deploy.initRevert", 16, 53062, ""},
-        {"none+intrinsic+eip2929", "deploy.initLoop", 12, 3000000, "984705b23b630c84"},
-        {"none+intrinsic+eip2929", "transfer", 19, 21000, "80fbc8f8f83d7a74"},
-        {"none+intrinsic+eip2929", "transfer.value", 19, 21000, "80fbc8f8f83d7a74"},
-        {"none+intrinsic+eip2929", "store.add", 0, 26149, ""},
-        {"none+intrinsic+eip2929", "store.modify", 0, 26149, ""},
-        {"none+intrinsic+eip2929", "store.same", 0, 26149, ""},
-        {"none+intrinsic+eip2929", "store.delete", 0, 26137, ""},
-        {"none+intrinsic+eip2929", "store.readd", 0, 26149, ""},
-        {"none+intrinsic+eip2929", "store2.addDelete", 0, 29186, ""},
-        {"none+intrinsic+eip2929", "store2.addModify", 0, 29198, ""},
-        {"none+intrinsic+eip2929", "store2.modifyRestore", 0, 29198, ""},
-        {"none+intrinsic+eip2929", "call.revert", 16, 21018, "beced09521047d05"},
-        {"none+intrinsic+eip2929", "call.invalid", 10, 21000, "d07a663483805d25"},
-        {"none+intrinsic+eip2929", "call.loop", 12, 3000000, "984705b23b630c84"},
-        {"none+intrinsic+eip2929", "call.gaslimit", 0, 21017, "40ea3c03c8f719cb"},
-        {"none+intrinsic+eip2929", "pre.ecrecover", 0, 24832, ""},
-        {"none+intrinsic+eip2929", "pre.sha256", 0, 21425, "6b273558f4f016a3"},
-        {"none+intrinsic+eip2929", "pre.ripemd160", 0, 22073, "592a516381074890"},
-        {"none+intrinsic+eip2929", "pre.identity", 0, 22359, "f7363c7e1636e179"},
-        {"none+intrinsic+eip2929", "pre.modexp", 0, 21791, "69c322e3248a5dfc"},
-        {"none+intrinsic+eip2929", "pre.ecadd", 0, 21988, "ad3228b676f7d3cd"},
-        {"none+intrinsic+eip2929", "pre.ecmul", 0, 27704, "ad3228b676f7d3cd"},
-        {"none+intrinsic+eip2929", "pre.ecpairing", 0, 66302, "b10e2d527612073b"},
-        {"none+intrinsic+eip2929", "pre.blake2f", 0, 22232, "516f9e1d688a5036"},
-        {"none+intrinsic+eip2929", "pre.fiscoKeccak", 0, 24352, "b8e12eedbb60e532"},
-        {"none+intrinsic+eip2929", "nested.store", 0, 29015, "b10e2d527612073b"},
-        {"none+intrinsic+eip2929", "nested.revert", 0, 24024, "290decd9548b62a8"},
-        {"none+intrinsic+eip2929", "nested.invalid", 0, 24006, "290decd9548b62a8"},
-        {"none+intrinsic+eip2929", "nested.noCode", 0, 23778, "b10e2d527612073b"},
-        {"none+intrinsic+eip2929", "nested.create", 0, 73057, "9c6be5b9cf511912"},
-        {"none+intrinsic+eip2929", "fisco.keccak", 0, 21517, "b8e12eedbb60e532"},
-        {"none+intrinsic+eip2929", "fisco.createKVTable", 15, 22408, "0110a620bf3f5175"},
         {"none+intrinsic+exceptionGasUsed", "store", 0, 54668, "7f7478394cee6407"},
         {"none+intrinsic+exceptionGasUsed", "store2", 0, 55952, "ada990cc74409008"},
         {"none+intrinsic+exceptionGasUsed", "revert", 0, 55328, "3bc08145f8fa5be2"},
@@ -1344,50 +1286,6 @@ const std::vector<Row> c_expectedSerial = {
         {"genesis-storageStatus", "nested.create", 0, 73057, "3bc15303d6857be4"},
         {"genesis-storageStatus", "fisco.keccak", 0, 21517, "b8e12eedbb60e532"},
         {"genesis-storageStatus", "fisco.createKVTable", 15, 22408, "0110a620bf3f5175"},
-        {"genesis+eip2929", "store", 0, 54668, "fcaea43149d1102d"},
-        {"genesis+eip2929", "store2", 0, 55952, "672ec3be9b7fb24e"},
-        {"genesis+eip2929", "revert", 0, 55328, "c9d8b28cf72c564a"},
-        {"genesis+eip2929", "invalid", 0, 53408, "84f0bff54a40a464"},
-        {"genesis+eip2929", "loop", 0, 54044, "244ccf8f903d8bd1"},
-        {"genesis+eip2929", "gaslimit", 0, 55112, "36014570db88d315"},
-        {"genesis+eip2929", "proxy", 0, 60008, "38171719f7674e89"},
-        {"genesis+eip2929", "caller", 0, 58064, "b0e716f7f7638d60"},
-        {"genesis+eip2929", "factory", 0, 58952, "f6a87a75c707c234"},
-        {"genesis+eip2929", "deploy.overMaxSize", 12, 3000000, "f6ce409b8fe309fa"},
-        {"genesis+eip2929", "deploy.depositPricey", 12, 3000000, "ae528383702d50cf"},
-        {"genesis+eip2929", "deploy.initRevert", 16, 53062, ""},
-        {"genesis+eip2929", "deploy.initLoop", 12, 3000000, "984705b23b630c84"},
-        {"genesis+eip2929", "transfer", 19, 21000, "80fbc8f8f83d7a74"},
-        {"genesis+eip2929", "transfer.value", 19, 21000, "80fbc8f8f83d7a74"},
-        {"genesis+eip2929", "store.add", 0, 43249, ""},
-        {"genesis+eip2929", "store.modify", 0, 26149, ""},
-        {"genesis+eip2929", "store.same", 0, 26149, ""},
-        {"genesis+eip2929", "store.delete", 0, 26137, ""},
-        {"genesis+eip2929", "store.readd", 0, 43249, ""},
-        {"genesis+eip2929", "store2.addDelete", 0, 46286, ""},
-        {"genesis+eip2929", "store2.addModify", 0, 46298, ""},
-        {"genesis+eip2929", "store2.modifyRestore", 0, 29198, ""},
-        {"genesis+eip2929", "call.revert", 16, 21018, "beced09521047d05"},
-        {"genesis+eip2929", "call.invalid", 10, 3000000, "d07a663483805d25"},
-        {"genesis+eip2929", "call.loop", 12, 3000000, "984705b23b630c84"},
-        {"genesis+eip2929", "call.gaslimit", 0, 21017, "40ea3c03c8f719cb"},
-        {"genesis+eip2929", "pre.ecrecover", 0, 24832, ""},
-        {"genesis+eip2929", "pre.sha256", 0, 21425, "6b273558f4f016a3"},
-        {"genesis+eip2929", "pre.ripemd160", 0, 22073, "592a516381074890"},
-        {"genesis+eip2929", "pre.identity", 0, 22359, "f7363c7e1636e179"},
-        {"genesis+eip2929", "pre.modexp", 0, 21791, "69c322e3248a5dfc"},
-        {"genesis+eip2929", "pre.ecadd", 0, 21988, "ad3228b676f7d3cd"},
-        {"genesis+eip2929", "pre.ecmul", 0, 27704, "ad3228b676f7d3cd"},
-        {"genesis+eip2929", "pre.ecpairing", 0, 66302, "b10e2d527612073b"},
-        {"genesis+eip2929", "pre.blake2f", 0, 22232, "516f9e1d688a5036"},
-        {"genesis+eip2929", "pre.fiscoKeccak", 0, 24352, "b8e12eedbb60e532"},
-        {"genesis+eip2929", "nested.store", 0, 29015, "b10e2d527612073b"},
-        {"genesis+eip2929", "nested.revert", 0, 24024, "290decd9548b62a8"},
-        {"genesis+eip2929", "nested.invalid", 0, 2953515, "290decd9548b62a8"},
-        {"genesis+eip2929", "nested.noCode", 0, 23778, "b10e2d527612073b"},
-        {"genesis+eip2929", "nested.create", 0, 73057, "c3dfc43d051c04a8"},
-        {"genesis+eip2929", "fisco.keccak", 0, 21517, "b8e12eedbb60e532"},
-        {"genesis+eip2929", "fisco.createKVTable", 15, 22408, "0110a620bf3f5175"},
         {"genesis-exceptionGasUsed", "store", 0, 54668, "72abbba1fa8931c6"},
         {"genesis-exceptionGasUsed", "store2", 0, 55952, "42ad5f151f5e178c"},
         {"genesis-exceptionGasUsed", "revert", 0, 55328, "b4f3145d348122b5"},
@@ -1787,50 +1685,6 @@ const std::vector<Row> c_expectedDmc = {
         {"none+storageStatus", "nested.create", 0, 34057, "c5dbc6cd76fe434b"},
         {"none+storageStatus", "fisco.keccak", 0, 9, "b8e12eedbb60e532"},
         {"none+storageStatus", "fisco.createKVTable", 15, 0, "0110a620bf3f5175"},
-        {"none+eip2929", "store", 0, 164, "0c1703bf332a1f27"},
-        {"none+eip2929", "store2", 0, 284, "b76357e496de78f2"},
-        {"none+eip2929", "revert", 0, 224, "9dba735a376248d1"},
-        {"none+eip2929", "invalid", 0, 44, "51023af93324d8c0"},
-        {"none+eip2929", "loop", 0, 104, "052789b564474e04"},
-        {"none+eip2929", "gaslimit", 0, 204, "37d1c360f73721f0"},
-        {"none+eip2929", "proxy", 0, 664, "8f7c6f7db628c841"},
-        {"none+eip2929", "caller", 0, 484, "7ecf28a147f05ad5"},
-        {"none+eip2929", "factory", 0, 564, "5496151bfc3203e6"},
-        {"none+eip2929", "deploy.overMaxSize", 12, 2195593, "f6ce409b8fe309fa"},
-        {"none+eip2929", "deploy.depositPricey", 0, 660486, "6e848149be63a3f7"},
-        {"none+eip2929", "deploy.initRevert", 16, 6, ""},
-        {"none+eip2929", "deploy.initLoop", 12, 3000000, "984705b23b630c84"},
-        {"none+eip2929", "transfer", 19, 0, "80fbc8f8f83d7a74"},
-        {"none+eip2929", "transfer.value", 19, 0, "80fbc8f8f83d7a74"},
-        {"none+eip2929", "store.add", 0, 5009, ""},
-        {"none+eip2929", "store.modify", 0, 5009, ""},
-        {"none+eip2929", "store.same", 0, 5009, ""},
-        {"none+eip2929", "store.delete", 0, 5009, ""},
-        {"none+eip2929", "store.readd", 0, 5009, ""},
-        {"none+eip2929", "store2.addDelete", 0, 7918, ""},
-        {"none+eip2929", "store2.addModify", 0, 7918, ""},
-        {"none+eip2929", "store2.modifyRestore", 0, 7918, ""},
-        {"none+eip2929", "call.revert", 16, 18, "beced09521047d05"},
-        {"none+eip2929", "call.invalid", 10, 0, "d07a663483805d25"},
-        {"none+eip2929", "call.loop", 12, 3000000, "984705b23b630c84"},
-        {"none+eip2929", "call.gaslimit", 0, 17, "40ea3c03c8f719cb"},
-        {"none+eip2929", "pre.ecrecover", 0, 3180, ""},
-        {"none+eip2929", "pre.sha256", 0, 237, "6b273558f4f016a3"},
-        {"none+eip2929", "pre.ripemd160", 0, 885, "592a516381074890"},
-        {"none+eip2929", "pre.identity", 0, 195, "f7363c7e1636e179"},
-        {"none+eip2929", "pre.modexp", 0, 183, "69c322e3248a5dfc"},
-        {"none+eip2929", "pre.ecadd", 0, 336, "ad3228b676f7d3cd"},
-        {"none+eip2929", "pre.ecmul", 0, 6180, "ad3228b676f7d3cd"},
-        {"none+eip2929", "pre.ecpairing", 0, 45162, "b10e2d527612073b"},
-        {"none+eip2929", "pre.blake2f", 0, 216, "516f9e1d688a5036"},
-        {"none+eip2929", "pre.fiscoKeccak", 0, 2692, "b8e12eedbb60e532"},
-        {"none+eip2929", "nested.store", 0, 7647, "b10e2d527612073b"},
-        {"none+eip2929", "nested.revert", 0, 2656, "290decd9548b62a8"},
-        {"none+eip2929", "nested.invalid", 0, 2638, "290decd9548b62a8"},
-        {"none+eip2929", "nested.noCode", 0, 2638, "290decd9548b62a8"},
-        {"none+eip2929", "nested.create", 0, 34057, "9c5022903aada6e1"},
-        {"none+eip2929", "fisco.keccak", 0, 9, "b8e12eedbb60e532"},
-        {"none+eip2929", "fisco.createKVTable", 15, 0, "0110a620bf3f5175"},
         {"none+exceptionGasUsed", "store", 0, 164, "1abfce7038c5a9f5"},
         {"none+exceptionGasUsed", "store2", 0, 284, "1b194c2838dca59a"},
         {"none+exceptionGasUsed", "revert", 0, 224, "8960186312fb1414"},
@@ -2007,50 +1861,6 @@ const std::vector<Row> c_expectedDmc = {
         {"none+intrinsic+storageStatus", "nested.create", 0, 73057, "ad8168c1213f6533"},
         {"none+intrinsic+storageStatus", "fisco.keccak", 0, 21517, "b8e12eedbb60e532"},
         {"none+intrinsic+storageStatus", "fisco.createKVTable", 15, 22408, "0110a620bf3f5175"},
-        {"none+intrinsic+eip2929", "store", 0, 54668, "bf1c3d4a7ad8e625"},
-        {"none+intrinsic+eip2929", "store2", 0, 55952, "3ef6e9cfa5882b7b"},
-        {"none+intrinsic+eip2929", "revert", 0, 55328, "40d5521d9631528b"},
-        {"none+intrinsic+eip2929", "invalid", 0, 53408, "7c049dc9555790fc"},
-        {"none+intrinsic+eip2929", "loop", 0, 54044, "f7dfd758cb339d67"},
-        {"none+intrinsic+eip2929", "gaslimit", 0, 55112, "78291c81b79bc2d4"},
-        {"none+intrinsic+eip2929", "proxy", 0, 60008, "596d540d6e3a8ac5"},
-        {"none+intrinsic+eip2929", "caller", 0, 58064, "b37a8e5fd705f3e8"},
-        {"none+intrinsic+eip2929", "factory", 0, 58952, "4d8db4da108373de"},
-        {"none+intrinsic+eip2929", "deploy.overMaxSize", 12, 3000000, "f6ce409b8fe309fa"},
-        {"none+intrinsic+eip2929", "deploy.depositPricey", 12, 3000000, "ae528383702d50cf"},
-        {"none+intrinsic+eip2929", "deploy.initRevert", 16, 53062, ""},
-        {"none+intrinsic+eip2929", "deploy.initLoop", 12, 3000000, "984705b23b630c84"},
-        {"none+intrinsic+eip2929", "transfer", 19, 21000, "80fbc8f8f83d7a74"},
-        {"none+intrinsic+eip2929", "transfer.value", 19, 21000, "80fbc8f8f83d7a74"},
-        {"none+intrinsic+eip2929", "store.add", 0, 26149, ""},
-        {"none+intrinsic+eip2929", "store.modify", 0, 26149, ""},
-        {"none+intrinsic+eip2929", "store.same", 0, 26149, ""},
-        {"none+intrinsic+eip2929", "store.delete", 0, 26137, ""},
-        {"none+intrinsic+eip2929", "store.readd", 0, 26149, ""},
-        {"none+intrinsic+eip2929", "store2.addDelete", 0, 29186, ""},
-        {"none+intrinsic+eip2929", "store2.addModify", 0, 29198, ""},
-        {"none+intrinsic+eip2929", "store2.modifyRestore", 0, 29198, ""},
-        {"none+intrinsic+eip2929", "call.revert", 16, 21018, "beced09521047d05"},
-        {"none+intrinsic+eip2929", "call.invalid", 10, 21000, "d07a663483805d25"},
-        {"none+intrinsic+eip2929", "call.loop", 12, 3000000, "984705b23b630c84"},
-        {"none+intrinsic+eip2929", "call.gaslimit", 0, 21017, "40ea3c03c8f719cb"},
-        {"none+intrinsic+eip2929", "pre.ecrecover", 0, 24832, ""},
-        {"none+intrinsic+eip2929", "pre.sha256", 0, 21425, "6b273558f4f016a3"},
-        {"none+intrinsic+eip2929", "pre.ripemd160", 0, 22073, "592a516381074890"},
-        {"none+intrinsic+eip2929", "pre.identity", 0, 22359, "f7363c7e1636e179"},
-        {"none+intrinsic+eip2929", "pre.modexp", 0, 21791, "69c322e3248a5dfc"},
-        {"none+intrinsic+eip2929", "pre.ecadd", 0, 21988, "ad3228b676f7d3cd"},
-        {"none+intrinsic+eip2929", "pre.ecmul", 0, 27704, "ad3228b676f7d3cd"},
-        {"none+intrinsic+eip2929", "pre.ecpairing", 0, 66302, "b10e2d527612073b"},
-        {"none+intrinsic+eip2929", "pre.blake2f", 0, 22232, "516f9e1d688a5036"},
-        {"none+intrinsic+eip2929", "pre.fiscoKeccak", 0, 24352, "b8e12eedbb60e532"},
-        {"none+intrinsic+eip2929", "nested.store", 0, 29015, "b10e2d527612073b"},
-        {"none+intrinsic+eip2929", "nested.revert", 0, 24024, "290decd9548b62a8"},
-        {"none+intrinsic+eip2929", "nested.invalid", 0, 24006, "290decd9548b62a8"},
-        {"none+intrinsic+eip2929", "nested.noCode", 0, 23778, "290decd9548b62a8"},
-        {"none+intrinsic+eip2929", "nested.create", 0, 73057, "0bfc4a9466bba323"},
-        {"none+intrinsic+eip2929", "fisco.keccak", 0, 21517, "b8e12eedbb60e532"},
-        {"none+intrinsic+eip2929", "fisco.createKVTable", 15, 22408, "0110a620bf3f5175"},
         {"none+intrinsic+exceptionGasUsed", "store", 0, 54668, "2f861a95a4f2b99e"},
         {"none+intrinsic+exceptionGasUsed", "store2", 0, 55952, "5d9f8fc5f735b2b7"},
         {"none+intrinsic+exceptionGasUsed", "revert", 0, 55328, "2651631625cea18d"},
@@ -2403,50 +2213,6 @@ const std::vector<Row> c_expectedDmc = {
         {"genesis-storageStatus", "nested.create", 0, 73057, "af6b2a99b62cb459"},
         {"genesis-storageStatus", "fisco.keccak", 0, 21517, "b8e12eedbb60e532"},
         {"genesis-storageStatus", "fisco.createKVTable", 15, 22408, "0110a620bf3f5175"},
-        {"genesis+eip2929", "store", 0, 54668, "b85872a496579104"},
-        {"genesis+eip2929", "store2", 0, 55952, "a82aa21cf7f6efe7"},
-        {"genesis+eip2929", "revert", 0, 55328, "6d98cfe94de31488"},
-        {"genesis+eip2929", "invalid", 0, 53408, "40608ecee7978efc"},
-        {"genesis+eip2929", "loop", 0, 54044, "6816b33030e5a204"},
-        {"genesis+eip2929", "gaslimit", 0, 55112, "b2f7f6e8942bead4"},
-        {"genesis+eip2929", "proxy", 0, 60008, "12e745a4ecded0aa"},
-        {"genesis+eip2929", "caller", 0, 58064, "d778f4845045a0b1"},
-        {"genesis+eip2929", "factory", 0, 58952, "e28ead9c7d36ad3c"},
-        {"genesis+eip2929", "deploy.overMaxSize", 12, 3000000, "f6ce409b8fe309fa"},
-        {"genesis+eip2929", "deploy.depositPricey", 12, 3000000, "ae528383702d50cf"},
-        {"genesis+eip2929", "deploy.initRevert", 16, 53062, ""},
-        {"genesis+eip2929", "deploy.initLoop", 12, 3000000, "984705b23b630c84"},
-        {"genesis+eip2929", "transfer", 19, 21000, "80fbc8f8f83d7a74"},
-        {"genesis+eip2929", "transfer.value", 19, 21000, "80fbc8f8f83d7a74"},
-        {"genesis+eip2929", "store.add", 0, 43249, ""},
-        {"genesis+eip2929", "store.modify", 0, 26149, ""},
-        {"genesis+eip2929", "store.same", 0, 26149, ""},
-        {"genesis+eip2929", "store.delete", 0, 26137, ""},
-        {"genesis+eip2929", "store.readd", 0, 43249, ""},
-        {"genesis+eip2929", "store2.addDelete", 0, 46286, ""},
-        {"genesis+eip2929", "store2.addModify", 0, 46298, ""},
-        {"genesis+eip2929", "store2.modifyRestore", 0, 29198, ""},
-        {"genesis+eip2929", "call.revert", 16, 21018, "beced09521047d05"},
-        {"genesis+eip2929", "call.invalid", 10, 3000000, "d07a663483805d25"},
-        {"genesis+eip2929", "call.loop", 12, 3000000, "984705b23b630c84"},
-        {"genesis+eip2929", "call.gaslimit", 0, 21017, "40ea3c03c8f719cb"},
-        {"genesis+eip2929", "pre.ecrecover", 0, 24832, ""},
-        {"genesis+eip2929", "pre.sha256", 0, 21425, "6b273558f4f016a3"},
-        {"genesis+eip2929", "pre.ripemd160", 0, 22073, "592a516381074890"},
-        {"genesis+eip2929", "pre.identity", 0, 22359, "f7363c7e1636e179"},
-        {"genesis+eip2929", "pre.modexp", 0, 21791, "69c322e3248a5dfc"},
-        {"genesis+eip2929", "pre.ecadd", 0, 21988, "ad3228b676f7d3cd"},
-        {"genesis+eip2929", "pre.ecmul", 0, 27704, "ad3228b676f7d3cd"},
-        {"genesis+eip2929", "pre.ecpairing", 0, 66302, "b10e2d527612073b"},
-        {"genesis+eip2929", "pre.blake2f", 0, 22232, "516f9e1d688a5036"},
-        {"genesis+eip2929", "pre.fiscoKeccak", 0, 24352, "b8e12eedbb60e532"},
-        {"genesis+eip2929", "nested.store", 0, 29015, "b10e2d527612073b"},
-        {"genesis+eip2929", "nested.revert", 0, 24024, "290decd9548b62a8"},
-        {"genesis+eip2929", "nested.invalid", 0, 2953515, "290decd9548b62a8"},
-        {"genesis+eip2929", "nested.noCode", 0, 23778, "290decd9548b62a8"},
-        {"genesis+eip2929", "nested.create", 0, 73057, "d3ba82cdfd6aad54"},
-        {"genesis+eip2929", "fisco.keccak", 0, 21517, "b8e12eedbb60e532"},
-        {"genesis+eip2929", "fisco.createKVTable", 15, 22408, "0110a620bf3f5175"},
         {"genesis-exceptionGasUsed", "store", 0, 54668, "10432116496f92ba"},
         {"genesis-exceptionGasUsed", "store2", 0, 55952, "b521bae2fab7960d"},
         {"genesis-exceptionGasUsed", "revert", 0, 55328, "6d09f9bb7d6979b3"},
@@ -2641,6 +2407,60 @@ BOOST_AUTO_TEST_CASE(dmcScriptUnderEachConfiguration)
     Recorder recorder;
     runAll(Mode::dmc, 12'003'000, recorder);
     recorder.check(c_expectedDmc);
+}
+
+BOOST_AUTO_TEST_CASE(codeSizeLimitAcrossBlockVersions)
+{
+    constexpr int64_t budget = 8'000'000;
+    constexpr size_t runtimeSize = 0x50000;
+    struct Expected
+    {
+        protocol::BlockVersion version;
+        int32_t status;
+        int64_t gasUsed;
+    };
+    // Intrinsic gas stays off: 20 gas/byte makes this deployment affordable after 3.2.
+    constexpr std::array<Expected, 3> expected = {{
+        {protocol::BlockVersion::V3_0_VERSION,
+            static_cast<int32_t>(protocol::TransactionStatus::OutOfGas), 235'526},
+        {protocol::BlockVersion::V3_1_VERSION,
+            static_cast<int32_t>(protocol::TransactionStatus::OutOfGas), 235'526},
+        {protocol::BlockVersion::V3_2_VERSION,
+            static_cast<int32_t>(protocol::TransactionStatus::None), 6'789'126},
+    }};
+    const Step deploy("deploy.betweenCodeSizeLimits", "", constant(fromHex("620500006000f3")));
+    protocol::BlockNumber number = 12'004'000;
+    for (auto mode : {Mode::serial, Mode::dmc})
+    {
+        for (auto const& row : expected)
+        {
+            BOOST_TEST_INFO_SCOPE("mode=" << static_cast<int>(mode)
+                                          << " version=" << static_cast<uint32_t>(row.version));
+            Config config{.name = "codeSizeBoundary", .features = {}, .version = row.version};
+            auto env = chain(config, number);
+            auto params = message(deploy, {}, 0, number);
+            auto const address = std::string(params->to());
+            params->setGasAvailable(budget);
+            auto result = mode == Mode::serial ? serial(env, std::move(params)) :
+                                                 dmc(env, std::move(params), number, false);
+            BOOST_CHECK_EQUAL(result->status(), row.status);
+            BOOST_CHECK_EQUAL(budget - result->gasAvailable(), row.gasUsed);
+            auto runtime = code(env, address);
+            if (row.status == static_cast<int32_t>(protocol::TransactionStatus::None))
+            {
+                BOOST_CHECK_EQUAL(result->newEVMContractAddress(), address);
+                BOOST_REQUIRE_EQUAL(runtime.size(), runtimeSize);
+                BOOST_CHECK(std::all_of(
+                    runtime.begin(), runtime.end(), [](byte value) { return value == 0; }));
+            }
+            else
+            {
+                BOOST_CHECK(result->newEVMContractAddress().empty());
+                BOOST_CHECK(runtime.empty());
+            }
+            ++number;
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

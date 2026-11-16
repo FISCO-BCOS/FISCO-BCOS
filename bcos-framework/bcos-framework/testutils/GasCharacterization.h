@@ -37,11 +37,14 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <map>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -77,8 +80,8 @@ constexpr std::string_view c_factoryRuntime =
     "60005260206000f3"
     "60646000f3";
 
-// The EIP-2930 transaction of Web3AccessListResolverTest: 16 non-zero calldata bytes, two
-// addresses and two storage keys in its access list, a recipient without code.
+// An EIP-2930 transaction with 16 non-zero calldata bytes, two addresses and two storage keys
+// in its access list, and a recipient without code. This pins access-list intrinsic gas.
 constexpr std::string_view c_accessListTx =
     "0x01f8f205078506fc23ac008357b58494811a752c8cd697e3cb27279c330ed1ada745a8d7881bc16d674ec800"
     "00906ebaf477f83e051589c1188bcc6ddccdf872f85994de0b295669a9fd93d5f28d9ec85e40f4cb697baef842"
@@ -289,6 +292,16 @@ struct Config
     protocol::BlockVersion version = protocol::BlockVersion::V3_18_0_VERSION;
 };
 
+// The index in each lane's append-only name list is its stable block offset. Keep removed
+// names as reserved slots so adding or removing a configuration cannot change existing rows.
+inline protocol::BlockNumber blockNumberFor(std::string_view name,
+    std::span<std::string_view const> blockIDs, protocol::BlockNumber firstBlock)
+{
+    auto it = std::find(blockIDs.begin(), blockIDs.end(), name);
+    BOOST_REQUIRE_MESSAGE(it != blockIDs.end(), "missing stable block ID for " << name);
+    return firstBlock + std::distance(blockIDs.begin(), it);
+}
+
 // Feature sets as governance can produce them: turning a flag on turns on what it depends on
 // (Features::getFeatureDependencies), turning one off turns off what depends on it. A set that
 // breaks this is not a chain state.
@@ -403,13 +416,14 @@ public:
         m_rows.emplace(std::move(key), std::move(observed));
     }
 
-    // GAS_CHARACTERIZATION_RECORD set: print the table. Otherwise every row must match.
+    // GAS_CHARACTERIZATION_RECORD=1: print the table. Otherwise every row must match.
     void check(std::vector<Row> const& expected) const
     {
-        if (std::getenv("GAS_CHARACTERIZATION_RECORD") != nullptr)
+        auto const* record = std::getenv("GAS_CHARACTERIZATION_RECORD");
+        if (record != nullptr && std::string_view(record) == "1")
         {
             BOOST_TEST_MESSAGE(
-                "GAS_CHARACTERIZATION_RECORD is set: printing the table, not "
+                "GAS_CHARACTERIZATION_RECORD=1: printing the table, not "
                 "checking it");
             for (auto const& key : m_order)
             {

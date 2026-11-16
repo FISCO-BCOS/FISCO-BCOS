@@ -16,8 +16,8 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -fno-var-tracking -Wno-unused
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # using-directives at namespace scope; kept out of the unity batches
 set_source_files_properties("libexecutor/GasCharacterization_V0Test.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-# This target follows the repo-wide unity default (cmake/Options.cmake) and carries no
-# per-file opt-outs beyond the boost.test entry main.cpp above:
+# This target follows the repo-wide unity default (cmake/Options.cmake), except for the
+# boost.test entry main.cpp and the characterization test above:
 #  - the global `using namespace std;` files were fixed to targeted `using std::x;`
 #    (a global using-directive makes range-v3's ::ranges ambiguous with ::std::ranges
 #    inside unity TUs);

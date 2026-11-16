@@ -42,7 +42,6 @@ v0 与 v1 的差异、各开关的作用，都写成下表的字段取值。每�
 | `codeDepositPrecheck` 与 `maxCodeSize` | v0 有预检和大小上限（3.2 起 1 MiB，之前 0x40000）；v1 都没有 | `TransactionExecutive.cpp:1157`、`:1177` |
 | `budgetSource` | v0：链级 `tx_gas_limit`，系统合约目标取 3000000000，除非开 `bugfix_precompiled_gascalc`；v1：开 `bugfix_gas_payment_balance_precheck` 时取交易与链级的较小值 | `bcos-scheduler/src/BlockExecutive.cpp:236`，`TransactionExecutorImpl.h:53` |
 | `storageStatusMode` | `bugfix_evm_storage_status`；关闭时 v0 与 v1 的旧分支不同 | `bcos-executor/src/vm/EVMHostInterface.cpp:87`，`transaction-executor/bcos-transaction-executor/vm/EVMHostInterface.h:76` |
-| `eip2929` | `feature_evm_eip2929` 且 revision 不低于 Berlin | `bcos-executor/src/vm/Eip2929Util.h:32` |
 | `builtinPrecompileCharge` | v0：块版本是否达到 3.1.0；v1：`bugfix_v1_error_handling` | `bcos-executor/src/vm/HostContext.cpp:315`，`transaction-executor/bcos-transaction-executor/precompiled/PrecompiledImpl.h:65` |
 | `errorGasLeft` | v0：`bugfix_evm_exception_gas_used`；v1：`bugfix_v1_error_handling` | `TransactionExecutive.cpp:1584`，`transaction-executor/bcos-transaction-executor/EVMCResult.cpp:169` |
 | `gasLimitOpcode` | v0：块版本达到 3.1.0 取 `tx_gas_limit`，否则取 3000000000；v1：`tx_gas_limit` | `bcos-executor/src/vm/HostContext.cpp:89`，`HostContext.h:462` |
@@ -68,13 +67,15 @@ v0 与 v1 的差异、各开关的作用，都写成下表的字段取值。每�
 
 ## 特征测试（PR 1）
 
-Fisco lane 没有外部裁判，重构前先用特征测试钉住今天的收费。每个测试在一组开关配置下跑同一段交易脚本，把每个（配置，交易）的状态码、gasUsed、输出摘要与测试文件里的内联表逐行比对；设 `GAS_CHARACTERIZATION_RECORD=1` 时打印当前值而不比对，用来生成这张表。重构 PR 不得改动这些表；改动表格就是改动行为，要在 review 里按行为变更论证。
+Fisco lane 没有外部裁判，重构前先用特征测试钉住今天的收费。每个测试在一组开关配置下跑同一段交易脚本，把每个（配置，交易）的状态码、gasUsed、输出摘要与测试文件里的内联表逐行比对；仅当 `GAS_CHARACTERIZATION_RECORD=1` 时打印当前值而不比对，用来生成这张表。空串、`0` 和其他值都继续比对。重构 PR 不得改动这些表；改动表格就是改动行为，要在 review 里按行为变更论证。
 
 - 脚本与配置生成在 `bcos-framework/bcos-framework/testutils/GasCharacterization.h`，v0 与 v1 共用。
 - 交易分三组。部署：成功、超出代码大小上限、只有旧价付得起的 code deposit、init code revert 或耗尽 gas。调用：转账、带 value 的转账（v0）、普通调用、嵌套调用、revert、EVM 异常、签了较小 gasLimit 的调用（v1）、带 access list 的 EIP-2930 交易（v1）。计量：SSTORE 各状态（含同一交易内对同一槽位写两次）、EVM 内置预编译 0x01–0x09、FISCO `CryptoPrecompiled` 与 `TableManagerPrecompiled.createKVTable`。
 - 配置：全关；每个开关单独打开（连同它的依赖）；`bugfix_tx_intrinsic_gas` 与其余开关两两组合；3.18.0 创世；创世上每个开关翻转一次（创世里有的关掉、没有的打开，EVM 分叉与 `feature_balance` 不在创世里）；v0 另有 3.0、3.1、3.2 块版本。开关组合遵守 `Features::getFeatureDependencies`。
+- 每条 lane 用追加式配置名列表分配固定块号。删除 EIP-2929 配置后仍保留原编号槽位，调整配置运行顺序也不改变已有地址、输出摘要和 calldata gas。
 - `GasCharacterization_V1Test`（`test-transaction-executor`）同时记录 `protocol::normalizeReceipts` 求出的块 gas 合计，即 `BaselineScheduler` 写进区块头的值。
 - `GasCharacterization_V0Test`（`test-bcos-executor`）按串行（`executeTransactions`）和 DMC（`dmcExecuteTransaction` 加一个按 `DmcExecutor::handleExecutiveMessage`/`V2` 处理消息的驱动）各跑一遍。
+- v0 另有独立的代码大小用例：关闭 intrinsic，预算 8,000,000，部署返回 `0x50000` 字节的代码。3.0/3.1 应拒绝，3.2 应成功；串行和 DMC 各验证三个版本，并检查 gasUsed 与代码落库结果。共享脚本仍使用 3,000,000 预算，原有耗尽 gas 的行不变。
 - `GasCharacterization_SchedulerTest`（`test-scheduler`）用每帧固定扣 1000 gas 的桩执行器，覆盖 `BlockExecutive` 与 `SerialBlockExecutive` 的预算、回执 gasUsed、区块 gasUsed，以及三个 gas 开关的全部组合。
 - 混合组链：`tools/.ci/ci_check_air.sh` 设 `FISCO_BCOS_OLD_BIN` 时，每条链的奇数号节点用旧二进制。新旧节点状态一旦不一致就凑不够法定票数，链停止出块。
 
@@ -82,4 +83,7 @@ Fisco lane 没有外部裁判，重构前先用特征测试钉住今天的收费
 
 - 系统合约（`SYS_CONFIG` 等）的直接调用只在调度器测试里覆盖；两个执行器测试的环境下，`SystemConfigPrecompiled` 读表时解引用空存储（`Table::asyncGetRow`），调用无法执行。
 - `TablePrecompiled` 与 `KVTablePrecompiled` 的读写：`createKVTable` 在这两个测试环境里以状态 15 失败，只钉住了它失败时的 gas。
+- v0 的 `transfer.value` 未覆盖成功转账：开启 `feature_balance` 时，收款方无表会进入自动建账，但夹具未初始化 BFS 根目录，创建失败并返回状态 15。这些行只记录该失败路径；成功转账及双方余额、失败回滚的断言留待后续用例补齐。
+- DMC 表记录真实执行器在单 context、无锁竞争的微型驱动下的行为，未覆盖真实调度器的并发锁竞争、CREATE2 和 delegatecall。现有 Prague/Osaka 创世配置会触发 GET_CODE；驱动折叠调度器内部的 prepare 转发与 push/pop，保留执行器可见的 seq 及消息结果，无需复制内部调度步骤。真实 DmcExecutor 的消息对照留待后续覆盖。
+- v1 的内置预编译尚未覆盖费用大于子帧预算的分支。后续 gas policy 重构前增加受控低 gas 调用，并返回子调用成功位与剩余 gas，固定 `bugfix_v1_error_handling` 开关两侧的现有行为。
 - 开 `feature_evm_prague` 且关 `bugfix_evm_create2_delegatecall_staticcall_codecopy` 的配置不进 v0 的 DMC 表，这组配置的执行结果在不同运行之间不一致，另行修复。
