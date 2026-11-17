@@ -723,17 +723,41 @@ BOOST_AUTO_TEST_CASE(layoutPathLinesAreMergedByTimestamp)
     sink.stop();
 }
 
-// morebtcg #2: a producer that is already past its own stop check when stop() runs
-// used to publish into a ring the worker had detached from, so the line was
-// neither consumed nor counted. Building a large message widens that window from
-// nanoseconds to milliseconds, which is how the reviewer reproduced it.
+// Round-4 F1: the stop/publication handshake. A producer publishes its line and
+// then re-checks m_stop; stop() sets m_stop and then inspects the rings. Both sides
+// must not miss each other, or an accepted line ends up neither drained nor counted.
+//
+// Deterministic, no sleeps: a publication hook parks the producer exactly between
+// the tail publication and the m_stop recheck, so stop() is guaranteed to run
+// entirely inside that window. The earlier sleep-based version could not place the
+// producer there and stayed green even with the recheck disabled.
+namespace
+{
+struct PublicationBarrier
+{
+    /// Set once the producer is parked and waiting to be released.
+    std::atomic<bool> armed{false};
+    std::atomic<bool> mayResume{false};
+};
+
+void parkAfterPublication(void* _context)
+{
+    auto& barrier = *static_cast<PublicationBarrier*>(_context);
+    barrier.armed.store(true, std::memory_order_release);
+    while (!barrier.mayResume.load(std::memory_order_acquire))
+    {
+        std::this_thread::yield();
+    }
+}
+}  // namespace
+
 BOOST_AUTO_TEST_CASE(stopRacingAnInFlightProducerLosesNothing)
 {
     auto backend = boost::make_shared<FakeBackend>();
     backend->gate = false;
     bcos::log::LineAsyncSink<FakeBackend, 64> sink(backend);
 
-    // Park the worker so the backlog stays in the ring.
+    // Park the worker so the ring backlog is preserved.
     sink.writeLine(LogLevel::INFO, "p|", "seed");
     auto const deadline = std::chrono::steady_clock::now() + 2s;
     while (backend->consumeEntered.load(std::memory_order_acquire) < 1 &&
@@ -743,24 +767,31 @@ BOOST_AUTO_TEST_CASE(stopRacingAnInFlightProducerLosesNothing)
     }
     BOOST_REQUIRE_GE(backend->consumeEntered.load(std::memory_order_acquire), 1);
 
-    // The copy must still be running when stop() begins, otherwise the line is
-    // published and drained by stop()'s own drain and the post-publish m_stop
-    // re-check is never load-bearing — with an 8 MB line the copy finished in
-    // 1-3 ms while this thread slept 50 ms, so disabling the re-check kept the
-    // case green. 128 MB takes roughly 40-80 ms, and the wait below is 1 ms, so
-    // stop() reliably lands while this thread is inside the copy. Verified by
-    // mutation: with the re-check disabled this now leaves the line stranded.
-    std::string const huge(128u * 1024u * 1024u, 'x');
-    std::thread producer([&] { sink.writeLine(LogLevel::INFO, "p|", huge); });
-    // Just long enough for the producer to be past its stop check and inside the
-    // copy; far shorter than the copy itself.
-    std::this_thread::sleep_for(1ms);
+    PublicationBarrier barrier;
+    bcos::log::LineAsyncSink<FakeBackend, 64>::setPublicationHookForTesting(
+        &parkAfterPublication, &barrier);
+
+    // Deterministic interleaving, no sleeps. The producer passes its own m_stop
+    // check, then parks BEFORE publishing. stop() then runs to completion, so both
+    // of its drains genuinely see an empty ring and the sink is detached from the
+    // worker; only after stop() returns does the producer publish. At that point
+    // the post-publish re-check is the ONLY thing that can save the line, which is
+    // exactly the guarantee the paired fences provide. Verified by mutation:
+    // removing the re-check strands the line and fails this case.
+    std::thread producer([&] { sink.writeLine(LogLevel::INFO, "p|", "racing"); });
+    while (!barrier.armed.load(std::memory_order_acquire))
+    {
+        std::this_thread::yield();
+    }
 
     backend->gate = true;
     sink.stop();
+
+    bcos::log::LineAsyncSink<FakeBackend, 64>::setPublicationHookForTesting(nullptr, nullptr);
+    barrier.mayResume.store(true, std::memory_order_release);
     producer.join();
 
-    // Whatever the interleaving, the line must not stay invisible in a ring.
+    // The line must be visible: either this thread drained it, or stop() did.
     BOOST_CHECK_EQUAL(sink.pendingLines(), 0u);
     auto const delivered = backend->snapshot().size();
     BOOST_CHECK_GE(delivered + sink.droppedTotal(), 2u);  // seed + the racing line

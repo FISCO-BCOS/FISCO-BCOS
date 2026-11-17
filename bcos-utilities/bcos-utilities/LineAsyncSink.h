@@ -385,6 +385,23 @@ template <typename BackendT, std::size_t CapacityV = 4096, std::size_t MaxShards
 class LineAsyncSink : public LineSinkWriter, public LineFeeder::Client
 {
 public:
+    /// Test-only hook, invoked BEFORE publishing a line, i.e. before the tail store.
+    ///
+    /// It exists to test the stop/publication ordering deterministically. The
+    /// window that matters is: stop() sets m_stop, completes BOTH its drains
+    /// (seeing nothing), detaches from the worker — and only then does the producer
+    /// publish. A hook after the publication cannot express that, because stop()'s
+    /// first drain would already collect the line. Placing it before the store lets
+    /// a case hold the producer out until stop() has fully returned.
+    ///
+    /// Null by default and never set in production.
+    using PublicationHook = void (*)(void*);
+    static void setPublicationHookForTesting(PublicationHook _hook, void* _context) noexcept
+    {
+        s_publicationHook.store(_hook, std::memory_order_relaxed);
+        s_publicationContext.store(_context, std::memory_order_relaxed);
+    }
+
     // Mimics asynchronous_sink::locked_backend(): serializes backend
     // configuration against the feeding worker.
     class LockedBackend
@@ -584,6 +601,12 @@ public:
             }
             m_stop.store(true, std::memory_order_relaxed);
         }
+        // Paired with the fence in push(): this side publishes m_stop, then this
+        // fence, then inspects the rings. Together the two fences put the
+        // producer's tail publication and this thread's stop publication into one
+        // total order S, so a producer that missed m_stop cannot also have its
+        // tail missed by the drain below — see the full argument in enqueue().
+        std::atomic_thread_fence(std::memory_order_seq_cst);
         {
             // The worker will not drain for us after removeClient returns, so
             // flush the backlog inline first.
@@ -756,6 +779,9 @@ private:
         return state;
     }
     static inline std::atomic<std::uint64_t> s_nextSinkId{1};
+    /// See setPublicationHookForTesting(). Null in production.
+    static inline std::atomic<PublicationHook> s_publicationHook{nullptr};
+    static inline std::atomic<void*> s_publicationContext{nullptr};
 
     /// Appends one line to the calling thread's ring.
     void enqueue(LogLevel _level, LineRecord const* _record, std::string_view _prefix,
@@ -769,6 +795,11 @@ private:
             // producer" window that the registry's never-destroy policy allows.
             countDrop();
             return;
+        }
+        // Test-only: parks this thread BEFORE publishing. Always null in production.
+        if (auto const hook = s_publicationHook.load(std::memory_order_relaxed); hook != nullptr)
+        {
+            hook(s_publicationContext.load(std::memory_order_relaxed));
         }
         // The record pointer is passed straight through: push() stamps the slot
         // once the line is known to fit, and only samples a timestamp when the
@@ -796,24 +827,30 @@ private:
         // (seeing nothing) and detach from the worker. The line would then sit in
         // a ring nobody drains — not consumed, not counted as dropped, invisible.
         //
-        // The re-check below NARROWS that window, it does not close it: this
-        // store (release) followed by the load of m_stop and stop()'s store
-        // (relaxed) followed by its load of the tail are a Dekker pattern, and
-        // release/acquire provides no StoreLoad barrier, so the standard permits
-        // both sides to miss each other. What actually makes it unreachable in
-        // practice is the ordering AFTER this point, and both steps are
-        // load-bearing:
-        //   1. a producer that reads m_stop == false here goes on to call
-        //      wake(), whose m_dirty.exchange(acq_rel) is an RMW that commits the
-        //      tail store above within nanoseconds;
-        //   2. stop() takes m_controlMutex (an acquiring RMW) before its first
-        //      drain, and runs a third drain after removeClient(), which itself
-        //      takes a mutex.
-        // A stranded line therefore needs this thread to be descheduled between
-        // the publish and this load for that whole sequence, and a context switch
-        // is a full barrier. Closing the gap formally would cost a seq_cst fence
-        // on the per-line hot path. Do not remove the post-removeClient() drain,
-        // and do not turn wake() into a plain store: either reopens this silently.
+        // This recheck and stop()'s matching store form a Dekker pattern (each
+        // side stores one variable, then loads the other), and release/acquire
+        // does NOT close that pattern: it orders a load against later writes, not
+        // a store against a later load. The seq_cst fences on both sides do close
+        // it. In push() the fence sits between the tail release store and this
+        // load; in stop() the fence sits between the m_stop store and the first
+        // queue inspection. With both fences in place the two sides share one
+        // total order S of sequentially consistent operations, so either:
+        //   - this load of m_stop precedes stop()'s store in S, and then this
+        //     thread goes on to wake() — but that is not what saves the line;
+        //   - rather: if this recheck reads false (so the stopper's store is
+        //     later in S than this load), then this thread's fence precedes that
+        //     store in S, therefore the tail store it published is also ordered
+        //     before the stopper's fence, and the stopper's first queue
+        //     inspection — which happens after its own fence — must observe the
+        //     published tail and drain the line.
+        // The contrapositive is the other half: if the stopper's inspection misses
+        // the tail, then this load must observe the store and drainInlineAfterStop
+        // runs here. One side always observes the other, so an accepted line is
+        // either drained or counted. Neither the context switch nor the wake() RMW
+        // is load-bearing for this; they only make it likely, which is not a proof.
+        // Do not remove either fence, and do not remove the post-removeClient()
+        // drain: after removeClient() the worker can no longer be the one to
+        // service this sink, so stop()'s own drain is what covers the case above.
         //
         // The branch that DOES see the flag runs drainInlineAfterStop(), i.e.
         // backend file I/O plus a flush on a producing thread. That breaks the
@@ -894,6 +931,12 @@ private:
         // Publish: the release store makes every slot write visible to the
         // worker, which reads tail with acquire before touching the slot.
         _shard->tail.store(tail + 1, std::memory_order_release);
+        // The sequential consistency fence below is paired with the one in
+        // stop(), and the pairing is what makes shutdown accounting sound; see
+        // the argument in enqueue() next to the m_stop recheck. A release store
+        // alone is not enough: the recheck that follows loads a different atomic,
+        // and release/acquire does not order a store against a later load.
+        std::atomic_thread_fence(std::memory_order_seq_cst);
         return true;
     }
 
