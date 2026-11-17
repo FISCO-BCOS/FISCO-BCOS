@@ -96,8 +96,7 @@ bytes HsmSM2Crypto::sign(
 
     // step 3 : signature = Sign(e)
     unsigned int signLen;
-    code = provider.Sign(
-        key, hsm::SM2, (const unsigned char*)hashResult, 32, signatureData.data(), &signLen);
+    code = provider.Sign(key, hsm::SM2, hashResult, 32, signatureData.data(), &signLen);
     if (code != SDR_OK)
     {
         CRYPTO_LOG(WARNING) << "[HSMSignature::sign] ERROR of Sign"

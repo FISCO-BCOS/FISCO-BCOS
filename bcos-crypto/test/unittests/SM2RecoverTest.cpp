@@ -55,14 +55,20 @@ BOOST_AUTO_TEST_CASE(recoverAddressFromInputRecovers)
     BOOST_CHECK(addr == calculateAddress(hashImpl, keyPair->publicKey()).asBytes());
 }
 
-// truncated input: the zero-filled tail fails verification deterministically
+// A zero final signature byte would make truncation followed by zero-padding reproduce the
+// original valid signature, so choose a signature whose final byte changes on truncation.
 BOOST_AUTO_TEST_CASE(recoverAddressFromInputRejectsTruncated)
 {
     SM2Crypto crypto;
     auto hashImpl = std::make_shared<Keccak256>();
-    auto keyPair = crypto.generateKeyPair();
     auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
-    auto sig = crypto.sign(*keyPair, hashData, false);
+    decltype(crypto.generateKeyPair()) keyPair;
+    bytes sig;
+    do
+    {
+        keyPair = crypto.generateKeyPair();
+        sig = crypto.sign(*keyPair, hashData, false);
+    } while (sig.back() == 0);
 
     bytes input;
     input.insert(input.end(), hashData.begin(), hashData.end());
