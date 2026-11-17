@@ -23,6 +23,7 @@
 #include "bcos-rpc/util.h"
 
 #include <memory>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -71,7 +72,17 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
                 "blockHash is mutually exclusive with the fromBlock/toBlock range"));
         }
-        m_blockHash = blockHashMember->asString();
+        // An empty selector is not the same as no selector: getLogsImpl picks the blockHash branch
+        // on !blockHash().empty(), so storing "" would silently fall through to the range defaults
+        // (both "latest") and answer a request that named one specific block with the head block's
+        // logs -- another plausible-looking result for a selector that was never honoured. Reject
+        // it instead; the check covers whichever spelling supplied it.
+        auto blockHash = blockHashMember->asString();
+        if (blockHash.empty())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "blockHash is empty"));
+        }
+        m_blockHash = std::move(blockHash);
     }
 
     // `address` and `topics` are optional in the Ethereum filter spec: an omitted (or null)

@@ -102,12 +102,19 @@ inline constexpr int DEFAULT_FILTER_MAX_PROCESS_BLOCK = 10;
 
 // Range cap for the *one-shot* filter paths -- eth_getLogs, eth_getFilterLogs and getLogs on the
 // legacy JSON-RPC. They have no cursor, so FilterSystem::getLogsImpl rejects a wider range
-// outright instead of answering a prefix, and the cap therefore has to sit at the scale Ethereum
-// tooling assumes: public providers cap at the 10000-block mark and go-ethereum imposes no
-// block-count cap at all. It is a separate key from filter_max_process_block precisely because
-// the two jobs differ -- a query-sized window is right for a single explicit request and wrong
-// for a step that is spent on every poll.
-inline constexpr int DEFAULT_FILTER_MAX_BLOCK_RANGE = 10'000;
+// outright instead of answering a prefix. It is a separate key from filter_max_process_block
+// precisely because the two jobs differ -- a query-sized window is right for a single explicit
+// request and wrong for a step that is spent on every poll.
+//
+// The value is deliberately modest rather than matching the 10000-block mark some public
+// providers advertise. The cost of a one-shot query is the receipts of every block in the range,
+// read whether or not anything matches, and blocks are now limited by gas only (#5747 dropped the
+// 1000-transaction cap), so a range of N blocks is N x (a possibly large number) of receipts. At
+// the default 500ms seal time 1000 blocks is already ~8 minutes of chain -- far more than any
+// typical getLogs call needs -- and a full backfill has to be chunked at any cap, since a day of
+// chain is 172800 blocks. Operators who want a wider window raise this key; the error message
+// names the cap and the chunk size to retry with.
+inline constexpr int DEFAULT_FILTER_MAX_BLOCK_RANGE = 1'000;
 
 // Both budgets are read as range bounds, and a non-positive value would make the corresponding
 // path reject everything (a resolved range is at least one block), so reject it at boot instead
@@ -1220,7 +1227,7 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
         ; 300s
         filter_timeout=300
         filter_max_process_block=10
-        filter_max_block_range=10000
+        filter_max_block_range=1000
     */
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("rpc.listen_port", 20200);
@@ -1275,7 +1282,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; 300s
         filter_timeout=300
         filter_max_process_block=10
-        filter_max_block_range=10000
+        filter_max_block_range=1000
         batch_request_size_limit=8
         ;request body size limit for web3 rpc, default is 10MB
         request_body_size_limit=10240000

@@ -361,9 +361,9 @@ BOOST_AUTO_TEST_CASE(getLogsEmptyFilterMatchesAllLogs)
 // The one-shot range cap and the streaming paging step are separate knobs. They used to be one
 // member, so raising the cap for eth_getLogs also multiplied the per-poll work of
 // eth_getFilterChanges / eth_getBlockChanges / eth_getPendingTransactions by the same factor.
-// This builds a system with the original 10-block paging step and the shipped 10000-block cap,
-// then asserts a range far wider than the step is answered in a single one-shot call: the two
-// values are read at different places, so moving one leaves the other alone.
+// This builds a system with the original 10-block paging step and the 1000-block cap shipped
+// alongside it, then asserts a range far wider than the step is answered in a single one-shot
+// call: the two values are read at different places, so moving one leaves the other alone.
 BOOST_AUTO_TEST_CASE(oneShotRangeCapIsIndependentOfPagingStep)
 {
     for (int i = 0; i < 20; ++i)
@@ -372,7 +372,7 @@ BOOST_AUTO_TEST_CASE(oneShotRangeCapIsIndependentOfPagingStep)
     }
     auto wideCap = std::make_shared<Web3FilterSystem>(*ioServicePool->getIOService(),
         rpc->groupManager(), "test-group", 600000, /*maxBlockProcessPerReq=*/10,
-        /*maxBlockRange=*/10000);
+        /*maxBlockRange=*/1000);
     auto const latest = wideCap->getLatestBlockNumber();
     BOOST_REQUIRE_GE(latest, 16);
 
@@ -561,6 +561,97 @@ BOOST_AUTO_TEST_CASE(blockHashReorgBetweenLookupAndReadFailsClosed)
     BOOST_CHECK_THROW(
         task::syncWait(filterSystem->getLogs(blockHashRequest(staleHash))),
         bcos::rpc::JsonRpcException);
+}
+
+// An empty blockHash is not the same as no blockHash: getLogsImpl selects the hash branch on a
+// non-empty string, so storing "" would fall through to the omitted-range defaults (both
+// "latest") and answer a request that named one specific block with the head block's logs. Both
+// spellings must be rejected, and a non-empty hash must still be accepted.
+BOOST_AUTO_TEST_CASE(filterRequestRejectsEmptyBlockHash)
+{
+    Json::Reader reader;
+    auto parse = [&reader](std::string const& s) {
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(s, value));
+        return value;
+    };
+
+    for (char const* key : {"blockHash", "blockhash"})
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        BOOST_CHECK_THROW(
+            request->fromJson(parse(std::string("{\"") + key + "\":\"\"}"), 100, 1, 2,
+                std::nullopt, std::nullopt, false),
+            bcos::rpc::JsonRpcException);
+    }
+
+    // Control: the rejection is about the empty selector, not about hash-only requests.
+    auto request = std::make_shared<Web3FilterRequest>();
+    request->fromJson(
+        parse(R"({"blockHash":"0x1234"})"), 100, 1, 2, std::nullopt, std::nullopt, false);
+    BOOST_CHECK_EQUAL(request->blockHash(), "0x1234");
+}
+
+// The range cap bounds how many blocks are read; it cannot bound how much comes back, because one
+// block may now carry thousands of transactions and every matching log is appended to the
+// response array before it is serialized. A result above MAX_RETURNED_LOGS_PER_QUERY is refused
+// rather than truncated -- truncating would be the same "plausible-looking partial answer" the
+// range cap exists to remove. The negative control shows the cap is not just rejecting everything.
+BOOST_AUTO_TEST_CASE(getLogsRefusesMoreLogsThanTheResponseCap)
+{
+    auto const number = m_ledger->blockNumber() + 1;
+    std::string const logAddress = "abababababababababababababababababababab";
+    h256 const topic0("0x2222222222222222222222222222222222222222222222222222222222222222");
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(number);
+    header->setParentInfo({number - 1, h256(0U)});
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+    block->appendTransactionMetaData(
+        m_blockFactory->createTransactionMetaData(h256(2U), std::string("/apps/ab")));
+
+    // One log over the cap, all in a single receipt: one block must not be able to grow the
+    // response past the ceiling.
+    std::vector<protocol::LogEntry> logs;
+    logs.reserve(MAX_RETURNED_LOGS_PER_QUERY + 1);
+    for (size_t i = 0; i <= MAX_RETURNED_LOGS_PER_QUERY; ++i)
+    {
+        logs.emplace_back(toAddress(logAddress).asBytes(), h256s{topic0}, bytes{});
+    }
+    bytes output;
+    auto receipt = m_blockFactory->receiptFactory()->createReceipt(
+        u256(21000), logAddress, logs, /*status=*/0, ref(output), number);
+    block->appendReceipt(receipt);
+    m_ledger->appendBuiltBlock(std::move(block));
+
+    auto const latest = filterSystem->getLatestBlockNumber();
+    BOOST_REQUIRE_GE(latest, number);
+    auto parseRequest = [&latest](std::string const& json) {
+        Json::Reader reader;
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(json, value));
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(value, latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt,
+            std::nullopt, false);
+        return request;
+    };
+    auto const blockTag = toQuantity(number);
+    auto const rangeOfThatBlock =
+        R"({"fromBlock":")" + blockTag + R"(","toBlock":")" + blockTag + R"("})";
+
+    // Every log matches (no criteria) and there is one more than the cap allows.
+    BOOST_CHECK_THROW(
+        task::syncWait(filterSystem->getLogs(parseRequest(rangeOfThatBlock))),
+        bcos::rpc::JsonRpcException);
+
+    // Control: an address that matches nothing answers an empty array -- the cap is a ceiling on
+    // the result, not a refusal of the range.
+    auto const noMatch = task::syncWait(filterSystem->getLogs(parseRequest(
+        R"({"fromBlock":")" + blockTag + R"(","toBlock":")" + blockTag +
+        R"(","address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
+    BOOST_CHECK(noMatch.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

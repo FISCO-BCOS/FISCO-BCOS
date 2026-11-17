@@ -143,8 +143,12 @@ protected:
     task::Task<Json::Value> getFilterLogsImpl(std::string_view groupId, u256 filterID);
     task::Task<Json::Value> getLogsImpl(
         std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange);
-    task::Task<Json::Value> getLogsInternal(
-        bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params);
+    // @param enforceLogCountCap reject a result larger than MAX_RETURNED_LOGS_PER_QUERY. Set by
+    //        the one-shot callers, which have no cursor and cannot resume past the overflow; the
+    //        streaming path (getLogChangeImpl) leaves it off, because it pages by block and a
+    //        rejected poll would be retried forever against the same blocks.
+    task::Task<Json::Value> getLogsInternal(bcos::ledger::LedgerInterface& ledger,
+        FilterRequest::Ptr params, bool enforceLogCountCap = false);
 
     virtual int32_t InvalidParamsCode() = 0;
     uint64_t insertFilter(Filter::Ptr filter);
@@ -174,8 +178,11 @@ protected:
     // getLogChangeImpl). Each poll advances the cursor by this many blocks.
     int64_t m_maxBlockProcessPerReq = 10;
     // Range cap for the one-shot paths (eth_getLogs / eth_getFilterLogs / legacy getLogs), which
-    // have no cursor and therefore reject a wider request instead of paging it.
-    int64_t m_maxBlockRange = 10000;
+    // have no cursor and therefore reject a wider request instead of paging it. Kept modest on
+    // purpose: the cost of a one-shot query is the sum of the receipts of every block in the
+    // range, and block size is gas-limited only (the 1000-transaction cap is gone), so the range
+    // length has to carry the budget rather than assume a small number of transactions per block.
+    int64_t m_maxBlockRange = 1000;
     GroupManager::Ptr m_groupManager;
     std::string m_group;
     LogMatcher::Ptr m_matcher;

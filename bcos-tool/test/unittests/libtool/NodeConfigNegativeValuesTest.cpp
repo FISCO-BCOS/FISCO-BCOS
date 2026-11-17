@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(consensusCountsNegativeRejected)
 // eth_getLogs cap or the streaming paging step reject/return nothing, so both are validated at
 // boot. Two separate keys: filter_max_process_block is the streaming paging step (small) and
 // filter_max_block_range is the one-shot range cap (query-sized). Pinning both also pins the
-// shipped defaults, which are an operational contract: 10 for the step, 10000 for the cap.
+// shipped defaults, which are an operational contract: 10 for the step, 1000 for the cap.
 BOOST_AUTO_TEST_CASE(filterBudgetsRejectNonPositiveAndShipExpectedDefaults)
 {
     struct Case
@@ -121,12 +121,12 @@ BOOST_AUTO_TEST_CASE(filterBudgetsRejectNonPositiveAndShipExpectedDefaults)
     LoaderProbe defaults;
     defaults.loadRpcConfig(fromIni("[rpc]\nfilter_timeout=300\n"));
     BOOST_CHECK_EQUAL(defaults.rpcMaxProcessBlock(), 10U);
-    BOOST_CHECK_EQUAL(defaults.rpcMaxBlockRange(), 10000U);
+    BOOST_CHECK_EQUAL(defaults.rpcMaxBlockRange(), 1000U);
 
     LoaderProbe web3Defaults;
     web3Defaults.loadWeb3RpcConfig(fromIni("[web3_rpc]\nfilter_timeout=300\n"));
     BOOST_CHECK_EQUAL(web3Defaults.web3MaxProcessBlock(), 10U);
-    BOOST_CHECK_EQUAL(web3Defaults.web3MaxBlockRange(), 10000U);
+    BOOST_CHECK_EQUAL(web3Defaults.web3MaxBlockRange(), 1000U);
 
     // The two keys are independent: overriding one leaves the other at its default.
     LoaderProbe split;

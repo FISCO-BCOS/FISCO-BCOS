@@ -283,7 +283,7 @@ task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId,
                       << LOG_KV("nextStartBlockNumber", begin + processBlockNum)
                       << LOG_KV("begin", begin) << LOG_KV("end", end) << LOG_KV("from", begin)
                       << LOG_KV("to", begin + processBlockNum - 1);
-    co_return co_await getLogsInternal(*ledger, std::move(params));
+    co_return co_await getLogsInternal(*ledger, std::move(params), /*enforceLogCountCap=*/false);
 }
 
 task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId, u256 filterID)
@@ -402,16 +402,19 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
                 "block range too large: requested " + std::to_string(blockRange) +
                     " blocks, limit is " + std::to_string(m_maxBlockRange) +
-                    " (filter_max_block_range)"));
+                    " (filter_max_block_range); retry in chunks of " +
+                    std::to_string(m_maxBlockRange) + " blocks"));
         }
         params->setFromBlock(fromBlock);
         params->setToBlock(toBlock);
-        co_return co_await getLogsInternal(*ledger, std::move(params));
+        // One-shot caller: a result larger than MAX_RETURNED_LOGS_PER_QUERY is refused rather
+        // than returned, because there is no cursor to resume from (see getLogsInternal).
+        co_return co_await getLogsInternal(*ledger, std::move(params), /*enforceLogCountCap=*/true);
     }
 }
 
 task::Task<Json::Value> FilterSystem::getLogsInternal(
-    bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params)
+    bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params, bool enforceLogCountCap)
 {
     auto fromBlock = params->fromBlock();
     auto toBlock = params->toBlock();
@@ -425,6 +428,22 @@ task::Task<Json::Value> FilterSystem::getLogsInternal(
         // and a stored value is not authoritative (historical rows may predate the field).
         protocol::stampReceiptBlockPositions(*block);
         matcher->matches(params, block, jArray);
+        // Bounded here rather than after the loop so the overshoot is at most one block's logs.
+        // The range cap bounds the number of blocks read; it cannot bound how much comes back,
+        // since one block may now carry thousands of transactions and every log of a match is
+        // copied into this array before the response is serialized.
+        if (enforceLogCountCap && jArray.size() > MAX_RETURNED_LOGS_PER_QUERY)
+        {
+            FILTER_LOG(WARNING) << LOG_BADGE("getLogsInternal")
+                                << LOG_DESC("too many logs matched")
+                                << LOG_KV("fromBlock", fromBlock) << LOG_KV("toBlock", toBlock)
+                                << LOG_KV("matchedLogs", jArray.size())
+                                << LOG_KV("maxLogs", MAX_RETURNED_LOGS_PER_QUERY);
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
+                "too many logs matched: over " + std::to_string(MAX_RETURNED_LOGS_PER_QUERY) +
+                    " logs in the requested range; narrow the range or add an address/topic "
+                    "filter"));
+        }
     }
     co_return jArray;
 }
