@@ -453,6 +453,56 @@ BOOST_AUTO_TEST_CASE(writeRecordKeepsMessageVerbatim)
     }
 }
 
+// Batches join records with '\n', and the separator must depend on how many
+// records are already in the batch, not on its byte length. With the old
+// `!batch.empty()` an EMPTY leading record left the batch empty, so the next
+// record got no separator and the empty record vanished from the file.
+BOOST_AUTO_TEST_CASE(emptyRecordsSurviveBatchJoining)
+{
+    // A slow backend keeps the worker inside consumeLine while both records are
+    // enqueued, which is what puts them in the SAME batch. Without that the
+    // records could be drained in two passes and the bug would not be exercised.
+    auto backend = boost::make_shared<CollectingBackend>(150ms);
+    auto sink = std::make_shared<SmallSink<32, 2>>(backend);
+
+    // Seed: parks the worker in the backend for 150ms.
+    sink->writeLine(bcos::LogLevel::INFO, "", "seed");
+    std::this_thread::sleep_for(20ms);
+    // Both land in the ring while the worker is still asleep in consumeLine.
+    sink->writeLine(bcos::LogLevel::INFO, "", "");
+    sink->writeLine(bcos::LogLevel::INFO, "", "next");
+
+    sink->stop();
+    auto lines = backend->take();
+
+    // Three records reached the backend: the seed, the empty one, and "next".
+    // Before the fix the empty record disappeared and only two arrived.
+    BOOST_REQUIRE_EQUAL(lines.size(), 3U);
+    BOOST_CHECK_EQUAL(lines[1], "");
+    BOOST_CHECK_EQUAL(lines[2], "next");
+}
+
+BOOST_AUTO_TEST_CASE(consecutiveEmptyRecordsAreKeptDistinct)
+{
+    auto backend = boost::make_shared<CollectingBackend>(150ms);
+    auto sink = std::make_shared<SmallSink<32, 2>>(backend);
+
+    sink->writeLine(bcos::LogLevel::INFO, "", "seed");
+    std::this_thread::sleep_for(20ms);
+    // Two empty records in a row: four records, four lines.
+    sink->writeLine(bcos::LogLevel::INFO, "", "");
+    sink->writeLine(bcos::LogLevel::INFO, "", "");
+    sink->writeLine(bcos::LogLevel::INFO, "", "tail");
+
+    sink->stop();
+    auto lines = backend->take();
+
+    BOOST_REQUIRE_EQUAL(lines.size(), 4U);
+    BOOST_CHECK_EQUAL(lines[1], "");
+    BOOST_CHECK_EQUAL(lines[2], "");
+    BOOST_CHECK_EQUAL(lines[3], "tail");
+}
+
 // The registry publishes/unpublishes raw pointers while producers walk it. This
 // must not tear, use-after-free or lose the still-registered sinks.
 BOOST_AUTO_TEST_CASE(registrySurvivesConcurrentRegisterAndLogging)

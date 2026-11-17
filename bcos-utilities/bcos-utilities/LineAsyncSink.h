@@ -276,7 +276,24 @@ private:
             // the next wait() returns immediately: no wakeup can be lost, and a
             // spurious notify just costs one empty pass.
             m_dirty.wait(false, std::memory_order_acquire);
-            m_dirty.store(false, std::memory_order_relaxed);
+            // Clear with an RMW, not a store. A relaxed store reads nothing, so it
+            // would establish no happens-before edge with a producer that published
+            // while the flag was already true: that producer's exchange(true) sees
+            // true and therefore sends NO notify, and the store then overwrites the
+            // value it wrote without ever observing it. The worker's later
+            // tail.load(acquire) would then be pairing with nothing and is allowed
+            // to return the old (empty) tail, so the line would sit in its ring with
+            // no pending wake.
+            //
+            // An RMW's read must observe the immediately preceding write in the
+            // modification order, so exchange cannot skip that producer:
+            //   - producer's exchange first  -> this reads its true, acquires its
+            //     publication (tail store included) and the pass drains it;
+            //   - this exchange first        -> the producer reads false, flips to
+            //     true and notifies, bringing the worker back for another pass.
+            // Either way the line is drained; the worst case is one extra (empty)
+            // pass. One RMW per pass on the worker thread, never per line.
+            m_dirty.exchange(false, std::memory_order_acquire);
 
             // Snapshot under the lock, then call the clients with it released:
             // feedOnWorker() does disk IO and must not block addClient() or
@@ -1184,7 +1201,12 @@ private:
             {
                 firstLevel = slot.level;
             }
-            if (!batch.empty())
+            // Separate by record count, not by accumulated bytes: an empty leading
+            // record leaves `batch` empty, so `!batch.empty()` would drop its
+            // newline and the record would silently disappear from the file.
+            // `written` counts records already appended, which is what the
+            // separator actually depends on.
+            if (written != 0)
             {
                 batch += '\n';
             }

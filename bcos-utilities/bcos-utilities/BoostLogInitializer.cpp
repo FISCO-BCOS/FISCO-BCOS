@@ -74,38 +74,6 @@ struct BoostLogLevelResetHandler
 
 std::string BoostLogLevelResetHandler::configFile;
 
-/// handler to solve log rotate
-bool BoostLogInitializer::canRotate(size_t const& _index)
-{
-    // The file backend calls this predicate before EVERY line. Reading the wall
-    // clock through localtime() on that path costs two orders of magnitude more
-    // than the rest of a line's work, and the answer only changes once an hour,
-    // so consult the clock at most once per second. The per-sink timestamps are
-    // thread_local because the predicate only ever runs on the feeding thread.
-    constexpr size_t c_maxRotateSlots = 8;
-    thread_local std::array<std::chrono::steady_clock::time_point, c_maxRotateSlots> lastCheck{};
-
-    // Sinks beyond the slot count share the last slot; they are still checked,
-    // just throttled together.
-    size_t const slot = _index < c_maxRotateSlots ? _index : (c_maxRotateSlots - 1);
-    auto const nowSteady = std::chrono::steady_clock::now();
-    if (lastCheck[slot] != std::chrono::steady_clock::time_point{} &&
-        nowSteady - lastCheck[slot] < std::chrono::seconds(1))
-    {
-        return false;
-    }
-    lastCheck[slot] = nowSteady;
-
-    const boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
-    int hour = (int)now.time_of_day().hours();
-    if (hour != m_currentHourVec[_index])
-    {
-        m_currentHourVec[_index] = hour;
-        return true;
-    }
-    return false;
-}
-
 void BoostLogInitializer::initLog(
     const std::string& _configFile, std::string const& _logger, std::string const& _logPrefix)
 {
@@ -321,24 +289,40 @@ std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::ini
 std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::initHourLineLogSink(
     std::string const& _logPath, std::string const& _logPrefix)
 {
-    m_currentHourVec.push_back(
-        (int)boost::posix_time::second_clock::local_time().time_of_day().hours());
     /// set file name
     std::string fileName = _logPath + "/" + _logPrefix + "_%Y%m%d%H.%M.log";
 
     auto sink = std::make_shared<line_sink_t>();
     sink->locked_backend()->set_open_mode(std::ios::ate);
-    // 1s throttle: canRotate() builds a posix_time local_time per call, see
-    // initLineLogSink for the measurement.
+    // The rotation state is owned BY VALUE by the callback, deliberately.
+    //
+    // A registered sink is never destroyed, so a producer that lost the race with
+    // stopLogging() can still reach the backend afterwards (see
+    // LineAsyncSink::drainInlineAfterStop). If this lambda captured `this` and
+    // called canRotate(), that late drain would dereference an already destroyed
+    // BoostLogInitializer — it is a local shared_ptr in every entry point and is
+    // gone once main returns. Keeping the hour here makes the callback completely
+    // self-contained, so no sink-owned call can reach initializer state.
+    //
+    // 1s throttle: the broken-down local time is built once per second per sink,
+    // see initLineLogSink for the measurement behind that.
     sink->locked_backend()->set_time_based_rotation(
-        [this, index = (m_currentHourVec.size() - 1), last = std::time_t(0)]() mutable {
+        [currentHour = (int)boost::posix_time::second_clock::local_time().time_of_day().hours(),
+            last = std::time_t(0)]() mutable {
             std::time_t now = std::time(nullptr);
             if (now == last)
             {
                 return false;
             }
             last = now;
-            return canRotate(index);
+            auto const hour =
+                (int)boost::posix_time::second_clock::local_time().time_of_day().hours();
+            if (hour != currentHour)
+            {
+                currentHour = hour;
+                return true;
+            }
+            return false;
         });
     sink->locked_backend()->set_file_name_pattern(fileName);
     /// set rotation size MB
