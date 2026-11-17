@@ -2248,8 +2248,7 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
         m_keyIndex = _pt.get<int>("security.key_index");
         m_password = _pt.get<std::string>("security.password", "");
         NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig HSM")
-                             << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("key_index", m_keyIndex)
-                             << LOG_KV("password", m_password);
+                             << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("key_index", m_keyIndex);
     }
     else if (m_keyEncryptionType == security::KeyEncryptionType::CLOUDKMS)  // cloud kms
     {

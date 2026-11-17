@@ -60,8 +60,7 @@ bytes HsmSM2Crypto::sign(
             std::make_shared<bytes>(hsmKeyPair.password().begin(), hsmKeyPair.password().end());
         key = Key(hsmKeyPair.keyIndex(), pwdConstPtr);
         CRYPTO_LOG(DEBUG) << "[HSMSignature::key] is internal key "
-                          << LOG_KV("keyIndex", key.identifier())
-                          << LOG_KV("password", hsmKeyPair.password());
+                          << LOG_KV("keyIndex", key.identifier());
     }
     else
     {

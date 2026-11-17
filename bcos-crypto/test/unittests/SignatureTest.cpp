@@ -26,12 +26,14 @@
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
 #include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
+#include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <bcos-crypto/signature/sm2.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
+#include <bcos-framework/testutils/LogCapture.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
@@ -49,9 +51,14 @@ class FakeHsmCryptoProvider : public hsm::CryptoProvider
 public:
     unsigned int KeyGen(hsm::AlgorithmType, hsm::Key*) override { return 1; }
     unsigned int Sign(hsm::Key const&, hsm::AlgorithmType, unsigned char const*, unsigned int,
-        unsigned char*, unsigned int*) override
+        unsigned char* signature, unsigned int* signatureLen) override
     {
-        return 1;
+        for (size_t i = 0; i < HSM_SM2_SIGNATURE_LEN; ++i)
+        {
+            signature[i] = 0;
+        }
+        *signatureLen = HSM_SM2_SIGNATURE_LEN;
+        return 0;
     }
     unsigned int Verify(hsm::Key const& key, hsm::AlgorithmType, unsigned char const*, unsigned int,
         unsigned char const* signature, unsigned int signatureLen, bool* result) override
@@ -718,6 +725,31 @@ BOOST_AUTO_TEST_CASE(testHsmSM2RecoverPreservesLegacyTrailingPublicKeyByte)
     bytes shortPublicKey(HSM_SM2_PUBLIC_KEY_LEN - 1, 0);
     BOOST_CHECK_THROW(
         signatureCrypto.verify(ref(shortPublicKey), hashData, ref(legacySignature)), InvalidKey);
+}
+
+BOOST_AUTO_TEST_CASE(testHsmSM2SignDoesNotLogPassword)
+{
+    auto const password = std::string("hsm-signing-secret");
+    FakeHsmCryptoProvider provider;
+    TestableHsmSM2Crypto signatureCrypto(provider);
+    auto secret = std::make_shared<KeyImpl>(
+        h256("bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd").asBytes());
+    HsmSM2KeyPair keyPair("", secret);
+    keyPair.setKeyIndex(7);
+    keyPair.setPassword(password);
+    auto hashData = sm3Hash(bytesConstRef(std::string("hsm-sm2-logging")));
+
+    auto const previousLogLevel = c_fileLogLevel.load();
+    setFileLogLevel(LogLevel::DEBUG);
+    LogCapture capture;
+    auto signature = signatureCrypto.sign(keyPair, hashData);
+    auto const text = capture.text();
+    setFileLogLevel(previousLogLevel);
+
+    BOOST_REQUIRE_EQUAL(signature.size(), HSM_SM2_SIGNATURE_LEN);
+    BOOST_CHECK(text.find("keyIndex=7") != std::string::npos);
+    BOOST_CHECK(text.find(password) == std::string::npos);
+    BOOST_CHECK(text.find("password=") == std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
