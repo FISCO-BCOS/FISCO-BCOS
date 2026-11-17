@@ -51,6 +51,11 @@ BOOST_AUTO_TEST_CASE(recoverAddressRejectsBadSignature)
 
     bcos::bytes badSig(SECP256K1_SIGNATURE_LEN, 0);
     BOOST_CHECK_THROW(crypto.recoverAddress(hasher, hash, bcos::ref(badSig)), std::exception);
+
+    bcos::bytes overflowSig(SECP256K1_SIGNATURE_LEN, 0xff);
+    overflowSig[SECP256K1_SIGNATURE_V] = 0;
+    BOOST_CHECK_THROW(
+        crypto.recoverAddress(hasher, hash, bcos::ref(overflowSig)), InvalidSignature);
 }
 
 BOOST_AUTO_TEST_CASE(verifyRejectsIncorrectPublicKeyLength)

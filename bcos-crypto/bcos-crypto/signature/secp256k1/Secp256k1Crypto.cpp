@@ -210,11 +210,23 @@ bytes Secp256k1Crypto::recoverAddress(
     crypto::Hash& _hashImpl, const HashType& _hash, bytesConstRef _signatureData) const
 {
     checkSigLen(_signatureData);
+    if ((uint8_t)_signatureData[SECP256K1_SIGNATURE_V] > 3)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidSignature() << errinfo_comment(
+                "secp256k1 recoverAddress illegal argument: recid >= 0 && recid <= 3, recid: " +
+                std::to_string((int)_signatureData[SECP256K1_SIGNATURE_V])));
+    }
     std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> data{};
     secp256k1_ecdsa_recoverable_signature sig;
     secp256k1_pubkey pubkey;
-    secp256k1_ecdsa_recoverable_signature_parse_compact(secp256k1Context(), &sig,
-        _signatureData.data(), (int)_signatureData[SECP256K1_SIGNATURE_V]);
+    if (secp256k1_ecdsa_recoverable_signature_parse_compact(secp256k1Context(), &sig,
+            _signatureData.data(), (int)_signatureData[SECP256K1_SIGNATURE_V]) == 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
+                                  "invalid signature: secp256k1 parse compact failed, msgHash : " +
+                                  _hash.hex() + ", signData:" + toHex(_signatureData)));
+    }
     if (secp256k1_ecdsa_recover(secp256k1Context(), &pubkey, &sig, _hash.data()) == 0)
     {
         BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(

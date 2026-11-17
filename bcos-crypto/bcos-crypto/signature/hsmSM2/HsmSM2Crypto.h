@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyPairFactory.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPairFactory.h>
+#include <hsm-crypto/hsm/CryptoProvider.h>
 
 namespace bcos::crypto
 {
@@ -49,6 +50,9 @@ public:
     KeyPairInterface::UniquePtr generateKeyPair() const override;
     KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
     KeyPairInterface::UniquePtr createKeyPair(unsigned int _keyIndex, std::string _password);
+
+protected:
+    virtual hsm::CryptoProvider& cryptoProvider() const;
 
 private:
     KeyPairFactory::Ptr m_keyPairFactory;

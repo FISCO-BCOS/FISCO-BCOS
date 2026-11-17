@@ -42,11 +42,16 @@ HsmSM2Crypto::HsmSM2Crypto(std::string _libPath)
     m_keyPairFactory = std::make_shared<HsmSM2KeyPairFactory>(m_hsmLibPath);
 }
 
+CryptoProvider& HsmSM2Crypto::cryptoProvider() const
+{
+    return SDFCryptoProvider::GetInstance(m_hsmLibPath);
+}
+
 bytes HsmSM2Crypto::sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const
 {
     auto& hsmKeyPair = dynamic_cast<const HsmSM2KeyPair&>(_keyPair);
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+    CryptoProvider& provider = cryptoProvider();
 
     Key key = Key();
     if (hsmKeyPair.isInternalKey())
@@ -113,15 +118,17 @@ bytes HsmSM2Crypto::sign(
 bool HsmSM2Crypto::verify(
     bytesConstRef _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    if (_pubKeyBytes.size() != HSM_SM2_PUBLIC_KEY_LEN)
+    // Historical HSM-SM2 transactions can carry trailing public-key bytes. Verification uses
+    // only the fixed-length prefix below, while recovery retains the complete key for addressing.
+    if (_pubKeyBytes.size() < HSM_SM2_PUBLIC_KEY_LEN)
     {
         BOOST_THROW_EXCEPTION(
             InvalidKey() << errinfo_comment(
                 "invalidKey, the key size: " + std::to_string(_pubKeyBytes.size()) +
-                ", expected size:" + std::to_string(HSM_SM2_PUBLIC_KEY_LEN)));
+                ", expected minimum size:" + std::to_string(HSM_SM2_PUBLIC_KEY_LEN)));
     }
     // get provider
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+    CryptoProvider& provider = cryptoProvider();
 
     if (_signatureData.size() < HSM_SM2_SIGNATURE_LEN)
     {

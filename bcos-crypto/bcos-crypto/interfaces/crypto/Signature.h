@@ -41,9 +41,9 @@ public:
         bool _signatureWithPub = false) const = 0;
 
     // verify checks whether a signature is calculated from a given hash.
-    // The Public& overload returns false for an incorrectly sized key, while bytesConstRef throws
-    // InvalidKey. Secp256k1 also throws InvalidSignature for malformed signatures and recovery
-    // failure; the other implementations return false for short signatures.
+    // The Public& overload normalizes InvalidKey to false, while bytesConstRef propagates it.
+    // Secp256k1 also throws InvalidSignature for malformed signatures and recovery failure; the
+    // other implementations return false for short signatures.
     bool verify(const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
     {
         try

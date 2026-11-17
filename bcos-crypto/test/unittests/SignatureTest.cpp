@@ -25,6 +25,7 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithV.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
 #include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
+#include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
@@ -41,6 +42,67 @@ namespace bcos
 {
 namespace test
 {
+namespace
+{
+class FakeHsmCryptoProvider : public hsm::CryptoProvider
+{
+public:
+    unsigned int KeyGen(hsm::AlgorithmType, hsm::Key*) override { return 1; }
+    unsigned int Sign(hsm::Key const&, hsm::AlgorithmType, unsigned char const*, unsigned int,
+        unsigned char*, unsigned int*) override
+    {
+        return 1;
+    }
+    unsigned int Verify(hsm::Key const& key, hsm::AlgorithmType, unsigned char const*, unsigned int,
+        unsigned char const* signature, unsigned int signatureLen, bool* result) override
+    {
+        observedPublicKey = *key.publicKey();
+        observedSignature.assign(signature, signature + signatureLen);
+        *result = true;
+        return 0;
+    }
+    unsigned int Hash(hsm::Key*, hsm::AlgorithmType, unsigned char const*, unsigned int,
+        unsigned char* digest, unsigned int* digestLen) override
+    {
+        for (size_t i = 0; i < HSM_SM3_DIGEST_LENGTH; ++i)
+        {
+            digest[i] = 0;
+        }
+        *digestLen = HSM_SM3_DIGEST_LENGTH;
+        return 0;
+    }
+    unsigned int Encrypt(hsm::Key const&, hsm::AlgorithmType, unsigned char*, unsigned char const*,
+        unsigned int, unsigned char*, unsigned int*) override
+    {
+        return 1;
+    }
+    unsigned int Decrypt(hsm::Key const&, hsm::AlgorithmType, unsigned char*, unsigned char const*,
+        unsigned int, unsigned char*, unsigned int*) override
+    {
+        return 1;
+    }
+    unsigned int ExportInternalPublicKey(hsm::Key&, hsm::AlgorithmType) override { return 1; }
+    char* GetErrorMessage(unsigned int) override { return nullptr; }
+
+    bytes observedPublicKey;
+    bytes observedSignature;
+};
+
+class TestableHsmSM2Crypto : public HsmSM2Crypto
+{
+public:
+    explicit TestableHsmSM2Crypto(hsm::CryptoProvider& provider)
+      : HsmSM2Crypto(""), m_provider(provider)
+    {}
+
+protected:
+    hsm::CryptoProvider& cryptoProvider() const override { return m_provider; }
+
+private:
+    hsm::CryptoProvider& m_provider;
+};
+}  // namespace
+
 BOOST_FIXTURE_TEST_SUITE(SignatureTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testSecp256k1KeyPair)
 {
@@ -209,12 +271,14 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     BOOST_CHECK(signData == *encodedData);
     auto publicKey = secp256k1Crypto->recover(hashData, ref(*encodedData));
     BOOST_CHECK(publicKey.data() == keyPair->publicKey()->data());
-    for (uint8_t i = 4; i < 255; i++)
+    for (unsigned int i = 4; i <= 255; i++)
     {
-        (*encodedData)[SECP256K1_SIGNATURE_V] = i;
+        (*encodedData)[SECP256K1_SIGNATURE_V] = static_cast<byte>(i);
         BOOST_CHECK_THROW(secp256k1Crypto->recover(hashData, ref(*encodedData)), InvalidSignature);
         BOOST_CHECK_THROW(
             secp256k1Crypto->verify(*keyPair->publicKey(), hashData, ref(*encodedData)),
+            InvalidSignature);
+        BOOST_CHECK_THROW(secp256k1Crypto->recoverAddress(*hashImpl, hashData, ref(*encodedData)),
             InvalidSignature);
     }
 }
@@ -616,6 +680,44 @@ BOOST_AUTO_TEST_CASE(testSignatureDataWithPubCodec)
         auto reEncoded = decoded.encode();
         BOOST_CHECK(*reEncoded == data);
     }
+}
+
+BOOST_AUTO_TEST_CASE(testHsmSM2RecoverPreservesLegacyTrailingPublicKeyByte)
+{
+    FakeHsmCryptoProvider provider;
+    TestableHsmSM2Crypto signatureCrypto(provider);
+    SM3 hashImpl;
+    auto hashData = sm3Hash(bytesConstRef(std::string("hsm-sm2-legacy-signature")));
+
+    bytes publicKey(HSM_SM2_PUBLIC_KEY_LEN);
+    bytes signature(HSM_SM2_SIGNATURE_LEN);
+    for (size_t i = 0; i < HSM_SM2_PUBLIC_KEY_LEN; ++i)
+    {
+        publicKey[i] = static_cast<byte>(i);
+        signature[i] = static_cast<byte>(i + HSM_SM2_PUBLIC_KEY_LEN);
+    }
+    auto legacySignature = signature;
+    legacySignature.insert(legacySignature.end(), publicKey.begin(), publicKey.end());
+    legacySignature.push_back(0);
+    BOOST_REQUIRE_EQUAL(legacySignature.size(), 129U);
+
+    auto expectedPublicKey = publicKey;
+    expectedPublicKey.push_back(0);
+    auto recovered = signatureCrypto.recover(hashData, ref(legacySignature));
+    BOOST_CHECK(recovered.data() == expectedPublicKey);
+    BOOST_CHECK(provider.observedPublicKey == publicKey);
+    BOOST_CHECK(provider.observedSignature == signature);
+
+    SignatureCrypto& baseCrypto = signatureCrypto;
+    auto address = baseCrypto.recoverAddress(hashImpl, hashData, ref(legacySignature));
+    auto expectedAddress = calculateAddress(hashImpl, KeyImpl(expectedPublicKey)).asBytes();
+    auto truncatedAddress = calculateAddress(hashImpl, KeyImpl(publicKey)).asBytes();
+    BOOST_CHECK(address == expectedAddress);
+    BOOST_CHECK(address != truncatedAddress);
+
+    bytes shortPublicKey(HSM_SM2_PUBLIC_KEY_LEN - 1, 0);
+    BOOST_CHECK_THROW(
+        signatureCrypto.verify(ref(shortPublicKey), hashData, ref(legacySignature)), InvalidKey);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
