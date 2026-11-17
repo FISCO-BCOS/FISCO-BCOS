@@ -319,9 +319,9 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         // transaction list and receipts from one read snapshot is the complete fix and is tracked
         // separately, because it needs a ledger/storage API this layer does not have.
         protocol::Block::Ptr block;
+        int64_t blockNumber = 0;
         for (int attempt = 0; attempt < 2; ++attempt)
         {
-            int64_t blockNumber = 0;
             try
             {
                 blockNumber = co_await ledger::getBlockNumber(*ledger, requestedHash);
@@ -351,7 +351,12 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         // Derive the block position before matching: the matcher reads logIndex off the receipts,
         // and a stored value is not authoritative (historical rows may predate the field).
         protocol::stampReceiptBlockPositions(*block);
-        matcher->matches(params, block, jArray);
+        // Same response ceiling as the range branch. Selecting a dense block by hash would
+        // otherwise bypass the cap that rejects it when selected by height, making the advertised
+        // one-shot bound depend on which selector the caller happened to use.
+        requireWithinLogBudget(
+            matcher->matches(params, block, jArray, MAX_RETURNED_LOGS_PER_QUERY), blockNumber,
+            blockNumber);
         co_return jArray;
     }
     else
@@ -427,23 +432,30 @@ task::Task<Json::Value> FilterSystem::getLogsInternal(
         // Derive the block position before matching: the matcher reads logIndex off the receipts,
         // and a stored value is not authoritative (historical rows may predate the field).
         protocol::stampReceiptBlockPositions(*block);
-        matcher->matches(params, block, jArray);
-        // Bounded here rather than after the loop so the overshoot is at most one block's logs.
-        // The range cap bounds the number of blocks read; it cannot bound how much comes back,
-        // since one block may now carry thousands of transactions and every log of a match is
-        // copied into this array before the response is serialized.
-        if (enforceLogCountCap && jArray.size() > MAX_RETURNED_LOGS_PER_QUERY)
-        {
-            FILTER_LOG(WARNING) << LOG_BADGE("getLogsInternal")
-                                << LOG_DESC("too many logs matched")
-                                << LOG_KV("fromBlock", fromBlock) << LOG_KV("toBlock", toBlock)
-                                << LOG_KV("matchedLogs", jArray.size())
-                                << LOG_KV("maxLogs", MAX_RETURNED_LOGS_PER_QUERY);
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
-                "too many logs matched: over " + std::to_string(MAX_RETURNED_LOGS_PER_QUERY) +
-                    " logs in the requested range; narrow the range or add an address/topic "
-                    "filter"));
-        }
+        // The budget is the query's, not the block's: _result accumulates across the loop, so
+        // LogMatcher compares against its TOTAL size and stops before appending the entry that
+        // would cross the cap. Checking after matches() returned would have let one dense block
+        // materialise all of its matches before the guard fired.
+        requireWithinLogBudget(
+            matcher->matches(params, block, jArray,
+                enforceLogCountCap ? MAX_RETURNED_LOGS_PER_QUERY : /*unlimited=*/0),
+            fromBlock, toBlock);
     }
     co_return jArray;
+}
+
+void FilterSystem::requireWithinLogBudget(
+    LogMatcher::BlockMatchOutcome const& outcome, int64_t fromBlock, int64_t toBlock)
+{
+    if (!outcome.budgetExceeded)
+    {
+        return;
+    }
+    FILTER_LOG(WARNING) << LOG_BADGE("getLogsImpl") << LOG_DESC("too many logs matched")
+                        << LOG_KV("fromBlock", fromBlock) << LOG_KV("toBlock", toBlock)
+                        << LOG_KV("matchedLogs", outcome.matched)
+                        << LOG_KV("maxLogs", MAX_RETURNED_LOGS_PER_QUERY);
+    BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
+        "too many logs matched: over " + std::to_string(MAX_RETURNED_LOGS_PER_QUERY) +
+            " logs in the requested range; narrow the range or add an address/topic filter"));
 }

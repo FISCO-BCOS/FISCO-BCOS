@@ -646,12 +646,75 @@ BOOST_AUTO_TEST_CASE(getLogsRefusesMoreLogsThanTheResponseCap)
         task::syncWait(filterSystem->getLogs(parseRequest(rangeOfThatBlock))),
         bcos::rpc::JsonRpcException);
 
+    // The ceiling must not depend on the selector: the same dense block selected by hash has to
+    // be refused too. Without the shared path the hash branch returned the whole array, so one
+    // query shape answered while the other errored.
+    auto const blockHashOfThatBlock = m_ledger->ledgerData()[number]->blockHeader()->hash();
+    BOOST_CHECK_THROW(task::syncWait(filterSystem->getLogs(parseRequest(
+                          R"({"blockHash":")" + blockHashOfThatBlock.hexPrefixed() + R"("})"))),
+        bcos::rpc::JsonRpcException);
+
     // Control: an address that matches nothing answers an empty array -- the cap is a ceiling on
     // the result, not a refusal of the range.
     auto const noMatch = task::syncWait(filterSystem->getLogs(parseRequest(
         R"({"fromBlock":")" + blockTag + R"(","toBlock":")" + blockTag +
         R"(","address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
     BOOST_CHECK(noMatch.empty());
+
+    // Same control through the hash branch, so the shared path is exercised on the allow side
+    // as well: an unmatched address must answer empty, not throw.
+    auto const noMatchByHash = task::syncWait(filterSystem->getLogs(parseRequest(
+        R"({"blockHash":")" + blockHashOfThatBlock.hexPrefixed() +
+        R"(","address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
+    BOOST_CHECK(noMatchByHash.empty());
+}
+
+// The cap has to be enforced while the result is built, not after: one dense block can produce
+// every match it has before a post-hoc size check would fire, so "at most 10000 entries" would
+// only bound successful responses, not the array's peak. This pins the early stop directly on the
+// matcher -- the array ends at the budget and the outcome says it stopped there.
+BOOST_AUTO_TEST_CASE(logMatcherStopsAtTheBudgetBeforeAppending)
+{
+    auto const number = m_ledger->blockNumber() + 1;
+    std::string const logAddress = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+    h256 const topic0("0x3333333333333333333333333333333333333333333333333333333333333333");
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(number);
+    header->setParentInfo({number - 1, h256(0U)});
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+    block->appendTransactionMetaData(
+        m_blockFactory->createTransactionMetaData(h256(3U), std::string("/apps/ab")));
+
+    constexpr size_t kLogs = 5;
+    constexpr size_t kBudget = 2;
+    std::vector<protocol::LogEntry> logs;
+    logs.reserve(kLogs);
+    for (size_t i = 0; i < kLogs; ++i)
+    {
+        logs.emplace_back(toAddress(logAddress).asBytes(), h256s{topic0}, bytes{});
+    }
+    bytes output;
+    auto receipt = m_blockFactory->receiptFactory()->createReceipt(
+        u256(21000), logAddress, logs, /*status=*/0, ref(output), number);
+    block->appendReceipt(receipt);
+
+    Json::Reader reader;
+    Json::Value params;
+    BOOST_REQUIRE(reader.parse(R"({})", params));
+    auto request = std::make_shared<Web3FilterRequest>();
+    request->fromJson(params, number, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt,
+        std::nullopt, false);
+
+    Json::Value result(Json::arrayValue);
+    auto const outcome = filterSystem->matcher()->matches(request, block, result, kBudget);
+
+    // Stopped mid-block: two entries, and the flag says the third was never constructed.
+    BOOST_CHECK_EQUAL(result.size(), kBudget);
+    BOOST_CHECK_EQUAL(outcome.matched, kBudget);
+    BOOST_CHECK(outcome.budgetExceeded);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
