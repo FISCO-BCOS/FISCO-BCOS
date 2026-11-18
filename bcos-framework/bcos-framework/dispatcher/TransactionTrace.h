@@ -23,6 +23,6 @@ struct CallTrace
     std::string output;
     std::string error;
     std::string revertReason;
-    std::vector<std::shared_ptr<CallTrace>> calls;
+    std::vector<std::unique_ptr<CallTrace>> calls;
 };
 }  // namespace bcos::scheduler

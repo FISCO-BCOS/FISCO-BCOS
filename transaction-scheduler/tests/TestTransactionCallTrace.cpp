@@ -93,11 +93,14 @@ using Checkpoints = TrivialCheckpointStorage<StateKey, StateValue, Backend>;
 using Storage = MultiLayerStorage<Mutable, void, Checkpoints>;
 
 // Configuration is fixed in this fixture; block data and receipt reads remain real.
-inline task::Immediate<void> tag_invoke(ledger::tag_t<ledger::getLedgerConfig>, Storage::ViewType&,
+inline task::Task<void> tag_invoke(ledger::tag_t<ledger::getLedgerConfig>, Storage::ViewType& view,
     ledger::LedgerConfig& config, protocol::BlockNumber, protocol::BlockFactory&)
 {
     config.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
-    return {};
+    auto entry = co_await readOne(view, StateKey{ledger::SYS_CONFIG, "web3_chain_id"});
+    config.setChainId(
+        bcos::toEvmC(ledger::parseConfiguredWeb3ChainId(entry ? std::string(entry->get()) : "1")));
+    co_return;
 }
 using Scheduler = BaselineScheduler<Storage, eth::EthereumExecutor, sharedmock::SharedMockScheduler,
     ledger::LedgerInterface>;
@@ -122,7 +125,7 @@ struct Fixture
     {
         forks.londonTime = 0;
         forks.parisTime = 0;
-        scheduler.setTraceForkSchedule(forks, 1);
+        scheduler.setTraceForkSchedule(forks);
     }
     using Result = std::pair<Error::Ptr, std::shared_ptr<bcos::scheduler::CallTrace>>;
     Result trace()
@@ -183,6 +186,23 @@ struct Fixture
             task::syncWait(writeOne(backend, std::move(key), std::move(value)));
         return block;
     }
+    void chainConfiguration(uint64_t chainId)
+    {
+        storage::Entry entry;
+        entry.set(std::to_string(chainId));
+        task::syncWait(
+            writeOne(backend, StateKey{ledger::SYS_CONFIG, "web3_chain_id"}, std::move(entry)));
+    }
+    void signedCreation(std::string_view rawHex)
+    {
+        auto raw = fromHex(rawHex);
+        auto transaction = rpc::decodeWeb3RawTransaction(
+            bytesConstRef(raw.data(), raw.size()), *factory->cryptoSuite()->hashImpl());
+        hash = transaction->hash();
+        auto parent = block(0, {}, ledger::mpt::emptyRootHash());
+        block(1, protocol::canonicalBlockHash(*parent->blockHeader()), {}, std::move(transaction));
+        receipt(59537);
+    }
     void successfulTransfer()
     {
         // Public test key 1, chain 1, nonce/value/gasPrice zero, gas 21000, to 0xcafe.
@@ -201,6 +221,39 @@ struct Fixture
 };
 
 BOOST_FIXTURE_TEST_SUITE(TransactionCallTraceScheduler, Fixture)
+
+BOOST_AUTO_TEST_CASE(ReplayUsesExistingChainConfigurationForChainIdOpcode)
+{
+    chainConfiguration(42);
+    // Public test key 1; chain 42, nonce/value/gasPrice zero, gas 100000.
+    // Creation initcode returns CHAINID as a 32-byte deployed code/output word.
+    signedCreation(
+        "f8558080830186a08080894660005260206000f378a0"
+        "7dd96712ff2172903c9ff62977332dcf47a996af259e23f924868c5b70652158a0"
+        "5b04b1180a2812143584e4274d36d3ce34ddcf22144522bfea31c1d752596607");
+    auto [error, tree] = trace();
+    BOOST_REQUIRE_MESSAGE(!error, (error ? error->errorMessage() : ""));
+    BOOST_REQUIRE(tree);
+    BOOST_CHECK_EQUAL(
+        tree->output, "0x000000000000000000000000000000000000000000000000000000000000002a");
+    BOOST_CHECK(tree->error.empty());
+}
+
+BOOST_AUTO_TEST_CASE(ReplayRejectsSignedTransactionFromAnotherChain)
+{
+    chainConfiguration(42);
+    // Independently signed for chain 43; storage/body/hash commitments remain valid.
+    signedCreation(
+        "f8558080830186a08080894660005260206000f37aa0"
+        "95522d4f7441a9d4205308305971ef122f701b81d8f9898c9f2512729c2deae6a0"
+        "5377d6286dea1253ee658ea2f5b5411ea8c305df8a8234deda6fdcf032aac314");
+    auto [error, tree] = trace();
+    BOOST_REQUIRE(error);
+    BOOST_CHECK_EQUAL(
+        error->errorCode(), static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
+    BOOST_CHECK_EQUAL(error->errorMessage(), "historical transaction replay validation failed");
+    BOOST_CHECK(!tree);
+}
 
 BOOST_AUTO_TEST_CASE(UnknownAndUnavailableStateAreDistinctAndReleaseCapacity)
 {

@@ -70,7 +70,7 @@ public:
                 m_stack.emplace_back();
                 return;
             }
-            auto f = std::make_shared<scheduler::CallTrace>();
+            auto f = std::make_unique<scheduler::CallTrace>();
             bool create = msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2;
             f->type = create ? (msg.kind == EVMC_CREATE ? "CREATE" : "CREATE2") :
                       msg.kind == EVMC_DELEGATECALL ? "DELEGATECALL" :
@@ -95,11 +95,14 @@ public:
                 f->value = quantity(msg.value);
             f->gas = quantity(static_cast<uint64_t>(msg.gas));
             f->input = hex(msg.input_data, msg.input_size);
+            auto* frame = f.get();
             if (m_stack.empty())
-                m_root = f;
+                m_root = std::move(f);
             else if (m_stack.back())
-                m_stack.back()->calls.push_back(f);
-            m_stack.push_back(std::move(f));
+                m_stack.back()->calls.push_back(std::move(f));
+            else
+                frame = nullptr;
+            m_stack.push_back(frame);
         }
         catch (...)
         {
@@ -192,7 +195,7 @@ public:
             }
             if (!account(512))
                 return;
-            auto f = std::make_shared<scheduler::CallTrace>();
+            auto f = std::make_unique<scheduler::CallTrace>();
             f->type = "SELFDESTRUCT";
             f->from = hex(from.bytes, 20);
             f->to = hex(to.bytes, 20);
@@ -342,6 +345,6 @@ private:
     bool m_onlyTop = false, m_recording = false, m_timedOut = false, m_failed = false;
     size_t m_frames = 0, m_bytes = 0;
     std::shared_ptr<scheduler::CallTrace> m_root;
-    std::vector<std::shared_ptr<scheduler::CallTrace>> m_stack;
+    std::vector<scheduler::CallTrace*> m_stack;
 };
 }  // namespace bcos::executor_v1::eth

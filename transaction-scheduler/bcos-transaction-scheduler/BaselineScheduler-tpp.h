@@ -910,10 +910,9 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setTraceForkSchedule(
-    EvmcForkTimestamps const& schedule, uint64_t chainId)
+    EvmcForkTimestamps const& schedule)
 {
-    m_traceForks = std::make_shared<EvmcForkTimestamps const>(schedule);
-    m_traceChainId = chainId;
+    m_traceForks = std::make_unique<EvmcForkTimestamps const>(schedule);
 }
 
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
@@ -1041,8 +1040,7 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::trac
                     if (n > 0)
                         expectedParent = data.parentInfo.blockHash;
                 }
-                fillExecutionLedgerConfig(
-                    ethHeader, *config, *self->m_traceForks, self->m_traceChainId);
+                fillExecutionLedgerConfig(ethHeader, *config, *self->m_traceForks);
                 auto header = makeExecutionBlockHeader(ethHeader, self->m_blockFactory.get(),
                     config->compatibilityVersion(), *self->m_traceForks);
                 auto rev = *config->evmcRevisionForBlock(number);

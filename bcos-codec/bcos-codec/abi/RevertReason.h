@@ -10,6 +10,20 @@
 
 namespace bcos::codec::abi
 {
+enum class SolidityPanicCode : uint8_t
+{
+    Generic = 0x00,
+    AssertionFailed = 0x01,
+    ArithmeticOverflow = 0x11,
+    DivisionByZero = 0x12,
+    EnumOverflow = 0x21,
+    InvalidStorageByteArray = 0x22,
+    PopEmptyArray = 0x31,
+    ArrayOutOfBounds = 0x32,
+    OutOfMemory = 0x41,
+    UninitializedFunction = 0x51,
+};
+
 /// The human-readable form of the ABI-encoded revert payload the way geth's abi.UnpackRevert
 /// reads it: Error(string) → the string, Panic(uint256) → the Solidity panic description.
 /// nullopt for raw / custom-error / malformed data (the caller then decodes `data` itself).
@@ -42,27 +56,27 @@ inline std::optional<std::string> decodeRevertReason(bytesConstRef output)
         {
             return "unknown panic code: " + panicCode(code);
         }
-        switch (static_cast<uint64_t>(code))
+        switch (static_cast<SolidityPanicCode>(static_cast<uint8_t>(code)))
         {
-        case 0x00:
+        case SolidityPanicCode::Generic:
             return "generic panic";
-        case 0x01:
+        case SolidityPanicCode::AssertionFailed:
             return "assert(false)";
-        case 0x11:
+        case SolidityPanicCode::ArithmeticOverflow:
             return "arithmetic underflow or overflow";
-        case 0x12:
+        case SolidityPanicCode::DivisionByZero:
             return "division or modulo by zero";
-        case 0x21:
+        case SolidityPanicCode::EnumOverflow:
             return "enum overflow";
-        case 0x22:
+        case SolidityPanicCode::InvalidStorageByteArray:
             return "invalid encoded storage byte array accessed";
-        case 0x31:
+        case SolidityPanicCode::PopEmptyArray:
             return "out-of-bounds array access; popping on an empty array";
-        case 0x32:
+        case SolidityPanicCode::ArrayOutOfBounds:
             return "out-of-bounds access of an array or bytesN";
-        case 0x41:
+        case SolidityPanicCode::OutOfMemory:
             return "out of memory";
-        case 0x51:
+        case SolidityPanicCode::UninitializedFunction:
             return "uninitialized function";
         default:
             return "unknown panic code: " + panicCode(code);

@@ -45,7 +45,7 @@ public:
         std::shared_ptr<Executor> transactionExecutor,
         std::shared_ptr<ledger::mpt::CommitObserver> mptCommitObserver = nullptr,
         bool notifyTransactions = true, ledger::EvmcRevisionSchedule evmcRevisionSchedule = {},
-        std::shared_ptr<EvmcForkTimestamps const> traceForks = nullptr, uint64_t traceChainId = 0)
+        EvmcForkTimestamps const* traceForks = nullptr)
     {
         auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
             Executor, SchedulerType, ledger::LedgerInterface>>(storageInitializer->storage(),
@@ -59,7 +59,7 @@ public:
         baselineScheduler->setEvmcRevisionSchedule(std::move(evmcRevisionSchedule));
         if (traceForks)
         {
-            baselineScheduler->setTraceForkSchedule(*traceForks, traceChainId);
+            baselineScheduler->setTraceForkSchedule(*traceForks);
         }
         if (notifyTransactions)
         {

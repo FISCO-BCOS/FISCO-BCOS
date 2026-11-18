@@ -173,8 +173,7 @@ private:
     /// executor_version=2 only (setEvmcRevisionSchedule): the dry-run calls stamp the revision
     /// of the block they execute on from it. Empty on every other lane.
     ledger::EvmcRevisionSchedule m_evmcRevisionSchedule;
-    std::shared_ptr<EvmcForkTimestamps const> m_traceForks;
-    uint64_t m_traceChainId = 0;
+    std::unique_ptr<EvmcForkTimestamps const> m_traceForks;
     inline static std::atomic<unsigned> s_activeTraces{0};
     std::mutex m_traceMutex;
     std::condition_variable m_traceDrained;
@@ -343,7 +342,7 @@ public:
     /// eth_estimateGas) execute with the EVM revision this schedule assigns to the block they
     /// run on, since the lane records no evmc_revision row. Call at wiring time.
     void setEvmcRevisionSchedule(ledger::EvmcRevisionSchedule schedule);
-    void setTraceForkSchedule(EvmcForkTimestamps const& schedule, uint64_t chainId);
+    void setTraceForkSchedule(EvmcForkTimestamps const& schedule);
     void traceTransaction(crypto::HashType const& hash, scheduler::TraceOptions options,
         std::function<void(Error::Ptr, std::shared_ptr<scheduler::CallTrace>)> callback) override;
 

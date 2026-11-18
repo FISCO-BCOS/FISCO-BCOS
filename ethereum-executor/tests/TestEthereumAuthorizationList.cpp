@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(CallWithinStaticCallKeepsActualOpcodeType)
     BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
     auto root = f.tracer->result();
     BOOST_REQUIRE_EQUAL(root->calls.size(), 1u);
-    auto child = root->calls.front();
+    auto const& child = root->calls.front();
     BOOST_CHECK_EQUAL(child->type, "STATICCALL");
     BOOST_REQUIRE_EQUAL(child->calls.size(), 1u);
     BOOST_CHECK_EQUAL(child->calls.front()->type, "CALL");

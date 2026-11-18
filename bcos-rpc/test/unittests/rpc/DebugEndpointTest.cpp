@@ -157,6 +157,20 @@ BOOST_AUTO_TEST_CASE(RevertReasonDynamicOffsetBounds)
     BOOST_CHECK(!codec::abi::decodeRevertReason(ref(output)));
 }
 
+BOOST_AUTO_TEST_CASE(PanicCodeIsCheckedBeforeNarrowing)
+{
+    bytes output(36);
+    output[0] = 0x4e;
+    output[1] = 0x48;
+    output[2] = 0x7b;
+    output[3] = 0x71;
+    output[27] = 1;  // 2^64 + 1 must not decode as assert(false).
+    output[35] = 1;
+    auto reason = codec::abi::decodeRevertReason(ref(output));
+    BOOST_REQUIRE(reason);
+    BOOST_CHECK_EQUAL(*reason, "unknown panic code: 0x10000000000000001");
+}
+
 BOOST_AUTO_TEST_CASE(TraceMethodHasAnIndependentGate)
 {
     EndpointsMapping const defaultMapping;
@@ -204,12 +218,17 @@ BOOST_AUTO_TEST_CASE(TraceOptionsAndCallFrameWireContract)
     frame.gas = "0x5208";
     frame.gasUsed = "0x5208";
     frame.input = "0x";
-    auto child = std::make_shared<scheduler::CallTrace>(frame);
+    auto child = std::make_unique<scheduler::CallTrace>();
+    child->from = frame.from;
+    child->to = frame.to;
+    child->gas = frame.gas;
+    child->gasUsed = frame.gasUsed;
+    child->input = frame.input;
     child->type = "STATICCALL";
     child->value.clear();
     child->error = "execution reverted";
     child->output = "0xdeadbeef";
-    frame.calls.push_back(child);
+    frame.calls.push_back(std::move(child));
 
     Json::Value params(Json::arrayValue);
     params.append(crypto::HashType{42U}.hexPrefixed());
