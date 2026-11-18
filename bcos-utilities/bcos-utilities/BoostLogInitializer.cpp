@@ -32,6 +32,8 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <array>
+#include <chrono>
 #include <cstdio>
 #include <iostream>
 #include <mutex>
@@ -71,19 +73,6 @@ struct BoostLogLevelResetHandler
 };
 
 std::string BoostLogLevelResetHandler::configFile;
-
-/// handler to solve log rotate
-bool BoostLogInitializer::canRotate(size_t const& _index)
-{
-    const boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
-    int hour = (int)now.time_of_day().hours();
-    if (hour != m_currentHourVec[_index])
-    {
-        m_currentHourVec[_index] = hour;
-        return true;
-    }
-    return false;
-}
 
 void BoostLogInitializer::initLog(
     const std::string& _configFile, std::string const& _logger, std::string const& _logPrefix)
@@ -282,6 +271,12 @@ std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::ini
             targetDir, m_maxArchiveSize, m_minFreeSpace, m_maxArchiveFiles, m_compressArchive));
     }
     sink->locked_backend()->scan_for_files();
+    // log.flush=true makes the backend flush once per line, so the sink must stop
+    // batching: the producer is still asynchronous either way, but per-line
+    // flushing bounds the crash window to the one line rather than a batch of up
+    // to 32. Must be set before the sink is registered so no producer can enqueue
+    // a batched line first.
+    sink->setPerLinePersistence(m_autoFlush);
     if (m_enableLog)
     {
         bcos::log::registerLineSink(sink);
@@ -294,30 +289,48 @@ std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::ini
 std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::initHourLineLogSink(
     std::string const& _logPath, std::string const& _logPrefix)
 {
-    m_currentHourVec.push_back(
-        (int)boost::posix_time::second_clock::local_time().time_of_day().hours());
     /// set file name
     std::string fileName = _logPath + "/" + _logPrefix + "_%Y%m%d%H.%M.log";
 
     auto sink = std::make_shared<line_sink_t>();
     sink->locked_backend()->set_open_mode(std::ios::ate);
-    // 1s throttle: canRotate() builds a posix_time local_time per call, see
-    // initLineLogSink for the measurement.
+    // The rotation state is owned BY VALUE by the callback, deliberately.
+    //
+    // A registered sink is never destroyed, so a producer that lost the race with
+    // stopLogging() can still reach the backend afterwards (see
+    // LineAsyncSink::drainInlineAfterStop). If this lambda captured `this` and
+    // called canRotate(), that late drain would dereference an already destroyed
+    // BoostLogInitializer — it is a local shared_ptr in every entry point and is
+    // gone once main returns. Keeping the hour here makes the callback completely
+    // self-contained, so no sink-owned call can reach initializer state.
+    //
+    // 1s throttle: the broken-down local time is built once per second per sink,
+    // see initLineLogSink for the measurement behind that.
     sink->locked_backend()->set_time_based_rotation(
-        [this, index = (m_currentHourVec.size() - 1), last = std::time_t(0)]() mutable {
+        [currentHour = (int)boost::posix_time::second_clock::local_time().time_of_day().hours(),
+            last = std::time_t(0)]() mutable {
             std::time_t now = std::time(nullptr);
             if (now == last)
             {
                 return false;
             }
             last = now;
-            return canRotate(index);
+            auto const hour =
+                (int)boost::posix_time::second_clock::local_time().time_of_day().hours();
+            if (hour != currentHour)
+            {
+                currentHour = hour;
+                return true;
+            }
+            return false;
         });
     sink->locked_backend()->set_file_name_pattern(fileName);
     /// set rotation size MB
     sink->locked_backend()->set_rotation_size(m_rotateSize);
     /// set auto-flush according to log configuration
     sink->locked_backend()->auto_flush(m_autoFlush);
+    // See initLineLogSink: batching is incompatible with per-line durability.
+    sink->setPerLinePersistence(m_autoFlush);
     if (m_enableLog)
     {
         bcos::log::registerLineSink(sink);
@@ -334,6 +347,8 @@ BoostLogInitializer::initLineConsoleLogSink(boost::property_tree::ptree const& _
         boost::shared_ptr<std::ostream>(&std::cout, boost::null_deleter()));
     bool need_flush = _pt.get<bool>("log.flush", false);
     sink->locked_backend()->auto_flush(need_flush);
+    // See initLineLogSink: batching is incompatible with per-line durability.
+    sink->setPerLinePersistence(need_flush);
     if (m_enableLog)
     {
         bcos::log::registerLineSink(sink);
@@ -382,10 +397,13 @@ void BoostLogInitializer::stopLogging()
         return;
     }
     m_running.store(false);
-    // Unregister whole-line sinks first so new records stop arriving;
-    // unregisterLineSink takes the registry's unique lock, so it waits for
-    // in-flight producers (who hold the shared lock across writeLine) before
-    // the sinks below are stopped and destroyed.
+    // Unpublish the whole-line sinks first so no new records reach them. The
+    // registry is lock-free: unregisterLineSink() only clears the atomic slot, so
+    // it does NOT wait for in-flight producers. That is safe because the sink is
+    // never destroyed (ownership is parked in leakedSinks) and sink->stop() below
+    // sets the sink's own m_stop, which makes a late writeLine a counted no-op.
+    // The ordering guarantee callers rely on comes from stop() draining inline,
+    // not from this call.
     for (auto const& sink : m_lineSinks)
     {
         bcos::log::unregisterLineSink(sink.get());

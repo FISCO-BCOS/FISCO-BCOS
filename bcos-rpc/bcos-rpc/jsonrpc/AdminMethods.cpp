@@ -71,6 +71,13 @@ Json::Value logLevelsJson()
     // Cumulative lines dropped on log slot-pool overflow since startup;
     // non-zero means the node lost log lines under sustained pressure.
     result["droppedLines"] = Json::UInt64(log::droppedLogLines());
+    // Pipeline shape. logRings is how many per-producer rings are allocated;
+    // logUsingSharedRing flips to true once that exceeded the budget and every
+    // further producer serialises on one shared ring — the one degradation the
+    // drop counter alone cannot distinguish from "this node logs a lot".
+    auto const sinkStatus = log::logSinkStatus();
+    result["logRings"] = Json::UInt64(sinkStatus.ringCount);
+    result["logUsingSharedRing"] = sinkStatus.usingSharedRing;
     return result;
 }
 
