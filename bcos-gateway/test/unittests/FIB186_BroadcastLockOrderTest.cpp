@@ -57,45 +57,37 @@ class BroadcastProbeService : public Service
 public:
     explicit BroadcastProbeService(P2PInfo const& _info) : Service(_info) {}
 
-    // Put one session in m_sessions so broadcastMessageToAll's loop actually sends once; capture
-    // x_sessions for the probe thread.
+    // Put one session in the table so broadcastMessageToAll's loop actually sends once.
     void arm()
     {
-        m_xSessionsPtr = &x_sessions;
-        m_sessions.emplace("peerRawP2pID", std::make_shared<P2PSession>());
+        m_sessions.update([&](SessionsType& table) {
+            table.emplace("peerRawP2pID", std::make_shared<P2PSession>());
+        });
     }
 
-    // broadcastMessageToAll sends through the coroutine fast path (sendMessageByNodeID) for
-    // each session, after snapshotting the session keys under x_sessions and releasing it. This
-    // virtual is called for each session; a probe thread tries to take x_sessions EXCLUSIVELY: it
-    // fails iff the broadcasting thread still holds it. No throw needed -- broadcastMessageToAll
-    // touches no host; we just probe the lock state and stop.
+    // broadcastMessageToAll takes a snapshot of the session table and releases it before sending,
+    // so a concurrent session-table WRITER (a connect/disconnect) must never be blocked by a
+    // broadcast. Under the old shared_mutex this was the FIB-186 vector D deadlock: a writer
+    // waiting for x_sessions while the broadcast held it shared. This probe runs a writer inside
+    // the per-session send and asserts it completes.
     task::Task<std::optional<Message>> sendMessageByNodeID(P2pID /*nodeID*/, Message& /*header*/,
         ::ranges::any_view<bytesConstRef> /*payloads*/, Options /*options*/) override
     {
-        bool acquiredExclusive = false;
-        std::thread probe([this, &acquiredExclusive]() {
-            // try_lock() is permitted to fail spuriously; retry a bounded number of times so a
-            // spurious failure is not misread as "asyncBroadcastMessage holds x_sessions". If it is
-            // genuinely held (shared, by the broadcasting thread) every exclusive attempt fails; if
-            // it is free the first attempt succeeds.
-            for (int i = 0; i < 64 && !acquiredExclusive; ++i)
-            {
-                acquiredExclusive = m_xSessionsPtr->try_lock();
-            }
-            if (acquiredExclusive)
-            {
-                m_xSessionsPtr->unlock();
-            }
+        std::atomic<bool> writerDone{false};
+        std::thread probe([this, &writerDone]() {
+            m_sessions.update([](SessionsType& table) {
+                // a no-op mutation: the point is that the clone-publish does not wait on the reader
+                (void)table.size();
+            });
+            writerDone.store(true);
         });
         probe.join();
-        m_xSessionsHeldDuringSend = !acquiredExclusive;
-        m_sendInvoked = true;
+        m_writerBlockedByBroadcast.store(!writerDone.load());
+        m_sendInvoked.store(true);
         co_return std::nullopt;
     }
 
-    std::shared_mutex* m_xSessionsPtr = nullptr;
-    std::atomic<bool> m_xSessionsHeldDuringSend{false};
+    std::atomic<bool> m_writerBlockedByBroadcast{false};
     std::atomic<bool> m_sendInvoked{false};
 };
 }  // namespace
@@ -116,7 +108,7 @@ BOOST_AUTO_TEST_CASE(BroadcastDoesNotHoldSessionsLockWhileSending)
     }(service, message));
 
     BOOST_REQUIRE(service->m_sendInvoked.load());
-    BOOST_CHECK_MESSAGE(!service->m_xSessionsHeldDuringSend.load(),
+    BOOST_CHECK_MESSAGE(!service->m_writerBlockedByBroadcast.load(),
         "FIB-186 vector D: broadcastMessageToAll held x_sessions(shared) while sending to a "
         "session via sendMessageByNodeID (which re-acquires x_sessions via getP2PSessionByNodeId). "
         "That recursive shared lock deadlocks against a waiting onConnect writer and halts "

@@ -579,8 +579,7 @@ public:
     explicit FanoutProbeService(P2PInfo const& _info) : Service(_info) {}
     void addSession(P2pID const& _nodeID, P2PSession::Ptr _session)
     {
-        std::unique_lock lock(x_sessions);
-        m_sessions[_nodeID] = std::move(_session);
+        m_sessions.update([&](SessionsType& table) { table[_nodeID] = std::move(_session); });
     }
 };
 
