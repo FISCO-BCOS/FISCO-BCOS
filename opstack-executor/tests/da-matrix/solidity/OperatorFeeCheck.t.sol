@@ -1,0 +1,176 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.15;
+
+// OperatorFeeCheck — Solidity authoritative end of the FISCO opstack da-matrix
+// (Task 5). Deploys a MockL1Block at the L1_BLOCK predeploy address and the real
+// GasPriceOracle, drives every da_matrix.json case through getOperatorFee (the
+// operator-fee authority) and getL1Fee (L1 cross-reference only), and writes the
+// per-case {id, l1_cost, operator_cost} result to .testdata/solidity_out.json.
+//
+// Conventions:
+//   - getOperatorFee(_gasUsed) is authoritative and directly comparable with the
+//     FISCO / op-geth / op-revm operator_cost (same gas input, same formula).
+//   - getL1Fee(_data) eats an UNSIGNED tx and adds +68 (flz+68, GasPriceOracle.sol
+//     :257-258), whereas FISCO / op-geth / op-revm eat the signed envelope with no
+//     +68. The Solidity l1_cost is therefore recorded as a CROSS-REFERENCE only,
+//     not byte-comparable with the other three ends.
+//   - GasPriceOracle holds its own isEcotone/isFjord/isIsthmus/isJovian flags (it
+//     does NOT read SystemConfig); we set them via the depositor-guarded setters.
+//
+// The per-case pushes below are generated from da_matrix.json by
+// solidity/gen_solidity_grid.py (in the FISCO worktree) — do not hand-edit.
+
+import { Test } from "forge-std/Test.sol";
+import { GasPriceOracle } from "src/L2/GasPriceOracle.sol";
+
+/// @title MockL1Block
+/// @notice Minimal L1Block stand-in returning the da-matrix slot values. The
+///         runtime code is etched at Predeploys.L1_BLOCK_ATTRIBUTES so the real
+///         GasPriceOracle reads from it.
+contract MockL1Block {
+    uint256 public basefee;
+    uint256 public blobBaseFee;
+    uint32 public baseFeeScalar;
+    uint32 public blobBaseFeeScalar;
+    uint32 public operatorFeeScalar;
+    uint64 public operatorFeeConstant;
+    uint16 public daFootprintGasScalar;
+
+    function setBasefee(uint256 v) external { basefee = v; }
+    function setBlobBaseFee(uint256 v) external { blobBaseFee = v; }
+    function setBaseFeeScalar(uint32 v) external { baseFeeScalar = v; }
+    function setBlobBaseFeeScalar(uint32 v) external { blobBaseFeeScalar = v; }
+    function setOperatorFeeScalar(uint32 v) external { operatorFeeScalar = v; }
+    function setOperatorFeeConstant(uint64 v) external { operatorFeeConstant = v; }
+    function setDaFootprintGasScalar(uint16 v) external { daFootprintGasScalar = v; }
+}
+
+contract OperatorFeeCheck is Test {
+    // Hardcoded rather than pulled from Predeploys/Constants libraries because
+    // library `internal constant`s are not accepted in contract constant
+    // initializers here. Values match Predeploys.L1_BLOCK_ATTRIBUTES and
+    // Constants.DEPOSITOR_ACCOUNT.
+    address internal constant L1_BLOCK = 0x4200000000000000000000000000000000000015;
+    address internal constant DEPOSITOR = 0xDeaDDEaDDeAdDeAdDEAdDEaddeAddEAdDEAd0001;
+
+    struct Case {
+        string id;
+        bytes envelope;
+        uint256 gas;
+        string fork;
+        uint256 basefee;
+        uint256 blobBaseFee;
+        uint32 baseFeeScalar;
+        uint32 blobBaseFeeScalar;
+        uint32 operatorFeeScalar;
+        uint64 operatorFeeConstant;
+        uint16 daFootprintGasScalar;
+    }
+
+    Case[] internal cases;
+
+    function setUp() public {
+        vm.etch(L1_BLOCK, type(MockL1Block).runtimeCode);
+        cases.push(Case({id: "baseline_isthmus", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "isthmus", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 1439103868, operatorFeeConstant: 1256417826609331460, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "baseline_jovian", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "jovian", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 1439103868, operatorFeeConstant: 1256417826609331460, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "max_isthmus_scalars", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "isthmus", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 4294967295, blobBaseFeeScalar: 4294967295, operatorFeeScalar: 4294967295, operatorFeeConstant: 18446744073709551615, daFootprintGasScalar: 65535}));
+        cases.push(Case({id: "max_jovian_scalars", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "jovian", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 4294967295, blobBaseFeeScalar: 4294967295, operatorFeeScalar: 4294967295, operatorFeeConstant: 18446744073709551615, daFootprintGasScalar: 65535}));
+        cases.push(Case({id: "overflow_isthmus", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 18446744073709551615, fork: "isthmus", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 4294967295, blobBaseFeeScalar: 4294967295, operatorFeeScalar: 4294967295, operatorFeeConstant: 18446744073709551615, daFootprintGasScalar: 65535}));
+        cases.push(Case({id: "overflow_jovian", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 18446744073709551615, fork: "jovian", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 4294967295, blobBaseFeeScalar: 4294967295, operatorFeeScalar: 4294967295, operatorFeeConstant: 18446744073709551615, daFootprintGasScalar: 65535}));
+        cases.push(Case({id: "pre_isthmus_fjord", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "fjord", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 1439103868, operatorFeeConstant: 1256417826609331460, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "pre_isthmus_granite", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "granite", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 1439103868, operatorFeeConstant: 1256417826609331460, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "pre_isthmus_holocene", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "holocene", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 1439103868, operatorFeeConstant: 1256417826609331460, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "missing_isthmus_slot8_zero", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "isthmus", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 0, operatorFeeConstant: 0, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "switch_ecotone", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "ecotone", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 1439103868, operatorFeeConstant: 1256417826609331460, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "switch_fjord", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "fjord", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 1439103868, operatorFeeConstant: 1256417826609331460, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "switch_isthmus", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "isthmus", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 1439103868, operatorFeeConstant: 1256417826609331460, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "switch_jovian", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "jovian", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 1439103868, operatorFeeConstant: 1256417826609331460, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "switch_karst", envelope: hex"02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000003c1e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe000000000000000000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e", gas: 1618, fork: "karst", basefee: 1000000000, blobBaseFee: 10000000, baseFeeScalar: 2, blobBaseFeeScalar: 3, operatorFeeScalar: 1439103868, operatorFeeConstant: 1256417826609331460, daFootprintGasScalar: 0}));
+        cases.push(Case({id: "blob_jovian_blob_scalar", envelope: hex"dd80808094095e7baea6a6c7c4c2dfeb977efac326af552d878080808080", gas: 1618, fork: "jovian", basefee: 0, blobBaseFee: 10000000, baseFeeScalar: 0, blobBaseFeeScalar: 1000, operatorFeeScalar: 0, operatorFeeConstant: 0, daFootprintGasScalar: 0}));
+    }
+
+    /// @notice "0x" + lowercase minimal hex (op-geth hexutil.Big convention).
+    function toHex(uint256 v) internal pure returns (string memory) {
+        if (v == 0) return "0x0";
+        bytes memory hexChars = "0123456789abcdef";
+        uint256 n = 0;
+        uint256 t = v;
+        while (t > 0) { n++; t >>= 4; }
+        bytes memory out = new bytes(n + 2);
+        out[0] = "0";
+        out[1] = "x";
+        uint256 pos = n + 1;
+        while (v > 0) {
+            out[pos] = hexChars[v & 0xf];
+            v >>= 4;
+            pos--;
+        }
+        return string(out);
+    }
+
+    function _strEq(string memory a, string memory b) internal pure returns (bool) {
+        return keccak256(abi.encodePacked(a)) == keccak256(abi.encodePacked(b));
+    }
+
+    /// @notice Activate the exact fork flags on a fresh GasPriceOracle. Flags are
+    ///         one-way (depositor-guarded setters), so each case gets a new oracle.
+    function _setFork(GasPriceOracle g, string memory fork) internal {
+        vm.prank(DEPOSITOR);
+        g.setEcotone();
+        if (_strEq(fork, "ecotone")) return;
+        vm.prank(DEPOSITOR);
+        g.setFjord();
+        if (_strEq(fork, "fjord") || _strEq(fork, "granite") || _strEq(fork, "holocene")) return;
+        vm.prank(DEPOSITOR);
+        g.setIsthmus();
+        if (_strEq(fork, "isthmus")) return;
+        vm.prank(DEPOSITOR);
+        g.setJovian(); // jovian | karst
+    }
+
+    function testOperatorFeeMatrix() public {
+        uint256 n = cases.length;
+        require(n > 0, "no cases");
+        string memory out = "[";
+        for (uint256 i = 0; i < n; i++) {
+            Case memory c = cases[i];
+            MockL1Block(L1_BLOCK).setBasefee(c.basefee);
+            MockL1Block(L1_BLOCK).setBlobBaseFee(c.blobBaseFee);
+            MockL1Block(L1_BLOCK).setBaseFeeScalar(c.baseFeeScalar);
+            MockL1Block(L1_BLOCK).setBlobBaseFeeScalar(c.blobBaseFeeScalar);
+            MockL1Block(L1_BLOCK).setOperatorFeeScalar(c.operatorFeeScalar);
+            MockL1Block(L1_BLOCK).setOperatorFeeConstant(c.operatorFeeConstant);
+            MockL1Block(L1_BLOCK).setDaFootprintGasScalar(c.daFootprintGasScalar);
+
+            GasPriceOracle g = new GasPriceOracle();
+            _setFork(g, c.fork);
+
+            // getOperatorFee is the Solidity authority (no overflow; saturating
+            // isthmus formula, jovian formula fits the grid's extreme rows).
+            uint256 op = g.getOperatorFee(c.gas);
+
+            // getL1Fee is a cross-reference only. NOTE: the real contract
+            // computes `baseFeeScalar() * 16` in uint32 (GasPriceOracle.sol
+            // :248/:283), which overflows/panics when baseFeeScalar >= 2^28.
+            // The grid's max/overflow rows (scalar=0xffffffff) trigger this
+            // latent bug; record the sentinel 0xfff..ff for those cases instead
+            // of failing the whole matrix. See DIVERGENCES.md.
+            uint256 l1;
+            try g.getL1Fee(c.envelope) returns (uint256 v) {
+                l1 = v;
+            } catch {
+                l1 = type(uint256).max;
+            }
+
+            if (i > 0) out = string.concat(out, ",");
+            out = string.concat(
+                out,
+                '{"id":"', c.id, '"',
+                ',"l1_cost":"', toHex(l1), '"',
+                ',"operator_cost":"', toHex(op), '"}'
+            );
+        }
+        out = string.concat(out, "]");
+        vm.writeJson(out, ".testdata/solidity_out.json");
+    }
+}
