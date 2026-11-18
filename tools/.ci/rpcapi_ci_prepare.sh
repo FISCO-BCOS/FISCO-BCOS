@@ -19,8 +19,13 @@ nodes_dir="${current_path}/nodes/127.0.0.1"
 fisco_bcos_path=$(cd "${current_path}/../build/fisco-bcos-air" && pwd)/fisco-bcos
 
 # The node prints "The fisco-bcos is running..." only after initializer->init() finishes
-# (config, RocksDB, genesis), so this is a startup budget, not a request timeout.
+# (config, RocksDB, genesis), so this is a startup budget, not a request timeout. It is enforced
+# against wall time for the round, relaunches included.
 START_TIMEOUT=${START_TIMEOUT:-120}
+# Worst case wall time one generated start.sh spends before giving up: `sleep 1.5` plus four
+# `sleep 0.5` retries (build_chain.sh). Relaunching is synchronous, so it is charged against the
+# round's remaining budget before it is spent.
+START_SCRIPT_BUDGET=${START_SCRIPT_BUDGET:-4}
 # Only nodes whose process is gone are relaunched, so one round is normally enough; the bound
 # exists so a genuinely broken node fails this step instead of looping until the job times out.
 MAX_ROUNDS=${MAX_ROUNDS:-3}
@@ -62,29 +67,49 @@ diagnose_node()
 
 # wait_for_nodes: every node has a live process AND answers RPC. Relaunching is limited to nodes
 # whose process is gone -- restarting one that is still initialising resets its storage setup.
+#
+# The budget is wall time for the whole round, not a count of the sleeps below. A relaunch is
+# synchronous and costs up to START_SCRIPT_BUDGET even when the node fails instantly, so what is
+# left is checked before every launch and probe. Counting only `sleep 3` used to let a round run
+# far past its stated budget: four instantly-failing nodes cost 4 x 3.5s of start.sh plus the 3s
+# sleep (17s) while the counter advanced by 3s, so START_TIMEOUT=120 ran for ~680s and logged
+# 120s -- and MAX_ROUNDS=3 then spent ~34 minutes before giving up.
 wait_for_nodes()
 {
-    local waited=0 node pending
-    while [ "${waited}" -lt "${START_TIMEOUT}" ]; do
+    local started=${SECONDS} deadline=$(( SECONDS + START_TIMEOUT ))
+    local node pending remaining elapsed
+    while :; do
         pending=""
         for node in "${nodes_dir}"/node*; do
             [ -d "${node}" ] || continue
+            remaining=$(( deadline - SECONDS ))
             if ! pgrep -f "${node}/" >/dev/null 2>&1; then
+                if [ "${remaining}" -lt "${START_SCRIPT_BUDGET}" ]; then
+                    # Not enough left to relaunch and still learn anything useful: report the
+                    # node instead of spending the budget on a launch that cannot be evaluated.
+                    pending="${pending} $(basename "${node}")"
+                    continue
+                fi
                 LOG_WARN "$(basename "${node}") has no process; starting it again"
                 bash "${node}/start.sh" 2>&1 | grep -v 'Exceed waiting time'
                 pending="${pending} $(basename "${node}")"
-            elif ! rpc_answers "${node}"; then
+            elif [ "${remaining}" -le 0 ] || ! rpc_answers "${node}"; then
+                # Out of budget: the probe would overrun, so the node is unresolved, not healthy.
                 pending="${pending} $(basename "${node}")"
             fi
         done
+        elapsed=$(( SECONDS - started ))
         if [ -z "${pending}" ]; then
-            LOG_INFO "every node answers (${waited}s)"
+            LOG_INFO "every node answers (${elapsed}s)"
             return 0
         fi
-        sleep 3
-        waited=$((waited + 3))
+        remaining=$(( deadline - SECONDS ))
+        [ "${remaining}" -le 0 ] && break
+        # never sleep past the deadline
+        if [ "${remaining}" -lt 3 ]; then sleep "${remaining}"; else sleep 3; fi
     done
-    LOG_ERROR "still not serving after ${waited}s:${pending}"
+    elapsed=$(( SECONDS - started ))
+    LOG_ERROR "still not serving after ${elapsed}s:${pending}"
     for node in ${pending}; do
         diagnose_node "${nodes_dir}/${node}"
     done
@@ -114,7 +139,7 @@ teardown_on_failure()
 
 start_chain()
 {
-    local round=1
+    local started=${SECONDS} round=1
     while [ "${round}" -le "${MAX_ROUNDS}" ]; do
         LOG_INFO "Try to start all (attempt ${round}/${MAX_ROUNDS})"
         # "Exceed waiting time" is start_all.sh's own 3.5s report and is not a verdict: this
@@ -129,9 +154,10 @@ start_chain()
         LOG_WARN "chain not serving after attempt ${round}/${MAX_ROUNDS}; stopping it and retrying"
         stop_nodes
         round=$((round + 1))
-        sleep 10
+        # no point waiting before the round that will not happen
+        [ "${round}" -le "${MAX_ROUNDS}" ] && sleep 10
     done
-    LOG_ERROR "chain did not start after ${MAX_ROUNDS} attempts"
+    LOG_ERROR "chain did not start after ${MAX_ROUNDS} attempts ($(( SECONDS - started ))s total)"
     return 1
 }
 
