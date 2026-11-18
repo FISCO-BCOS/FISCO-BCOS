@@ -1008,8 +1008,14 @@ public:
         {
             header.baseFee = test::hexToU256(env.baseFee);
         }
-        auto const revision = scheduler_v1::evmcRevisionForTimestamp(
+        auto const revisionOpt = scheduler_v1::evmcRevisionForTimestamp(
             schedule.forks, header.timestamp, header.difficulty);
+        if (!revisionOpt)
+        {
+            // Not an expected transaction exception: the binary cannot price the block.
+            return fail(scheduler_v1::kUnsupportedConstantinopleRevision);
+        }
+        auto const revision = *revisionOpt;
         std::optional<std::vector<bytes>> withdrawals;
         if (revision >= EVMC_SHANGHAI)
         {

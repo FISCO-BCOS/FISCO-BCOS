@@ -809,13 +809,18 @@ BOOST_AUTO_TEST_CASE(preLondonHeaderEraAndRevisionLadder)
         V::LONDON);
 
     auto rev = [&](uint64_t timestamp) {
-        return scheduler_v1::evmcRevisionForTimestamp(preLondon, timestamp, /*difficulty=*/1);
+        auto selected =
+            scheduler_v1::evmcRevisionForTimestamp(preLondon, timestamp, /*difficulty=*/1);
+        BOOST_REQUIRE(selected.has_value());
+        return *selected;
     };
     BOOST_CHECK(rev(0) == EVMC_FRONTIER);
     BOOST_CHECK(rev(55) == EVMC_HOMESTEAD);
     BOOST_CHECK(rev(65) == EVMC_TANGERINE_WHISTLE);
     BOOST_CHECK(rev(75) == EVMC_SPURIOUS_DRAGON);
     BOOST_CHECK(rev(85) == EVMC_BYZANTIUM);
+    // Constantinople and Petersburg share timestamp 90: simultaneous activation
+    // stays Petersburg. There is no Constantinople-only sample on this ladder.
     BOOST_CHECK(rev(95) == EVMC_PETERSBURG);
     BOOST_CHECK(rev(115) == EVMC_ISTANBUL);
     BOOST_CHECK(rev(125) == EVMC_BERLIN);
@@ -823,7 +828,126 @@ BOOST_AUTO_TEST_CASE(preLondonHeaderEraAndRevisionLadder)
     // A schedule that starts at London (every configured chain today) keeps the old fallback.
     scheduler_v1::EvmcForkTimestamps londonOnly;
     londonOnly.londonTime = 0;
-    BOOST_CHECK(scheduler_v1::evmcRevisionForTimestamp(londonOnly, 0, 1) == EVMC_LONDON);
+    auto const london = scheduler_v1::evmcRevisionForTimestamp(londonOnly, 0, 1);
+    BOOST_REQUIRE(london.has_value());
+    BOOST_CHECK(*london == EVMC_LONDON);
+}
+
+// ABI 19 has no EVMC_CONSTANTINOPLE. A non-zero-difficulty block whose schedule
+// has activated Constantinople and not Petersburg (or any later fork) must be
+// refused before execution: Petersburg's SSTORE rules are not EIP-1283.
+// Simultaneous activation, a later fork, and difficulty 0 keep the old selection.
+BOOST_AUTO_TEST_CASE(constantinopleOnlyNonzeroDifficultyIsUnsupported)
+{
+    using scheduler_v1::EvmcForkTimestamps;
+    EvmcForkTimestamps gap;
+    gap.byzantiumTime = 0;
+    gap.constantinopleTime = 100;
+    gap.petersburgTime = 200;
+
+    auto at = [&](uint64_t timestamp, int difficulty) {
+        return scheduler_v1::evmcRevisionForTimestamp(gap, timestamp, u256(difficulty));
+    };
+    // Distinct activation times, inside the gap.
+    BOOST_CHECK(!at(100, 1).has_value());
+    BOOST_CHECK(!at(199, 1).has_value());
+    // Petersburg's activation timestamp ends the gap.
+    auto const atPetersburg = at(200, 1);
+    BOOST_REQUIRE(atPetersburg.has_value());
+    BOOST_CHECK(*atPetersburg == EVMC_PETERSBURG);
+    // Before Constantinople the previous revision still applies.
+    auto const before = at(99, 1);
+    BOOST_REQUIRE(before.has_value());
+    BOOST_CHECK(*before == EVMC_BYZANTIUM);
+
+    // difficulty 0 is the TTD signal and selects Paris before the gap is considered.
+    auto const merged = at(150, 0);
+    BOOST_REQUIRE(merged.has_value());
+    BOOST_CHECK(*merged == EVMC_PARIS);
+
+    // Simultaneous Constantinople+Petersburg activation, including the shared timestamp.
+    EvmcForkTimestamps coincident;
+    coincident.byzantiumTime = 0;
+    coincident.constantinopleTime = 100;
+    coincident.petersburgTime = 100;
+    auto const onTheBoundary = scheduler_v1::evmcRevisionForTimestamp(coincident, 100, u256(1));
+    BOOST_REQUIRE(onTheBoundary.has_value());
+    BOOST_CHECK(*onTheBoundary == EVMC_PETERSBURG);
+    auto const afterBoth = scheduler_v1::evmcRevisionForTimestamp(coincident, 150, u256(1));
+    BOOST_REQUIRE(afterBoth.has_value());
+    BOOST_CHECK(*afterBoth == EVMC_PETERSBURG);
+
+    // A later fork covers the Constantinople timestamp even if Petersburg is unset.
+    EvmcForkTimestamps istanbulCovers;
+    istanbulCovers.constantinopleTime = 0;
+    istanbulCovers.istanbulTime = 0;
+    auto const istanbul = scheduler_v1::evmcRevisionForTimestamp(istanbulCovers, 0, u256(1));
+    BOOST_REQUIRE(istanbul.has_value());
+    BOOST_CHECK(*istanbul == EVMC_ISTANBUL);
+
+    BOOST_CHECK_THROW(scheduler_v1::requireEvmcRevisionForTimestamp(gap, 150, u256(1)),
+        scheduler_v1::UnsupportedConstantinopleRevision);
+}
+
+// The refusal is the block's result, and it is produced before transaction decode
+// or the VM. A decoder that records a call proves the execute path was not reached.
+BOOST_FIXTURE_TEST_CASE(constantinopleOnlyGapReturnsBeforeExecution, EEBVFixture)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEBVConst");
+        SchedulerSerialImpl scheduler(ioServicePool);
+        auto sender = EEBVAddress(7);
+        co_await EEBVFundAccount(backendStorage, sender, EEBVFunding);
+        co_await EEBVWriteCurrentNumber(backendStorage, 0);
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+
+        scheduler_v1::EvmcForkTimestamps forks;
+        forks.byzantiumTime = 0;
+        forks.constantinopleTime = 100;
+        forks.petersburgTime = 200;
+
+        bcos::protocol::EthBlockHeaderData header;
+        header.number = 1;
+        header.timestamp = 150;
+        header.difficulty = 1;
+        header.gasLimit = 30000000;
+        auto parent = header;
+        parent.number = 0;
+        parent.timestamp = 149;
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        bool decoded = false;
+        bool rooted = false;
+        auto decoder = [&](bcos::bytes const&) -> protocol::Transaction::Ptr {
+            decoded = true;
+            return {};
+        };
+        using ViewType = EEBVMultiLayerStorage::ViewType;
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
+            scheduler, *executor, *blockFactory);
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::StateRootCalculator<ViewType>
+            stateRootCalc = [&](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+            rooted = true;
+            co_return crypto::HashType{};
+        };
+
+        auto execution = co_await verifier.executeEthereumBlock(view, header, parent,
+            std::vector<bcos::bytes>{bcos::bytes{0x01}}, std::nullopt, forks, 1, {},
+            std::numeric_limits<uint64_t>::max(), decoder, stateRootCalc);
+
+        BOOST_REQUIRE(execution.error.has_value());
+        BOOST_CHECK_NE(execution.error->find(scheduler_v1::kUnsupportedConstantinopleRevision),
+            std::string::npos);
+        BOOST_CHECK(!decoded);
+        BOOST_CHECK(!rooted);
+        BOOST_CHECK(execution.transactions.empty());
+        BOOST_CHECK(execution.receipts.empty());
+        BOOST_CHECK_EQUAL(co_await EEBVReadBalance(view, sender), EEBVFunding);
+    }());
 }
 
 // PoW block rewards by era (geth accumulateRewards): 5 ETH to Byzantium, 3 ETH to

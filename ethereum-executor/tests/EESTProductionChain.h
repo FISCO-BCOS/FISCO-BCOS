@@ -229,6 +229,19 @@ inline FixtureSchedule scheduleForNetwork(std::string const& network)
     set(forkIndex("byzantium"), f.byzantiumTime);
     set(forkIndex("constantinople"), f.constantinopleTime);
     set(forkIndex("constantinoplefix"), f.petersburgTime);
+    // tests@v20.0.2's Constantinople ruleset does not include EIP-1283;
+    // ConstantinopleFix is that same ruleset under the Petersburg name.
+    // evmcRevisionForTimestamp refuses a real Constantinople-only interval
+    // (non-zero difficulty, Petersburg not yet active) because ABI 19 cannot
+    // price EIP-1283. Collapse the two activations so this corpus keeps
+    // executing as Petersburg. A schedule whose timestamps really differ still
+    // refuses on the production path.
+    if (f.constantinopleTime != scheduler_v1::EvmcForkTimestamps::kForkDisabled &&
+        (f.petersburgTime == scheduler_v1::EvmcForkTimestamps::kForkDisabled ||
+            f.petersburgTime > f.constantinopleTime))
+    {
+        f.petersburgTime = f.constantinopleTime;
+    }
     set(forkIndex("istanbul"), f.istanbulTime);
     set(forkIndex("berlin"), f.berlinTime);
     set(forkIndex("london"), f.londonTime);
