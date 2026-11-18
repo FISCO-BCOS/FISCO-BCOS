@@ -901,7 +901,7 @@ bool PBFTEngine::checkProposalSignature(
     }
 
     return m_config->cryptoSuite()->signatureImpl()->verify(
-        nodeInfo->nodeID, _proposal->hash(), _proposal->signature());
+        *nodeInfo->nodeID, _proposal->hash(), _proposal->signature());
 }
 
 bool PBFTEngine::checkRotateTransactionValid(PBFTMessageInterface::Ptr const& _proposal,

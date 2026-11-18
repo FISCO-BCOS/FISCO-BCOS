@@ -13,6 +13,10 @@
 #include "bcos-crypto/encrypt/AESCrypto.h"
 #include "bcos-crypto/encrypt/SM4Crypto.h"
 
+using bcos::Address;
+using bcos::byte;
+using bcos::bytes;
+using bcos::bytesConstRef;
 using namespace bcos::crypto;
 
 inline std::shared_ptr<bcos::crypto::CryptoSuite> newCryptoSuite(bool sm) {
@@ -38,8 +42,13 @@ inline const bcos::crypto::KeyPairInterface& pointerToReference(const std::share
 %include <std_shared_ptr.i>
 %shared_ptr(bcos::crypto::CryptoSuite)
 %shared_ptr(bcos::crypto::KeyFactory)
+%shared_ptr(bcos::crypto::KeyInterface)
+%shared_ptr(bcos::crypto::KeyImpl)
 %shared_ptr(bcos::crypto::SignatureCrypto)
 
+%include "../bcos-crypto/bcos-crypto/interfaces/crypto/CommonType.h"
+%include "../bcos-crypto/bcos-crypto/interfaces/crypto/KeyInterface.h"
+%include "../bcos-crypto/bcos-crypto/signature/key/KeyImpl.h"
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/KeyFactory.h"
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/Signature.h"
@@ -49,7 +58,6 @@ inline const bcos::crypto::KeyPairInterface& pointerToReference(const std::share
 %include "../bcos-crypto/bcos-crypto/signature/fastsm2/FastSM2Crypto.h"
 %include "../bcos-crypto/bcos-crypto/encrypt/AESCrypto.h"
 %include "../bcos-crypto/bcos-crypto/encrypt/SM4Crypto.h"
-%include "../bcos-crypto/bcos-crypto/interfaces/crypto/CommonType.h"
 
 inline std::shared_ptr<bcos::crypto::CryptoSuite> newCryptoSuite(bool sm);
 inline const bcos::crypto::KeyPairInterface& pointerToReference(const bcos::crypto::KeyPairInterface::UniquePtr& ptr);

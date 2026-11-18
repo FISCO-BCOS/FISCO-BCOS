@@ -25,6 +25,7 @@
 #include <array>
 #include <cstring>
 #include <memory>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -35,8 +36,8 @@ bcos::crypto::Secp256k1KeyPair::Secp256k1KeyPair()
 
 bcos::crypto::Secp256k1KeyPair::Secp256k1KeyPair(SecretPtr _secretKey) : Secp256k1KeyPair()
 {
-    m_secretKey = _secretKey;
     m_publicKey = priToPub(_secretKey);
+    m_secretKey = std::move(_secretKey);
     m_type = KeyPairType::Secp256K1;
 }
 

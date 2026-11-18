@@ -20,6 +20,7 @@
  */
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -31,8 +32,8 @@ SM2KeyPair::SM2KeyPair(SecretPtr _secretKey) : SM2KeyPair()
                                   "Invalid InvalidSecretKey, sm2 secret length must be " +
                                   std::to_string(SM2_PRIVATE_KEY_LEN)));
     }
-    m_secretKey = _secretKey;
     m_publicKey = priToPub(_secretKey);
+    m_secretKey = std::move(_secretKey);
 }
 
 PublicPtr SM2KeyPair::priToPub(SecretPtr _secretKey)

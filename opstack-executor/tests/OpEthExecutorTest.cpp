@@ -95,9 +95,8 @@ bcos::crypto::KeyPairInterface::Ptr fixedSenderKeyPair()
 {
     bcos::bytes secretBytes(32, 0x00);
     secretBytes[31] = 0x11;
-    auto secret = std::make_shared<bcos::crypto::KeyImpl>(
-        bcos::bytesConstRef{secretBytes.data(), secretBytes.size()});
-    return bcos::crypto::Secp256k1Crypto{}.createKeyPair(std::move(secret));
+    bcos::crypto::KeyImpl secret(bcos::bytesConstRef{secretBytes.data(), secretBytes.size()});
+    return bcos::crypto::Secp256k1Crypto{}.createKeyPair(secret);
 }
 
 /// Sign a full EIP-1559 envelope (the OpEthForkMatrixTest recipe).
@@ -117,11 +116,11 @@ bcos::bytes signEip1559(bcos::crypto::KeyPairInterface const& keyPair, uint64_t 
     w3.data = {};
     bcos::crypto::Secp256k1Crypto secp;
     auto const sig = secp.sign(keyPair, w3.hashForSign(), false);
-    BOOST_REQUIRE(sig != nullptr);
-    BOOST_REQUIRE_EQUAL(sig->size(), 65);
-    w3.signatureR.assign(sig->begin(), sig->begin() + 32);
-    w3.signatureS.assign(sig->begin() + 32, sig->begin() + 64);
-    w3.signatureV = (*sig)[64];  // typed tx: yParity
+    BOOST_REQUIRE(!sig.empty());
+    BOOST_REQUIRE_EQUAL(sig.size(), 65);
+    w3.signatureR.assign(sig.begin(), sig.begin() + 32);
+    w3.signatureS.assign(sig.begin() + 32, sig.begin() + 64);
+    w3.signatureV = sig[64];  // typed tx: yParity
     return w3.encode();
 }
 

@@ -20,6 +20,8 @@
 
 **bcos-boostssl/bcos-cpp-sdk 破坏性变更**：删除 MessageFace 及工厂、WsMessage 改 move-only、回调改按值传 WsMessage、WsSession/WsService 去虚、发送路径签名改 const WsMessage&（迁移详见 PR #5464）
 
+**bcos-crypto 破坏性变更**：`SignatureCrypto` 的 `sign` 改为返回 `bytes`，`recover` 改为返回 `KeyImpl`，公钥、私钥和哈希参数改用引用或 `bytesConstRef`；三参数 `recoverAddress` 直接返回 `bytes` 并以异常报告失败；原始字节公钥的 `verify` 对过短公钥抛出 `InvalidKey`，secp256k1、SM2、Ed25519 同时拒绝超长公钥，HSM-SM2 保留既有的最小长度兼容行为，`const Public&` 形式将 `InvalidKey` 归一化为返回 `false`；`createKeyPair` 的 `SecretPtr` 按值重载保持签名并在内部移动所有权，另新增非虚 `const Secret&` 借用重载，下游实现无需为该重载添加 override。SWIG Java/Python 绑定同步调整；下游 `SignatureCrypto` 实现及调用方需同步迁移（PR #5763）
+
 **bcos-ledger 破坏性变更**：
 
 * 已安装公共头 `bcos-framework/ledger/LedgerInterface.h` 将 `void asyncPrewriteBlock(StorageInterface::Ptr, ConstTransactionsPtr, Block::ConstPtr, std::function<void(std::string, Error::Ptr&&)>, bool, std::optional<Features>, std::optional<HashType>, bool)` 替换为 `task::Task<std::string> prewriteBlock(StorageInterface::Ptr, ConstTransactionsPtr, Block::ConstPtr, bool, std::optional<HashType>, bool)`，同时删除回调和未使用的 `features` 参数；下游派生实现需改为协程 override，普通预写返回 hash-to-number 行的 primary key，系统合约部署分支只写 `SYS_KEY_CURRENT_NUMBER` 并返回空字符串，错误通过协程异常传播

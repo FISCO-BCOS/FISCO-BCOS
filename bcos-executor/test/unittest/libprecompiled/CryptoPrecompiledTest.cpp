@@ -324,7 +324,7 @@ BOOST_AUTO_TEST_CASE(testSM2Verify)
     SM2VerifyPrecompiledFixture fixture;
 
     // verify the signature
-    auto signatureStruct = std::make_shared<SignatureDataWithPub>(ref(*signature));
+    auto signatureStruct = std::make_shared<SignatureDataWithPub>(ref(signature));
     bytes in = fixture.m_abi->abiIn(fixture.m_sm2VerifyFunction, codec::toString32(hash),
         signatureStruct->pub(), codec::toString32(signatureStruct->r()),
         codec::toString32(signatureStruct->s()));

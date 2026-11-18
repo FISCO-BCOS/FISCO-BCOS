@@ -70,11 +70,11 @@ bcos::bytes gossipSign(rpc::Web3Transaction& web3Tx, crypto::KeyPairInterface co
 {
     crypto::Secp256k1Crypto secp;
     auto const sig = secp.sign(keyPair, web3Tx.hashForSign(), false);
-    BOOST_REQUIRE(sig);
-    BOOST_REQUIRE_EQUAL(sig->size(), 65);
-    web3Tx.signatureR.assign(sig->begin(), sig->begin() + 32);
-    web3Tx.signatureS.assign(sig->begin() + 32, sig->begin() + 64);
-    web3Tx.signatureV = (*sig)[64];
+    BOOST_REQUIRE(!sig.empty());
+    BOOST_REQUIRE_EQUAL(sig.size(), 65);
+    web3Tx.signatureR.assign(sig.begin(), sig.begin() + 32);
+    web3Tx.signatureS.assign(sig.begin() + 32, sig.begin() + 64);
+    web3Tx.signatureV = sig[64];
     return web3Tx.encode();
 }
 

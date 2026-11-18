@@ -395,7 +395,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     bcos::crypto::KeyPairInterface::Ptr invalidKeyPair = signatureImpl->generateKeyPair();
     auto invalidHash = hashImpl->hash(std::string("test"));
     auto signatureData = signatureImpl->sign(*invalidKeyPair, invalidHash, true);
-    pbTx->setSignatureData(*signatureData);
+    pbTx->setSignatureData(signatureData);
     pbTx->forceSender(bcos::bytes());
     size_t importedTxNum = 0;
     if (!_sm)

@@ -61,7 +61,7 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     pbTransaction->calculateHash(*_cryptoSuite->hashImpl());
 
     auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
-    pbTransaction->setSignatureData(*signData);
+    pbTransaction->setSignatureData(signData);
     pbTransaction->forceSender(_keyPair->address(_cryptoSuite->hashImpl()).asBytes());
     pbTransaction->calculateHash(*_cryptoSuite->hashImpl());
     return pbTransaction;
@@ -194,7 +194,7 @@ inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string no
     // recovers the sender from.
     auto sigHash = bcos::crypto::keccak256Hash(bcos::ref(preimage));
     auto signData = _cryptoSuite->signatureImpl()->sign(*key, sigHash, true);
-    tx->setSignatureData(*signData);
+    tx->setSignatureData(signData);
     // Fills extraTransactionHash with the canonical txHash recomputed from preimage + signature.
     tx->calculateHash(*_cryptoSuite->hashImpl());
     tx->forceSender(key->address(_cryptoSuite->hashImpl()).asBytes());

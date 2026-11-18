@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(verifyTest)
 
     auto hash = hashImpl->hash(bcos::ref(input));
     auto sign = signatureImpl->sign(keyPair, hash, true);
-    std::string signStr = bcos::toHex(*sign);
+    std::string signStr = bcos::toHex(sign);
     // success
     {
         auto [result, recoverAdd] = callValidator.verify(precompiled::SYS_CONFIG_ADDRESS,
@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(smVerifyTest)
 
     auto hash = hashImpl->hash(bcos::ref(input));
     auto sign = signatureImpl->sign(keyPair, hash, true);
-    std::string signStr = bcos::toHex(*sign);
+    std::string signStr = bcos::toHex(sign);
 
     // success
     {
@@ -156,7 +156,7 @@ BOOST_AUTO_TEST_CASE(wasmTest)
 
     auto hash = hashImpl->hash(bcos::ref(input));
     auto sign = signatureImpl->sign(keyPair, hash, true);
-    std::string signStr = bcos::toHex(*sign);
+    std::string signStr = bcos::toHex(sign);
     // success
     {
         auto [result, recoverAdd] = bcos::rpc::CallValidator::verify(precompiled::SYS_CONFIG_NAME,
@@ -198,7 +198,7 @@ BOOST_AUTO_TEST_CASE(wasmSmTest)
 
     auto hash = hashImpl->hash(bcos::ref(input));
     auto sign = signatureImpl->sign(keyPair, hash, true);
-    std::string signStr = bcos::toHex(*sign);
+    std::string signStr = bcos::toHex(sign);
     // success
     {
         auto [result, recoverAdd] = bcos::rpc::CallValidator::verify(precompiled::SYS_CONFIG_NAME,

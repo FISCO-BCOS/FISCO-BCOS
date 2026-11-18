@@ -38,7 +38,7 @@ std::shared_ptr<bcos::bytes> Signature::sign(const bcos::crypto::KeyPairInterfac
     if (crypto_type == CryptoType::HsmSM2)
     {
         auto signatureImpl = std::make_shared<bcos::crypto::HsmSM2Crypto>(_hsmLibPath);
-        return signatureImpl->sign(_keyPair, _hash);
+        return std::make_shared<bcos::bytes>(signatureImpl->sign(_keyPair, _hash));
     }
     else
     {
@@ -53,7 +53,7 @@ bool Signature::verify(CryptoType _cryptoType, std::shared_ptr<bcos::bytes const
     if (_cryptoType == CryptoType::HsmSM2)
     {
         auto signatureImpl = std::make_shared<bcos::crypto::HsmSM2Crypto>(_hsmLibPath);
-        return signatureImpl->verify(_pubKeyBytes, _hash, _signatureData);
+        return signatureImpl->verify(bcos::ref(*_pubKeyBytes), _hash, _signatureData);
     }
     else
     {
@@ -68,7 +68,8 @@ bcos::crypto::PublicPtr Signature::recover(CryptoType _cryptoType,
     if (_cryptoType == CryptoType::HsmSM2)
     {
         auto signatureImpl = std::make_shared<bcos::crypto::HsmSM2Crypto>(_hsmLibPath);
-        return signatureImpl->recover(_hash, _signatureData);
+        return std::make_shared<bcos::crypto::KeyImpl>(
+            signatureImpl->recover(_hash, _signatureData));
     }
     else
     {
@@ -82,7 +83,7 @@ std::pair<bool, bcos::bytes> Signature::recoverAddress(CryptoType _cryptoType,
     if (_cryptoType == CryptoType::HsmSM2)
     {
         auto signatureImpl = std::make_shared<bcos::crypto::HsmSM2Crypto>(_hsmLibPath);
-        return signatureImpl->recoverAddress(_hashImpl, _in);
+        return signatureImpl->recoverAddress(*_hashImpl, _in);
     }
     else
     {

@@ -185,7 +185,7 @@ bool BlockValidator::checkSignatureList(Block::Ptr _block)
                             << LOG_KV("hash", blockHeader->hash().abridged());
         }
         if (!nodeInfo || !m_config->cryptoSuite()->signatureImpl()->verify(
-                             nodeInfo->nodeID, blockHeader->hash(), signatureData))
+                             *nodeInfo->nodeID, blockHeader->hash(), signatureData))
         {
             PBFT_LOG(ERROR) << LOG_DESC("checkBlock for sync module: checkSign failed")
                             << LOG_KV("sealerIdx", nodeIndex)

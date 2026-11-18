@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(testDropProposalWithInsufficientWeight)
 
     // Add only ONE valid sig proof (weight=1) while minRequiredQuorum for 4 nodes is 3.
     auto sigData = cryptoSuite->signatureImpl()->sign(*fakerMap[0]->keyPair(), blockHash);
-    proposal->appendSignatureProof(0, ref(*sigData));
+    proposal->appendSignatureProof(0, ref(sigData));
 
     auto responseMsg = std::make_shared<PBFTMessage>();
     responseMsg->setPacketType(PacketType::CommittedProposalResponse);
@@ -178,14 +178,14 @@ BOOST_AUTO_TEST_CASE(testDropProposalWithDuplicateSealerProofs)
     auto requiredQuorum = config->minRequiredQuorum();
     for (uint64_t i = 0; i < requiredQuorum + 1; i++)
     {
-        proposal->appendSignatureProof(0, ref(*sigData));
+        proposal->appendSignatureProof(0, ref(sigData));
     }
     BOOST_REQUIRE_GE(proposal->signatureProofSize(), requiredQuorum);
 
     // Sanity check: each individual proof is cryptographically valid against the chosen hash,
     // so weight inflation is the only thing standing between the attacker and quorum.
     BOOST_REQUIRE(cryptoSuite->signatureImpl()->verify(
-        fakerMap[0]->keyPair()->publicKey(), blockHash, ref(*sigData)));
+        *fakerMap[0]->keyPair()->publicKey(), blockHash, ref(sigData)));
 
     auto responseMsg = std::make_shared<PBFTMessage>();
     responseMsg->setPacketType(PacketType::CommittedProposalResponse);
@@ -227,7 +227,7 @@ BOOST_AUTO_TEST_CASE(testVerifyProposalQuorumSignaturesRejectsDuplicates)
     {
         auto sig = cryptoSuite->signatureImpl()->sign(
             *fakerMap[static_cast<size_t>(idx)]->keyPair(), blockHash);
-        goodProposal->appendSignatureProof(static_cast<int64_t>(idx), ref(*sig));
+        goodProposal->appendSignatureProof(static_cast<int64_t>(idx), ref(sig));
     }
     BOOST_CHECK(config->verifyProposalQuorumSignatures(goodProposal));
 
@@ -238,7 +238,7 @@ BOOST_AUTO_TEST_CASE(testVerifyProposalQuorumSignaturesRejectsDuplicates)
     auto sig0 = cryptoSuite->signatureImpl()->sign(*fakerMap[0]->keyPair(), blockHash);
     for (uint64_t i = 0; i < config->minRequiredQuorum(); i++)
     {
-        badProposal->appendSignatureProof(0, ref(*sig0));
+        badProposal->appendSignatureProof(0, ref(sig0));
     }
     BOOST_CHECK(!config->verifyProposalQuorumSignatures(badProposal));
 }

@@ -27,7 +27,7 @@ BOOST_AUTO_TEST_CASE(recoverAddressFromInputRejectsInvalid)
     SM2Crypto crypto;
     auto hashImpl = std::make_shared<Keccak256>();
     bcos::bytes input(160, 0);
-    auto [ok, addr] = crypto.recoverAddress(hashImpl, bcos::ref(input));
+    auto [ok, addr] = crypto.recoverAddress(*hashImpl, bcos::ref(input));
     BOOST_CHECK(!ok);
     BOOST_CHECK(addr.empty());
 }
@@ -41,37 +41,43 @@ BOOST_AUTO_TEST_CASE(recoverAddressFromInputRecovers)
     auto keyPair = crypto.generateKeyPair();
     auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
     auto sig = crypto.sign(*keyPair, hashData, false);
-    BOOST_REQUIRE_EQUAL(sig->size(), SM2_SIGNATURE_LEN);
+    BOOST_REQUIRE_EQUAL(sig.size(), SM2_SIGNATURE_LEN);
 
     bytes input;
     input.insert(input.end(), hashData.begin(), hashData.end());
     auto const& pub = *keyPair->publicKey();
     input.insert(input.end(), pub.constData(), pub.constData() + pub.size());
-    input.insert(input.end(), sig->begin(), sig->end());
+    input.insert(input.end(), sig.begin(), sig.end());
     BOOST_REQUIRE_EQUAL(input.size(), 32 + SM2_PUBLIC_KEY_LEN + SM2_SIGNATURE_LEN);
 
-    auto [ok, addr] = crypto.recoverAddress(hashImpl, bcos::ref(input));
+    auto [ok, addr] = crypto.recoverAddress(*hashImpl, bcos::ref(input));
     BOOST_CHECK(ok);
     BOOST_CHECK(addr == calculateAddress(hashImpl, keyPair->publicKey()).asBytes());
 }
 
-// truncated input: the zero-filled tail fails verification deterministically
+// A zero final signature byte would make truncation followed by zero-padding reproduce the
+// original valid signature, so choose a signature whose final byte changes on truncation.
 BOOST_AUTO_TEST_CASE(recoverAddressFromInputRejectsTruncated)
 {
     SM2Crypto crypto;
     auto hashImpl = std::make_shared<Keccak256>();
-    auto keyPair = crypto.generateKeyPair();
     auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
-    auto sig = crypto.sign(*keyPair, hashData, false);
+    decltype(crypto.generateKeyPair()) keyPair;
+    bytes sig;
+    do
+    {
+        keyPair = crypto.generateKeyPair();
+        sig = crypto.sign(*keyPair, hashData, false);
+    } while (sig.back() == 0);
 
     bytes input;
     input.insert(input.end(), hashData.begin(), hashData.end());
     auto const& pub = *keyPair->publicKey();
     input.insert(input.end(), pub.constData(), pub.constData() + pub.size());
-    input.insert(input.end(), sig->begin(), sig->end());
+    input.insert(input.end(), sig.begin(), sig.end());
     auto truncated = bytes(input.begin(), input.end() - 1);
 
-    auto [ok, addr] = crypto.recoverAddress(hashImpl, bcos::ref(truncated));
+    auto [ok, addr] = crypto.recoverAddress(*hashImpl, bcos::ref(truncated));
     BOOST_CHECK(!ok);
     BOOST_CHECK(addr.empty());
 }

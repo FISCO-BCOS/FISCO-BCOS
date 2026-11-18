@@ -10,6 +10,7 @@
 
 #include "NodeConfigLoaderProbe.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/testutils/LogCapture.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <fstream>
@@ -153,6 +154,24 @@ BOOST_AUTO_TEST_CASE(securityConfigHsmCloudKmsBcosKms)
     LoaderProbe bcoskmsBad;  // BCOSKMS without cipher_data_key → throws
     BOOST_CHECK_THROW(bcoskmsBad.loadSecurityConfig(fromIni("[security]\nkms_type=BCOSKMS\n")),
         bcos::tool::InvalidConfig);
+}
+
+BOOST_AUTO_TEST_CASE(securityConfigHsmDoesNotLogPassword)
+{
+    auto const password = std::string("node-config-hsm-secret");
+    auto const previousLogLevel = c_fileLogLevel.load();
+    LoaderProbe hsm;
+    setFileLogLevel(LogLevel::INFO);
+    LogCapture capture;
+    hsm.loadSecurityConfig(fromIni(
+        "[security]\nkms_type=HSM\nkey_index=1\nhsm_lib_path=/tmp/x.so\npassword=" + password +
+        "\n"));
+    auto const text = capture.text();
+    setFileLogLevel(previousLogLevel);
+
+    BOOST_CHECK(text.find("loadSecurityConfig HSM") != std::string::npos);
+    BOOST_CHECK(text.find(password) == std::string::npos);
+    BOOST_CHECK(text.find("password") == std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

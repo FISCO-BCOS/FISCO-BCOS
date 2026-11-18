@@ -35,7 +35,7 @@ PublicPtr bcos::crypto::sm2PriToPub(SecretPtr _secretKey)
     return c_sm2KeyPair.priToPub(_secretKey);
 }
 
-std::shared_ptr<bytes> bcos::crypto::sm2Sign(
+bytes bcos::crypto::sm2Sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub)
 {
     return c_sm2Crypto.sign(_keyPair, _hash, _signatureWithPub);
@@ -46,17 +46,18 @@ KeyPairInterface::UniquePtr bcos::crypto::sm2GenerateKeyPair()
     return c_sm2Crypto.generateKeyPair();
 }
 
-bool bcos::crypto::sm2Verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData)
+bool bcos::crypto::sm2Verify(
+    const Public& _pubKey, const HashType& _hash, bytesConstRef _signatureData)
 {
     return c_sm2Crypto.verify(_pubKey, _hash, _signatureData);
 }
 
-PublicPtr bcos::crypto::sm2Recover(const HashType& _hash, bytesConstRef _signData)
+KeyImpl bcos::crypto::sm2Recover(const HashType& _hash, bytesConstRef _signData)
 {
     return c_sm2Crypto.recover(_hash, _signData);
 }
 
-std::pair<bool, bytes> bcos::crypto::sm2Recover(Hash::Ptr _hashImpl, bytesConstRef _input)
+std::pair<bool, bytes> bcos::crypto::sm2Recover(Hash& _hashImpl, bytesConstRef _input)
 {
     return c_sm2Crypto.recoverAddress(_hashImpl, _input);
 }

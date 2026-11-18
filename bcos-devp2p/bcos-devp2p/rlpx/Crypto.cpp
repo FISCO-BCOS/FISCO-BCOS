@@ -273,11 +273,11 @@ bcos::bytes signRecoverable(bytesConstRef _hash, bytesConstRef _privateKey)
     bcos::crypto::Secp256k1KeyPair keyPair(secret);
     bcos::crypto::HashType hash(bytesConstRef(_hash.data(), 32));
     auto signature = bcos::crypto::secp256k1Sign(keyPair, hash);
-    if (signature == nullptr || signature->size() != 65)
+    if (signature.size() != 65)
     {
         throw std::runtime_error("signRecoverable: signing failed");
     }
-    return *signature;
+    return signature;
 }
 
 PublicKey recoverPublicKey(bytesConstRef _hash, bytesConstRef _signature)
@@ -288,11 +288,11 @@ PublicKey recoverPublicKey(bytesConstRef _hash, bytesConstRef _signature)
     }
     bcos::crypto::HashType hash(bytesConstRef(_hash.data(), 32));
     auto publicKey = bcos::crypto::secp256k1Recover(hash, _signature);
-    if (publicKey == nullptr || publicKey->size() != 64)
+    if (publicKey.size() != 64)
     {
         throw std::runtime_error("recoverPublicKey: recovery failed");
     }
-    auto const& data = publicKey->data();
+    auto const& data = publicKey.data();
     return bcos::bytes(data.begin(), data.end());
 }
 

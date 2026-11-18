@@ -24,6 +24,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/LogStream.h>
 #include <memory>
+#include <utility>
 namespace bcos
 {
 namespace crypto
@@ -49,7 +50,7 @@ public:
 
     KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) override
     {
-        return std::make_unique<HsmSM2KeyPair>(m_hsmLibPath, _secretKey);
+        return std::make_unique<HsmSM2KeyPair>(m_hsmLibPath, std::move(_secretKey));
     }
 
     KeyPairInterface::UniquePtr generateKeyPair() override
