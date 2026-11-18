@@ -565,7 +565,11 @@ gen_sm_node_cert() {
     gen_sm_node_cert_with_ext "$capath" "$ndpath" "${type}" v3_req
     gen_sm_node_cert_with_ext "$capath" "$ndpath" "en${type}" v3enc_req
     #nodeid is pubkey
-    $OPENSSL_CMD ec -in "$ndpath/sm_${type}.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "${ndpath}/sm_${type}.nodeid"
+    local sm_nodeid
+    if ! sm_nodeid=$(extract_public_key_hex "$ndpath/sm_${type}.key"); then
+        LOG_FATAL "Failed to read node id from $ndpath/sm_${type}.key with ${OPENSSL_CMD}"
+    fi
+    printf '%s' "${sm_nodeid}" > "${ndpath}/sm_${type}.nodeid"
     cp "$capath/sm_ca.crt" "$ndpath"
 }
 
@@ -1742,8 +1746,11 @@ generate_secp256k1_node_account() {
         fi
         ${OPENSSL_CMD} genpkey -paramfile /tmp/secp256k1.param -out ${output_path}/node.pem 2>/dev/null
         # generate nodeid
-        ${OPENSSL_CMD} ec -text -noout -in "${output_path}/node.pem" 2>/dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$output_path"/node.nodeid
-        local node_id=$(cat "${output_path}/node.nodeid")
+        local node_id
+        if ! node_id=$(extract_public_key_hex "${output_path}/node.pem"); then
+            LOG_FATAL "Failed to read node id from ${output_path}/node.pem with ${OPENSSL_CMD}"
+        fi
+        printf '%s' "${node_id}" >"${output_path}"/node.nodeid
         nodeid_list=$"${nodeid_list}node.${node_index}=${node_id}: 1
         "
     fi
@@ -1767,8 +1774,11 @@ generate_sm_node_account() {
             generate_sm_sm2_param ${sm2_params}
         fi
         ${OPENSSL_CMD} genpkey -paramfile ${sm2_params} -out ${output_path}/node.pem 2>/dev/null
-        $OPENSSL_CMD ec -in "$output_path/node.pem" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$output_path/node.nodeid"
-        local node_id=$(cat "${output_path}/node.nodeid")
+        local node_id
+        if ! node_id=$(extract_public_key_hex "$output_path/node.pem"); then
+            LOG_FATAL "Failed to read node id from $output_path/node.pem with ${OPENSSL_CMD}"
+        fi
+        printf '%s' "${node_id}" > "$output_path/node.nodeid"
         nodeid_list=$"${nodeid_list}node.${node_index}=${node_id}:1
         "
     fi
@@ -1883,6 +1893,34 @@ check_openssl(){
             exit 1
         fi
     fi
+}
+
+# extract_public_key_hex <pem file>: print the 64-byte public key of the EC/SM2 key in <pem> as
+# 128 lowercase hex characters, with the uncompressed-point 0x04 prefix removed. Returns 1 (and
+# prints nothing) when the file does not yield a public key, so callers name their own context.
+#
+# Parsed by CONTENT, never by line number. `openssl ec -text` wraps its hex at a fixed number of
+# bytes per line, and that number changed between releases: LibreSSL, OpenSSL 1.1.1 and 3.x wrap
+# at 15 (priv is 3 lines, the pub hex lands on lines 7-11), OpenSSL 4.0 wraps at 16 (priv is 2
+# lines, everything shifts up by one). The `sed -n '7,11p'` this replaces was written against the
+# 15-byte layout, so on OpenSSL 4.0 it collected four pub lines plus "ASN1 OID: secp256k1" and
+# missed the line carrying the 0x04 prefix: the node id came out as 96 hex characters followed
+# by ASN1OIDsecp256k1, and the node rejected it at startup (BadHexCharacter in fromHex) before
+# printing its readiness line -- which the CI saw as a chain that never started.
+extract_public_key_hex()
+{
+    local pem_file="${1}"
+    local hex
+    hex=$("${OPENSSL_CMD}" ec -in "${pem_file}" -text -noout 2>/dev/null | awk '
+        /^pub:/ { in_pub = 1; next }
+        /^[^[:space:]]/ { in_pub = 0 }
+        in_pub && /^[[:space:]]*[0-9a-fA-F][0-9a-fA-F]/ { print }
+    ' | tr -d '[:space:]:')
+    # an uncompressed point is 1 + 64 bytes, i.e. 130 hex characters including the 0x04 prefix
+    if ! [[ ${hex} =~ ^04[0-9a-fA-F]{128}$ ]]; then
+        return 1
+    fi
+    printf '%s' "${hex#04}"
 }
 
 generate_node_account()
@@ -2321,8 +2359,9 @@ generate_nodeids_from_path()
     fi
     local nodeid=""
     if [ "${file_type}" == "pem" ]; then
-        ${OPENSSL_CMD} ec -text -noout -in "${node_key_dir}/${node_key_file_array[${file_index}]}" 2>/dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$node_key_dir"/node.nodeid
-        nodeid=$(cat "${node_key_dir}/node.nodeid")
+        if ! nodeid=$(extract_public_key_hex "${node_key_dir}/${node_key_file_array[${file_index}]}"); then
+            LOG_FATAL "Failed to read node id from ${node_key_dir}/${node_key_file_array[${file_index}]} with ${OPENSSL_CMD}"
+        fi
         cp -f "${node_key_dir}/${node_key_file_array[${file_index}]}" "${output_dir}/node.pem"
         rm -f "${node_key_dir}/node.nodeid"
     elif [ "${file_type}" == "nodeid" ]; then
@@ -2417,8 +2456,7 @@ generate_auth_account_with_openssl()
   local key_file="${account_target}/ecprivkey.pem"
   "${OPENSSL_CMD}" genpkey -paramfile "${param_file}" -out "${key_file}" 2>/dev/null
   local pub_hex
-  pub_hex=$("${OPENSSL_CMD}" ec -in "${key_file}" -text -noout 2>/dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}')
-  if ! [[ ${pub_hex} =~ ^[0-9a-fA-F]{128}$ ]]; then
+  if ! pub_hex=$(extract_public_key_hex "${key_file}"); then
       LOG_FATAL "Failed to read the public key of the admin account with OpenSSL"
   fi
   # The address is the digest of the 64 raw public-key BYTES (what `fisco-bcos account new` and the
