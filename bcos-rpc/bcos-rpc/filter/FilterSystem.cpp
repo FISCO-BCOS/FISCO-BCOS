@@ -338,8 +338,7 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
             }
             FILTER_LOG(WARNING) << LOG_BADGE("getLogsImpl") << LOG_DESC("block hash changed")
                                 << LOG_KV("requestedHash", requestedHash.hex())
-                                << LOG_KV("blockNumber", blockNumber)
-                                << LOG_KV("attempt", attempt);
+                                << LOG_KV("blockNumber", blockNumber) << LOG_KV("attempt", attempt);
             block = nullptr;
         }
         if (block == nullptr)
@@ -354,9 +353,8 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         // Same response ceiling as the range branch. Selecting a dense block by hash would
         // otherwise bypass the cap that rejects it when selected by height, making the advertised
         // one-shot bound depend on which selector the caller happened to use.
-        requireWithinLogBudget(
-            matcher->matches(params, block, jArray, MAX_RETURNED_LOGS_PER_QUERY), blockNumber,
-            blockNumber);
+        requireWithinLogBudget(matcher->matches(params, block, jArray, MAX_RETURNED_LOGS_PER_QUERY),
+            blockNumber, blockNumber);
         co_return jArray;
     }
     else

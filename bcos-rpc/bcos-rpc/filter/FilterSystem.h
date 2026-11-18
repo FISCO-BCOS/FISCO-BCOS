@@ -152,8 +152,8 @@ protected:
 
     /// Throw when a one-shot match stopped on the response ceiling. Shared by the blockHash and
     /// the range branches so the ceiling cannot depend on the request selector.
-    void requireWithinLogBudget(LogMatcher::BlockMatchOutcome const& outcome, int64_t fromBlock,
-        int64_t toBlock);
+    void requireWithinLogBudget(
+        LogMatcher::BlockMatchOutcome const& outcome, int64_t fromBlock, int64_t toBlock);
 
     virtual int32_t InvalidParamsCode() = 0;
     uint64_t insertFilter(Filter::Ptr filter);

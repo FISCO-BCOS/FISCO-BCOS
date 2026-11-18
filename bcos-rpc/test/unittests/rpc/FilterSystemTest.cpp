@@ -558,8 +558,7 @@ BOOST_AUTO_TEST_CASE(blockHashReorgBetweenLookupAndReadFailsClosed)
     BOOST_TEST(currentLogs.isArray());
 
     // The stale mapping must not answer with the logs of the block that replaced it.
-    BOOST_CHECK_THROW(
-        task::syncWait(filterSystem->getLogs(blockHashRequest(staleHash))),
+    BOOST_CHECK_THROW(task::syncWait(filterSystem->getLogs(blockHashRequest(staleHash))),
         bcos::rpc::JsonRpcException);
 }
 
@@ -579,9 +578,8 @@ BOOST_AUTO_TEST_CASE(filterRequestRejectsEmptyBlockHash)
     for (char const* key : {"blockHash", "blockhash"})
     {
         auto request = std::make_shared<Web3FilterRequest>();
-        BOOST_CHECK_THROW(
-            request->fromJson(parse(std::string("{\"") + key + "\":\"\"}"), 100, 1, 2,
-                std::nullopt, std::nullopt, false),
+        BOOST_CHECK_THROW(request->fromJson(parse(std::string("{\"") + key + "\":\"\"}"), 100, 1, 2,
+                              std::nullopt, std::nullopt, false),
             bcos::rpc::JsonRpcException);
     }
 
@@ -642,8 +640,7 @@ BOOST_AUTO_TEST_CASE(getLogsRefusesMoreLogsThanTheResponseCap)
         R"({"fromBlock":")" + blockTag + R"(","toBlock":")" + blockTag + R"("})";
 
     // Every log matches (no criteria) and there is one more than the cap allows.
-    BOOST_CHECK_THROW(
-        task::syncWait(filterSystem->getLogs(parseRequest(rangeOfThatBlock))),
+    BOOST_CHECK_THROW(task::syncWait(filterSystem->getLogs(parseRequest(rangeOfThatBlock))),
         bcos::rpc::JsonRpcException);
 
     // The ceiling must not depend on the selector: the same dense block selected by hash has to
@@ -656,16 +653,16 @@ BOOST_AUTO_TEST_CASE(getLogsRefusesMoreLogsThanTheResponseCap)
 
     // Control: an address that matches nothing answers an empty array -- the cap is a ceiling on
     // the result, not a refusal of the range.
-    auto const noMatch = task::syncWait(filterSystem->getLogs(parseRequest(
-        R"({"fromBlock":")" + blockTag + R"(","toBlock":")" + blockTag +
-        R"(","address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
+    auto const noMatch = task::syncWait(filterSystem->getLogs(
+        parseRequest(R"({"fromBlock":")" + blockTag + R"(","toBlock":")" + blockTag +
+                     R"(","address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
     BOOST_CHECK(noMatch.empty());
 
     // Same control through the hash branch, so the shared path is exercised on the allow side
     // as well: an unmatched address must answer empty, not throw.
-    auto const noMatchByHash = task::syncWait(filterSystem->getLogs(parseRequest(
-        R"({"blockHash":")" + blockHashOfThatBlock.hexPrefixed() +
-        R"(","address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
+    auto const noMatchByHash = task::syncWait(filterSystem->getLogs(
+        parseRequest(R"({"blockHash":")" + blockHashOfThatBlock.hexPrefixed() +
+                     R"(","address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
     BOOST_CHECK(noMatchByHash.empty());
 }
 
@@ -705,8 +702,8 @@ BOOST_AUTO_TEST_CASE(logMatcherStopsAtTheBudgetBeforeAppending)
     Json::Value params;
     BOOST_REQUIRE(reader.parse(R"({})", params));
     auto request = std::make_shared<Web3FilterRequest>();
-    request->fromJson(params, number, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt,
-        std::nullopt, false);
+    request->fromJson(
+        params, number, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
 
     Json::Value result(Json::arrayValue);
     auto const outcome = filterSystem->matcher()->matches(request, block, result, kBudget);
