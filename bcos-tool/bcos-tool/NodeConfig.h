@@ -62,6 +62,7 @@ struct EngineRpcConfig
     int32_t clockSkewSecs = 60;
     bool enableMinerApi = false;
     bool enableDebugApi = false;
+    bool enableTraceApi = false;
 };
 
 class NodeConfig
@@ -276,6 +277,9 @@ public:
     // enable_debug_api); neither reaches the other port.
     bool engineApiDebugApi() const;
     bool enableDebugApi() const;
+    // Read-only call tracing over retained state; no archive requirement, per listener.
+    bool engineApiTraceApi() const;
+    bool enableTraceApi() const;
 
     // The DebugSelfProduce driver's block parameters, from the hidden [debug] section:
     // block_interval (ms, default 1000), produce_empty_blocks (default true), fee_recipient
@@ -661,6 +665,7 @@ private:
     // config for the Engine API listener ([engine_rpc])
     bool m_enableMinerApi = false;
     bool m_enableDebugApi = false;
+    bool m_enableTraceApi = false;
     EngineRpcConfig m_engineRpc;
 
     // config for the hidden [debug] section (blockDriver() and the DebugSelfProduce driver)

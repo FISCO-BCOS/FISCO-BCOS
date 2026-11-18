@@ -1,4 +1,5 @@
 #pragma once
+#include <condition_variable>
 
 // Declaration-only header for BaselineScheduler: member definitions live in
 // BaselineScheduler-tpp.h so that translation units which only use the class through
@@ -51,6 +52,7 @@ class Hash;
 
 namespace bcos::scheduler_v1
 {
+struct EvmcForkTimestamps;
 #define BASELINE_SCHEDULER_LOG(LEVEL) \
     BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
@@ -171,6 +173,13 @@ private:
     /// executor_version=2 only (setEvmcRevisionSchedule): the dry-run calls stamp the revision
     /// of the block they execute on from it. Empty on every other lane.
     ledger::EvmcRevisionSchedule m_evmcRevisionSchedule;
+    std::shared_ptr<EvmcForkTimestamps const> m_traceForks;
+    uint64_t m_traceChainId = 0;
+    inline static std::atomic<unsigned> s_activeTraces{0};
+    std::mutex m_traceMutex;
+    std::condition_variable m_traceDrained;
+    unsigned m_activeTraceCount = 0;
+    bool m_traceStopping = false;
 
     /// Stamp the EVM revision of @p blockHeader onto @p ledgerConfig when an
     /// m_evmcRevisionSchedule is set (header timestamp in milliseconds, as the v2 lane stores
@@ -334,6 +343,9 @@ public:
     /// eth_estimateGas) execute with the EVM revision this schedule assigns to the block they
     /// run on, since the lane records no evmc_revision row. Call at wiring time.
     void setEvmcRevisionSchedule(ledger::EvmcRevisionSchedule schedule);
+    void setTraceForkSchedule(EvmcForkTimestamps const& schedule, uint64_t chainId);
+    void traceTransaction(crypto::HashType const& hash, scheduler::TraceOptions options,
+        std::function<void(Error::Ptr, std::shared_ptr<scheduler::CallTrace>)> callback) override;
 
 
     /// Restore the no-op observer. stop() calls this under a BLOCKING m_commitMutex lock, so it

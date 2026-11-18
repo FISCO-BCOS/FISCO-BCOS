@@ -73,6 +73,12 @@ void bcos::scheduler_v1::MultiVersionScheduler::call(protocol::Transaction::Ptr 
     auto& scheduler = getScheduler();
     scheduler.call(std::move(transaction), std::move(callback));
 }
+void bcos::scheduler_v1::MultiVersionScheduler::traceTransaction(crypto::HashType const& hash,
+    scheduler::TraceOptions options,
+    std::function<void(Error::Ptr, std::shared_ptr<scheduler::CallTrace>)> callback)
+{
+    getScheduler().traceTransaction(hash, options, std::move(callback));
+}
 void bcos::scheduler_v1::MultiVersionScheduler::callAtBlock(protocol::Transaction::Ptr transaction,
     protocol::BlockNumber blockNumber,
     std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)

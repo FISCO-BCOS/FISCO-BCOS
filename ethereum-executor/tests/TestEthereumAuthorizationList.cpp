@@ -19,8 +19,10 @@
 #include "ethereum-executor/EthereumTransition.h"
 #include "ethereum-executor/tests/TestMemoryStorage.h"
 
+#include <evmone/evmone.h>
 #include <algorithm>
 #include <evmc/evmc.hpp>
+#include <evmone/vm.hpp>
 
 using namespace bcos;
 using namespace bcos::executor_v1;
@@ -112,4 +114,247 @@ BOOST_AUTO_TEST_CASE(AuthorizationForAnotherChainIsSkipped)
     }
 }
 
+BOOST_AUTO_TEST_SUITE_END()
+
+namespace
+{
+struct TraceFixture
+{
+    MutableStorage storage;
+    eth::EthereumState<MutableStorage> state{storage};
+    evmc::VM vm{evmc_create_evmone()};
+    eth::EthBlockInfo block{};
+    eth::EthL1Policy policy;
+    eth::EthereumCallTracer* tracer;
+    static constexpr auto sender = 0xaa_address;
+    static constexpr auto target = 0xbb_address;
+    TraceFixture(bool onlyTop = false, std::chrono::milliseconds timeout = std::chrono::seconds(5))
+    {
+        auto owned =
+            std::make_unique<eth::EthereumCallTracer>(scheduler::TraceOptions{timeout, onlyTop});
+        tracer = owned.get();
+        tracer->setRecording(true);
+        static_cast<evmone::VM*>(vm.get_raw_pointer())->add_tracer(std::move(owned));
+        state.get_or_insert(sender).nonce = 1;
+        block.gas_limit = 30000000;
+    }
+    void code(evmc::address address, std::initializer_list<uint8_t> bytes)
+    {
+        auto& account = state.get_or_insert(address);
+        account.code = {bytes.begin(), bytes.size()};
+        account.code_hash = eth::evm::keccak256(account.code);
+    }
+    evmc::Result call(
+        int64_t gas = 1000000, bool create = false, evmc::bytes_view input = {}, int depth = 0)
+    {
+        eth::EthereumHost<MutableStorage> host{
+            EVMC_CANCUN, vm, state, block, {}, std::nullopt, {}, 1, policy, tracer};
+        evmc_message msg{};
+        msg.kind = create ? EVMC_CREATE : EVMC_CALL;
+        msg.sender = sender;
+        if (!create)
+            msg.recipient = msg.code_address = target;
+        msg.depth = depth;
+        msg.gas = gas;
+        msg.input_data = input.data();
+        msg.input_size = input.size();
+        return host.call(msg);
+    }
+};
+}  // namespace
+
+BOOST_AUTO_TEST_SUITE(EthereumCallTracerTest)
+BOOST_AUTO_TEST_CASE(ChildRevertPreservesSuccessfulParentAndOnlyTopCall)
+{
+    for (bool onlyTop : {false, true})
+    {
+        TraceFixture f(onlyTop);
+        f.code(TraceFixture::target,
+            {0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0xcc, 0x61, 0xff, 0xff, 0xf1, 0});
+        f.code(0xcc_address, {0x60, 0, 0x60, 0, 0xfd});
+        auto result = f.call();
+        f.tracer->check();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+        auto root = f.tracer->result();
+        BOOST_REQUIRE(root);
+        BOOST_CHECK_EQUAL(root->type, "CALL");
+        BOOST_CHECK(root->error.empty());
+        BOOST_REQUIRE_EQUAL(root->calls.size(), onlyTop ? 0u : 1u);
+        if (!onlyTop)
+            BOOST_CHECK_EQUAL(root->calls.front()->error, "execution reverted");
+    }
+}
+BOOST_AUTO_TEST_CASE(CallWithinStaticCallKeepsActualOpcodeType)
+{
+    TraceFixture f;
+    f.code(TraceFixture::target,
+        {0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0xcc, 0x61, 0xff, 0xff, 0xfa, 0});
+    f.code(0xcc_address,
+        {0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0xdd, 0x61, 0xff, 0xff, 0xf1, 0});
+    f.code(0xdd_address, {0});
+    auto result = f.call();
+    f.tracer->check();
+    BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+    auto root = f.tracer->result();
+    BOOST_REQUIRE_EQUAL(root->calls.size(), 1u);
+    auto child = root->calls.front();
+    BOOST_CHECK_EQUAL(child->type, "STATICCALL");
+    BOOST_REQUIRE_EQUAL(child->calls.size(), 1u);
+    BOOST_CHECK_EQUAL(child->calls.front()->type, "CALL");
+}
+BOOST_AUTO_TEST_CASE(CreatePreservesRuntimeOutput)
+{
+    TraceFixture f;
+    const uint8_t init[] = {0x60, 1, 0x60, 0, 0xf3};
+    auto result = f.call(1000000, true, {init, sizeof(init)});
+    f.tracer->check();
+    BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(f.tracer->result()->output, "0x00");
+    BOOST_CHECK(!f.tracer->result()->to.empty());
+}
+BOOST_AUTO_TEST_CASE(CreateEmptyRuntimeOmitsOutput)
+{
+    TraceFixture f;
+    const uint8_t init[] = {0x00};
+    auto result = f.call(1000000, true, {init, sizeof(init)});
+    f.tracer->check();
+    BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+    BOOST_CHECK(f.tracer->result()->output.empty());
+}
+BOOST_AUTO_TEST_CASE(InsufficientBalanceChildIsRecorded)
+{
+    TraceFixture f;
+    f.code(TraceFixture::target,
+        {0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0, 0x60, 1, 0x60, 0xcc, 0x61, 0xff, 0xff, 0xf1, 0});
+    auto result = f.call();
+    f.tracer->check();
+    BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+    auto root = f.tracer->result();
+    BOOST_REQUIRE_EQUAL(root->calls.size(), 1u);
+    BOOST_CHECK_EQUAL(root->calls.front()->error, "insufficient balance for transfer");
+    BOOST_CHECK_EQUAL(root->calls.front()->gasUsed, "0x0");
+}
+BOOST_AUTO_TEST_CASE(PrecompileFailureRetainsValidatorReason)
+{
+    TraceFixture f;
+    f.code(TraceFixture::target,
+        {0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0, 0x60, 9, 0x61, 0xff, 0xff, 0xf1, 0});
+    auto result = f.call();
+    f.tracer->check();
+    BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+    auto root = f.tracer->result();
+    BOOST_REQUIRE_EQUAL(root->calls.size(), 1u);
+    BOOST_CHECK_EQUAL(root->calls.front()->error, "invalid input length");
+}
+BOOST_AUTO_TEST_CASE(MalformedBlsInputChecksGasBeforeErrorReason)
+{
+    evmc_message message{};
+    message.kind = EVMC_CALL;
+    message.code_address = 0x0f_address;
+    std::string_view reason;
+    message.gas = 37699;
+    auto underfunded = eth::evm::call_precompile(EVMC_PRAGUE, message, &reason);
+    BOOST_CHECK_EQUAL(underfunded.status_code, EVMC_OUT_OF_GAS);
+    BOOST_CHECK(reason.empty());
+    message.gas = 37700;
+    auto malformed = eth::evm::call_precompile(EVMC_PRAGUE, message, &reason);
+    BOOST_CHECK_EQUAL(malformed.status_code, EVMC_OUT_OF_GAS);
+    BOOST_CHECK_EQUAL(reason, "invalid input length");
+}
+BOOST_AUTO_TEST_CASE(DepthFailureTakesPrecedenceOverInsufficientBalance)
+{
+    TraceFixture f;
+    f.code(TraceFixture::target,
+        {0x60, 0, 0x60, 0, 0x60, 0, 0x60, 0, 0x60, 1, 0x60, 0xcc, 0x61, 0xff, 0xff, 0xf1, 0});
+    auto result = f.call(1000000, false, {}, 1024);
+    f.tracer->check();
+    BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+    auto root = f.tracer->result();
+    BOOST_REQUIRE_EQUAL(root->calls.size(), 1u);
+    BOOST_CHECK_EQUAL(root->calls.front()->error, "max call depth exceeded");
+}
+BOOST_AUTO_TEST_CASE(CryptoValidatorsExposeNativeFailureReason)
+{
+    const auto invoke = [](uint8_t address, bcos::bytes input) {
+        evmc_message message{};
+        message.kind = EVMC_CALL;
+        message.code_address.bytes[19] = address;
+        message.input_data = input.data();
+        message.input_size = input.size();
+        message.gas = 1000000;
+        std::string_view error;
+        auto result = eth::evm::call_precompile(EVMC_PRAGUE, message, &error);
+        BOOST_CHECK_NE(result.status_code, EVMC_SUCCESS);
+        return std::string(error);
+    };
+    BOOST_CHECK_EQUAL(invoke(10, bcos::bytes(192, 0)), "mismatched versioned hash");
+    auto field = bcos::bytes(64, 0xff);
+    BOOST_CHECK_EQUAL(invoke(6, field), "invalid fp.Element encoding");
+    auto curve = bcos::bytes(64, 0);
+    curve[31] = curve[63] = 1;
+    BOOST_CHECK_EQUAL(invoke(6, curve), "point is not on curve");
+    auto bls = bcos::bytes(256, 0);
+    bls[63] = bls[127] = 1;
+    BOOST_CHECK_EQUAL(invoke(11, bls), "invalid point: not on curve");
+    bls[0] = 1;
+    BOOST_CHECK_EQUAL(invoke(11, bls), "invalid field element top bytes");
+}
+BOOST_AUTO_TEST_CASE(ModexpLengthRejectionChecksNominalGasFirst)
+{
+    bcos::bytes input(96, 0);
+    input[30] = 4;
+    input[31] = 1;
+    input[63] = 1;
+    input[95] = 1;
+    evmc_message message{};
+    message.kind = EVMC_CALL;
+    message.code_address = 0x05_address;
+    message.input_data = input.data();
+    message.input_size = input.size();
+    std::string_view error;
+    message.gas = 33281;
+    auto low = eth::evm::call_precompile(EVMC_OSAKA, message, &error);
+    BOOST_CHECK_EQUAL(low.status_code, EVMC_OUT_OF_GAS);
+    BOOST_CHECK(error.empty());
+    message.gas = 33282;
+    auto sufficient = eth::evm::call_precompile(EVMC_OSAKA, message, &error);
+    BOOST_CHECK_EQUAL(sufficient.status_code, EVMC_OUT_OF_GAS);
+    BOOST_CHECK_EQUAL(error, "one or more of base/exponent/modulus length exceeded 1024 bytes");
+    input[31] = 0;
+    message.gas = 1000000;
+    auto valid = eth::evm::call_precompile(EVMC_OSAKA, message, &error);
+    BOOST_CHECK_EQUAL(valid.status_code, EVMC_SUCCESS);
+    BOOST_CHECK(error.empty());
+}
+BOOST_AUTO_TEST_CASE(TimeoutInterruptsLoopWithoutHostCalls)
+{
+    TraceFixture f(false, std::chrono::milliseconds(1));
+    f.code(TraceFixture::target, {0x5b, 0x60, 0, 0x56});
+    auto started = std::chrono::steady_clock::now();
+    auto result = f.call(std::numeric_limits<int64_t>::max());
+    BOOST_CHECK_NE(result.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_EXCEPTION(f.tracer->check(), std::runtime_error,
+        [](auto const& error) { return std::string_view(error.what()) == "execution timeout"; });
+    BOOST_CHECK(std::chrono::steady_clock::now() - started < std::chrono::seconds(1));
+}
+BOOST_AUTO_TEST_CASE(OutputAndFrameBudgetsFailClosed)
+{
+    eth::EthereumCallTracer tracer({});
+    tracer.setRecording(true);
+    evmc_message msg{};
+    msg.input_size = eth::EthereumCallTracer::maxBytes;
+    tracer.enter(msg);
+    BOOST_CHECK_THROW(tracer.check(), std::runtime_error);
+    eth::EthereumCallTracer frames({});
+    frames.setRecording(true);
+    msg.input_size = 0;
+    frames.enter(msg);
+    evmc_result success{};
+    for (size_t i = 0; i < eth::EthereumCallTracer::maxFrames; ++i)
+    {
+        frames.enter(msg);
+        frames.exit(msg, success);
+    }
+    BOOST_CHECK_THROW(frames.check(), std::runtime_error);
+}
 BOOST_AUTO_TEST_SUITE_END()

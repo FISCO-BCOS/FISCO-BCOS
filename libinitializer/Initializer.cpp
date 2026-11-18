@@ -532,7 +532,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, m_mptCommitObserver, blockDriver == bcos::tool::BlockDriver::PBFT,
-                evmcRevisionSchedule);
+                evmcRevisionSchedule,
+                m_nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION ?
+                    std::make_shared<scheduler_v1::EvmcForkTimestamps const>(
+                        EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig)) :
+                    nullptr,
+                m_nodeConfig->ethereumChainId());
         // Engine-driven modes on the v2 EthereumExecutor: build the Engine API service wired
         // to the ethereum scheduler + EthereumExecutor so blocks are built with
         // Ethereum-compliant semantics. It is built when something drives it: the
@@ -606,7 +611,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, m_mptCommitObserver, blockDriver == bcos::tool::BlockDriver::PBFT,
-                evmcRevisionSchedule);
+                evmcRevisionSchedule,
+                m_nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION ?
+                    std::make_shared<scheduler_v1::EvmcForkTimestamps const>(
+                        EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig)) :
+                    nullptr,
+                m_nodeConfig->ethereumChainId());
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above.
         if (!engineApiForV1Only && !opStackMode &&

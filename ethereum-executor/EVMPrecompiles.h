@@ -22,6 +22,7 @@
 /// `evm-precompiles` library (see CMakeLists.txt).
 
 #pragma once
+#include <string_view>
 
 #include <cstddef>
 #include <cstdint>
@@ -57,12 +58,17 @@ struct ExecutionResult
 {
     evmc_status_code status_code;
     size_t output_size;
+    std::string_view error = {};
 };
 
 struct PrecompileAnalysis
 {
     int64_t gas_cost;
     size_t max_output_size;
+    std::string_view error = {};
+    // The reference client charges this before validating a malformed input.
+    // gas_cost remains GasCostMax on legacy rejection paths (consensus unchanged).
+    int64_t error_gas = 0;
 };
 
 PrecompileAnalysis ecrecover_analyze(evmc::bytes_view input, evmc_revision rev) noexcept;
@@ -127,6 +133,7 @@ bool is_precompile(evmc_revision rev, const evmc::address& addr) noexcept;
 
 /// Executes the message to a precompiled contract (msg.code_address must be a
 /// precompile; ported evmone call_precompile).
-evmc::Result call_precompile(evmc_revision rev, const evmc_message& msg) noexcept;
+evmc::Result call_precompile(
+    evmc_revision rev, const evmc_message& msg, std::string_view* error = nullptr) noexcept;
 
 }  // namespace bcos::executor_v1::eth::evm

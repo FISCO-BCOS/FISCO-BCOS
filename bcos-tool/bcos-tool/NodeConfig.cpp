@@ -1268,6 +1268,9 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; game's challenge window would answer an indistinguishable -32000. The node refuses to
         ; boot otherwise, and archive mode means MPT disk growth is unbounded — size for it.
         ; enable_debug_api=false
+        ; L1 callTracer uses retained historical state and does not require archive storage.
+        ; It is independent of enable_debug_api and only applies to this listener.
+        ; enable_trace_api=false
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
@@ -1316,6 +1319,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     // Default off: the debug namespace serves the fault-proof preimage oracle, not general
     // clients — expose it only on a listener that opts in (see the [web3_rpc] doc block).
     m_enableDebugApi = _pt.get<bool>("web3_rpc.enable_debug_api", false);
+    m_enableTraceApi = _pt.get<bool>("web3_rpc.enable_trace_api", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
@@ -1364,6 +1368,9 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; storage.mpt_prune_window=-1 (archive), for the same reason as [web3_rpc]
         ; enable_debug_api above.
         ; enable_debug_api=false
+        ; L1 callTracer uses retained historical state and does not require archive storage.
+        ; It is independent of enable_debug_api and only applies to this listener.
+        ; enable_trace_api=false
     */
     m_engineRpc.listenIP = _pt.get<std::string>("engine_rpc.listen_ip", "127.0.0.1");
     m_engineRpc.listenPort = _pt.get<int>("engine_rpc.listen_port", 8551);
@@ -1374,6 +1381,7 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
     m_engineRpc.clockSkewSecs = _pt.get<int32_t>("engine_rpc.clock_skew_secs", 60);
     m_engineRpc.enableMinerApi = _pt.get<bool>("engine_rpc.enable_miner_api", false);
     m_engineRpc.enableDebugApi = _pt.get<bool>("engine_rpc.enable_debug_api", false);
+    m_engineRpc.enableTraceApi = _pt.get<bool>("engine_rpc.enable_trace_api", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadEngineRpcConfig")
                          << LOG_KV("listenIP", m_engineRpc.listenIP)
@@ -3384,6 +3392,16 @@ bool NodeConfig::engineApiDebugApi() const
 bool NodeConfig::enableDebugApi() const
 {
     return m_enableDebugApi;
+}
+
+bool NodeConfig::engineApiTraceApi() const
+{
+    return m_engineRpc.enableTraceApi;
+}
+
+bool NodeConfig::enableTraceApi() const
+{
+    return m_enableTraceApi;
 }
 
 uint64_t NodeConfig::debugBlockInterval() const

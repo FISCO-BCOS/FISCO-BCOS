@@ -365,7 +365,7 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     EthBlockInfo const& block, BlockHashLookup blockHashLookup, protocol::Transaction const& tx,
     evmc_revision rev, evmc::VM& vm, EthTxProperties const& txProps, uint64_t chainId,
     EthCallParams const& callParams, protocol::TransactionReceiptFactory const& rf,
-    int64_t blockNumber, Policy const& policy = Policy{})
+    int64_t blockNumber, Policy const& policy = Policy{}, EthereumCallTracer* tracer = nullptr)
 {
     const auto gasLimit = effectiveGasLimit(tx, callParams);
     const auto sender = ethSender(tx);
@@ -390,7 +390,7 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
         policy.withholdUpfront(sender_acc, tx, block, rev, gasLimit, effective_gas_price);
 
     EthereumHost<Storage, Policy> host{rev, vm, state, block, std::move(blockHashLookup),
-        ethTxContextOf(tx, callParams), callParams, chainId, policy};
+        ethTxContextOf(tx, callParams), callParams, chainId, policy, tracer};
 
     sender_acc.access_status = EVMC_ACCESS_WARM;  // Tx sender is always warm.
     if (to.has_value())
@@ -441,6 +441,15 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     // Dry runs (eth_call / eth_estimateGas) are the only callers that need the return data in
     // the receipt; they discard it, while a mined transaction's receipt would grow for nothing.
     auto receipt = policy.buildReceipt(host, result, gas_used, rf, blockNumber, callParams.free);
+    if (tracer)
+    {
+        tracer->check();
+        if (auto root = tracer->result())
+        {
+            root->gas = EthereumCallTracer::quantity(static_cast<uint64_t>(gasLimit));
+            root->gasUsed = EthereumCallTracer::quantity(static_cast<uint64_t>(gas_used));
+        }
+    }
 
     co_await state.applyToStorage(rev);
     co_return receipt;

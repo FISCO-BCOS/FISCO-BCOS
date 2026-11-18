@@ -34,8 +34,10 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
+#include <bcos-task/FireAwaitable.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <cmath>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -46,7 +48,237 @@ namespace
 // contract code is stored under the 33-byte "c" + codeHash form that kona-host's L2Code hint
 // sends (CODE_PREFIX = 'c' in kona-bin/host/src/single/handler.rs).
 constexpr bcos::byte c_codeKeyPrefix = 'c';
+
+std::chrono::milliseconds traceTimeout(std::string_view text)
+{
+    auto invalid = []() -> void {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "timeout must be a duration between 1ms and 30s"));
+    };
+    if (text.empty() || text.size() > 128)
+    {
+        invalid();
+    }
+    if (text.front() == '+')
+    {
+        text.remove_prefix(1);
+    }
+    long double milliseconds = 0;
+    while (!text.empty())
+    {
+        long double number = 0;
+        bool digits = false;
+        while (!text.empty() && text.front() >= '0' && text.front() <= '9')
+        {
+            digits = true;
+            number = number * 10 + text.front() - '0';
+            text.remove_prefix(1);
+        }
+        if (!text.empty() && text.front() == '.')
+        {
+            text.remove_prefix(1);
+            long double fraction = 0.1L;
+            while (!text.empty() && text.front() >= '0' && text.front() <= '9')
+            {
+                digits = true;
+                number += (text.front() - '0') * fraction;
+                fraction /= 10;
+                text.remove_prefix(1);
+            }
+        }
+        if (!digits)
+        {
+            invalid();
+        }
+        bool unitFound = false;
+        for (auto const& [unit, scale] : {std::pair<std::string_view, long double>{"ns", 0.000001L},
+                 {"us", 0.001L}, {"µs", 0.001L}, {"μs", 0.001L}, {"ms", 1.L}, {"s", 1000.L},
+                 {"m", 60000.L}, {"h", 3600000.L}})
+        {
+            if (text.starts_with(unit))
+            {
+                milliseconds += number * scale;
+                text.remove_prefix(unit.size());
+                unitFound = true;
+                break;
+            }
+        }
+        if (!unitFound || milliseconds > 30000)
+        {
+            invalid();
+        }
+    }
+    if (milliseconds < 1)
+    {
+        invalid();
+    }
+    return std::chrono::milliseconds(static_cast<int64_t>(std::ceil(milliseconds)));
+}
+
+struct TraceJsonBudget
+{
+    std::chrono::steady_clock::time_point deadline;
+    size_t bytes = 0;
+    size_t frames = 0;
+
+    void check() const
+    {
+        if (std::chrono::steady_clock::now() >= deadline)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(Web3DefaultError, "execution timeout"));
+        }
+        if (bytes > 8 * 1024 * 1024 || frames > 10000)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(Web3DefaultError, "trace output limit exceeded"));
+        }
+    }
+
+    void account(std::string const& text)
+    {
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            auto c = static_cast<unsigned char>(text[i]);
+            // Bound JSON escaping as well as raw data, before constructing the JSON tree.
+            bytes += (c < 0x20 || c >= 0x80) ? 6 : (c == '"' || c == '\\') ? 2 : 1;
+            if (i % 4096 == 0)
+            {
+                check();
+            }
+        }
+        check();
+    }
+};
+
+Json::Value traceJson(scheduler::CallTrace const& frame, TraceJsonBudget& budget, size_t depth = 0)
+{
+    if (depth > 1024)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(Web3DefaultError, "trace depth limit exceeded"));
+    }
+    ++budget.frames;
+    budget.bytes += 256;  // Field names, quotes, separators and the response envelope.
+    budget.check();
+    for (auto const* value : {&frame.type, &frame.from, &frame.to, &frame.value, &frame.gas,
+             &frame.gasUsed, &frame.input, &frame.output, &frame.error, &frame.revertReason})
+    {
+        budget.account(*value);
+    }
+    Json::Value result(Json::objectValue);
+    result["type"] = frame.type;
+    result["from"] = frame.from;
+    result["gas"] = frame.gas;
+    result["gasUsed"] = frame.gasUsed;
+    result["input"] = frame.input;
+    for (auto const& [key, value] :
+        {std::pair{"to", &frame.to}, {"value", &frame.value}, {"output", &frame.output},
+            {"error", &frame.error}, {"revertReason", &frame.revertReason}})
+    {
+        if (!value->empty())
+        {
+            result[key] = *value;
+        }
+    }
+    if (!frame.calls.empty())
+    {
+        result["calls"] = Json::Value(Json::arrayValue);
+        for (auto const& child : frame.calls)
+        {
+            result["calls"].append(traceJson(*child, budget, depth + 1));
+        }
+    }
+    return result;
+}
 }  // namespace
+
+task::Task<void> DebugEndpoint::traceTransaction(const Json::Value& request, Json::Value& response)
+{
+    if (!request.isArray() || request.size() != 2 || !request[0U].isString() ||
+        !request[1U].isObject())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+            "debug_traceTransaction expects a transaction hash and callTracer options"));
+    }
+    auto const hashText = request[0U].asString();
+    if (hashText.size() != 66 || !hashText.starts_with("0x") ||
+        hashText.find_first_not_of("0123456789abcdefABCDEF", 2) != std::string::npos)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction hash"));
+    }
+    auto const& config = request[1U];
+    if (!config["tracer"].isString() || config["tracer"].asString() != "callTracer")
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Only callTracer is supported"));
+    }
+    for (auto const& name : config.getMemberNames())
+    {
+        if (name != "tracer" && name != "timeout" && name != "tracerConfig")
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "Unsupported trace option: " + name));
+        }
+    }
+    scheduler::TraceOptions options;
+    if (config.isMember("timeout"))
+    {
+        if (!config["timeout"].isString())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "timeout must be a duration string"));
+        }
+        options.timeout = traceTimeout(config["timeout"].asString());
+    }
+    if (config.isMember("tracerConfig"))
+    {
+        auto const& tracerConfig = config["tracerConfig"];
+        if (!tracerConfig.isObject())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "tracerConfig must be an object"));
+        }
+        for (auto const& name : tracerConfig.getMemberNames())
+        {
+            if (name != "onlyTopCall" || !tracerConfig[name].isBool())
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidParams, "tracerConfig supports only boolean onlyTopCall"));
+            }
+        }
+        options.onlyTopCall = tracerConfig.get("onlyTopCall", false).asBool();
+    }
+    TraceJsonBudget budget{std::chrono::steady_clock::now() + options.timeout};
+    auto executor = m_nodeService->scheduler();
+    if (!executor)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "Trace scheduler unavailable"));
+    }
+    auto pending = task::makeFireAwaitable<Error::Ptr, std::shared_ptr<scheduler::CallTrace>>(
+        [executor, hash = crypto::HashType(hashText, crypto::HashType::FromHex), options](
+            auto completion) {
+            auto shared = std::make_shared<decltype(completion)>(std::move(completion));
+            executor->traceTransaction(hash, options,
+                [shared](Error::Ptr error, std::shared_ptr<bcos::scheduler::CallTrace> result) {
+                    (*shared)(std::move(error), std::move(result));
+                });
+        },
+        BCOS_ERROR_PTR(-1, "Trace execution cancelled"));
+    auto [error, result] = co_await pending;
+    if (error)
+    {
+        auto const code = error->errorCode() == scheduler::SchedulerError::MPTStateUnavailable ?
+                              static_cast<int32_t>(ServiceNotInitCompleted) :
+                              static_cast<int32_t>(Web3DefaultError);
+        BOOST_THROW_EXCEPTION(JsonRpcException(code, error->errorMessage()));
+    }
+    if (!result)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InternalError, "Trace execution returned no result"));
+    }
+    auto json = traceJson(*result, budget);
+    budget.check();
+    buildJsonContent(json, response);
+}
 
 task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& response)
 {

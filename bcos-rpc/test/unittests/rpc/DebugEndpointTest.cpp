@@ -19,12 +19,14 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-codec/abi/RevertReason.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
@@ -131,6 +133,153 @@ public:
 };
 
 BOOST_FIXTURE_TEST_SUITE(DebugEndpointTest, DebugEndpointFixture)
+
+BOOST_AUTO_TEST_CASE(RevertReasonDynamicOffsetBounds)
+{
+    // Error("bad") with an in-bounds 64-byte offset (geth ABI decoding permits padding).
+    bytes output(103);
+    output[0] = 0x08;
+    output[1] = 0xc3;
+    output[2] = 0x79;
+    output[3] = 0xa0;
+    output[35] = 64;
+    output[99] = 3;
+    output[100] = 'b';
+    output[101] = 'a';
+    output[102] = 'd';
+    auto reason = codec::abi::decodeRevertReason(ref(output));
+    BOOST_REQUIRE(reason.has_value());
+    BOOST_CHECK_EQUAL(*reason, "bad");
+    output[35] = 255;
+    BOOST_CHECK(!codec::abi::decodeRevertReason(ref(output)));
+    output[35] = 64;
+    output[99] = 4;
+    BOOST_CHECK(!codec::abi::decodeRevertReason(ref(output)));
+}
+
+BOOST_AUTO_TEST_CASE(TraceMethodHasAnIndependentGate)
+{
+    EndpointsMapping const defaultMapping;
+    EndpointsMapping const preimages(false, false, true);
+    EndpointsMapping const trace(false, false, false, true);
+    BOOST_CHECK(!defaultMapping.findHandler("debug_traceTransaction"));
+    BOOST_CHECK(!preimages.findHandler("debug_traceTransaction"));
+    BOOST_CHECK(trace.findHandler("debug_traceTransaction").has_value());
+    BOOST_CHECK(!trace.findHandler("debug_dbGet"));
+    BOOST_CHECK(!trace.findHandler("debug_getRawHeader"));
+    BOOST_CHECK(!trace.findHandler("debug_getRawReceipts"));
+    BOOST_CHECK(preimages.findHandler("debug_getRawReceipts").has_value());
+}
+
+BOOST_AUTO_TEST_CASE(TraceOptionsAndCallFrameWireContract)
+{
+    class TraceScheduler : public FakeScheduler2
+    {
+    public:
+        using FakeScheduler2::FakeScheduler2;
+        void traceTransaction(crypto::HashType const& hash, scheduler::TraceOptions options,
+            std::function<void(Error::Ptr, std::shared_ptr<scheduler::CallTrace>)> callback)
+            override
+        {
+            observedHash = hash;
+            observedOptions = options;
+            ++invocations;
+            callback(error, result);
+        }
+        crypto::HashType observedHash;
+        scheduler::TraceOptions observedOptions;
+        int invocations = 0;
+        Error::Ptr error;
+        std::shared_ptr<scheduler::CallTrace> result = std::make_shared<scheduler::CallTrace>();
+    };
+    auto tracing = std::make_shared<TraceScheduler>(m_ledger, m_blockFactory);
+    auto service = std::make_shared<bcos::rpc::NodeService>(
+        m_ledger, tracing, txPool, nullptr, nullptr, m_blockFactory, nullptr);
+    DebugEndpoint endpoint(service);
+    auto& frame = *tracing->result;
+    frame.type = "CALL";
+    frame.from = "0x0000000000000000000000000000000000000001";
+    frame.to = "0x0000000000000000000000000000000000000002";
+    frame.value = "0x0";
+    frame.gas = "0x5208";
+    frame.gasUsed = "0x5208";
+    frame.input = "0x";
+    auto child = std::make_shared<scheduler::CallTrace>(frame);
+    child->type = "STATICCALL";
+    child->value.clear();
+    child->error = "execution reverted";
+    child->output = "0xdeadbeef";
+    frame.calls.push_back(child);
+
+    Json::Value params(Json::arrayValue);
+    params.append(crypto::HashType{42U}.hexPrefixed());
+    Json::Value config(Json::objectValue);
+    config["tracer"] = "callTracer";
+    config["timeout"] = "1s250ms";
+    config["tracerConfig"]["onlyTopCall"] = true;
+    params.append(config);
+    Json::Value response;
+    task::syncWait(endpoint.traceTransaction(params, response));
+    BOOST_CHECK(tracing->observedHash == crypto::HashType{42U});
+    BOOST_CHECK_EQUAL(tracing->observedOptions.timeout.count(), 1250);
+    BOOST_CHECK(tracing->observedOptions.onlyTopCall);
+    BOOST_CHECK_EQUAL(response["result"]["type"].asString(), "CALL");
+    BOOST_CHECK(!response["result"].isMember("output"));
+    BOOST_CHECK(!response["result"].isMember("error"));
+    auto const& childJson = response["result"]["calls"][0U];
+    BOOST_CHECK_EQUAL(childJson["error"].asString(), "execution reverted");
+    BOOST_CHECK_EQUAL(childJson["output"].asString(), "0xdeadbeef");
+    BOOST_CHECK(!childJson.isMember("value"));
+
+    for (auto const& duration : {"0s", "31s", "-1s", "nan", "", "1e3ms", "1", "+"})
+    {
+        params[1U]["timeout"] = duration;
+        BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(params, response)),
+            JsonRpcException, [](auto const& e) { return e.code() == InvalidParams; });
+    }
+    params[1U]["timeout"] = "0.001s";
+    task::syncWait(endpoint.traceTransaction(params, response));
+    BOOST_CHECK_EQUAL(tracing->observedOptions.timeout.count(), 1);
+    params[1U].removeMember("timeout");
+    params[1U].removeMember("tracerConfig");
+    task::syncWait(endpoint.traceTransaction(params, response));
+    BOOST_CHECK_EQUAL(tracing->observedOptions.timeout.count(), 5000);
+    BOOST_CHECK(!tracing->observedOptions.onlyTopCall);
+
+    auto valid = params;
+    for (auto const& badTracer : {"prestateTracer", "", "{}"})
+    {
+        params[1U]["tracer"] = badTracer;
+        BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(params, response)),
+            JsonRpcException, [](auto const& e) { return e.code() == InvalidParams; });
+    }
+    params = valid;
+    params[1U]["tracerConfig"]["onlyTopCall"] = "true";
+    BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(params, response)),
+        JsonRpcException, [](auto const& e) { return e.code() == InvalidParams; });
+    params = valid;
+    params[0U] = "0x12";
+    BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(params, response)),
+        JsonRpcException, [](auto const& e) { return e.code() == InvalidParams; });
+    BOOST_CHECK_EQUAL(tracing->invocations, 3);
+
+    tracing->error = BCOS_ERROR_PTR(-1, "historical state unavailable");
+    BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(valid, response)),
+        JsonRpcException, [](auto const& e) {
+            return e.code() == -32000 && e.msg() == "historical state unavailable";
+        });
+    tracing->error = BCOS_ERROR_PTR(
+        bcos::scheduler::SchedulerError::MPTStateUnavailable, "historical state unavailable");
+    BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(valid, response)),
+        JsonRpcException, [](auto const& e) { return e.code() == -32004; });
+    tracing->error.reset();
+    // JSON escaping must count towards the output cap, not just the raw revert text.
+    frame.revertReason.assign(2 * 1024 * 1024, '\n');
+    BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(valid, response)),
+        JsonRpcException, [](auto const& e) {
+            return e.code() == -32000 && e.msg() == "trace output limit exceeded";
+        });
+}
 
 // debug_dbGet must be registered in EndpointsMapping, but only behind the per-listener
 // enable_debug_api gate — a default mapping must NOT dispatch it (the gate is the protection).

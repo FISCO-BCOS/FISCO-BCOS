@@ -99,7 +99,8 @@ enum class EthMethod
     debug_dbGet,
     debug_getRawHeader,
     debug_getRawReceipts,
-    debug_executePayload
+    debug_executePayload,
+    debug_traceTransaction
 };
 
 [[maybe_unused]] static std::string methodString(EthMethod _method)
