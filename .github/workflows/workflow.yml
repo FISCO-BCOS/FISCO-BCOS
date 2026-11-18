@@ -536,8 +536,8 @@ jobs:
             ls -la build || true
             exit 1
           fi
-          # Create tar.gz in repo root with only the binary inside (no extra folders)
-          tar -C "$(dirname "$BIN_PATH")" -czf "${PKG_NAME}" "$(basename "$BIN_PATH")"
+          cp ports/valijson/LICENSE "$(dirname "$BIN_PATH")/valijson.LICENSE"
+          tar -C "$(dirname "$BIN_PATH")" -czf "${PKG_NAME}" "$(basename "$BIN_PATH")" valijson.LICENSE
       - name: Upload assets to GitHub Release
         if: github.event_name == 'release' && matrix.os != 'windows-2025'
         uses: softprops/action-gh-release@v2

@@ -27,3 +27,9 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           bash tools/.ci/check-commit.sh
           bash tools/.ci/check_log_events.sh
+
+      - name: Verify Web3 RPC schema and registration coverage
+        run: |
+          python3 -m pip install --user -r tools/web3-rpc-schema/requirements.txt
+          python3 tools/web3-rpc-schema/generate.py --check
+          python3 tools/web3-rpc-schema/test_generate.py

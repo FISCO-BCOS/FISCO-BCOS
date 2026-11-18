@@ -31,6 +31,10 @@ find_package(tarscpp REQUIRED)
 add_library(rpc ${SRCS} ${HEADERS})
 target_include_directories(rpc PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+target_include_directories(rpc SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/../ports)
+set_source_files_properties(bcos-rpc/validator/JsonValidator.cpp PROPERTIES
+    COMPILE_DEFINITIONS VALIJSON_USE_EXCEPTIONS=1)
+install(FILES ../ports/valijson/LICENSE DESTINATION share/fiscobcos/licenses RENAME valijson.txt)
 target_link_libraries(rpc PUBLIC bcos-boostssl ledger codec bcos-crypto rlp-protocol protocol-tars mempool bcos-tx-validator jsoncpp_static jwt-cpp::jwt-cpp tarscpp::tarsservant tarscpp::tarsutil)
 add_dependencies(rpc BuildInfo.h)
 

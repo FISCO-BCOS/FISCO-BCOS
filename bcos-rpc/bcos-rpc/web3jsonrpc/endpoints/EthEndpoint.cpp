@@ -710,7 +710,7 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     }
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
-    auto const blockTag = toView(request[1U]);
+    auto const blockTag = request.size() > 1 ? toView(request[1U]) : LatestBlock;
     auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
     auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
@@ -836,7 +836,7 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid storage position"));
     }
 
-    auto const blockTag = toView(request[2U]);
+    auto const blockTag = request.size() > 2 ? toView(request[2U]) : LatestBlock;
     auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
     auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
@@ -2032,9 +2032,12 @@ task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::V
 task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json::Value& response)
 {
     // params: blockNumber(QTY|TAG), fullTransaction(Boolean)
-    // result: block(BLOCK)
-    auto const blockTag = toView(request[0U]);
-    auto const fullTransaction = request[1U].asBool();
+    return fetchBlockByNumber(toView(request[0U]), request[1U].asBool(), response);
+}
+
+task::Task<void> EthEndpoint::fetchBlockByNumber(
+    std::string_view blockTag, bool fullTransaction, Json::Value& response)
+{
     Json::Value result = Json::objectValue;
     try
     {

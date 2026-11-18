@@ -24,6 +24,7 @@ find_package(Boost REQUIRED unit_test_framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
+target_include_directories(${TEST_BINARY_NAME} SYSTEM PRIVATE ../../ports)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 
 # transaction-scheduler: EthGetProofIntegrationTest.cpp drives the FullChainFixture
@@ -41,6 +42,8 @@ set_source_files_properties("unittests/rpc/AdminMethodsTest.cpp" PROPERTIES SKIP
 # DebugRawReceiptsTest drives the same FullChainFixture harness (real Ledger + RocksDB), so it
 # inherits the same name-collision risk in a unity merge.
 set_source_files_properties("unittests/rpc/DebugRawReceiptsTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("unittests/rpc/Web3ParameterSchemasTest.cpp" PROPERTIES
+    COMPILE_DEFINITIONS VALIJSON_USE_EXCEPTIONS=1)
 #add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")
 enable_testing()

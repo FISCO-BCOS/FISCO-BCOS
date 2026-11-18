@@ -5,6 +5,8 @@ import re
 import os
 import subprocess
 import logging
+import shlex
+import tempfile
 
 logging.basicConfig(format='%(message)s',
                     level=logging.INFO)
@@ -333,26 +335,29 @@ def try_to_rename_tgz_package(root_path, tars_pkg_path, service_name, org_servic
             tars_pkg_path, service_name))
         return (False, renamed_package_path)
 
-    unzip_binary_path = os.path.join("./", org_service_name, org_service_name)
     if service_name == org_service_name:
         return (True, org_package_path)
     renamed_package_name = service_name + ServiceInfo.tars_pkg_postfix
-    renamed_package_path = os.path.join("./", renamed_package_name)
-    renamed_binary_path = os.path.join("./", service_name, service_name)
-
-    mkdir_command = "mkdir -p %s" % os.path.join("./", service_name)
-    unzip_command = "tar -xvf %s" % org_package_path
-    mv_command = "mv %s %s && rm -rf %s" % (
-        unzip_binary_path, renamed_binary_path, os.path.join("./", org_service_name))
-    zip_command = "tar -cvzf %s %s" % (renamed_package_path,
-                                       renamed_binary_path)
-    rm_command = "rm -rf %s" % os.path.join("./", service_name)
-    generated_package_path = os.path.join(root_path, renamed_package_path)
-    mv_pkg_command = "mkdir -p %s && mv %s %s" % (
-        root_path, renamed_package_path, root_path)
-    command = "%s && %s && %s && %s && %s && %s" % (
-        mkdir_command, unzip_command, mv_command, zip_command, rm_command, mv_pkg_command)
-    ret = execute_command(command)
+    generated_package_path = os.path.join(root_path, renamed_package_name)
+    renamed_binary = os.path.join(service_name, service_name)
+    renamed_license = os.path.join(service_name, "valijson.LICENSE")
+    with tempfile.TemporaryDirectory(dir=".") as staging:
+        archive = os.path.join(staging, renamed_package_name)
+        original_directory = os.path.join(staging, org_service_name)
+        renamed_directory = os.path.join(staging, service_name)
+        original_binary = os.path.join(renamed_directory, org_service_name)
+        quote = shlex.quote
+        command = (
+            f"tar -xvf {quote(org_package_path)} -C {quote(staging)}"
+            f" && mv {quote(original_directory)} {quote(renamed_directory)}"
+            f" && mv {quote(original_binary)} {quote(os.path.join(staging, renamed_binary))}"
+            f" && set -- {quote(renamed_binary)}"
+            f" && if [ -f {quote(os.path.join(staging, renamed_license))} ]; then"
+            f' set -- "$@" {quote(renamed_license)}; fi'
+            f' && tar -cvzf {quote(archive)} -C {quote(staging)} "$@"'
+            f" && mkdir -p {quote(root_path)} && mv {quote(archive)} {quote(generated_package_path)}"
+        )
+        ret = execute_command(command)
     if ret is False:
         log_error("try_to_rename_tgz_package failed, service: %s" %
                   service_name)

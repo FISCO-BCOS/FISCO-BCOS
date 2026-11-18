@@ -184,12 +184,9 @@ void Web3Subscribe::onNewBlock(int64_t blockNumber)
             std::stringstream ss;
             ss << std::hex << blockNumber;
 
-            Json::Value params(Json::arrayValue);
-            params.append("0x" + ss.str());
-            params.append(false);
-
+            auto const blockTag = "0x" + ss.str();
             Json::Value result;
-            co_await web3JsonRpc->endpoints().getBlockByNumber(params, result);
+            co_await web3JsonRpc->endpoints().fetchBlockByNumber(blockTag, false, result);
 
             if (result.isMember("result") && result["result"].isMember("transactions"))
             {

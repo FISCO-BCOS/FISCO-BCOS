@@ -80,6 +80,18 @@ BOOST_AUTO_TEST_CASE(getBlockByNumberFullTxs)
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
 }
 
+BOOST_AUTO_TEST_CASE(subscriptionBlockLookupUsesTheSameBlockResponse)
+{
+    auto const rpcResponse = call(req("eth_getBlockByNumber", R"(["0x1",false])"));
+    BOOST_REQUIRE(rpcResponse["result"].isObject());
+    BOOST_CHECK_EQUAL(rpcResponse["result"]["number"].asString(), "0x1");
+    BOOST_REQUIRE(rpcResponse["result"]["transactions"].isArray());
+
+    Json::Value subscriptionResponse;
+    task::syncWait(web3JsonRpc->endpoints().fetchBlockByNumber("0x1", false, subscriptionResponse));
+    BOOST_CHECK(subscriptionResponse["result"] == rpcResponse["result"]);
+}
+
 BOOST_AUTO_TEST_CASE(getBlockTransactionCountByNumber)
 {
     auto resp = call(req("eth_getBlockTransactionCountByNumber", R"(["0x1"])"));
@@ -102,9 +114,18 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptUnknown)
 
 BOOST_AUTO_TEST_CASE(malformedParamsReportError)
 {
-    // Wrong arity / type should surface a JSON-RPC error, not crash.
-    auto resp = call(req("eth_getBlockByNumber", R"([])"));
-    BOOST_CHECK(resp.isMember("error") || resp.isMember("result"));
+    for (auto const& [params, message] : {
+             std::pair{R"([])", "Invalid params at /params"},
+             std::pair{R"(["latest",1])", "Invalid params at /params/1"},
+         })
+    {
+        auto resp = call(req("eth_getBlockByNumber", params));
+        BOOST_REQUIRE(resp.isMember("error"));
+        BOOST_CHECK(!resp.isMember("result"));
+        BOOST_CHECK_EQUAL(resp["id"].asInt(), 1);
+        BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
+        BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), message);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(getBlockTransactionCountByNumberEarliestAndPending)

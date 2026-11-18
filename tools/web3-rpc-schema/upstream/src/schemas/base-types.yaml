@@ -1,0 +1,85 @@
+address:
+  title: hex encoded address
+  type: string
+  pattern: ^0x[0-9a-fA-F]{40}$
+addresses:
+  title: hex encoded address
+  type: array
+  items:
+    $ref: '#/components/schemas/address'
+byte:
+  title: hex encoded byte
+  type: string
+  pattern: ^0x[0-9a-f]{1,2}$
+bytes:
+  title: hex encoded bytes
+  type: string
+  pattern: ^0x[0-9a-f]*$
+bytesMax32:
+  title: 32 hex encoded bytes
+  type: string
+  pattern: ^0x[0-9a-f]{0,64}$
+bytes4:
+  title: 4 hex encoded bytes
+  type: string
+  pattern: ^0x[0-9a-f]{8}$
+bytes8:
+  title: 8 hex encoded bytes
+  type: string
+  pattern: ^0x[0-9a-f]{16}$
+bytes16:
+  title: 16 hex encoded bytes
+  type: string
+  pattern: ^0x[0-9a-f]{32}$
+bytes32:
+  title: 32 hex encoded bytes
+  type: string
+  pattern: ^0x[0-9a-f]{64}$
+bytes48:
+  title: 48 hex encoded bytes
+  type: string
+  pattern: ^0x[0-9a-f]{96}$
+bytes96:
+  title: 96 hex encoded bytes
+  type: string
+  pattern: ^0x[0-9a-f]{192}$
+bytes256:
+  title: 256 hex encoded bytes
+  type: string
+  pattern: ^0x[0-9a-f]{512}$
+bytes65:
+  title: 65 hex encoded bytes
+  type: string
+  pattern: ^0x[0-9a-f]{130}$
+ratio:
+  title: normalized ratio
+  type: number
+  minimum: 0
+  maximum: 1
+uint:
+  title: hex encoded unsigned integer
+  type: string
+  pattern: ^0x(0|[1-9a-f][0-9a-f]*)$
+uint32:
+  title: hex encoded 32 bit unsigned integer
+  type: string
+  pattern: ^0x(0|[1-9a-f][0-9a-f]{0,7})$
+uint64:
+  title: hex encoded 64 bit unsigned integer
+  type: string
+  pattern: ^0x(0|[1-9a-f][0-9a-f]{0,15})$
+uint256:
+  title: hex encoded 256 bit unsigned integer
+  type: string
+  pattern: ^0x(0|[1-9a-f][0-9a-f]{0,63})$
+uintDecimal:
+  title: decimal unsigned integer string
+  type: string
+  pattern: ^(0|[1-9][0-9]*)$
+hash32:
+  title: 32 byte hex value
+  type: string
+  pattern: ^0x[0-9a-f]{64}$
+notFound:
+  title: 'Not Found (null)'
+  type: 'null'

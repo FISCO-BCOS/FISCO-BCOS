@@ -1,0 +1,396 @@
+- name: eth_getBlockByHash
+  summary: Returns information about a block by hash.
+  params:
+    - name: Block hash
+      required: true
+      schema:
+        $ref: '#/components/schemas/hash32'
+    - name: Hydrated transactions
+      required: true
+      schema:
+        title: hydrated
+        type: boolean
+  result:
+    name: Block information
+    schema:
+      oneOf:
+        - $ref: '#/components/schemas/notFound'
+        - $ref: '#/components/schemas/Block'
+  errors:
+    - code: 4444
+      message: Pruned history unavailable
+  examples:
+    - name: eth_getBlockByHash example
+      params:
+        - name: Block hash
+          value: '0xd5f1812548be429cbdc6376b29611fc49e06f1359758c4ceaaa3b393e2239f9c'
+        - name: Hydrated transactions
+          value: false
+      result:
+        name: Block information
+        value:
+          number: '0x68b3'
+          hash: '0xd5f1812548be429cbdc6376b29611fc49e06f1359758c4ceaaa3b393e2239f9c'
+          mixHash: '0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d'
+          parentHash: '0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d'
+          nonce: '0x378da40ff335b070'
+          sha3Uncles: '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
+          logsBloom: '0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000'
+          transactionsRoot: '0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126'
+          stateRoot: '0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233'
+          receiptsRoot: '0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a'
+          miner: '0xb42b6c4a95406c78ff892d270ad20b22642e102d'
+          difficulty: '0x66e619a'
+          extraData: '0xd583010502846765746885676f312e37856c696e7578'
+          size: '0x334'
+          gasLimit: '0x47e7c4'
+          gasUsed: '0x37993'
+          timestamp: '0x5835c54d'
+          uncles: []
+          transactions:
+            - '0xa0807e117a8dd124ab949f460f08c36c72b710188f01609595223b325e58e0fc'
+            - '0xeae6d797af50cb62a596ec3939114d63967c374fa57de9bc0f4e2b576ed6639d'
+          baseFeePerGas: '0x7'
+          withdrawalsRoot: '0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f'
+          withdrawals:
+            - index: '0x0'
+              validatorIndex: '0x9d8c0'
+              address: '0xb9d7934878b5fb9610b3fe8a5e441e8fad7e293f'
+              amount: '0x11a33e3760'
+          blobGasUsed: '0x0'
+          excessBlobGas: '0x0'
+          parentBeaconBlockRoot: '0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685'
+- name: eth_getBlockByNumber
+  summary: Returns information about a block by number.
+  params:
+    - name: Block
+      required: true
+      schema:
+        $ref: '#/components/schemas/BlockNumberOrTag'
+    - name: Hydrated transactions
+      required: true
+      schema:
+        title: hydrated
+        type: boolean
+  result:
+    name: Block information
+    schema:
+      oneOf:
+        - $ref: '#/components/schemas/notFound'
+        - $ref: '#/components/schemas/Block'
+  errors:
+    - code: 4444
+      message: Pruned history unavailable
+  examples:
+    - name: eth_getBlockByNumber example
+      params:
+        - name: block
+          value: '0x68b3'
+        - name: Hydrated transactions
+          value: false
+      result:
+        name: Block information
+        value:
+          number: '0x68b3'
+          hash: '0xd5f1812548be429cbdc6376b29611fc49e06f1359758c4ceaaa3b393e2239f9c'
+          mixHash: '0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d'
+          parentHash: '0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d'
+          nonce: '0x378da40ff335b070'
+          sha3Uncles: '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
+          logsBloom: '0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000'
+          transactionsRoot: '0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126'
+          stateRoot: '0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233'
+          receiptsRoot: '0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a'
+          miner: '0xb42b6c4a95406c78ff892d270ad20b22642e102d'
+          difficulty: '0x66e619a'
+          extraData: '0xd583010502846765746885676f312e37856c696e7578'
+          size: '0x334'
+          gasLimit: '0x47e7c4'
+          gasUsed: '0x37993'
+          timestamp: '0x5835c54d'
+          uncles: [ ]
+          transactions:
+            - '0xa0807e117a8dd124ab949f460f08c36c72b710188f01609595223b325e58e0fc'
+            - '0xeae6d797af50cb62a596ec3939114d63967c374fa57de9bc0f4e2b576ed6639d'
+          baseFeePerGas: '0x7'
+          withdrawalsRoot: '0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f'
+          withdrawals:
+            - index: '0x0'
+              validatorIndex: '0x9d8c0'
+              address: '0xb9d7934878b5fb9610b3fe8a5e441e8fad7e293f'
+              amount: '0x11a33e3760'
+          blobGasUsed: '0x0'
+          excessBlobGas: '0x0'
+          parentBeaconBlockRoot: '0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685'
+- name: eth_getHeaderByHash
+  summary: Returns information about a block header by hash.
+  description: >-
+    Returns the execution header of the given block. Header fields introduced
+    by a fork MUST be omitted for headers that predate that fork. The result
+    is `null` if the block is unknown.
+  params:
+    - name: Block hash
+      required: true
+      schema:
+        $ref: '#/components/schemas/hash32'
+  result:
+    name: Header information
+    schema:
+      oneOf:
+        - $ref: '#/components/schemas/notFound'
+        - $ref: '#/components/schemas/Header'
+  errors:
+    - code: 4444
+      message: Pruned history unavailable
+  examples:
+    - name: eth_getHeaderByHash example
+      params:
+        - name: Block hash
+          value: '0xd5f1812548be429cbdc6376b29611fc49e06f1359758c4ceaaa3b393e2239f9c'
+      result:
+        name: Header information
+        value:
+          number: '0x68b3'
+          hash: '0xd5f1812548be429cbdc6376b29611fc49e06f1359758c4ceaaa3b393e2239f9c'
+          mixHash: '0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d'
+          parentHash: '0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d'
+          nonce: '0x378da40ff335b070'
+          sha3Uncles: '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
+          logsBloom: '0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000'
+          transactionsRoot: '0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126'
+          stateRoot: '0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233'
+          receiptsRoot: '0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a'
+          miner: '0xb42b6c4a95406c78ff892d270ad20b22642e102d'
+          difficulty: '0x66e619a'
+          extraData: '0xd583010502846765746885676f312e37856c696e7578'
+          gasLimit: '0x47e7c4'
+          gasUsed: '0x37993'
+          timestamp: '0x5835c54d'
+          baseFeePerGas: '0x7'
+          withdrawalsRoot: '0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f'
+          blobGasUsed: '0x0'
+          excessBlobGas: '0x0'
+          parentBeaconBlockRoot: '0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685'
+- name: eth_getHeaderByNumber
+  summary: Returns information about a block header by number.
+  description: >-
+    Returns the execution header of the given block. Header fields introduced
+    by a fork MUST be omitted for headers that predate that fork. The result
+    is `null` if the block is unknown or if the `pending` tag is requested.
+  params:
+    - name: Block
+      required: true
+      schema:
+        $ref: '#/components/schemas/BlockNumberOrTag'
+  result:
+    name: Header information
+    schema:
+      oneOf:
+        - $ref: '#/components/schemas/notFound'
+        - $ref: '#/components/schemas/Header'
+  errors:
+    - code: 4444
+      message: Pruned history unavailable
+  examples:
+    - name: eth_getHeaderByNumber example
+      params:
+        - name: Block
+          value: '0x68b3'
+      result:
+        name: Header information
+        value:
+          number: '0x68b3'
+          hash: '0xd5f1812548be429cbdc6376b29611fc49e06f1359758c4ceaaa3b393e2239f9c'
+          mixHash: '0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d'
+          parentHash: '0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d'
+          nonce: '0x378da40ff335b070'
+          sha3Uncles: '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
+          logsBloom: '0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000'
+          transactionsRoot: '0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126'
+          stateRoot: '0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233'
+          receiptsRoot: '0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a'
+          miner: '0xb42b6c4a95406c78ff892d270ad20b22642e102d'
+          difficulty: '0x66e619a'
+          extraData: '0xd583010502846765746885676f312e37856c696e7578'
+          gasLimit: '0x47e7c4'
+          gasUsed: '0x37993'
+          timestamp: '0x5835c54d'
+          baseFeePerGas: '0x7'
+          withdrawalsRoot: '0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f'
+          blobGasUsed: '0x0'
+          excessBlobGas: '0x0'
+          parentBeaconBlockRoot: '0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685'
+- name: eth_getBlockTransactionCountByHash
+  summary: Returns the number of transactions in a block from a block matching the given block hash.
+  params:
+    - name: Block hash
+      schema:
+        $ref: '#/components/schemas/hash32'
+  result:
+    name: Transaction count
+    schema:
+      oneOf:
+        - $ref: '#/components/schemas/notFound'
+        - title: Transaction count
+          $ref: '#/components/schemas/uint'
+  errors:
+    - code: 4444
+      message: Pruned history unavailable
+  examples:
+    - name: eth_getBlockTransactionCountByHash example
+      params:
+        - name: Block hash
+          value: '0xb903239f8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238'
+      result:
+        name: Transaction count
+        value: '0x8'
+- name: eth_getBlockTransactionCountByNumber
+  summary: Returns the number of transactions in a block matching the given block number.
+  params:
+    - name: Block
+      schema:
+        $ref: '#/components/schemas/BlockNumberOrTag'
+  result:
+    name: Transaction count
+    schema:
+      oneOf:
+        - $ref: '#/components/schemas/notFound'
+        - title: Transaction count
+          $ref: '#/components/schemas/uint'
+  errors:
+    - code: 4444
+      message: Pruned history unavailable
+  examples:
+    - name: eth_getBlockTransactionCountByNumber example
+      params:
+        - name: Block
+          value: '0xe8'
+      result:
+        name: Transaction count
+        value: '0x8'
+- name: eth_getBlockReceipts
+  summary: Returns the receipts of a block by number or hash.
+  params:
+    - name: Block
+      required: true
+      schema:
+        $ref: '#/components/schemas/BlockNumberOrTagOrHash'
+  result:
+    name: Receipts information
+    schema:
+      oneOf:
+        - $ref: '#/components/schemas/notFound'
+        - title: Receipts information
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptInfo'
+  errors:
+    - code: 4444
+      message: Pruned history unavailable
+  examples:
+    - name: eth_getBlockReceipts example
+      params:
+        - name: Block
+          value: 'latest'
+      result:
+        name: Receipts information
+        value:
+          - blockHash: '0x19514ce955c65e4dd2cd41f435a75a46a08535b8fc16bc660f8092b32590b182'
+            blockNumber: '0x6f55'
+            contractAddress: null
+            cumulativeGasUsed: '0x18c36'
+            from: '0x22896bfc68814bfd855b1a167255ee497006e730'
+            gasUsed: '0x18c36'
+            blobGasUsed: '0x20000'
+            effectiveGasPrice: '0x9502f907'
+            blobGasPrice: '0x32'
+            logs:
+              - address: '0xfd584430cafa2f451b4e2ebcf3986a21fff04350'
+                topics:
+                  - '0x2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d'
+                  - '0x4be29e0e4eb91f98f709d98803cba271592782e293b84a625e025cbb40197ba8'
+                  - '0x000000000000000000000000835281a2563db4ebf1b626172e085dc406bfc7d2'
+                  - '0x00000000000000000000000022896bfc68814bfd855b1a167255ee497006e730'
+                data: '0x'
+                blockNumber: '0x6f55'
+                transactionHash: '0x4a481e4649da999d92db0585c36cba94c18a33747e95dc235330e6c737c6f975'
+                transactionIndex: '0x0'
+                blockHash: '0x19514ce955c65e4dd2cd41f435a75a46a08535b8fc16bc660f8092b32590b182'
+                logIndex: '0x0'
+                removed: false
+            logsBloom: '0x00000004000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000080020000000000000200010000000000000000000001000000800000000000000000000000000000000000000000000000000000100100000000000000000000008000000000000000000000000000000002000000000000000000000'
+            status: '0x1'
+            to: '0xfd584430cafa2f451b4e2ebcf3986a21fff04350'
+            transactionHash: '0x4a481e4649da999d92db0585c36cba94c18a33747e95dc235330e6c737c6f975'
+            transactionIndex: '0x0'
+            type: '0x0'
+          - blockHash: '0x19514ce955c65e4dd2cd41f435a75a46a08535b8fc16bc660f8092b32590b182'
+            blockNumber: '0x6f55'
+            contractAddress: null
+            cumulativeGasUsed: '0x1de3e'
+            from: '0x712e3a792c974b3e3dbe41229ad4290791c75a82'
+            gasUsed: '0x5208'
+            blobGasUsed: '0x20000'
+            effectiveGasPrice: '0x9502f907'
+            blobGasPrice: '0x32'
+            logs: []
+            logsBloom: '0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+            status: '0x1'
+            to: '0xd42e2b1c14d02f1df5369a9827cb8e6f3f75f338'
+            transactionHash: '0xefb83b4e3f1c317e8da0f8e2fbb2fe964f34ee184466032aeecac79f20eacaf6'
+            transactionIndex: '0x1'
+            type: '0x2'
+- name: eth_getBlockAccessList
+  summary: Returns the block access list for a given block.
+  description: >-
+    Returns the EIP-7928 block access list of the given block, decoded into JSON.
+    Every account entry contains all six fields, with empty change lists encoded
+    as empty arrays, and entries follow the ordering of the canonical RLP
+    encoding. The result is `null` if the block is unknown or the `pending` tag
+    is requested. For blocks that predate the Amsterdam fork clients MUST return
+    the `-32001: Resource not found` error, and for blocks whose access list has
+    been pruned clients MUST return the `4444: Pruned history unavailable` error.
+  params:
+    - name: Block
+      required: true
+      schema:
+        $ref: '#/components/schemas/BlockNumberOrTagOrHash'
+  result:
+    name: Block access list
+    schema:
+      oneOf:
+        - $ref: '#/components/schemas/notFound'
+        - $ref: '#/components/schemas/BlockAccessList'
+  errors:
+    - code: 4444
+      message: Pruned history unavailable
+    - code: -32001
+      message: Resource not found
+  examples:
+    - name: eth_getBlockAccessList example
+      params:
+        - name: Block
+          value: 'latest'
+      result:
+        name: Block access list
+        value:
+          - address: '0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b'
+            storageChanges:
+              - key: '0x0000000000000000000000000000000000000000000000000000000000000000'
+                changes:
+                  - index: '0x0'
+                    value: '0x0000000000000000000000000000000000000000000000000000000000000000'
+                  - index: '0x1'
+                    value: '0x0000000000000000000000000000000000000000000000000000000000000100'
+            storageReads: []
+            balanceChanges:
+              - index: '0x0'
+                value: '0x56bc75e2d63100000'
+              - index: '0x1'
+                value: '0x56bc75e2d63000000'
+            nonceChanges:
+              - index: '0x0'
+                value: '0x0'
+              - index: '0x1'
+                value: '0x1'
+            codeChanges: []
