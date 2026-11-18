@@ -250,15 +250,33 @@ BOOST_AUTO_TEST_CASE(TraceOptionsAndCallFrameWireContract)
     BOOST_CHECK_EQUAL(childJson["output"].asString(), "0xdeadbeef");
     BOOST_CHECK(!childJson.isMember("value"));
 
-    for (auto const& duration : {"0s", "31s", "-1s", "nan", "", "1e3ms", "1", "+"})
+    for (auto const& duration :
+        {"0s", "31s", "-1s", "nan", "", "1e3ms", "1", "+", "-0.001s", "0.9999999ms", "999999ns",
+            "30.000000001s", "30s1ns", "999999999999999999999999999999999999h"})
     {
-        params[1U]["timeout"] = duration;
-        BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(params, response)),
-            JsonRpcException, [](auto const& e) { return e.code() == InvalidParams; });
+        BOOST_TEST_CONTEXT(duration)
+        {
+            auto const invocations = tracing->invocations;
+            params[1U]["timeout"] = duration;
+            BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(params, response)),
+                JsonRpcException, [](auto const& e) { return e.code() == InvalidParams; });
+            BOOST_CHECK_EQUAL(tracing->invocations, invocations);
+        }
     }
-    params[1U]["timeout"] = "0.001s";
-    task::syncWait(endpoint.traceTransaction(params, response));
-    BOOST_CHECK_EQUAL(tracing->observedOptions.timeout.count(), 1);
+    for (auto const& [duration, expected] :
+        {std::pair<std::string_view, int64_t>{"0.001s", 1}, {"+0.001s", 1}, {"1ms", 1},
+            {"1000us", 1}, {"1000µs", 1}, {"1000μs", 1}, {"1000000ns", 1}, {".0005s500us", 1},
+            {"1.0000009ms", 1}, {"1.000001ms", 2}, {"999999ns1.9ns", 1}, {"1ms0.9ns0.9ns", 1},
+            {"1ms1ns", 2}, {"0.5m", 30000}, {"30s", 30000}, {"30000ms", 30000},
+            {"29s999.999999ms1ns", 30000}, {"30.0000000009s", 30000}})
+    {
+        BOOST_TEST_CONTEXT(duration)
+        {
+            params[1U]["timeout"] = std::string(duration);
+            task::syncWait(endpoint.traceTransaction(params, response));
+            BOOST_CHECK_EQUAL(tracing->observedOptions.timeout.count(), expected);
+        }
+    }
     params[1U].removeMember("timeout");
     params[1U].removeMember("tracerConfig");
     task::syncWait(endpoint.traceTransaction(params, response));
@@ -266,6 +284,7 @@ BOOST_AUTO_TEST_CASE(TraceOptionsAndCallFrameWireContract)
     BOOST_CHECK(!tracing->observedOptions.onlyTopCall);
 
     auto valid = params;
+    auto const invocationsBeforeInvalidOptions = tracing->invocations;
     for (auto const& badTracer : {"prestateTracer", "", "{}"})
     {
         params[1U]["tracer"] = badTracer;
@@ -280,7 +299,7 @@ BOOST_AUTO_TEST_CASE(TraceOptionsAndCallFrameWireContract)
     params[0U] = "0x12";
     BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(params, response)),
         JsonRpcException, [](auto const& e) { return e.code() == InvalidParams; });
-    BOOST_CHECK_EQUAL(tracing->invocations, 3);
+    BOOST_CHECK_EQUAL(tracing->invocations, invocationsBeforeInvalidOptions);
 
     tracing->error = BCOS_ERROR_PTR(-1, "historical state unavailable");
     BOOST_CHECK_EXCEPTION(task::syncWait(endpoint.traceTransaction(valid, response)),

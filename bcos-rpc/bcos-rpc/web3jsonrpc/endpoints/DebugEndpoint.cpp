@@ -37,7 +37,6 @@
 #include <bcos-task/FireAwaitable.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <cmath>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -63,56 +62,80 @@ std::chrono::milliseconds traceTimeout(std::string_view text)
     {
         text.remove_prefix(1);
     }
-    long double milliseconds = 0;
+    constexpr uint64_t c_maxNanoseconds = 30'000'000'000;
+    constexpr uint64_t c_nanosecondsPerMillisecond = 1'000'000;
+    uint64_t nanoseconds = 0;
     while (!text.empty())
     {
-        long double number = 0;
+        uint64_t number = 0;
         bool digits = false;
         while (!text.empty() && text.front() >= '0' && text.front() <= '9')
         {
             digits = true;
-            number = number * 10 + text.front() - '0';
+            auto digit = static_cast<uint64_t>(text.front() - '0');
+            if (number > (c_maxNanoseconds - digit) / 10)
+            {
+                invalid();
+            }
+            number = number * 10 + digit;
             text.remove_prefix(1);
         }
+        std::string_view fractionDigits;
         if (!text.empty() && text.front() == '.')
         {
             text.remove_prefix(1);
-            long double fraction = 0.1L;
+            auto fractionStart = text;
             while (!text.empty() && text.front() >= '0' && text.front() <= '9')
             {
                 digits = true;
-                number += (text.front() - '0') * fraction;
-                fraction /= 10;
                 text.remove_prefix(1);
             }
+            fractionDigits = fractionStart.substr(0, fractionStart.size() - text.size());
         }
         if (!digits)
         {
             invalid();
         }
         bool unitFound = false;
-        for (auto const& [unit, scale] : {std::pair<std::string_view, long double>{"ns", 0.000001L},
-                 {"us", 0.001L}, {"µs", 0.001L}, {"μs", 0.001L}, {"ms", 1.L}, {"s", 1000.L},
-                 {"m", 60000.L}, {"h", 3600000.L}})
+        for (auto const& [unit, scale] : {std::pair<std::string_view, uint64_t>{"ns", 1},
+                 {"us", 1'000}, {"µs", 1'000}, {"μs", 1'000}, {"ms", 1'000'000},
+                 {"s", 1'000'000'000}, {"m", 60'000'000'000}, {"h", 3'600'000'000'000}})
         {
             if (text.starts_with(unit))
             {
-                milliseconds += number * scale;
+                if (number > (c_maxNanoseconds - nanoseconds) / scale)
+                {
+                    invalid();
+                }
+                nanoseconds += number * scale;
+                // Work backwards to truncate each fractional component to nanoseconds
+                // without floating-point boundary drift.
+                uint64_t fraction = 0;
+                for (auto it = fractionDigits.rbegin(); it != fractionDigits.rend(); ++it)
+                {
+                    fraction = (fraction + static_cast<uint64_t>(*it - '0') * scale) / 10;
+                }
+                if (fraction > c_maxNanoseconds - nanoseconds)
+                {
+                    invalid();
+                }
+                nanoseconds += fraction;
                 text.remove_prefix(unit.size());
                 unitFound = true;
                 break;
             }
         }
-        if (!unitFound || milliseconds > 30000)
+        if (!unitFound)
         {
             invalid();
         }
     }
-    if (milliseconds < 1)
+    if (nanoseconds < c_nanosecondsPerMillisecond)
     {
         invalid();
     }
-    return std::chrono::milliseconds(static_cast<int64_t>(std::ceil(milliseconds)));
+    return std::chrono::milliseconds(
+        (nanoseconds + c_nanosecondsPerMillisecond - 1) / c_nanosecondsPerMillisecond);
 }
 
 struct TraceJsonBudget
