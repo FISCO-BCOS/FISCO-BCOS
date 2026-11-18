@@ -137,8 +137,11 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
     bcos::crypto::NodeIDPtr _dstNodeID,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads)
 {
-    auto p2pIDs =
-        m_gatewayNodeManager->peersRouterTable()->queryP2pIDs(_groupID, _dstNodeID->hex());
+    // The routing tables key remote nodes by hex text, so this lookup needs the hex form of the
+    // destination id. NodeID::hex() caches its result inside the key object, so repeated sends to
+    // the same peer reuse one conversion instead of re-encoding 128 characters every time.
+    auto p2pIDs = m_gatewayNodeManager->peersRouterTable()->queryP2pIDs(
+        _groupID, _dstNodeID->hex());
     if (p2pIDs.empty())
     {
         // no remote gateway available: deliver locally if the destination front is local (the
@@ -513,28 +516,30 @@ bcos::task::Task<void> bcos::gateway::Gateway::broadcastMessage(uint16_t type,
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
-    // zero-copy: the message (header/options only) lives in this frame; payload rides as views
-    Message message;
-    message.setPacketType(GatewayMessageType::BroadcastMessage);
-    message.setExt(type);
-    message.setSeq(m_p2pInterface->newSeq());
+    // zero-copy: the message holds only header/options and rides down as a shared_ptr, so the
+    // per-peer fan-out in PeersRouterTable shares this one object instead of copying the header for
+    // every peer. The payload itself travels as views.
+    auto message = std::make_shared<Message>();
+    message->setPacketType(GatewayMessageType::BroadcastMessage);
+    message->setExt(type);
+    message->setSeq(m_p2pInterface->newSeq());
 
     P2PMessageOptions options;
     options.setGroupID(std::string(groupID));
     options.setSrcNodeID(srcNodeID.encode());
     options.setModuleID(moduleID);
-    message.setOptions(std::move(options));
+    message->setOptions(std::move(options));
 
     if (m_gatewayRateLimiter)
     {
         GatewayMessageExtAttributes msgExtAttr;
         msgExtAttr.setGroupID(std::string(groupID));
         msgExtAttr.setModuleID(moduleID);
-        message.setExtAttributes(std::move(msgExtAttr));
+        message->setExtAttributes(std::move(msgExtAttr));
     }
 
     co_await m_gatewayNodeManager->peersRouterTable()->broadcastMessage(
-        type, groupID, moduleID, message, std::move(payloads));
+        type, groupID, moduleID, std::move(message), std::move(payloads));
 }
 bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, P2PInterface::Ptr _p2pInterface,
     GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,

@@ -19,6 +19,7 @@
  */
 #include "PeersRouterTable.h"
 #include "bcos-utilities/LogStream.h"
+#include <bcos-task/Wait.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 
@@ -264,7 +265,7 @@ void PeersRouterTable::removeNodeFromGatewayInfo(P2pID const& _p2pID)
 }
 
 bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_t type,
-    std::string_view group, uint16_t moduleID, const Message& message,
+    std::string_view group, uint16_t moduleID, Message::Ptr message,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
     std::vector<std::string> selectedPeers;
@@ -284,9 +285,26 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
         }
     }
 
+    // compress the fan-out payload once instead of once per peer
+    auto prepared = prepareFanoutPayload(payloads, m_enableCompressForBroadcast.load());
+    Options options;
+    if (prepared)
+    {
+        options.prepared = prepared;
+    }
+
     ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable")
                       << LOG_DESC("broadcastMsg: randomChooseP2PNode") << LOG_KV("nodeType", type)
                       << LOG_KV("moduleID", moduleID) << LOG_KV("peersSize", selectedPeers.size());
+
+    // One Message shared by every peer, exactly like Service::broadcastMessageToAll: the caller owns
+    // it through a shared_ptr, each per-peer task keeps that pointer alive for its own lifetime, and
+    // stamps its destination before its first suspension. The per-peer deep copy that used to be
+    // taken here (`auto forkMessage = message`) is gone. task::wait resumes each task synchronously up
+    // to that suspension, which is what keeps the shared header race-free; the same contract applies
+    // as in Service::broadcastMessageToAll, so any new suspension point added ahead of the stamp
+    // would break both.
+    auto self = shared_from_this();
     for (auto const& peer : selectedPeers)
     {
         if (c_fileLogLevel <= TRACE) [[unlikely]]
@@ -295,15 +313,24 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
                               << LOG_KV("nodeType", type) << LOG_KV("moduleID", moduleID)
                               << LOG_KV("dst", printShortP2pID(peer));
         }
-        auto forkMessage = message;
-        try
-        {
-            co_await m_p2pInterface->sendMessageByNodeID(peer, forkMessage, payloads);
-        }
-        catch (const std::exception& e)
-        {
-            ROUTER_LOG(WARNING) << "send message to nodeid: " << peer << " failed, "
-                                << boost::diagnostic_information(e);
-        }
+        task::wait([](std::shared_ptr<PeersRouterTable> _self, P2pID _peer,
+                       Message::Ptr _message, Options _options,
+                       ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads)
+                       -> task::Task<void> {
+            try
+            {
+                // stamp this peer's destination onto the shared header. Runs synchronously before the
+                // first suspension inside sendMessageByNodeID.
+                _message->setDstP2PNodeID(_peer);
+                co_await _self->m_p2pInterface->sendMessageByNodeID(
+                    _peer, *_message, std::move(_payloads), std::move(_options));
+            }
+            catch (const std::exception& e)
+            {
+                ROUTER_LOG(WARNING) << "send message to nodeid: " << _peer << " failed, "
+                                    << boost::diagnostic_information(e);
+            }
+        }(self, peer, message, options, payloads));
     }
+    co_return;
 }
