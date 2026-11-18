@@ -32,6 +32,7 @@
 #include "EthereumSyncInitializer.h"
 #include "ExternalPayloadVerifier.h"
 #include "GlobalStateStorageInitializer.h"
+#include "KeyPageStorageResolver.h"
 #include "LedgerInitializer.h"
 #include "MemPoolInitializer.h"
 #include "SchedulerInitializer.h"
@@ -72,7 +73,6 @@
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
-#include <bcos-table/src/KeyPageStorage.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
@@ -296,6 +296,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         throw std::runtime_error("storage type not support");
     }
+
+    auto keyPageResolution =
+        resolveKeyPageSize(*m_nodeConfig, *m_storage, m_globalStateStorageInitializer->rocksDB());
+    INITIALIZER_LOG(INFO) << LOG_DESC("resolveKeyPageSize")
+                          << LOG_KV("source", keyPageResolution.source)
+                          << LOG_KV("keyPageSize", keyPageResolution.value)
+                          << LOG_KV("tablesExamined", keyPageResolution.tablesExamined);
 
     // build ledger
     auto ledger = LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage,
@@ -1243,13 +1250,16 @@ void Initializer::initSysContract()
         return;
     }
     // check is it deploy first time
-    std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> getNumberPromise;
-    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, protocol::BlockNumber _number) {
-        getNumberPromise.set_value(std::make_tuple(std::move(_error), _number));
-    });
-    auto getNumberTuple = getNumberPromise.get_future().get();
-    if (std::get<0>(getNumberTuple) != nullptr ||
-        std::get<1>(getNumberTuple) > SYS_CONTRACT_DEPLOY_NUMBER)
+    protocol::BlockNumber blockNumber = -1;
+    try
+    {
+        blockNumber = task::syncWait(ledger::getCurrentBlockNumber(*m_ledger));
+    }
+    catch (bcos::Error const&)
+    {
+        return;
+    }
+    if (blockNumber > SYS_CONTRACT_DEPLOY_NUMBER)
     {
         return;
     }
@@ -1444,21 +1454,6 @@ protocol::BlockNumber Initializer::getCurrentBlockNumber(
             }
         });
     return blockNumberFuture.get_future().get();
-    // std::promise<protocol::BlockNumber> blockNumberFuture;
-    // m_ledger->asyncGetBlockNumber(
-    //     [&blockNumberFuture](Error::Ptr error, protocol::BlockNumber number) {
-    //         if (error)
-    //         {
-    //             INITIALIZER_LOG(ERROR)
-    //                 << LOG_DESC("get block number failed") << LOG_DESC(error->errorMessage());
-    //             blockNumberFuture.set_value(0);
-    //         }
-    //         else
-    //         {
-    //             blockNumberFuture.set_value(number);
-    //         }
-    //     });
-    // return blockNumberFuture.get_future().get();
 }
 
 void Initializer::prune()
@@ -1944,8 +1939,7 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
         moveSSTFiles = false;
     }
     auto rocksdbOption = getRocksDBOption(nodeConfig, true);
-    auto rocksDB =
-        StorageInitializer::createRocksDB(stateDBPath, rocksdbOption, nodeConfig->keyPageSize());
+    auto rocksDB = StorageInitializer::createRocksDB(stateDBPath, rocksdbOption);
     ingestIntoRocksDB(*rocksDB, sstFiles, moveSSTFiles);
     bcos::storage::TransactionalStorageInterface::Ptr stateStorage = nullptr;
     // import tx and receipt

@@ -23,6 +23,7 @@
 #include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
 #include <memory>
+#include <utility>
 namespace bcos
 {
 namespace crypto
@@ -37,7 +38,7 @@ public:
     virtual KeyPairInterface::UniquePtr createKeyPair() { return std::make_unique<SM2KeyPair>(); }
     KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) override
     {
-        return std::make_unique<SM2KeyPair>(_secretKey);
+        return std::make_unique<SM2KeyPair>(std::move(_secretKey));
     }
 
     KeyPairInterface::UniquePtr generateKeyPair() override

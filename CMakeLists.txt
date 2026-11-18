@@ -64,8 +64,6 @@ if(NOT ONLY_CPP_SDK)
     find_package(ittapi CONFIG REQUIRED)
 endif ()
 
-add_subdirectory(legacy)
-
 # bcos-ops (the operator subcommands of the AIR binary) links bcos-cpp-sdk, so a full node
 # always builds the SDK library; WITH_CPPSDK alone still works for SDK-only builds
 if(WITH_CPPSDK OR FULLNODE)
@@ -116,6 +114,10 @@ if(FULLNODE)
             add_subdirectory(benchmark)
         endif()
     endif()
+endif()
+
+if(TESTS)
+    add_subdirectory(tools/BcosBuilder)
 endif()
 
 if(TOOLS)

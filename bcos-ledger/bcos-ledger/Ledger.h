@@ -74,9 +74,8 @@ public:
 
     ~Ledger() override = default;
 
-    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
-        bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::UniquePtr&&)> _callback) override;
+    task::Task<void> preStoreBlockTxs(bcos::protocol::ConstTransactionsPtr blockTxs,
+        bcos::protocol::Block::ConstPtr block) override;
     // No default arguments here — see LedgerInterface::prewriteBlock.
     task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
@@ -86,47 +85,34 @@ public:
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
         bcos::protocol::Block::ConstPtr block) override;
 
-    void asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
-        std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock) override;
+    task::Task<bcos::protocol::Block::Ptr> getBlockDataByNumber(
+        bcos::protocol::BlockNumber blockNumber, int32_t blockFlag) override;
 
-    void asyncGetBlockNumber(
-        std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock) override;
+    task::Task<bcos::protocol::BlockNumber> getBlockNumber() override;
 
-    void asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
-        std::function<void(Error::Ptr, bcos::crypto::HashType)> _onGetBlock) override;
+    task::Task<bcos::crypto::HashType> getBlockHashByNumber(
+        bcos::protocol::BlockNumber blockNumber) override;
 
-    void asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
-        std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock) override;
+    task::Task<bcos::protocol::BlockNumber> getBlockNumberByHash(
+        crypto::HashType blockHash) override;
 
-    void asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _withProof,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr,
-            std::shared_ptr<std::map<std::string, MerkleProofPtr>>)>
-            _onGetTx) override;
+    task::Task<BatchTransactionsResult> getBatchTxsByHashList(
+        crypto::HashListPtr txHashList, bool withProof) override;
 
-    void asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txHash, bool _withProof,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionReceipt::Ptr, MerkleProofPtr)>
-            _onGetTx) override;
+    task::Task<TransactionReceiptResult> getTransactionReceiptByHash(
+        bcos::crypto::HashType txHash, bool withProof) override;
 
-    void asyncGetTotalTransactionCount(
-        std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)> _callback)
-        override;
+    task::Task<TransactionCountResult> getTotalTransactionCount() override;
 
-    void asyncGetSystemConfigByKey(const std::string_view& _key,
-        std::function<void(Error::Ptr, std::string, bcos::protocol::BlockNumber)> _onGetConfig)
-        override;
+    task::Task<SystemConfigEntry> getSystemConfigByKey(std::string_view key) override;
 
-    void asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t _offset,
-        std::function<void(
-            Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
-            _onGetList) override;
+    task::Task<NonceListResult> getNonceList(
+        bcos::protocol::BlockNumber startNumber, int64_t offset) override;
     void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync = false) override;
 
-    void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override;
+    task::Task<consensus::ConsensusNodeList> getNodeListByType(std::string_view type) override;
 
-    void asyncGetCurrentStateByKey(std::string_view const& _key,
-        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
-        override;
+    task::Task<std::optional<storage::Entry>> getCurrentStateByKey(std::string_view key) override;
     Error::Ptr setCurrentStateByKey(
         std::string_view const& _key, bcos::storage::Entry entry) override;
 
@@ -161,16 +147,14 @@ private:
 
     // The storage2 read path cannot distinguish a missing table from missing rows; the
     // legacy async contract reports a missing table as OpenTableFailed, so the legacy
-    // SYS_* readers share this open-table gate. @p callback receives nullptr when the
-    // table exists and is valid, the OpenTableFailed error otherwise.
-    void asyncCheckStateTableValid(
-        std::string_view tableName, std::function<void(Error::Ptr)> callback);
+    // SYS_* readers share this open-table gate.
+    task::Task<void> checkStateTableValid(std::string_view tableName);
 
     Error::Ptr checkEntryValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Entry>& entry, const std::string_view& key);
 
     // prewriteBlockImpl contains the row writes; prewriteBlock folds failures into the historical
-    // error contract. asyncGetBatchTxsByHashList still bridges its coroutine with a callback shell.
+    // error contract.
     task::Task<std::string> prewriteBlockImpl(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block,
         bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
@@ -183,16 +167,13 @@ private:
 
     task::Task<MerkleProofPtr> getTxProof(const crypto::HashType& txHash);
 
-    task::Task<std::pair<bcos::protocol::TransactionsPtr,
-        std::shared_ptr<std::map<std::string, MerkleProofPtr>>>>
-    getBatchTxsWithProofs(crypto::HashListPtr txHashList, bool withProof);
+    task::Task<BatchTransactionsResult> getBatchTxsWithProofs(
+        crypto::HashListPtr txHashList, bool withProof);
 
-    void asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> hashes,
-        std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)>
-            callback);
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> batchGetReceipts(
+        std::shared_ptr<std::vector<std::string>> hashes);
 
-    void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
-        std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
+    task::Task<MerkleProofPtr> getReceiptProof(protocol::TransactionReceipt::Ptr receipt);
 
     void createFileSystemTables(uint32_t blockVersion);
 

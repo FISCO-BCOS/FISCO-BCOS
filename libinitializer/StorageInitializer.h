@@ -42,8 +42,7 @@ using RocksDBOption = bcos::storage2::rocksdb::RocksDBCheckpointOption;
 class StorageInitializer
 {
 public:
-    static auto createRocksDB(const std::string& _path, RocksDBOption& rocksDBOption,
-        [[maybe_unused]] size_t keyPageSize = 0)
+    static auto createRocksDB(const std::string& _path, RocksDBOption& rocksDBOption)
     {
         boost::filesystem::create_directories(_path);
         rocksdb::DB* db = nullptr;
@@ -62,7 +61,6 @@ public:
         options.max_background_jobs = rocksDBOption.maxBackgroundJobs;
         options.max_write_buffer_number = rocksDBOption.maxWriteBufferNumber;
         // FIXME: enable blob support when space amplification is acceptable
-        // options.enable_blob_files = keyPageSize > 1 ? true : false;
         options.enable_blob_files = rocksDBOption.enableBlobFiles;
         options.bytes_per_sync = 1 << 20;  // 1MB
         // options.level_compaction_dynamic_level_bytes = true;

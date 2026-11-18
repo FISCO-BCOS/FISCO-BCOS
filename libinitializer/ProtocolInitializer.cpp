@@ -160,8 +160,7 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
         m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())
                         ->createKeyPair(m_keyIndex, m_password);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from HSM")
-                              << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("keyIndex", m_keyIndex)
-                              << LOG_KV("HSM password", m_password);
+                              << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("keyIndex", m_keyIndex);
     }
     else
     {
@@ -178,7 +177,7 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
                               << LOG_KV("keyEncryptionType",
                                      std::string(magic_enum::enum_name((m_keyEncryptionType))));
         auto privateKey = m_keyFactory->createKey(privateKeyData);
-        m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
+        m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(std::move(privateKey));
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from privateKeyPath")
                               << LOG_KV("privateKeyPath", _privateKeyPath);
     }

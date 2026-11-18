@@ -62,7 +62,7 @@ bcos::crypto::KeyPair::UniquePtr KeyPairBuilder::genKeyPair(
     if (_cryptoType == CryptoType::Secp256K1)
     {
         bcos::crypto::Secp256k1Crypto secp256k1Crypto;
-        auto keyPair = secp256k1Crypto.createKeyPair(keyImpl);
+        auto keyPair = secp256k1Crypto.createKeyPair(std::move(keyImpl));
         /*
         UTILITIES_KEYPAIR_LOG(TRACE)
             << LOG_BADGE("genKeyPair") << LOG_DESC("generate new ecdsa keypair")
@@ -74,7 +74,7 @@ bcos::crypto::KeyPair::UniquePtr KeyPairBuilder::genKeyPair(
     else if (_cryptoType == CryptoType::SM2)
     {
         bcos::crypto::FastSM2KeyPairFactory sM2KeyPairFactory;
-        auto keyPair = sM2KeyPairFactory.createKeyPair(keyImpl);
+        auto keyPair = sM2KeyPairFactory.createKeyPair(std::move(keyImpl));
         /*
         UTILITIES_KEYPAIR_LOG(TRACE)
             << LOG_BADGE("genKeyPair") << LOG_DESC("generate new sm keypair")
@@ -87,7 +87,7 @@ bcos::crypto::KeyPair::UniquePtr KeyPairBuilder::genKeyPair(
         auto hsmKeyPairFactory = std::make_shared<bcos::crypto::HsmSM2KeyPairFactory>(_hsmLibPath);
         UTILITIES_KEYPAIR_LOG(TRACE)
             << LOG_BADGE("genKeyPair") << LOG_DESC("generate new hsm keypair");
-        return hsmKeyPairFactory->createKeyPair(keyImpl);
+        return hsmKeyPairFactory->createKeyPair(std::move(keyImpl));
     }
     else
     {

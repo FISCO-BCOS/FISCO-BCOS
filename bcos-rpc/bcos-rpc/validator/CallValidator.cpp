@@ -61,7 +61,7 @@ std::pair<bool, bytes> bcos::rpc::CallValidator::verify(std::string_view _to,
     bcos::bytes signBytes = bcos::fromHex(sign);
     try
     {
-        return signatureImpl->recoverAddress(*hashImpl, hash, bcos::ref(signBytes));
+        return {true, signatureImpl->recoverAddress(*hashImpl, hash, bcos::ref(signBytes))};
     }
     catch (...)
     {

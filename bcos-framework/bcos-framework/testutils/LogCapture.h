@@ -42,20 +42,41 @@ private:
         // commitLine fans out under a shared lock, so producers on different
         // threads reach this concurrently — serialize the insertion, as the
         // base's synchronous_sink did.
-        void writeLine(LogLevel, std::string_view, std::string_view _message) override
+        //
+        // Signature must match LineSinkWriter::writeLine exactly, including the
+        // optional LineRecord parameter: a default argument only lets CALLERS
+        // omit it, it does not let a three-parameter function override a
+        // four-parameter virtual. This sink renders the whole line itself and has
+        // no queue to stamp, so it ignores the record.
+        void writeLine(LogLevel, std::string_view, std::string_view _message,
+            LineRecord const* = nullptr) override
         {
             std::lock_guard lock(m_mutex);
+            // closed is set by close() under this same mutex, so a producer that
+            // loaded this sink from the registry just before unregisterLineSink()
+            // can still arrive here, and its write must be rejected rather than
+            // racing a later snapshot.
+            if (m_closed)
+            {
+                return;
+            }
             *m_stream << _message << '\n';
         }
-        std::string str()
+
+        /// Stops accepting writes and returns everything collected so far, both
+        /// under the write mutex. Every snapshot must go through here: reading the
+        /// stream under a separate lock could race a concurrent writeLine().
+        std::string closeAndSnapshot()
         {
             std::lock_guard lock(m_mutex);
+            m_closed = true;
             return m_stream->str();
         }
 
     private:
         std::shared_ptr<std::ostringstream> m_stream;
         std::mutex m_mutex;
+        bool m_closed = false;
     };
 
 public:
@@ -74,15 +95,20 @@ public:
     {
         if (m_sink)
         {
-            // unregisterLineSink waits for in-flight writeLine calls, so the
-            // locked read below sees everything collected.
-            log::unregisterLineSink(m_sink.get());
-            auto text = m_sink->str();
+            // unregisterLineSink() only unpublishes the sink: it deliberately
+            // does NOT wait for producers, unlike the registry it replaced. A
+            // producer that already loaded the pointer can therefore still reach
+            // writeLine() after this returns, which is why the snapshot has to be
+            // the sink's own close-and-snapshot under its write mutex.
+            auto sink = m_sink;
+            log::unregisterLineSink(sink.get());
             m_sink.reset();
+            auto text = sink->closeAndSnapshot();
+            m_lastText = text;
             return text;
         }
-        std::lock_guard lock(m_streamMutex);
-        return m_stream->str();
+        // Detached already: the sink is closed, so this is a stable value.
+        return m_lastText;
     }
 
 private:
@@ -90,14 +116,18 @@ private:
     {
         if (m_sink)
         {
-            log::unregisterLineSink(m_sink.get());
+            auto sink = m_sink;
+            log::unregisterLineSink(sink.get());
             m_sink.reset();
+            m_lastText = sink->closeAndSnapshot();
         }
     }
 
     std::shared_ptr<std::ostringstream> m_stream;
     std::shared_ptr<CaptureSink> m_sink;
-    // only used when text() runs after stop() detached the sink
-    std::mutex m_streamMutex;
+    // Snapshot taken when the sink was detached. Written only while releasing
+    // m_sink, and read by text() once m_sink is clear; the sink's own mutex already
+    // serialises the stream access, so no second mutex is required here.
+    std::string m_lastText;
 };
 }  // namespace bcos::test

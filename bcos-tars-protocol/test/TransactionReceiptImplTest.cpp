@@ -463,5 +463,22 @@ BOOST_AUTO_TEST_CASE(opStackMetaRoundTripL1FeeScalarWire)
     BOOST_CHECK_EQUAL(*nonZero->l1_fee_scalar, bcos::u256(1'000'000));
 }
 
+BOOST_AUTO_TEST_CASE(tarsTransportPreservesReceiptPresence)
+{
+    BOOST_CHECK(!makeTransactionReceiptFromTars({}));
+
+    auto suite = makeReceiptImplSuite();
+    TransactionReceiptFactoryImpl factory(suite);
+    std::vector<bcos::protocol::LogEntry> logs;
+    bcos::bytes output;
+    auto receipt = factory.createReceipt(bcos::u256(0), "", logs, 0, bcos::ref(output), 1);
+    auto impl = std::dynamic_pointer_cast<TransactionReceiptImpl>(receipt);
+    BOOST_REQUIRE(impl);
+
+    auto converted = makeTransactionReceiptFromTars(impl->inner());
+    BOOST_REQUIRE(converted);
+    BOOST_CHECK(converted->hash() == receipt->hash());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

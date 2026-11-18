@@ -32,66 +32,87 @@ public:
         bcostars::LedgerServicePrx _prx, bcos::protocol::BlockFactory::Ptr _blockFactory);
     ~LedgerServiceClient() override;
 
+    bcos::task::Task<void> preStoreBlockTxs(
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override;
+
     // TODO: implement this
     bcos::task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr, bool,
         std::optional<bcos::crypto::HashType>, bool writeNonces) override;
 
-    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
-        bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::UniquePtr&&)>) override;
-
     // TODO: implement this
     bcos::Error::Ptr storeTransactionsAndReceipts(
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override;
 
-    void asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
-        std::function<void(bcos::Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock) override;
+    bcos::task::Task<bcos::protocol::Block::Ptr> getBlockDataByNumber(
+        bcos::protocol::BlockNumber blockNumber, int32_t blockFlag) override;
 
-    void asyncGetBlockNumber(
-        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock) override;
+    bcos::task::Task<bcos::protocol::BlockNumber> getBlockNumber() override;
 
-    void asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
-        std::function<void(bcos::Error::Ptr, bcos::crypto::HashType)> _onGetBlock) override;
+    bcos::task::Task<bcos::crypto::HashType> getBlockHashByNumber(
+        bcos::protocol::BlockNumber blockNumber) override;
 
-    void asyncGetBlockNumberByHash(bcos::crypto::HashType const& _blockHash,
-        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock) override;
+    bcos::task::Task<bcos::protocol::BlockNumber> getBlockNumberByHash(
+        bcos::crypto::HashType blockHash) override;
 
-    void asyncGetBatchTxsByHashList(bcos::crypto::HashListPtr _txHashList, bool _withProof,
-        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionsPtr,
-            std::shared_ptr<std::map<std::string, bcos::ledger::MerkleProofPtr>>)>
-            _onGetTx) override;
+    bcos::task::Task<bcos::ledger::BatchTransactionsResult> getBatchTxsByHashList(
+        bcos::crypto::HashListPtr txHashList, bool withProof) override;
 
-    void asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txHash, bool _withProof,
-        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr,
-            bcos::ledger::MerkleProofPtr)>
-            _onGetTx) override;
+    bcos::task::Task<bcos::ledger::TransactionReceiptResult> getTransactionReceiptByHash(
+        bcos::crypto::HashType txHash, bool withProof) override;
 
-    void asyncGetTotalTransactionCount(std::function<void(bcos::Error::Ptr, int64_t _totalTxCount,
-            int64_t _failedTxCount, bcos::protocol::BlockNumber _latestBlockNumber)>
-            _callback) override;
+    bcos::task::Task<bcos::ledger::TransactionCountResult> getTotalTransactionCount() override;
 
-    virtual void asyncGetCurrentStateByKey(std::string_view const& _key,
-        std::function<void(bcos::Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
-        override;
+    bcos::task::Task<std::optional<bcos::storage::Entry>> getCurrentStateByKey(
+        std::string_view key) override;
 
     bcos::Error::Ptr setCurrentStateByKey(
         std::string_view const& _key, bcos::storage::Entry entry) override;
 
-    void asyncGetSystemConfigByKey(std::string_view const& _key,
-        std::function<void(bcos::Error::Ptr, std::string, bcos::protocol::BlockNumber)>
-            _onGetConfig) override;
+    bcos::task::Task<bcos::ledger::SystemConfigEntry> getSystemConfigByKey(
+        std::string_view key) override;
 
-    void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeList)> _onGetConfig)
-        override;
+    bcos::task::Task<bcos::consensus::ConsensusNodeList> getNodeListByType(
+        std::string_view type) override;
 
-    // TODO: implement this
-    void asyncGetNonceList(bcos::protocol::BlockNumber, int64_t,
-        std::function<void(bcos::Error::Ptr,
-            std::shared_ptr<std::map<bcos::protocol::BlockNumber, bcos::protocol::NonceListPtr>>)>)
-        override;
+    bcos::task::Task<bcos::ledger::NonceListResult> getNonceList(
+        bcos::protocol::BlockNumber startNumber, int64_t offset) override;
 
     void removeExpiredNonce(bcos::protocol::BlockNumber blockNumber, bool sync) override;
+
+private:
+    void asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock);
+
+    void asyncGetBlockNumber(
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock);
+
+    void asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
+        std::function<void(bcos::Error::Ptr, bcos::crypto::HashType)> _onGetBlock);
+
+    void asyncGetBlockNumberByHash(bcos::crypto::HashType const& _blockHash,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock);
+
+    void asyncGetBatchTxsByHashList(bcos::crypto::HashListPtr _txHashList, bool _withProof,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionsPtr,
+            std::shared_ptr<std::map<std::string, bcos::ledger::MerkleProofPtr>>)>
+            _onGetTx);
+
+    void asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txHash, bool _withProof,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr,
+            bcos::ledger::MerkleProofPtr)>
+            _onGetTx);
+
+    void asyncGetTotalTransactionCount(std::function<void(bcos::Error::Ptr, int64_t _totalTxCount,
+            int64_t _failedTxCount, bcos::protocol::BlockNumber _latestBlockNumber)>
+            _callback);
+
+    void asyncGetSystemConfigByKey(std::string_view const& _key,
+        std::function<void(bcos::Error::Ptr, std::string, bcos::protocol::BlockNumber)>
+            _onGetConfig);
+
+    void asyncGetNodeListByType(std::string_view const& _type,
+        std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeList)> _onGetConfig);
 
 private:
     bcostars::LedgerServicePrx m_prx;

@@ -3,9 +3,9 @@
 #include "MockBlock.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/storage/Serialize.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-framework/storage/Serialize.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/test/unit_test.hpp>
@@ -14,6 +14,8 @@
 
 namespace bcos::test
 {
+using namespace bcos::ledger;
+
 class MockLedger : public bcos::ledger::LedgerInterface
 {
 public:
@@ -31,16 +33,13 @@ public:
         std::optional<bcos::crypto::HashType>, bool) override
     {
         BOOST_CHECK(false);  // Need implementations
-        return []() -> task::Task<std::string> { co_return std::string{}; }();
+        co_return std::string{};
     };
-    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
-        bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override
+
+    task::Task<void> preStoreBlockTxs(
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override
     {
-        if (!_callback)
-        {
-            return;
-        }
-        _callback(nullptr);
+        co_return;
     }
 
     bcos::Error::Ptr storeTransactionsAndReceipts(
@@ -59,8 +58,8 @@ public:
             m_blockNumber = blockHeader->number();
         }
     }
-    void asyncGetBlockDataByNumber(protocol::BlockNumber _blockNumber, int32_t _blockFlag,
-        std::function<void(Error::Ptr, protocol::Block::Ptr)> _onGetBlock) override
+
+    task::Task<protocol::Block::Ptr> getBlockDataByNumber(protocol::BlockNumber, int32_t) override
     {
         auto block = std::make_shared<MockBlock>();
         if (m_blockHeader)
@@ -70,82 +69,66 @@ public:
         block->blockHeader()->setNumber(m_blockNumber);
         auto hashImpl = std::make_shared<crypto::Keccak256>();
         block->blockHeader()->calculateHash(*hashImpl);
-        _onGetBlock(nullptr, block);
+        co_return std::move(block);
     };
 
     protocol::BlockNumber m_blockNumber = 0;
     void setBlockNumber(protocol::BlockNumber blockNumber) { m_blockNumber = blockNumber; }
 
-    void asyncGetBlockNumber(
-        std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock) override
+    task::Task<protocol::BlockNumber> getBlockNumber() override { co_return m_blockNumber; };
+
+    task::Task<crypto::HashType> getBlockHashByNumber(protocol::BlockNumber _blockNumber) override
     {
-        _onGetBlock(nullptr, m_blockNumber);
+        co_return crypto::HashType(_blockNumber);
     };
 
-    void asyncGetBlockHashByNumber(protocol::BlockNumber _blockNumber,
-        std::function<void(Error::Ptr, crypto::HashType)> _onGetBlock) override
-    {
-        _onGetBlock(nullptr, crypto::HashType(_blockNumber));
-    };
-
-    void asyncGetBlockNumberByHash(crypto::HashType const& _blockHash,
-        std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock) override
+    task::Task<protocol::BlockNumber> getBlockNumberByHash(crypto::HashType) override
     {
         BOOST_CHECK(false);  // Need implementations
+        co_return -1;
     };
 
-    void asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _withProof,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr,
-            std::shared_ptr<std::map<std::string, bcos::ledger::MerkleProofPtr>>)>
-            _onGetTx) override
+    task::Task<BatchTransactionsResult> getBatchTxsByHashList(crypto::HashListPtr, bool) override
     {
         BOOST_CHECK(false);  // Need implementations
+        co_return BatchTransactionsResult{};
     };
 
-
-    void asyncGetTransactionReceiptByHash(crypto::HashType const& _txHash, bool _withProof,
-        std::function<void(
-            Error::Ptr, protocol::TransactionReceipt::Ptr, bcos::ledger::MerkleProofPtr)>
-            _onGetTx) override
+    task::Task<TransactionReceiptResult> getTransactionReceiptByHash(
+        crypto::HashType, bool) override
     {
         BOOST_CHECK(false);  // Need implementations
+        co_return TransactionReceiptResult{};
     };
 
-
-    void asyncGetTotalTransactionCount(std::function<void(Error::Ptr, int64_t _totalTxCount,
-            int64_t _failedTxCount, protocol::BlockNumber _latestBlockNumber)>
-            _callback) override
+    task::Task<TransactionCountResult> getTotalTransactionCount() override
     {
         BOOST_CHECK(false);  // Need implementations
+        co_return TransactionCountResult{};
     };
 
-    void asyncGetCurrentStateByKey(std::string_view const& _key,
-        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) override
-    {}
+    task::Task<std::optional<bcos::storage::Entry>> getCurrentStateByKey(std::string_view) override
+    {
+        co_return std::nullopt;
+    }
 
-
-    void asyncGetSystemConfigByKey(std::string_view const& _key,
-        std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> _onGetConfig) override
+    task::Task<SystemConfigEntry> getSystemConfigByKey(std::string_view _key) override
     {
         if (std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION) == std::string(_key))
         {
             std::stringstream ss;
             ss << bcos::protocol::BlockVersion::MAX_VERSION;
-
-            _onGetConfig(nullptr, ss.str(), m_blockNumber);
-            return;
+            co_return SystemConfigEntry{ss.str(), m_blockNumber};
         }
-        else if (std::string(bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT) == std::string(_key))
+        if (std::string(bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT) == std::string(_key))
         {
-            _onGetConfig(nullptr, std::to_string(MockLedger::TX_GAS_LIMIT), m_blockNumber);
-            return;
+            co_return SystemConfigEntry{std::to_string(MockLedger::TX_GAS_LIMIT), m_blockNumber};
         }
-        else if (std::string(bcos::ledger::SYSTEM_KEY_WEB3_CHAIN_ID) == std::string(_key))
+        if (std::string(bcos::ledger::SYSTEM_KEY_WEB3_CHAIN_ID) == std::string(_key))
         {
-            _onGetConfig(nullptr, "20200", m_blockNumber);
-            return;
+            co_return SystemConfigEntry{"20200", m_blockNumber};
         }
-        else if (std::string(bcos::ledger::SYSTEM_KEY_AUTH_CHECK_STATUS) == std::string(_key))
+        if (std::string(bcos::ledger::SYSTEM_KEY_AUTH_CHECK_STATUS) == std::string(_key))
         {
             if (m_storage)
             {
@@ -157,29 +140,23 @@ public:
                 auto rawEntry = promise.get_future().get();
                 auto entry =
                     bcos::storage::serialize::decode<ledger::SystemConfigEntry>(rawEntry.get());
-                _onGetConfig(nullptr, std::get<0>(entry), std::get<1>(entry));
-                return;
+                co_return entry;
             }
-            _onGetConfig(nullptr, "0", m_blockNumber);
-            return;
+            co_return SystemConfigEntry{"0", m_blockNumber};
         }
 
-        _onGetConfig(nullptr, "0", 0);
+        co_return SystemConfigEntry{"0", 0};
     };
 
-
-    void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override
+    task::Task<consensus::ConsensusNodeList> getNodeListByType(std::string_view) override
     {
-        _onGetConfig(nullptr, consensus::ConsensusNodeList());
+        co_return consensus::ConsensusNodeList{};
     };
 
-    void asyncGetNonceList(protocol::BlockNumber _startNumber, int64_t _offset,
-        std::function<void(
-            Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
-            _onGetList) override
+    task::Task<NonceListResult> getNonceList(protocol::BlockNumber, int64_t) override
     {
         BOOST_CHECK(false);  // Need implementations
+        co_return nullptr;
     };
 
     void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}

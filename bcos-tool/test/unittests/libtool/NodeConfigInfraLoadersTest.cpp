@@ -10,6 +10,7 @@
 
 #include "NodeConfigLoaderProbe.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/testutils/LogCapture.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <fstream>
@@ -67,6 +68,30 @@ BOOST_AUTO_TEST_CASE(storageConfigDefaults)
     a.loadStorageConfig({});  // pure defaults — covers the bulk of the loader
     BOOST_CHECK_EQUAL(a.storageType(), "RocksDB");
     BOOST_CHECK(!a.enableSeparateBlockAndState());
+    BOOST_CHECK_EQUAL(a.keyPageSize(), 0);
+    BOOST_CHECK(!a.keyPageSizeConfigured());
+
+    LoaderProbe explicitZero;
+    explicitZero.loadStorageConfig(fromIni("[storage]\nkey_page_size=0\n"));
+    BOOST_CHECK_EQUAL(explicitZero.keyPageSize(), 0);
+    BOOST_CHECK(explicitZero.keyPageSizeConfigured());
+
+    LoaderProbe legacy;
+    legacy.loadStorageConfig(fromIni("[storage]\nkey_page_size=10240\n"));
+    BOOST_CHECK_EQUAL(legacy.keyPageSize(), 10240);
+    BOOST_CHECK(legacy.keyPageSizeConfigured());
+}
+
+
+BOOST_AUTO_TEST_CASE(storageConfigRejectsMalformedKeyPageSize)
+{
+    for (auto const* invalid : {"", "abc"})
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_THROW(probe.loadStorageConfig(
+                              fromIni(std::string("[storage]\nkey_page_size=") + invalid + "\n")),
+            bcos::tool::InvalidConfig);
+    }
 }
 
 
@@ -129,6 +154,24 @@ BOOST_AUTO_TEST_CASE(securityConfigHsmCloudKmsBcosKms)
     LoaderProbe bcoskmsBad;  // BCOSKMS without cipher_data_key → throws
     BOOST_CHECK_THROW(bcoskmsBad.loadSecurityConfig(fromIni("[security]\nkms_type=BCOSKMS\n")),
         bcos::tool::InvalidConfig);
+}
+
+BOOST_AUTO_TEST_CASE(securityConfigHsmDoesNotLogPassword)
+{
+    auto const password = std::string("node-config-hsm-secret");
+    auto const previousLogLevel = c_fileLogLevel.load();
+    LoaderProbe hsm;
+    setFileLogLevel(LogLevel::INFO);
+    LogCapture capture;
+    hsm.loadSecurityConfig(fromIni(
+        "[security]\nkms_type=HSM\nkey_index=1\nhsm_lib_path=/tmp/x.so\npassword=" + password +
+        "\n"));
+    auto const text = capture.text();
+    setFileLogLevel(previousLogLevel);
+
+    BOOST_CHECK(text.find("loadSecurityConfig HSM") != std::string::npos);
+    BOOST_CHECK(text.find(password) == std::string::npos);
+    BOOST_CHECK(text.find("password") == std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

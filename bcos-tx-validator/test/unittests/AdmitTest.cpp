@@ -348,10 +348,16 @@ BOOST_AUTO_TEST_CASE(malformedEnvelopeIsRejectedBeforeTheChainIdCheck)
 /// A ledger whose SYS_CONFIG reads fail outright.
 struct SystemConfigUnreadableLedger : FakeLedger
 {
-    void asyncGetSystemConfigByKey(std::string_view const&,
-        std::function<void(Error::Ptr, std::string, protocol::BlockNumber)>) override
+    std::size_t systemConfigReads = 0;
+
+    bcos::task::Task<bcos::ledger::SystemConfigEntry> getSystemConfigByKey(
+        std::string_view) override
     {
-        throw std::runtime_error("SYS_CONFIG must not be read at admission");
+        ++systemConfigReads;
+        return []() -> bcos::task::Task<bcos::ledger::SystemConfigEntry> {
+            throw std::runtime_error("SYS_CONFIG must not be read at admission");
+            co_return bcos::ledger::SystemConfigEntry{};
+        }();
     }
 };
 
@@ -362,10 +368,12 @@ struct SystemConfigUnreadableLedger : FakeLedger
 BOOST_AUTO_TEST_CASE(admissionReadsNoSystemConfig)
 {
     AdmitHarness harness;
-    harness.ledger = std::make_shared<SystemConfigUnreadableLedger>();
+    auto ledger = std::make_shared<SystemConfigUnreadableLedger>();
+    harness.ledger = ledger;
     harness.web3NonceChecker = std::make_shared<CountingWeb3NonceChecker>(harness.ledger);
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+    BOOST_CHECK_EQUAL(ledger->systemConfigReads, 0);
 }
 
 // ------------------------------------------------------------ contexts and policy
@@ -870,7 +878,7 @@ BOOST_AUTO_TEST_CASE(forgedBcosDataHashDoesNotBindTheVictimAsSender)
         [inner = std::move(victimInner)]() mutable { return &inner; });
     victim->calculateHash(*hashImpl);
     auto signature = signatureImpl->sign(senderKey(), victim->hash(), true);
-    victim->setSignatureData(*signature);
+    victim->setSignatureData(signature);
     auto const stolenHash = victim->hash();
 
     // The attacker's body, carrying the victim's hash and signature.
@@ -880,16 +888,14 @@ BOOST_AUTO_TEST_CASE(forgedBcosDataHashDoesNotBindTheVictimAsSender)
     forgedInner.data.groupID = "group0";
     forgedInner.data.chainID = "chain0";
     forgedInner.dataHash.assign(stolenHash.begin(), stolenHash.end());
-    forgedInner.signature.assign(signature->begin(), signature->end());
+    forgedInner.signature.assign(signature.begin(), signature.end());
     auto forged = std::make_shared<bcostars::protocol::TransactionImpl>(
         [inner = std::move(forgedInner)]() mutable { return &inner; });
 
     harness.run(*forged, AdmissionContext::PoolAdmission, SignaturePolicy::Required);
 
     // What the victim's key actually signed.
-    auto const [ok, victimAddress] =
-        signatureImpl->recoverAddress(*hashImpl, stolenHash, ref(*signature));
-    BOOST_REQUIRE(ok);
+    auto const victimAddress = signatureImpl->recoverAddress(*hashImpl, stolenHash, ref(signature));
 
     // The forged body must NOT be attributed to the victim. Admission may still accept it as
     // some other (meaningless) sender -- what must never happen is the victim's address ending

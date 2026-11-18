@@ -172,7 +172,7 @@ bcos::bytesConstPtr TransactionBuilder::signTransactionDataHash(
 
     //  sign transaction data hash
     auto signData = cryptoSuite->signatureImpl()->sign(_keyPair, _transactionDataHash, true);
-    return signData;
+    return std::make_shared<bcos::bytes>(std::move(signData));
 }
 
 /**

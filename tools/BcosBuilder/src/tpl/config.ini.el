@@ -114,7 +114,7 @@
     data_path=data
     enable_cache=true
     type=RocksDB
-    key_page_size=10240
+    key_page_size=0
     ; EL nodes sync an Ethereum L1 chain whose state is archive-scale (tens of thousands
     ; of SSTs): the bounded default (256) thrashes the table cache there — every random
     ; MPT node read evicts a reader and re-reads its index/filter/properties blocks

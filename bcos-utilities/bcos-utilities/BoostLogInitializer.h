@@ -73,8 +73,6 @@ public:
     std::string logPath() const { return m_logPath; }
 
 private:
-    bool canRotate(size_t const& _index);
-
     std::shared_ptr<line_sink_t> initLineLogSink(std::string const& _logPath);
     std::shared_ptr<line_sink_t> initHourLineLogSink(
         std::string const& _logPath, std::string const& _logPrefix);
@@ -84,7 +82,9 @@ private:
     std::vector<std::shared_ptr<line_sink_t>> m_lineSinks;
     std::vector<std::shared_ptr<console_line_sink_t>> m_consoleLineSinks;
 
-    std::vector<int> m_currentHourVec;
+    // No m_currentHourVec: the hourly rotation state lives inside the sink's own
+    // rotation callback (see initHourLineLogSink). A sink outlives this
+    // initializer, so any rotation state it needs must not be owned here.
     std::string m_logPath;
     unsigned m_logLevel = 2;
     bool m_consoleLog = false;

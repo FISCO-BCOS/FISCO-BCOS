@@ -181,7 +181,7 @@ std::string Web3Transaction::sender() const
     auto encodeForSign = this->encodeForSign();
     auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
     const bcos::crypto::Secp256k1Crypto signatureImpl;
-    auto [_, addr] = signatureImpl.recoverAddress(hashImpl, hash, ref(sign));
+    auto addr = signatureImpl.recoverAddress(hashImpl, hash, ref(sign));
     return toHexStringWithPrefix(addr);
 }
 std::string Web3Transaction::toString() const noexcept

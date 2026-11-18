@@ -61,6 +61,11 @@ Address inline calculateAddress(crypto::Hash& _hashImpl, PublicPtr _publicKey)
     return right160(_hashImpl.hash(_publicKey));
 }
 
+Address inline calculateAddress(crypto::Hash& _hashImpl, const Public& _publicKey)
+{
+    return right160(_hashImpl.hash(_publicKey.data()));
+}
+
 bytes inline calculateAddress(crypto::Hash& _hashImpl, uint8_t* _publicKey, size_t _len)
 {
     auto address = _hashImpl.hash(bytesConstRef(_publicKey, _len));

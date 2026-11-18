@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(constructor)
         "08d9eb8563e31f943d760786edf42ad67dd");
     auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
     auto sec1 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec1.asBytes());
-    auto keyPair1 = signatureImpl->createKeyPair(sec1);
+    auto keyPair1 = signatureImpl->createKeyPair(*sec1);
     auto blockFactory = createBlockFactory();
     auto sealerConfig =
         std::make_shared<bcos::sealer::SealerConfig>(blockFactory, nullptr, nullptr);

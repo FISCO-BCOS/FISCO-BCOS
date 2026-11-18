@@ -23,6 +23,7 @@
 #include <bcos-crypto/signature/ed25519/Ed25519KeyPair.h>
 #include <openssl/evp.h>
 #include <memory>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -33,8 +34,8 @@ Ed25519KeyPair::Ed25519KeyPair()
 
 Ed25519KeyPair::Ed25519KeyPair(SecretPtr _secretKey) : Ed25519KeyPair()
 {
-    m_secretKey = _secretKey;
     m_publicKey = priToPub(_secretKey);
+    m_secretKey = std::move(_secretKey);
     m_type = KeyPairType::Ed25519;
 }
 

@@ -103,6 +103,40 @@ BOOST_AUTO_TEST_CASE(initLogRejectsTooSmallFileSize)
     BOOST_CHECK_THROW(init.initLog(pt, bcos::FileLogger, "test"), std::runtime_error);
 }
 
+// enable=false skips registerLineSink, so no line ever reaches the backend and the
+// hourly rotation predicate is never invoked. Exercise it for real: with the sink
+// enabled and rotate_by_hour=true, the backend consults the predicate on every
+// line, so this is what proves the predicate works without any initializer state.
+// It also documents why the predicate must be self-contained: a registered sink
+// outlives BoostLogInitializer, and a producer that lost the race with
+// stopLogging() can still drive the backend afterwards.
+BOOST_AUTO_TEST_CASE(hourlyRotationPredicateRunsWithEnabledSink)
+{
+    auto path = makeTempLogDir("hourly_enabled");
+    auto pt = fromIni("[log]\nenable=true\nlevel=info\nlog_path=" + path +
+                      "\nenable_rotate_by_hour=true\ntime_based_rotation_enabled=true\n"
+                      "max_log_file_size=200\n");
+    {
+        BoostLogInitializer init;
+        init.initLog(pt, bcos::FileLogger, "test");
+        // Enough lines that rotation is checked repeatedly, not just once.
+        for (int i = 0; i < 200; ++i)
+        {
+            BCOS_LOG(INFO) << "rotationPredicateMarker" << i;
+        }
+        init.stopLogging();
+    }
+
+    bool wroteSomething = false;
+    for (auto const& entry : std::filesystem::directory_iterator(path))
+    {
+        wroteSomething = wroteSomething ||
+                         (entry.is_regular_file() && std::filesystem::file_size(entry.path()) > 0);
+    }
+    std::filesystem::remove_all(path);
+    BOOST_CHECK(wroteSomething);
+}
+
 // Drives the real boost text file backend end to end: every other case sets
 // enable=false, which skips registerLineSink, so Sink::consumeLine — and its
 // default-constructed record_view() assumption against the installed boost
