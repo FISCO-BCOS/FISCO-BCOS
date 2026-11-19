@@ -128,8 +128,8 @@ public:
         using engine::engine_common::ExternalL1Context;
         // The builder only ever produces PoS blocks (difficulty 0), which is also the
         // per-block "TTD passed" signal evmcRevisionForTimestamp keys on.
-        auto const revision =
-            scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0));
+        auto const revision = scheduler_v1::requireEvmcRevisionForTimestamp(
+            m_forkSchedule, timestampSeconds, u256(0));
         ExternalL1Context context;
         // Throws UnsupportedFork for a revision this binary cannot map to a header era
         // — the same loud failure the number-keyed derivation had.
@@ -156,8 +156,8 @@ public:
     std::optional<bcos::protocol::EthBlockVersion> forkVersionAt(
         int64_t timestampSeconds) const override
     {
-        return engine::detail::tryEthBlockVersionFor(
-            scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0)));
+        return engine::detail::tryEthBlockVersionFor(scheduler_v1::requireEvmcRevisionForTimestamp(
+            m_forkSchedule, timestampSeconds, u256(0)));
     }
 
     task::Task<engine::engine_common::ExternalBuildResult> buildL1Block(

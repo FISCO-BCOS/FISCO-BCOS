@@ -1,6 +1,7 @@
 #pragma once
 #include "../../../src/executive/BlockContext.h"
 #include "../../src/Common.h"
+#include "../../src/executive/CoroutineTransactionExecutive.h"
 #include "../../src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executor/TransactionExecutor.h"

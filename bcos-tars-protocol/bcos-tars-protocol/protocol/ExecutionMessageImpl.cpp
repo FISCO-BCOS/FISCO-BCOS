@@ -84,6 +84,16 @@ void bcostars::protocol::ExecutionMessageImpl::setSeq(int64_t seq)
     m_inner()->seq = seq;
 }
 
+int64_t bcostars::protocol::ExecutionMessageImpl::schedulerSeq() const
+{
+    return m_inner()->schedulerSeq;
+}
+
+void bcostars::protocol::ExecutionMessageImpl::setSchedulerSeq(int64_t schedulerSeq)
+{
+    m_inner()->schedulerSeq = schedulerSeq;
+}
+
 std::string_view bcostars::protocol::ExecutionMessageImpl::origin() const
 {
     return m_inner()->origin;
@@ -296,7 +306,12 @@ void bcostars::protocol::ExecutionMessageImpl::setStatus(int32_t status)
 
 int32_t bcostars::protocol::ExecutionMessageImpl::evmStatus() const
 {
-    return m_inner()->evmStatus;
+    const auto status = m_inner()->evmStatus;
+    // Tars reads compact Int32 bytes through plain char, which is unsigned on
+    // Linux ARM. Restore the three EVMC internal statuses (-3, -2, -1) after
+    // zero-extension. Values 253..255 are not defined positive EVMC statuses.
+    // Normalize unconditionally so forwarding through another platform is safe.
+    return status >= 253 && status <= 255 ? status - 256 : status;
 }
 
 void bcostars::protocol::ExecutionMessageImpl::setEvmStatus(int32_t evmStatus)

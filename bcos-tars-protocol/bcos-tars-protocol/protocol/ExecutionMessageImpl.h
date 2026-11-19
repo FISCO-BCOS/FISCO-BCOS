@@ -57,6 +57,9 @@ public:
     int64_t seq() const override;
     void setSeq(int64_t seq) override;
 
+    int64_t schedulerSeq() const override;
+    void setSchedulerSeq(int64_t schedulerSeq) override;
+
     std::string_view origin() const override;
     void setOrigin(std::string origin) override;
 

@@ -11,6 +11,11 @@ add_dependencies(eest-runner executor)
 set_target_properties(eest-runner PROPERTIES UNITY_BUILD OFF)
 set_target_properties(eest-runner PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
+# test-eest-post-state (TestEESTPostState.cpp) retired by the merge with #5753:
+# it unit-tested the old runner's MutableStorage-based verifyPostState member,
+# which the known-failures pipeline replaced with its own view-based
+# verifyPostState and corpus-level post-state gates.
+
 # Compile/instantiation smoke coverage for the split-2/4 orphan headers
 # (EVMSupport.h / EthereumState.h): nothing else includes them yet, so this
 # target is the first place a syntax, template-instantiation or ODR error in
