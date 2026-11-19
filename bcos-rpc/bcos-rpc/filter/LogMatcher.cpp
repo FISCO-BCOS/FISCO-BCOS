@@ -11,25 +11,40 @@ using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::protocol;
 
-uint32_t LogMatcher::matches(
-    FilterRequest::ConstPtr _params, bcos::protocol::Block::ConstPtr _block, Json::Value& _result)
+LogMatcher::BlockMatchOutcome LogMatcher::matches(FilterRequest::ConstPtr _params,
+    bcos::protocol::Block::ConstPtr _block, Json::Value& _result, std::size_t _maxLogs)
 {
-    uint32_t count = 0;
+    BlockMatchOutcome outcome;
     auto receipts = _block->receipts();
     auto const blockHash = bcos::protocol::canonicalBlockHash(*_block->blockHeader());
     for (std::size_t index = 0; index < _block->transactionsMetaDataSize(); index++)
     {
         auto receipt = receipts[index];
-        count += matches(_params, crypto::HashType(blockHash), *receipt,
-            _block->transactionHash(index), index, _result);
+        outcome.matched += matches(_params, crypto::HashType(blockHash), *receipt,
+            _block->transactionHash(index), index, _result, _maxLogs, outcome.budgetExceeded);
+        if (outcome.budgetExceeded)
+        {
+            // Stop walking the block too: the remaining receipts cannot be reported, and
+            // decoding their logs would be work spent only to throw.
+            break;
+        }
     }
 
-    return count;
+    return outcome;
 }
 
 uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::HashType&& _blockHash,
     const bcos::protocol::TransactionReceipt& _receipt, bcos::crypto::HashType&& _txHash,
     std::size_t _txIndex, Json::Value& _result)
+{
+    bool budgetExceeded = false;
+    return matches(_params, std::move(_blockHash), _receipt, std::move(_txHash), _txIndex, _result,
+        /*_maxLogs=*/0, budgetExceeded);
+}
+
+uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::HashType&& _blockHash,
+    const bcos::protocol::TransactionReceipt& _receipt, bcos::crypto::HashType&& _txHash,
+    std::size_t _txIndex, Json::Value& _result, std::size_t _maxLogs, bool& _budgetExceeded)
 {
     uint32_t count = 0;
     auto blockNumber = _receipt.blockNumber();
@@ -43,6 +58,14 @@ uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::Hash
         const auto& logEntry = logEntries[i];
         if (matches(_params, logEntry))
         {
+            // Checked BEFORE the entry is constructed: the budget is a bound on the array, so
+            // appending first and testing afterwards would not bound anything -- one dense block
+            // could still materialise every match it has.
+            if (_maxLogs != 0 && _result.size() >= _maxLogs)
+            {
+                _budgetExceeded = true;
+                return count;
+            }
             count++;
             Json::Value log;
             log["data"] = toHexStringWithPrefix(logEntry.data());
