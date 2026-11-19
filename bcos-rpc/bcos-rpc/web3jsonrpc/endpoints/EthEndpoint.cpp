@@ -19,6 +19,7 @@
  */
 
 #include "EthEndpoint.h"
+#include "EthMethods.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -296,6 +297,16 @@ Json::Value callFailureError(protocol::TransactionStatus status, std::string_vie
     error["message"] = std::move(message);
     error["data"] = std::move(outputHex);
     return error;
+}
+
+// A non-string selector must not become an empty tag, which resolves to latest.
+std::string_view readStringBlockSelector(const Json::Value& tag)
+{
+    if (!tag.isNull() && !tag.isString())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Unsupported block parameter"));
+    }
+    return toView(tag);
 }
 
 /// Resolve an EIP-1186/EIP-1898 block parameter to its canonical string form. The fault-proof
@@ -710,7 +721,7 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     }
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
-    auto const blockTag = toView(request[1U]);
+    auto const blockTag = request.size() > 1 ? readStringBlockSelector(request[1U]) : LatestBlock;
     auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
     auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
@@ -819,16 +830,14 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     {
         positionStr.insert(0, "0");
     }
-    // A QUANTITY position is at most 256 bits (32 bytes = 64 hex digits); anything wider is
-    // an invalid param per the spec. Note the std::string FixedBytes overload silently
-    // truncates wider input via fromHex, so reject explicitly before decoding.
+    // FixedBytes truncates oversized input, so check the width before decoding.
+    if (positionStr.size() > 64) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid storage position"));
+    }
     FixedBytes<32> positionBytes;
     try
     {
-        if (positionStr.size() > 64) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid storage position"));
-        }
         positionBytes = FixedBytes<32>(positionStr, FixedBytes<32>::FromHex);
     }
     catch (...)
@@ -836,7 +845,7 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid storage position"));
     }
 
-    auto const blockTag = toView(request[2U]);
+    auto const blockTag = request.size() > 2 ? readStringBlockSelector(request[2U]) : LatestBlock;
     auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
     auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
@@ -1003,7 +1012,7 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     }
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
-    auto const blockTag = toView(request[1U]);
+    auto const blockTag = readStringBlockSelector(request[1U]);
     auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
     auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
@@ -1187,7 +1196,7 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     }
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
-    auto const blockTag = toView(request[1u]);
+    auto const blockTag = readStringBlockSelector(request[1u]);
     auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
     auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
@@ -1607,7 +1616,7 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
     {
         call.gas = c_ethCallGasCap;
     }
-    auto const blockTag = toView(request[1U]);
+    auto const blockTag = readStringBlockSelector(request[1U]);
     auto const [blockNumber, head] = co_await getBlockNumberAndHeadByTag(blockTag);
     auto const isLatest = std::cmp_equal(head, blockNumber);
     if (c_fileLogLevel == TRACE)
@@ -1814,7 +1823,7 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
             JsonRpcError::InternalError, "Ledger not available for eth_estimateGas"));
     }
     auto const& tx = request[0U];
-    auto const blockTag = toView(request[1U]);
+    auto const blockTag = readStringBlockSelector(request[1U]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
@@ -2031,9 +2040,11 @@ task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::V
 }
 task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json::Value& response)
 {
-    // params: blockNumber(QTY|TAG), fullTransaction(Boolean)
-    // result: block(BLOCK)
-    auto const blockTag = toView(request[0U]);
+    auto const blockTag = readStringBlockSelector(request[0U]);
+    if (!request[1U].isBool())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Expected fullTransaction boolean"));
+    }
     auto const fullTransaction = request[1U].asBool();
     Json::Value result = Json::objectValue;
     try
@@ -2469,6 +2480,40 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     co_return;
 }
 
+std::optional<task::Task<void>> EthEndpoint::laneAvailabilityCheck(std::string_view method) const
+{
+    if (method != "eth_blobBaseFee" && method != "eth_feeHistory" &&
+        method != "eth_getBlockReceipts" && method != "txpool_status" &&
+        method != "txpool_content" && method != "debug_getRawHeader" &&
+        method != "debug_getRawReceipts")
+    {
+        return std::nullopt;
+    }
+
+    // Keep handler guards for direct callers. Registered routes must also check their lane
+    // before schema validation. Ordinary routes never create an availability task.
+    return [](NodeService& node, std::string_view restrictedMethod) -> task::Task<void> {
+        auto const& ledger = node.ledger();
+        if (!ledger)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InternalError, "Ledger not available for " + std::string(restrictedMethod)));
+        }
+        if (restrictedMethod.starts_with("txpool_"))
+        {
+            co_await requireOpStackLane(*ledger, restrictedMethod);
+        }
+        else if (restrictedMethod == "debug_getRawReceipts")
+        {
+            co_await requireEthereumExecutorLane(*ledger, restrictedMethod);
+        }
+        else
+        {
+            co_await requireEthereumLane(*ledger, restrictedMethod);
+        }
+    }(*m_nodeService, method);
+}
+
 task::Task<void> EthEndpoint::blobBaseFee(const Json::Value&, Json::Value& response)
 {
     // params: none
@@ -2588,7 +2633,7 @@ task::Task<void> EthEndpoint::getBlockReceipts(const Json::Value& request, Json:
     // eth_getTransactionReceipt answers for that tx; null for an unknown block.
     auto const ledger = m_nodeService->ledger();
     co_await requireEthereumLane(*ledger, "eth_getBlockReceipts");
-    auto const blockId = toView(request[0U]);
+    auto const blockId = readStringBlockSelector(request[0U]);
     // A bare 32-byte hash is resolved by the shared tag resolver too (which is what makes the
     // hash -> number mapping one implementation rather than three). This endpoint answers null
     // for a block the node does not have, which is the one place the resolver's not-found

@@ -356,22 +356,14 @@ BOOST_AUTO_TEST_CASE(ReaderUnsetReturns32603)
     BOOST_CHECK(resp["error"]["message"].asString().find("MPT not enabled") != std::string::npos);
 }
 
-// F4 regression: a 66-char "0x…" third parameter is a block hash (op-node passes it). A
-// malformed hex hash is a client error ("Invalid block hash"), not the misleading
-// "Block not found" the earlier catch-all produced for both malformed hex and storage faults.
-BOOST_AUTO_TEST_CASE(MalformedBlockHashReturnsInvalidBlockHash)
+// A malformed block hash is rejected during parameter validation, before block lookup.
+BOOST_AUTO_TEST_CASE(MalformedBlockHashReturnsInvalidParams)
 {
-    buildTrie();
-    wireReader();
-
-    // 66 chars ("0x" + 64) so the hash branch is taken, but the payload is not valid hex — the
-    // decode fails before any ledger lookup, so the fixture needs no hash->number support.
     std::string malformed = "0x" + std::string(64, 'z');
     auto resp = getProof(address.hexPrefixed(), {}, malformed);
     BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);  // InvalidParams
-    BOOST_CHECK(
-        resp["error"]["message"].asString().find("Invalid block hash") != std::string::npos);
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
+    BOOST_CHECK(resp["error"]["message"].asString().starts_with("Invalid params at /params/2"));
 }
 
 // A valid 66-char hash (op-node passes the block hash for output-root computation) resolves to
@@ -462,9 +454,8 @@ BOOST_AUTO_TEST_CASE(ObjectBlockHashFormReturnsSameProofAsHash)
         respByHash["result"]["storageHash"].asString());
 }
 
-// The {"blockNumber": "0x…"} EIP-1898 object form must resolve identically to the plain
-// quantity/tag string, exercising the helper's blockNumber branch.
-BOOST_AUTO_TEST_CASE(ObjectBlockNumberFormResolvesTag)
+// An EIP-1898 blockNumber object takes a quantity. A block tag remains valid as a string.
+BOOST_AUTO_TEST_CASE(ObjectBlockNumberFormResolvesQuantity)
 {
     buildTrie();
     wireReader();
@@ -477,7 +468,7 @@ BOOST_AUTO_TEST_CASE(ObjectBlockNumberFormResolvesTag)
     params.append(address.hexPrefixed());
     params.append(Json::arrayValue);
     Json::Value blockId(Json::objectValue);
-    blockId["blockNumber"] = "latest";
+    blockId["blockNumber"] = toQuantity(m_ledger->ledgerData().back()->blockHeader()->number());
     params.append(blockId);
     req["params"] = params;
 
@@ -493,6 +484,13 @@ BOOST_AUTO_TEST_CASE(ObjectBlockNumberFormResolvesTag)
         respByObject["result"]["balance"].asString(), respByTag["result"]["balance"].asString());
     BOOST_CHECK_EQUAL(respByObject["result"]["storageHash"].asString(),
         respByTag["result"]["storageHash"].asString());
+
+    req["params"][2U]["blockNumber"] = "latest";
+    auto const invalidObjectTag = request(printJson(req));
+    BOOST_REQUIRE(invalidObjectTag.isMember("error"));
+    BOOST_CHECK_EQUAL(invalidObjectTag["error"]["code"].asInt(), -32602);
+    BOOST_CHECK(
+        invalidObjectTag["error"]["message"].asString().starts_with("Invalid params at /params/2"));
 }
 
 // An EIP-1898 object that is neither blockHash-string nor blockNumber string/integral is

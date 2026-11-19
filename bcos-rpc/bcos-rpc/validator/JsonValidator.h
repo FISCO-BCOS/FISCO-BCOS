@@ -20,10 +20,10 @@
 
 #pragma once
 
-#include <bcos-rpc/Common.h>
 #include <json/json.h>
 #include <string>
-#include <vector>
+#include <string_view>
+#include <tuple>
 
 
 namespace bcos::rpc
@@ -33,6 +33,9 @@ class JsonValidator
 public:
     static std::tuple<bool, std::string> validate(const Json::Value& _json);
     static std::tuple<bool, std::string> checkRequestFields(const Json::Value& _json);
+    // Throws InvalidParams with a JSON Pointer rooted at /params for a malformed tuple.
+    static void prepareParameterSchemas();
+    static void requireParams(std::string_view method, Json::Value const& params);
 };
 
 }  // namespace bcos::rpc

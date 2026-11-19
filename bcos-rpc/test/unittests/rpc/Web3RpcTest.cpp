@@ -163,7 +163,7 @@ BOOST_AUTO_TEST_CASE(handleInvalidTest)
         const auto request = R"({{"jsonrpc":"2.0","id":1, "method":"eth_blockNumber","params":[]})";
         auto response = onRPCRequestWrapper(request);
         BOOST_TEST(response.isMember("error"));
-        BOOST_TEST(response["error"]["code"].asInt() == InvalidRequest);
+        BOOST_TEST(response["error"]["code"].asInt() == ParseError);
     }
 
     // invalid params type
@@ -181,6 +181,37 @@ BOOST_AUTO_TEST_CASE(handleInvalidTest)
         BOOST_TEST(response.isMember("error"));
         BOOST_TEST(response["error"]["code"].asInt() == MethodNotFound);
         BOOST_TEST(response["error"]["message"].asString() == "Method not found");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(schemaValidationFollowsRequestAndMethodAvailability)
+{
+    auto const responses = onRPCRequestWrapper(R"([
+        {"jsonrpc":"2.0","id":1,"method":"eth_noSuchMethod","params":[true]},
+        {"jsonrpc":"2.0","id":2,"method":"engine_exchangeCapabilities","params":[true]},
+        {"jsonrpc":"2.0","id":3,"method":"eth_getBlockByNumber","params":["latest","false"]},
+        {"jsonrpc":"2.0","id":4,"method":"eth_noSuchMethod","params":{}},
+        {"jsonrpc":"2.0","id":5,"method":"eth_chainId","params":[]}
+    ])");
+    BOOST_REQUIRE(responses.isArray());
+    BOOST_REQUIRE_EQUAL(responses.size(), 5);
+    for (auto const& response : responses)
+    {
+        auto const id = response["id"].asUInt();
+        BOOST_TEST_CONTEXT("response id " << id)
+        {
+            if (id == 5)
+            {
+                validRespCheck(response);
+                continue;
+            }
+            BOOST_REQUIRE(response["error"].isObject());
+            auto const expected = id < 3  ? MethodNotFound :
+                                  id == 3 ? InvalidParams :
+                                            InvalidRequest;
+            BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), expected);
+            BOOST_CHECK(!response["error"].isMember("data"));
+        }
     }
 }
 
@@ -291,7 +322,7 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
 
         using namespace std::string_literals;
         auto request2 =
-            R"({"jsonrpc":"2.0","method":"eth_estimateGas","params":[{"from":"0x2a09be8823b80f337170650802d1a0f8a99fe2d8","data":"0x608060405234801561000f575f5ffd5b5060408051808201909152600b81526a12195b1b1bc815dbdc9b1960aa1b60208201525f9061003e90826100dc565b50610196565b634e487b7160e01b5f52604160045260245ffd5b600181811c9082168061006c57607f821691505b60208210810361008a57634e487b7160e01b5f52602260045260245ffd5b50919050565b601f8211156100d757805f5260205f20601f840160051c810160208510156100b55750805b601f840160051c820191505b818110156100d4575f81556001016100c1565b50505b505050565b81516001600160401b038111156100f5576100f5610044565b610109816101038454610058565b84610090565b6020601f82116001811461013b575f83156101245750848201515b5f19600385901b1c1916600184901b1784556100d4565b5f84815260208120601f198516915b8281101561016a578785015182556020948501946001909201910161014a565b508482101561018757868401515f19600387901b60f8161c191681555b50505050600190811b01905550565b61037a806101a35f395ff3fe608060405234801561000f575f5ffd5b5060043610610034575f3560e01c80634ed3885e146100385780636d4ce63c1461004d575b5f5ffd5b61004b61004636600461011d565b61006b565b005b61005561007a565b60405161006291906101d0565b60405180910390f35b5f6100768282610289565b5050565b60605f805461008890610205565b80601f01602080910402602001604051908101604052809291908181526020018280546100b490610205565b80156100ff5780601f106100d6576101008083540402835291602001916100ff565b820191905f5260205f20905b8154815290600101906020018083116100e257829003601f168201915b5050505050905090565b634e487b7160e01b5f52604160045260245ffd5b5f6020828403121561012d575f5ffd5b813567ffffffffffffffff811115610143575f5ffd5b8201601f81018413610153575f5ffd5b803567ffffffffffffffff81111561016d5761016d610109565b604051601f8201601f19908116603f0116810167ffffffffffffffff8111828210171561019c5761019c610109565b6040528181528282016020018610156101b3575f5ffd5b816020840160208301375f91810160200191909152949350505050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b600181811c9082168061021957607f821691505b60208210810361023757634e487b7160e01b5f52602260045260245ffd5b50919050565b601f82111561028457805f5260205f20601f840160051c810160208510156102625750805b601f840160051c820191505b81811015610281575f815560010161026e565b50505b505050565b815167ffffffffffffffff8111156102a3576102a3610109565b6102b7816102b18454610205565b8461023d565b6020601f8211600181146102e9575f83156102d25750848201515b5f19600385901b1c1916600184901b178455610281565b5f84815260208120601f198516915b8281101561031857878501518255602094850194600190920191016102f8565b508482101561033557868401515f19600387901b60f8161c191681555b50505050600190811b0190555056fea2646970667358221220a57cc7c4c4b178df95e2a8c140734de9e3c49c8623eccd4425c20df3902a074f64736f6c634300081c0033"},"pending"],"id":4}))"s;
+            R"({"jsonrpc":"2.0","method":"eth_estimateGas","params":[{"from":"0x2a09be8823b80f337170650802d1a0f8a99fe2d8","data":"0x608060405234801561000f575f5ffd5b5060408051808201909152600b81526a12195b1b1bc815dbdc9b1960aa1b60208201525f9061003e90826100dc565b50610196565b634e487b7160e01b5f52604160045260245ffd5b600181811c9082168061006c57607f821691505b60208210810361008a57634e487b7160e01b5f52602260045260245ffd5b50919050565b601f8211156100d757805f5260205f20601f840160051c810160208510156100b55750805b601f840160051c820191505b818110156100d4575f81556001016100c1565b50505b505050565b81516001600160401b038111156100f5576100f5610044565b610109816101038454610058565b84610090565b6020601f82116001811461013b575f83156101245750848201515b5f19600385901b1c1916600184901b1784556100d4565b5f84815260208120601f198516915b8281101561016a578785015182556020948501946001909201910161014a565b508482101561018757868401515f19600387901b60f8161c191681555b50505050600190811b01905550565b61037a806101a35f395ff3fe608060405234801561000f575f5ffd5b5060043610610034575f3560e01c80634ed3885e146100385780636d4ce63c1461004d575b5f5ffd5b61004b61004636600461011d565b61006b565b005b61005561007a565b60405161006291906101d0565b60405180910390f35b5f6100768282610289565b5050565b60605f805461008890610205565b80601f01602080910402602001604051908101604052809291908181526020018280546100b490610205565b80156100ff5780601f106100d6576101008083540402835291602001916100ff565b820191905f5260205f20905b8154815290600101906020018083116100e257829003601f168201915b5050505050905090565b634e487b7160e01b5f52604160045260245ffd5b5f6020828403121561012d575f5ffd5b813567ffffffffffffffff811115610143575f5ffd5b8201601f81018413610153575f5ffd5b803567ffffffffffffffff81111561016d5761016d610109565b604051601f8201601f19908116603f0116810167ffffffffffffffff8111828210171561019c5761019c610109565b6040528181528282016020018610156101b3575f5ffd5b816020840160208301375f91810160200191909152949350505050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b600181811c9082168061021957607f821691505b60208210810361023757634e487b7160e01b5f52602260045260245ffd5b50919050565b601f82111561028457805f5260205f20601f840160051c810160208510156102625750805b601f840160051c820191505b81811015610281575f815560010161026e565b50505b505050565b815167ffffffffffffffff8111156102a3576102a3610109565b6102b7816102b18454610205565b8461023d565b6020601f8211600181146102e9575f83156102d25750848201515b5f19600385901b1c1916600184901b178455610281565b5f84815260208120601f198516915b8281101561031857878501518255602094850194600190920191016102f8565b508482101561033557868401515f19600387901b60f8161c191681555b50505050600190811b0190555056fea2646970667358221220a57cc7c4c4b178df95e2a8c140734de9e3c49c8623eccd4425c20df3902a074f64736f6c634300081c0033"},"pending"],"id":4})"s;
         response = onRPCRequestWrapper(request2);
         validRespCheck(response);
     }
@@ -827,8 +858,9 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     tx->encode(encodedTx);
     auto encodedTxHex = toHexStringWithPrefix(encodedTx);
 
-    auto const largeQuantity = std::string("0x100000000000000000");
-    auto const expectedLargeValue = fromBigQuantity(largeQuantity);
+    auto const maxUint64Quantity = std::string("0xffffffffffffffff");
+    auto const maxUint64 = fromBigQuantity(maxUint64Quantity);
+    auto const wideBlockValue = std::string("0x100000000000000000");
     auto const logsBloom = "0x" + std::string(BloomBytesSize * 2, '0');
 
     // Karst surface (B4): the wire dialect is newPayloadV4 (payload with withdrawalsRoot,
@@ -841,13 +873,33 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     newPayloadRequest += encodedTxHex;
     newPayloadRequest +=
         R"("],"withdrawals":[{"index":"0x1","validatorIndex":"0x2","address":"0x7777777777777777777777777777777777777777","amount":")";
-    newPayloadRequest += largeQuantity;
+    newPayloadRequest += maxUint64Quantity;
     newPayloadRequest += R"("}],"blobGasUsed":")";
-    newPayloadRequest += largeQuantity;
+    newPayloadRequest += maxUint64Quantity;
     newPayloadRequest += R"(","excessBlobGas":")";
-    newPayloadRequest += largeQuantity;
+    newPayloadRequest += maxUint64Quantity;
     newPayloadRequest +=
         R"("},[],"0x169630f535b4a41330164c6e5c92b1224c0c407f582d407d0ac3d206cd32fd52",[]]})";
+
+    for (auto const& [field, path] : {
+             std::pair{"amount", "/params/0/withdrawals/0/amount"},
+             std::pair{"blobGasUsed", "/params/0/blobGasUsed"},
+             std::pair{"excessBlobGas", "/params/0/excessBlobGas"},
+         })
+    {
+        auto invalidRequest = newPayloadRequest;
+        auto fieldPrefix = std::string{"\""} + field + "\":\"";
+        auto offset = invalidRequest.find(fieldPrefix + maxUint64Quantity);
+        BOOST_REQUIRE_NE(offset, std::string::npos);
+        invalidRequest.replace(
+            offset + fieldPrefix.size(), maxUint64Quantity.size(), wideBlockValue);
+        auto error = engineRequest(invalidRequest);
+        BOOST_REQUIRE(error.isMember("error"));
+        BOOST_CHECK_EQUAL(error["error"]["code"].asInt(), InvalidParams);
+        BOOST_CHECK_EQUAL(
+            error["error"]["message"].asString(), "Invalid params at " + std::string(path));
+        BOOST_CHECK(!testEngineService.m_state->capturedNewPayloadRequest.has_value());
+    }
 
     auto newPayloadResponse = engineRequest(newPayloadRequest);
     validRespCheck(newPayloadResponse);
@@ -866,17 +918,17 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
             .has_value());
     BOOST_TEST(
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
-            .amount == expectedLargeValue);
+            .amount == maxUint64);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed
             .has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
             .excessBlobGas.has_value());
     BOOST_TEST(
         *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
-        expectedLargeValue);
+        maxUint64);
     BOOST_TEST(
         *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas ==
-        expectedLargeValue);
+        maxUint64);
 
     // Raw-bytes carrier: newPayload preserves the wire bytes verbatim (no decoding).
     BOOST_TEST(toHexStringWithPrefix(testEngineService.m_state->capturedNewPayloadRequest
@@ -885,25 +937,25 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 
     testEngineService.m_state->getPayloadResult->executionPayload =
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload;
-    testEngineService.m_state->getPayloadResult->blockValue = expectedLargeValue;
+    testEngineService.m_state->getPayloadResult->blockValue = fromBigQuantity(wideBlockValue);
 
     const auto getPayloadRequest =
-        R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV5","params":["payload-id-1"]})";
+        R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV5","params":["0x0000000000000001"]})";
     auto getPayloadResponse = engineRequest(getPayloadRequest);
     validRespCheck(getPayloadResponse);
     BOOST_REQUIRE(testEngineService.m_state->capturedPayloadId.has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());
-    BOOST_TEST(*testEngineService.m_state->capturedPayloadId == "payload-id-1");
+    BOOST_TEST(*testEngineService.m_state->capturedPayloadId == "0x0000000000000001");
     BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 5);
     BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"].size() == 1);
     BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"][0].asString() ==
                encodedTxHex);
     BOOST_TEST(
         getPayloadResponse["result"]["executionPayload"]["withdrawals"][0]["amount"].asString() ==
-        largeQuantity);
+        maxUint64Quantity);
     BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["withdrawalsRoot"].asString() ==
                "0x9999999999999999999999999999999999999999999999999999999999999999");
-    BOOST_TEST(getPayloadResponse["result"]["blockValue"].asString() == largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["blockValue"].asString() == wideBlockValue);
     BOOST_TEST(getPayloadResponse["result"]["executionRequests"].isArray());
     BOOST_TEST(getPayloadResponse["result"]["executionRequests"].size() == 0U);
 
@@ -911,7 +963,7 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     // reaches the engine service over the same full RPC path, and answers in the V2 shape
     // (executionPayload + blockValue, no blobsBundle / executionRequests).
     const auto oldVersionRequest =
-        R"({"jsonrpc":"2.0","id":10,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
+        R"({"jsonrpc":"2.0","id":10,"method":"engine_getPayloadV2","params":["0x0000000000000001"]})";
     auto oldVersionResponse = engineRequest(oldVersionRequest);
     validRespCheck(oldVersionResponse);
     BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());

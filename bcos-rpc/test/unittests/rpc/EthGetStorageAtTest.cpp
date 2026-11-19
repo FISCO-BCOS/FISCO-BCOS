@@ -599,7 +599,7 @@ BOOST_AUTO_TEST_CASE(OverwidePositionReturnsInvalidParams)
     auto resp = getStorageAt(address.hexPrefixed(), overwide, "latest");
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
-    BOOST_CHECK(resp["error"]["message"].asString().find("storage position") != std::string::npos);
+    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), "Invalid params at /params/1");
 }
 
 // blockTag semantics: the default depths are 0 — PBFT commits are final, so safe/finalized

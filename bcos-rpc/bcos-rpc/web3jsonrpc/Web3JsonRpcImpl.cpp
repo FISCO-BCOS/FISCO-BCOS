@@ -22,6 +22,9 @@
 #include "bcos-rpc/validator/JsonValidator.h"
 #include "bcos-task/Wait.h"
 #include "utils/util.h"
+#include <memory>
+#include <optional>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -35,6 +38,7 @@ bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string const& _groupId,
     m_endpointsMapping(_enableOPEngine, _enableMinerApi, _enableDebugApi),
     m_batchRequestSizeLimit(_batchRequestSizeLimit)
 {
+    JsonValidator::prepareParameterSchemas();
     RPC_LOG(INFO) << LOG_KV("[NEWOBJ][Web3JsonRpcImpl]", this);
 }
 
@@ -51,7 +55,7 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
                             << LOG_KV("request", printJson(_request));
         }
 
-        // check request params
+        // Check the JSON-RPC envelope before resolving the route.
         if (auto result{JsonValidator::validate(_request)}; !std::get<bool>(result))
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidRequest, std::get<std::string>(result)));
@@ -60,19 +64,36 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
         std::string method = _request["method"].asString();
         response["id"] = _request["id"];
 
-        if (m_web3Subscribe && m_web3Subscribe->isSubscribeRequest(method))
+        bool const isSubscription = m_web3Subscribe && m_web3Subscribe->isSubscribeRequest(method);
+        std::optional<EndpointsMapping::Handler> optHandler;
+        if (isSubscription)
         {
-            auto result = handleSubscribeRequest(_request, method, std::move(_session));
-            co_return result;
+            if (!_session)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidRequest, "Subscribe request only support websocket protocol"));
+            }
+        }
+        else
+        {
+            optHandler = m_endpointsMapping.findHandler(method);
+            if (!optHandler)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
+            }
+            if (auto availability = m_endpoints.laneAvailabilityCheck(method))
+            {
+                co_await std::move(*availability);
+            }
         }
 
-        auto optHandler = m_endpointsMapping.findHandler(method);
-        if (!optHandler.has_value())
+        auto const& params = std::as_const(_request)["params"];
+        JsonValidator::requireParams(method, params);
+        if (isSubscription)
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
+            co_return handleSubscribeRequest(_request, method, std::move(_session));
         }
 
-        Json::Value const& params = _request["params"];
         Json::Value result;
         auto handler = optHandler.value();
         auto task = (m_endpoints.*handler)(params, result);
@@ -155,12 +176,6 @@ void Web3JsonRpcImpl::handleBatchRequest(
 Json::Value Web3JsonRpcImpl::handleSubscribeRequest(Json::Value _request,
     std::string const& _method, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
-    if (!_session)
-    {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidRequest, "Subscribe request only support websocket protocol"));
-    }
-
     Json::Value response;
     if (_request.isObject() && _request.isMember("id"))
     {
@@ -243,11 +258,24 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
                             << LOG_KV("request", _requestBody);
         }
 
-        // parse json
-        if (Json::Reader jsonReader;
-            !jsonReader.parse(_requestBody.begin(), _requestBody.end(), request))
+        static const Json::CharReaderBuilder readerBuilder = [] {
+            Json::CharReaderBuilder builder;
+            Json::CharReaderBuilder::strictMode(&builder.settings_);
+            // JSON scalars parse successfully and are rejected as invalid envelopes.
+            builder["strictRoot"] = false;
+            return builder;
+        }();
+        // JsonCpp treats a raw NUL as end of input even with failIfExtra enabled.
+        if (_requestBody.empty() || _requestBody.find('\0') != std::string_view::npos)
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidRequest, "Parse json failed"));
+            BOOST_THROW_EXCEPTION(JsonRpcException(ParseError, "Parse json failed"));
+        }
+        std::unique_ptr<Json::CharReader> reader(readerBuilder.newCharReader());
+        if (std::string error;
+            !reader->parse(_requestBody.begin(), _requestBody.end(), &request, &error))
+        {
+            request = Json::nullValue;
+            BOOST_THROW_EXCEPTION(JsonRpcException(ParseError, "Parse json failed"));
         }
 
         if (request.isObject() && request.isMember("id"))

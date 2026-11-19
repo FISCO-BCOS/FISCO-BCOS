@@ -80,6 +80,34 @@ BOOST_AUTO_TEST_CASE(getBlockByNumberFullTxs)
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
 }
 
+BOOST_AUTO_TEST_CASE(dispatchValidatesPilotParamsBeforeBusinessLogic)
+{
+    for (auto const* method : {"eth_getBalance", "eth_getStorageAt", "eth_getBlockByNumber"})
+    {
+        BOOST_TEST_CONTEXT(method)
+        {
+            auto const response = call(req(method, "[]"));
+            BOOST_REQUIRE(response["error"].isObject());
+            BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), InvalidParams);
+            BOOST_CHECK(!response["error"].isMember("data"));
+        }
+    }
+
+    auto const response = call(req("eth_getBlockByNumber", R"(["0x1",false])"));
+    BOOST_REQUIRE(response["result"].isObject());
+    BOOST_CHECK_EQUAL(response["result"]["number"].asString(), "0x1");
+    BOOST_CHECK(response["result"]["transactions"].isArray());
+}
+
+BOOST_AUTO_TEST_CASE(getBalanceEip1898ObjectReachesBusinessValidation)
+{
+    auto const response = call(req("eth_getBalance",
+        R"(["0x7dcd17433742f4c0ca53122ab541d0ba67fc27df",{"blockNumber":"0x0"}])"));
+    BOOST_REQUIRE(response["error"].isObject());
+    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), InvalidParams);
+    BOOST_CHECK_EQUAL(response["error"]["message"].asString(), "Unsupported block parameter");
+}
+
 BOOST_AUTO_TEST_CASE(getBlockTransactionCountByNumber)
 {
     auto resp = call(req("eth_getBlockTransactionCountByNumber", R"(["0x1"])"));
@@ -102,9 +130,18 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptUnknown)
 
 BOOST_AUTO_TEST_CASE(malformedParamsReportError)
 {
-    // Wrong arity / type should surface a JSON-RPC error, not crash.
-    auto resp = call(req("eth_getBlockByNumber", R"([])"));
-    BOOST_CHECK(resp.isMember("error") || resp.isMember("result"));
+    for (auto const& [params, message] : {
+             std::pair{R"([])", "Invalid params at /params"},
+             std::pair{R"(["latest",1])", "Invalid params at /params/1"},
+         })
+    {
+        auto resp = call(req("eth_getBlockByNumber", params));
+        BOOST_REQUIRE(resp.isMember("error"));
+        BOOST_CHECK(!resp.isMember("result"));
+        BOOST_CHECK_EQUAL(resp["id"].asInt(), 1);
+        BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
+        BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), message);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(getBlockTransactionCountByNumberEarliestAndPending)
