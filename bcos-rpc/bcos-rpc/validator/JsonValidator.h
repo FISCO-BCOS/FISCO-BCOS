@@ -21,24 +21,21 @@
 #pragma once
 
 #include <json/json.h>
-#include <optional>
 #include <string>
-#include <string_view>
 #include <tuple>
 
 
 namespace bcos::rpc
 {
+enum class EthMethod;
+
 class JsonValidator
 {
 public:
     static std::tuple<bool, std::string> validate(const Json::Value& _json);
     static std::tuple<bool, std::string> checkRequestFields(const Json::Value& _json);
-    static void prepareParameterSchemas();
-    // A failure contains a JSON Pointer rooted at /params. Unregistered schemas pass through.
-    // JSON null represents an absent params field after successful envelope validation.
-    static std::optional<std::string> validateParams(
-        std::string_view method, const Json::Value& params);
+    // Throws InvalidParams with a JSON Pointer rooted at /params for a malformed tuple.
+    static void requireParams(EthMethod method, Json::Value const& params);
 };
 
 }  // namespace bcos::rpc

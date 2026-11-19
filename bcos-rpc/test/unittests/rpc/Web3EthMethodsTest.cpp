@@ -80,16 +80,27 @@ BOOST_AUTO_TEST_CASE(getBlockByNumberFullTxs)
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
 }
 
-BOOST_AUTO_TEST_CASE(subscriptionBlockLookupUsesTheSameBlockResponse)
+BOOST_AUTO_TEST_CASE(directPilotHandlersValidateTheirParams)
 {
-    auto const rpcResponse = call(req("eth_getBlockByNumber", R"(["0x1",false])"));
-    BOOST_REQUIRE(rpcResponse["result"].isObject());
-    BOOST_CHECK_EQUAL(rpcResponse["result"]["number"].asString(), "0x1");
-    BOOST_REQUIRE(rpcResponse["result"]["transactions"].isArray());
+    auto& endpoints = web3JsonRpc->endpoints();
+    Json::Value response;
+    Json::Value params(Json::arrayValue);
+    auto const missingParams = [](JsonRpcException const& error) {
+        return error.code() == InvalidParams && error.msg() == "Invalid params at /params";
+    };
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(endpoints.getBalance(params, response)), JsonRpcException, missingParams);
+    BOOST_CHECK_EXCEPTION(
+        task::syncWait(endpoints.getStorageAt(params, response)), JsonRpcException, missingParams);
+    BOOST_CHECK_EXCEPTION(task::syncWait(endpoints.getBlockByNumber(params, response)),
+        JsonRpcException, missingParams);
 
-    Json::Value subscriptionResponse;
-    task::syncWait(web3JsonRpc->endpoints().fetchBlockByNumber("0x1", false, subscriptionResponse));
-    BOOST_CHECK(subscriptionResponse["result"] == rpcResponse["result"]);
+    params.append("0x1");
+    params.append(false);
+    task::syncWait(endpoints.getBlockByNumber(params, response));
+    BOOST_REQUIRE(response["result"].isObject());
+    BOOST_CHECK_EQUAL(response["result"]["number"].asString(), "0x1");
+    BOOST_CHECK(response["result"]["transactions"].isArray());
 }
 
 BOOST_AUTO_TEST_CASE(getBlockTransactionCountByNumber)

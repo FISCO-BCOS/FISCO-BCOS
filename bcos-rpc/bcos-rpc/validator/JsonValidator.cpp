@@ -19,103 +19,105 @@
  */
 
 #include "JsonValidator.h"
-#include "ParameterSchemas.generated.h"
-#include <boost/regex.hpp>
-#include <map>
-#include <sstream>
-#include <stdexcept>
-#include <unordered_map>
-#include <valijson/valijson_jsoncpp_bundled.hpp>
-#include <vector>
+#include <bcos-rpc/Common.h>
+#include <bcos-rpc/jsonrpc/Common.h>
+#include <bcos-rpc/web3jsonrpc/endpoints/EthMethods.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <boost/throw_exception.hpp>
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <limits>
+#include <span>
 
 namespace bcos::rpc
 {
 namespace
 {
-struct ParameterSchema
+enum class ParamKind
 {
-    valijson::Schema rule;
-    std::vector<Json::UInt> maxStringLengths;
+    Address,
+    StorageSlot,
+    BlockSelector,
+    Boolean
 };
 
-struct CompiledParameterSchemas
+// Positional signatures from ethereum/execution-apis at 68d76a5b1c09dff023782d97eec6ce87a6f6505e.
+// Local compatibility also permits legacy hex encodings and bare block hashes.
+constexpr std::array balanceParams{ParamKind::Address, ParamKind::BlockSelector};
+constexpr std::array storageParams{
+    ParamKind::Address, ParamKind::StorageSlot, ParamKind::BlockSelector};
+constexpr std::array blockParams{ParamKind::BlockSelector, ParamKind::Boolean};
+
+bool isAsciiHex(std::string_view digits)
 {
-    std::map<std::string, ParameterSchema, std::less<>> methods;
-    std::unordered_map<std::string, boost::regex> patterns;
-
-    CompiledParameterSchemas()
-    {
-        Json::CharReaderBuilder reader;
-        std::istringstream input(std::string{schema::parameterSchemas});
-        Json::Value source;
-        if (!Json::parseFromStream(reader, input, &source, nullptr) || !source.isObject())
-        {
-            throw std::logic_error("Invalid embedded Web3 parameter schemas");
-        }
-
-        for (auto entry = source.begin(); entry != source.end(); ++entry)
-        {
-            auto& compiled = methods.try_emplace(entry.name()).first->second;
-            auto const& rule = *entry;
-            auto const& items = rule["items"];
-            auto const& maxItems = rule["maxItems"];
-            if ((!items.isArray() && !items.isNull()) || !maxItems.isUInt() ||
-                maxItems.asUInt() != items.size())
-            {
-                throw std::logic_error("Web3 parameter schema must be a bounded tuple");
-            }
-            for (auto const& item : items)
-            {
-                compiled.maxStringLengths.push_back(item["maxLength"].asUInt());
-            }
-            compilePatterns(rule);
-            valijson::SchemaParser(valijson::SchemaParser::kDraft7)
-                .populateSchema(valijson::adapters::JsonCppAdapter(rule), compiled.rule);
-        }
-    }
-
-    void compilePatterns(const Json::Value& rule)
-    {
-        if (rule.isObject())
-        {
-            if (rule.isMember("pattern"))
-            {
-                auto const pattern = rule["pattern"].asString();
-                patterns.try_emplace(pattern, pattern, boost::regex::ECMAScript);
-            }
-        }
-        if (rule.isObject() || rule.isArray())
-        {
-            for (auto const& child : rule)
-            {
-                compilePatterns(child);
-            }
-        }
-    }
-};
-
-auto const& compiledParameterSchemas()
-{
-    static const CompiledParameterSchemas schemas;
-    return schemas;
+    return std::ranges::all_of(digits, [](char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+    });
 }
 
-// Valijson maintains a mutable pattern cache per Validator. Each thread caches only references
-// to the patterns compiled during startup. Request-local visitors own the validation state.
-struct ParameterRegex
+bool matchesBlockSelector(std::string_view value)
 {
-    boost::regex const& pattern;
-
-    explicit ParameterRegex(std::string const& source)
-      : pattern(compiledParameterSchemas().patterns.at(source))
-    {}
-
-    static bool search(const std::string& value, const ParameterRegex& rule)
+    if (value == EarliestBlock || value == LatestBlock || value == PendingBlock ||
+        value == SafeBlock || value == FinalizedBlock)
     {
-        // ECMAScript does not enable multiline anchors by default.
-        return boost::regex_search(value, rule.pattern, boost::match_single_line);
+        return true;
     }
-};
+    if (!value.starts_with("0x") || value.size() > 66)
+    {
+        return false;
+    }
+    auto const digits = value.substr(2);
+    // The shared resolver interprets a 32-byte hex value as a hash, even when padded with zeros.
+    if (digits.size() == 64)
+    {
+        return isAsciiHex(digits);
+    }
+    auto const height = safeFromQuantity(value);
+    return height && *height <= std::numeric_limits<int64_t>::max();
+}
+
+bool matchesParam(ParamKind kind, Json::Value const& value)
+{
+    if (kind == ParamKind::Boolean)
+    {
+        return value.isBool();
+    }
+    char const* begin = nullptr;
+    char const* end = nullptr;
+    if (!value.getString(&begin, &end))
+    {
+        return false;
+    }
+    auto const text = std::string_view(begin, end);
+    if (kind == ParamKind::BlockSelector)
+    {
+        return matchesBlockSelector(text);
+    }
+    auto const digits = text.starts_with("0x") || text.starts_with("0X") ? text.substr(2) : text;
+    return (kind == ParamKind::Address ? digits.size() == 40 : digits.size() <= 64) &&
+           isAsciiHex(digits);
+}
+
+void requirePositionalParams(
+    Json::Value const& params, std::span<ParamKind const> kinds, Json::ArrayIndex required)
+{
+    auto const fail = [](std::string path) {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid params at " + path));
+    };
+    auto const count = params.size();
+    if (!params.isArray() || count < required || count > kinds.size())
+    {
+        fail("/params");
+    }
+    for (Json::ArrayIndex i = 0; i < count; ++i)
+    {
+        if (!matchesParam(kinds[i], params[i]))
+        {
+            fail("/params/" + std::to_string(i));
+        }
+    }
+}
 }  // namespace
 
 std::tuple<bool, std::string> JsonValidator::validate(const Json::Value& root)
@@ -123,62 +125,22 @@ std::tuple<bool, std::string> JsonValidator::validate(const Json::Value& root)
     return checkRequestFields(root);
 }
 
-void JsonValidator::prepareParameterSchemas()
+void JsonValidator::requireParams(EthMethod method, Json::Value const& params)
 {
-    (void)compiledParameterSchemas();
-}
-
-std::optional<std::string> JsonValidator::validateParams(
-    std::string_view method, const Json::Value& params)
-{
-    auto const& schemas = compiledParameterSchemas().methods;
-    auto const entry = schemas.find(method);
-    if (entry == schemas.end())
+    switch (method)
     {
-        return std::nullopt;
+    case EthMethod::eth_getBalance:
+        requirePositionalParams(params, balanceParams, 1);
+        break;
+    case EthMethod::eth_getStorageAt:
+        requirePositionalParams(params, storageParams, 2);
+        break;
+    case EthMethod::eth_getBlockByNumber:
+        requirePositionalParams(params, blockParams, 2);
+        break;
+    default:
+        break;
     }
-
-    auto const& [rule, maxStringLengths] = entry->second;
-    static const Json::Value emptyParams(Json::arrayValue);
-    auto const& values = params.isNull() ? emptyParams : params;
-    if (!values.isArray() || values.size() > maxStringLengths.size())
-    {
-        return "/params";
-    }
-    for (Json::ArrayIndex index = 0; index < values.size(); ++index)
-    {
-        char const* begin = nullptr;
-        char const* end = nullptr;
-        auto const maxLength = maxStringLengths[index];
-        // These schemas only accept ASCII strings. Check the byte length before the adapter
-        // copies the string or gives it to the regex engine.
-        if (maxLength && values[index].getString(&begin, &end) &&
-            static_cast<size_t>(end - begin) > maxLength)
-        {
-            return "/params/" + std::to_string(index);
-        }
-    }
-
-    thread_local valijson::ValidatorT<ParameterRegex> validator;
-    valijson::adapters::JsonCppAdapter adapter(values);
-    if (validator.validate(rule, adapter, nullptr))
-    {
-        return std::nullopt;
-    }
-
-    valijson::ValidationResults results;
-    validator.validate(rule, adapter, &results);
-    for (auto const& error : results)
-    {
-        for (Json::ArrayIndex index = 0; index < values.size(); ++index)
-        {
-            if (error.jsonPointer == "/" + std::to_string(index))
-            {
-                return "/params" + error.jsonPointer;
-            }
-        }
-    }
-    return "/params";
 }
 
 std::tuple<bool, std::string> JsonValidator::checkRequestFields(const Json::Value& root)

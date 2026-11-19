@@ -19,6 +19,7 @@
  */
 
 #include "EthEndpoint.h"
+#include "EthMethods.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -48,6 +49,7 @@
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
+#include <bcos-rpc/validator/JsonValidator.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/CallRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
@@ -701,6 +703,7 @@ task::Task<T> mapPrunedMptWalk(task::Task<T> walk, bcos::protocol::BlockNumber b
 
 task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value& response)
 {
+    JsonValidator::requireParams(EthMethod::eth_getBalance, request);
     // params: address(DATA), blockNumber(QTY|TAG)
     // result: balance(QTY)
     auto address = toView(request[0U]);
@@ -803,6 +806,7 @@ static std::string storageValueToData(std::string_view value)
 
 task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Value& response)
 {
+    JsonValidator::requireParams(EthMethod::eth_getStorageAt, request);
     // params: address(DATA), position(QTY), blockNumber(QTY|TAG)
     // result: value(DATA)
     auto address = toView(request[0U]);
@@ -819,16 +823,9 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     {
         positionStr.insert(0, "0");
     }
-    // A QUANTITY position is at most 256 bits (32 bytes = 64 hex digits); anything wider is
-    // an invalid param per the spec. Note the std::string FixedBytes overload silently
-    // truncates wider input via fromHex, so reject explicitly before decoding.
     FixedBytes<32> positionBytes;
     try
     {
-        if (positionStr.size() > 64) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid storage position"));
-        }
         positionBytes = FixedBytes<32>(positionStr, FixedBytes<32>::FromHex);
     }
     catch (...)
@@ -2031,13 +2028,9 @@ task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::V
 }
 task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json::Value& response)
 {
-    // params: blockNumber(QTY|TAG), fullTransaction(Boolean)
-    return fetchBlockByNumber(toView(request[0U]), request[1U].asBool(), response);
-}
-
-task::Task<void> EthEndpoint::fetchBlockByNumber(
-    std::string_view blockTag, bool fullTransaction, Json::Value& response)
-{
+    JsonValidator::requireParams(EthMethod::eth_getBlockByNumber, request);
+    auto const blockTag = toView(request[0U]);
+    auto const fullTransaction = request[1U].asBool();
     Json::Value result = Json::objectValue;
     try
     {

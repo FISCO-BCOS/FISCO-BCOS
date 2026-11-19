@@ -35,7 +35,6 @@ bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string const& _groupId,
     m_endpointsMapping(_enableOPEngine, _enableMinerApi, _enableDebugApi),
     m_batchRequestSizeLimit(_batchRequestSizeLimit)
 {
-    JsonValidator::prepareParameterSchemas();
     RPC_LOG(INFO) << LOG_KV("[NEWOBJ][Web3JsonRpcImpl]", this);
 }
 
@@ -52,7 +51,7 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
                             << LOG_KV("request", printJson(_request));
         }
 
-        // Validate the envelope before checking method availability.
+        // check request params
         if (auto result{JsonValidator::validate(_request)}; !std::get<bool>(result))
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidRequest, std::get<std::string>(result)));
@@ -73,21 +72,7 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
             BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
         }
 
-        Json::Value const& params = std::as_const(_request)["params"];
-        std::optional<std::string> invalidPath;
-        try
-        {
-            invalidPath = JsonValidator::validateParams(method, params);
-        }
-        catch (...)
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "Parameter validation failed"));
-        }
-        if (invalidPath)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "Invalid params at " + *invalidPath));
-        }
+        Json::Value const& params = _request["params"];
         Json::Value result;
         auto handler = optHandler.value();
         auto task = (m_endpoints.*handler)(params, result);

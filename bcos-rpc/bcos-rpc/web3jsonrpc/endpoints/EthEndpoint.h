@@ -47,6 +47,8 @@ public:
     task::Task<void> gasPrice(const Json::Value&, Json::Value&);
     task::Task<void> accounts(const Json::Value&, Json::Value&);
     task::Task<void> blockNumber(const Json::Value&, Json::Value&);
+    task::Task<void> getBalance(const Json::Value&, Json::Value&);
+    task::Task<void> getStorageAt(const Json::Value&, Json::Value&);
     task::Task<void> getTransactionCount(const Json::Value&, Json::Value&);
     task::Task<void> getBlockTxCountByHash(const Json::Value&, Json::Value&);
     task::Task<void> getBlockTxCountByNumber(const Json::Value&, Json::Value&);
@@ -60,8 +62,7 @@ public:
     task::Task<void> call(const Json::Value&, Json::Value&);
     task::Task<void> estimateGas(const Json::Value&, Json::Value&);
     task::Task<void> getBlockByHash(const Json::Value&, Json::Value&);
-    task::Task<void> fetchBlockByNumber(
-        std::string_view blockTag, bool fullTransaction, Json::Value& response);
+    task::Task<void> getBlockByNumber(const Json::Value&, Json::Value&);
     task::Task<void> getTransactionByHash(const Json::Value&, Json::Value&);
     task::Task<void> getTransactionByBlockHashAndIndex(const Json::Value&, Json::Value&);
     task::Task<void> getTransactionByBlockNumberAndIndex(const Json::Value&, Json::Value&);
@@ -91,13 +92,6 @@ public:
     task::Task<void> getProof(const Json::Value&, Json::Value&);
 
 private:
-    friend class EndpointsMapping;
-
-    // Registered handlers receive schema-validated positional parameters.
-    task::Task<void> getBalance(const Json::Value&, Json::Value&);
-    task::Task<void> getStorageAt(const Json::Value&, Json::Value&);
-    task::Task<void> getBlockByNumber(const Json::Value&, Json::Value&);
-
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;

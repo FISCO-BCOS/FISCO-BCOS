@@ -1,3 +1,0 @@
-# Preserve the upstream generated bundle byte for byte.
-DisableFormat: true
-SortIncludes: Never
