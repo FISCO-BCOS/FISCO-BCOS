@@ -250,8 +250,7 @@ BOOST_AUTO_TEST_CASE(GetRawHeaderMalformedHashReturnsInvalidParams)
     }());
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
-    BOOST_CHECK(
-        resp["error"]["message"].asString().find("Invalid block hash") != std::string::npos);
+    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), "Invalid params at /params/0");
 }
 
 // debug_getRawHeader on an unknown hash answers -32602 "Block not found".

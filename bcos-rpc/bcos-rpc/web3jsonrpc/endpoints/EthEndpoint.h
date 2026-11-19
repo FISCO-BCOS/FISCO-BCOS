@@ -25,6 +25,8 @@
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <json/json.h>
+#include <optional>
+#include <string_view>
 
 namespace bcos::rpc
 {
@@ -37,6 +39,9 @@ class EthEndpoint
 public:
     EthEndpoint(NodeService::Ptr nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction);
     virtual ~EthEndpoint() = default;
+
+    // An empty result means the method needs no lane-specific availability check.
+    std::optional<task::Task<void>> laneAvailabilityCheck(std::string_view method) const;
 
     task::Task<void> protocolVersion(const Json::Value&, Json::Value&);
     task::Task<void> syncing(const Json::Value&, Json::Value&);

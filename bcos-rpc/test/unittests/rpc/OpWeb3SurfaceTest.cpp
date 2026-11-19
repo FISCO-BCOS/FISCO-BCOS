@@ -493,6 +493,34 @@ BOOST_AUTO_TEST_CASE(NonOpLaneIsMethodNotFound)
     }
 }
 
+BOOST_AUTO_TEST_CASE(disabledLaneTakesPrecedenceOverSchemaFailure)
+{
+    auto const invalid = params({false});
+    setExecutorVersion(1);
+    auto const fisco = call("eth_feeHistory", invalid);
+    BOOST_REQUIRE(fisco["error"].isObject());
+    BOOST_CHECK_EQUAL(fisco["error"]["code"].asInt(), MethodNotFound);
+
+    setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+    auto const eth = call("eth_feeHistory", invalid);
+    BOOST_REQUIRE(eth["error"].isObject());
+    BOOST_CHECK_EQUAL(eth["error"]["code"].asInt(), InvalidParams);
+    for (auto const* method : {"txpool_status", "txpool_content"})
+    {
+        auto const offLane = call(method, invalid);
+        BOOST_REQUIRE(offLane["error"].isObject());
+        BOOST_CHECK_EQUAL(offLane["error"]["code"].asInt(), MethodNotFound);
+    }
+
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    for (auto const* method : {"txpool_status", "txpool_content"})
+    {
+        auto const onLane = call(method, invalid);
+        BOOST_REQUIRE(onLane["error"].isObject());
+        BOOST_CHECK_EQUAL(onLane["error"]["code"].asInt(), InvalidParams);
+    }
+}
+
 // eth_blobBaseFee: null before Cancun, then geth's CalcBlobFee(excess, fraction) with the
 // fraction taken from the [fork_timestamps] ladder wired onto the node service — the only
 // schedule source the RPC path has (getLedgerConfig rebuilds from storage and a v2 genesis

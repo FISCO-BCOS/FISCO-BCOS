@@ -164,7 +164,16 @@ BOOST_AUTO_TEST_CASE(testOnHttpSubscribeRequest)
     BOOST_CHECK(responseJson["error"]["code"].asInt() == -32600);
     BOOST_CHECK(responseJson["error"]["message"].asString() ==
                 "Subscribe request only support websocket protocol");
-    // Test pending transactions subscription
+    request["params"][0U] = false;
+    mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), nullptr, sender);
+    BOOST_REQUIRE(reader.parse(std::string(respBytes1.begin(), respBytes1.end()), responseJson));
+    BOOST_CHECK_EQUAL(responseJson["error"]["code"].asInt(), InvalidRequest);
+
+    mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
+    BOOST_REQUIRE(reader.parse(std::string(respBytes1.begin(), respBytes1.end()), responseJson));
+    BOOST_CHECK_EQUAL(responseJson["error"]["code"].asInt(), InvalidParams);
+    BOOST_CHECK_EQUAL(responseJson["id"].asInt(), id);
+    BOOST_CHECK(!responseJson["error"].isMember("data"));
 }
 
 BOOST_AUTO_TEST_CASE(testOnSubscribeRequest)

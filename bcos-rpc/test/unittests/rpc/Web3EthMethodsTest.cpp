@@ -80,27 +80,32 @@ BOOST_AUTO_TEST_CASE(getBlockByNumberFullTxs)
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
 }
 
-BOOST_AUTO_TEST_CASE(directPilotHandlersValidateTheirParams)
+BOOST_AUTO_TEST_CASE(dispatchValidatesPilotParamsBeforeBusinessLogic)
 {
-    auto& endpoints = web3JsonRpc->endpoints();
-    Json::Value response;
-    Json::Value params(Json::arrayValue);
-    auto const missingParams = [](JsonRpcException const& error) {
-        return error.code() == InvalidParams && error.msg() == "Invalid params at /params";
-    };
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(endpoints.getBalance(params, response)), JsonRpcException, missingParams);
-    BOOST_CHECK_EXCEPTION(
-        task::syncWait(endpoints.getStorageAt(params, response)), JsonRpcException, missingParams);
-    BOOST_CHECK_EXCEPTION(task::syncWait(endpoints.getBlockByNumber(params, response)),
-        JsonRpcException, missingParams);
+    for (auto const* method : {"eth_getBalance", "eth_getStorageAt", "eth_getBlockByNumber"})
+    {
+        BOOST_TEST_CONTEXT(method)
+        {
+            auto const response = call(req(method, "[]"));
+            BOOST_REQUIRE(response["error"].isObject());
+            BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), InvalidParams);
+            BOOST_CHECK(!response["error"].isMember("data"));
+        }
+    }
 
-    params.append("0x1");
-    params.append(false);
-    task::syncWait(endpoints.getBlockByNumber(params, response));
+    auto const response = call(req("eth_getBlockByNumber", R"(["0x1",false])"));
     BOOST_REQUIRE(response["result"].isObject());
     BOOST_CHECK_EQUAL(response["result"]["number"].asString(), "0x1");
     BOOST_CHECK(response["result"]["transactions"].isArray());
+}
+
+BOOST_AUTO_TEST_CASE(getBalanceEip1898ObjectReachesBusinessValidation)
+{
+    auto const response = call(req("eth_getBalance",
+        R"(["0x7dcd17433742f4c0ca53122ab541d0ba67fc27df",{"blockNumber":"0x0"}])"));
+    BOOST_REQUIRE(response["error"].isObject());
+    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), InvalidParams);
+    BOOST_CHECK_EQUAL(response["error"]["message"].asString(), "Unsupported block parameter");
 }
 
 BOOST_AUTO_TEST_CASE(getBlockTransactionCountByNumber)
