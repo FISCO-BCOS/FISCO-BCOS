@@ -76,13 +76,20 @@ void EndpointsMapping::addEngineHandlers()
     m_handlers[methodString(EthMethod::engine_getPayloadV3)] = &Endpoints::getPayloadV3;
     m_handlers[methodString(EthMethod::engine_getPayloadV4)] = &Endpoints::getPayloadV4;
     m_handlers[methodString(EthMethod::engine_getPayloadV5)] = &Endpoints::getPayloadV5;
+    m_handlers[methodString(EthMethod::engine_getPayloadV6)] = &Endpoints::getPayloadV6;
     m_handlers[methodString(EthMethod::engine_newPayloadV1)] = &Endpoints::newPayloadV1;
     m_handlers[methodString(EthMethod::engine_newPayloadV2)] = &Endpoints::newPayloadV2;
     m_handlers[methodString(EthMethod::engine_newPayloadV3)] = &Endpoints::newPayloadV3;
     m_handlers[methodString(EthMethod::engine_newPayloadV4)] = &Endpoints::newPayloadV4;
+    m_handlers[methodString(EthMethod::engine_newPayloadV5)] = &Endpoints::newPayloadV5;
     m_handlers[methodString(EthMethod::engine_getPayloadBodiesByHashV1)] = &Endpoints::getPayloadBodiesByHashV1;
     m_handlers[methodString(EthMethod::engine_getPayloadBodiesByRangeV1)] = &Endpoints::getPayloadBodiesByRangeV1;
+    m_handlers[methodString(EthMethod::engine_getPayloadBodiesByHashV2)] = &Endpoints::getPayloadBodiesByHashV2;
+    m_handlers[methodString(EthMethod::engine_getPayloadBodiesByRangeV2)] = &Endpoints::getPayloadBodiesByRangeV2;
     m_handlers[methodString(EthMethod::engine_getBlobsV1)] = &Endpoints::getBlobsV1;
+    m_handlers[methodString(EthMethod::engine_getBlobsV2)] = &Endpoints::getBlobsV2;
+    m_handlers[methodString(EthMethod::engine_getBlobsV3)] = &Endpoints::getBlobsV3;
+    m_handlers[methodString(EthMethod::engine_getBlobsV4)] = &Endpoints::getBlobsV4;
     m_handlers[methodString(EthMethod::engine_getClientVersionV1)] = &Endpoints::getClientVersionV1;
     m_handlers[methodString(EthMethod::engine_exchangeClientVersionV1)] = &Endpoints::exchangeClientVersionV1;
     // clang-format on

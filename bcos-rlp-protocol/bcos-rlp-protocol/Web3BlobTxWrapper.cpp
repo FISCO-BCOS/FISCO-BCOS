@@ -151,7 +151,23 @@ void bcos::rpc::decodeBlobTxNetworkWrapper(
     }
     in = in.getCroppedData(bodyEncodedLength);
 
-    // Items 2-4: blobs, commitments, proofs.
+    // Item 2 decides the wrapper version: a list is the version-0 blobs; a byte string is
+    // the EIP-7594 wrapper_version, which must read 1.
+    sidecarOut.version = engine::BLOB_SIDECAR_VERSION_0;
+    if (auto const next = peekHeader(bcos::bytesConstRef(in.data(), in.size()));
+        next && !next->isList)
+    {
+        uint64_t wrapperVersion = 0;
+        codec::rlp::decode(in, wrapperVersion);
+        if (wrapperVersion != engine::BLOB_SIDECAR_VERSION_1) [[unlikely]]
+        {
+            throwRlpDecodeError(DecodingError::UnexpectedListElements,
+                "blob tx wrapper: unsupported wrapper version " + std::to_string(wrapperVersion));
+        }
+        sidecarOut.version = engine::BLOB_SIDECAR_VERSION_1;
+    }
+
+    // Remaining items: blobs, commitments, proofs (version 1: cell proofs).
     sidecarOut.blobs = decodeFixedBytesList(in, BLOB_TX_BLOB_SIZE, "blob");
     sidecarOut.commitments = decodeFixedBytesList(in, BLOB_TX_COMMITMENT_SIZE, "commitment");
     sidecarOut.proofs = decodeFixedBytesList(in, BLOB_TX_PROOF_SIZE, "proof");
@@ -163,7 +179,8 @@ void bcos::rpc::decodeBlobTxNetworkWrapper(
             "blob tx wrapper: items cross the outer list boundary");
     }
     if (sidecarOut.blobs.size() != sidecarOut.commitments.size() ||
-        sidecarOut.blobs.size() != sidecarOut.proofs.size() ||
+        sidecarOut.proofs.size() !=
+            sidecarOut.blobs.size() * engine::blobProofsPerBlob(sidecarOut.version) ||
         sidecarOut.blobs.size() != txOut.blobVersionedHashes.size()) [[unlikely]]
     {
         throwRlpDecodeError(DecodingError::UnexpectedListElements,
@@ -175,7 +192,8 @@ bcos::bytes bcos::rpc::encodeBlobTxNetworkWrapper(
     const Web3Transaction& tx, const engine::BlobTxSidecar& sidecar)
 {
     if (sidecar.blobs.size() != sidecar.commitments.size() ||
-        sidecar.blobs.size() != sidecar.proofs.size() ||
+        sidecar.proofs.size() !=
+            sidecar.blobs.size() * engine::blobProofsPerBlob(sidecar.version) ||
         sidecar.blobs.size() != tx.blobVersionedHashes.size()) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(bcos::Exception{} << bcos::errinfo_comment(
@@ -190,6 +208,10 @@ bcos::bytes bcos::rpc::encodeBlobTxNetworkWrapper(
                                   "encodeBlobTxNetworkWrapper: transaction is not a blob tx"));
     }
     bcos::bytes payload(stripped.begin() + 1, stripped.end());
+    if (sidecar.version == engine::BLOB_SIDECAR_VERSION_1)
+    {
+        codec::rlp::encode(payload, uint64_t{engine::BLOB_SIDECAR_VERSION_1});
+    }
     codec::rlp::encode(payload, sidecar.blobs);
     codec::rlp::encode(payload, sidecar.commitments);
     codec::rlp::encode(payload, sidecar.proofs);

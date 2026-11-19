@@ -43,13 +43,20 @@ public:
     task::Task<void> getPayloadV3(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadV4(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadV5(const Json::Value&, Json::Value&);
+    task::Task<void> getPayloadV6(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV1(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV2(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV3(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV4(const Json::Value&, Json::Value&);
+    task::Task<void> newPayloadV5(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadBodiesByHashV1(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadBodiesByRangeV1(const Json::Value&, Json::Value&);
+    task::Task<void> getPayloadBodiesByHashV2(const Json::Value&, Json::Value&);
+    task::Task<void> getPayloadBodiesByRangeV2(const Json::Value&, Json::Value&);
     task::Task<void> getBlobsV1(const Json::Value&, Json::Value&);
+    task::Task<void> getBlobsV2(const Json::Value&, Json::Value&);
+    task::Task<void> getBlobsV3(const Json::Value&, Json::Value&);
+    task::Task<void> getBlobsV4(const Json::Value&, Json::Value&);
     // engine_getClientVersionV1 is the current spec/geth name; engine_exchangeClientVersionV1
     // is the pre-rename draft name older CLs still call. Both dispatch to the same handler.
     task::Task<void> getClientVersionV1(const Json::Value&, Json::Value&);
@@ -64,7 +71,25 @@ private:
     /// The committed block at `number` as an ExecutionPayloadBodyV1 JSON value (raw
     /// EIP-2718 transactions; withdrawals only for Shanghai+ blocks), or Json::nullValue
     /// when the block — or a Shanghai+ block's withdrawals sidecar row — is unavailable.
-    task::Task<Json::Value> payloadBodyAtNumber(protocol::BlockNumber number);
+    /// @p bodyV2 adds the ExecutionPayloadBodyV2 blockAccessList field, null for every
+    /// block this binary commits (all pre-Amsterdam).
+    task::Task<Json::Value> payloadBodyAtNumber(protocol::BlockNumber number, bool bodyV2 = false);
+    task::Task<void> handleGetPayloadBodiesByHash(
+        std::string_view method, bool bodyV2, const Json::Value&, Json::Value&);
+    task::Task<void> handleGetPayloadBodiesByRange(
+        std::string_view method, bool bodyV2, const Json::Value&, Json::Value&);
+
+    /// The blob items for @p versionedHashes: the pool first (the spec's data source), then
+    /// the recent committed blocks' sidecar rows; nullopt per hash not held.
+    task::Task<std::vector<std::optional<engine::BlobItem>>> lookupBlobs(
+        std::string_view method, const Json::Value& request);
+    /// engine_getBlobsV2 (@p partial = false: null unless every blob is held) and V3
+    /// (@p partial = true: null per missing position), both over version-1 sidecars.
+    task::Task<void> handleGetBlobsCellProofs(
+        std::string_view method, bool partial, const Json::Value&, Json::Value&);
+    /// Whether the Osaka fork is active at the committed head's timestamp — the gate the
+    /// getBlobs family switches on (geth: head.Time against the fork schedule).
+    task::Task<bool> osakaActiveAtHead();
 
     /// Build a JSON-RPC error response when the engine service is unavailable.
     void buildEngineNotAvailableError(Json::Value& response) const;

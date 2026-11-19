@@ -126,6 +126,10 @@ struct EthereumForkSchedule
     uint64_t m_osakaTime = 0;
     uint64_t m_bpo1Time = 0;
     uint64_t m_bpo2Time = 0;
+    // Amsterdam (EIP-7928 block access lists) is not executable by this binary: a scheduled
+    // time is the point from which every fork-gated Engine method answers -38005
+    // (ExternalPayloadVerifierImpl::revisionAt), and the EIP-2124 fork id announces it.
+    uint64_t m_amsterdamTime = 0;
 };
 
 // The OP-lane fork schedule ([op_fork_timestamps]) lives in

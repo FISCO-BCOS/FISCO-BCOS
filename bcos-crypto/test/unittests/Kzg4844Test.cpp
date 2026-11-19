@@ -87,6 +87,49 @@ BOOST_AUTO_TEST_CASE(batchVerify)
     BOOST_CHECK(verifyBlobKzgProofBatch(none, none, none));
 }
 
+// EIP-7594 cell proofs (the version-1 sidecar / BlobsBundleV2 proof kind): compute the 128
+// per-blob proofs, batch-verify them against the blob commitments, and reject a tampered
+// proof, a tampered blob, a misplaced proof and a count that is not 128 per blob.
+BOOST_AUTO_TEST_CASE(cellProofsComputeAndBatchVerify)
+{
+    std::vector<bytes> blobs(2), commitments(2), cellProofs;
+    for (std::size_t i = 0; i < blobs.size(); ++i)
+    {
+        blobs[i].assign(BlobSize, byte{0});
+        blobs[i][0] = byte{static_cast<uint8_t>(i + 1)};
+        blobs[i][BlobSize - 1] = byte{0x2a};
+        BOOST_REQUIRE(blobToKzgCommitment(ref(blobs[i]), commitments[i]));
+        std::vector<bytes> proofs;
+        BOOST_REQUIRE(computeCellKzgProofs(ref(blobs[i]), proofs));
+        BOOST_REQUIRE_EQUAL(proofs.size(), CellsPerExtBlob);
+        BOOST_CHECK_EQUAL(proofs.front().size(), ProofSize);
+        cellProofs.insert(cellProofs.end(), proofs.begin(), proofs.end());
+    }
+    BOOST_REQUIRE_EQUAL(cellProofs.size(), 2 * CellsPerExtBlob);
+    BOOST_CHECK(verifyCellKzgProofBatch(blobs, commitments, cellProofs));
+    // The dispatcher the admission gates call picks this rule for version 1 and the blob
+    // rule for version 0 (a cell proof list is not a blob proof list, and vice versa).
+    BOOST_CHECK(verifyBlobSidecarProofs(1, blobs, commitments, cellProofs));
+    BOOST_CHECK(!verifyBlobSidecarProofs(0, blobs, commitments, cellProofs));
+
+    auto tamperedProofs = cellProofs;
+    tamperedProofs[CellsPerExtBlob + 5][3] ^= byte{1};
+    BOOST_CHECK(!verifyCellKzgProofBatch(blobs, commitments, tamperedProofs));
+    auto swappedProofs = cellProofs;
+    std::swap(swappedProofs[0], swappedProofs[1]);  // right proofs, wrong cell index
+    BOOST_CHECK(!verifyCellKzgProofBatch(blobs, commitments, swappedProofs));
+    auto tamperedBlobs = blobs;
+    tamperedBlobs[1][200] = byte{9};
+    BOOST_CHECK(!verifyCellKzgProofBatch(tamperedBlobs, commitments, cellProofs));
+    std::vector<bytes> shortProofs(cellProofs.begin(), cellProofs.end() - 1);
+    BOOST_CHECK(!verifyCellKzgProofBatch(blobs, commitments, shortProofs));
+    bytes shortBlob(1024, byte{0});
+    std::vector<bytes> none;
+    BOOST_CHECK(!computeCellKzgProofs(ref(shortBlob), none));
+    // The empty batch verifies vacuously, as the blob-proof batch does.
+    BOOST_CHECK(verifyCellKzgProofBatch(none, none, none));
+}
+
 BOOST_AUTO_TEST_CASE(rejectsWrongSizes)
 {
     bytes commitment, proof;

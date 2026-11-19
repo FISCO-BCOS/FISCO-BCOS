@@ -18,6 +18,7 @@
  */
 
 #include "EngineServiceCommon.h"
+#include <array>
 
 // Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 // (eth/catalyst/api.go GetPayloadVn / forkchoiceUpdated, miner/payload_building.go).
@@ -83,23 +84,27 @@ std::vector<std::string> supportedCapabilities()
     // integration suites.
     //
     // This is the Eth-lane list; the OP lane advertises its own narrower window
-    // (op::supportedOpCapabilities). FCU V4 is unimplemented (Endpoint -38005) and absent
-    // upstream (op-geth / op-node top out at V3), so it is not listed. A V4-shaped build
-    // still stores PayloadV3 (payloadShapeVersion).
+    // (op::supportedOpCapabilities). The Amsterdam methods (newPayloadV5, getPayloadV6,
+    // forkchoiceUpdatedV4, getBlobsV4) are routable but not listed: this binary has no
+    // Amsterdam execution (EIP-7928 block access lists), so each answers the spec's
+    // out-of-window -38005 (null for getBlobsV4) and advertising them would promise a fork
+    // the node cannot build or verify. A V4-shaped build still stores PayloadV3
+    // (payloadShapeVersion).
     //
-    // getPayloadBodies*V1 and getClientVersionV1 are vanilla engine methods both lanes
+    // getPayloadBodies*V1/V2 and getClientVersionV1 are vanilla engine methods both lanes
     // answer mechanically from the committed ledger / build info (geth advertises them
-    // from the same auto-derived caps list), so the OP table carries them too.
-    // engine_getBlobsV1 is Eth-lane only: the OP lane admits no blob transactions and
-    // does not advertise it. engine_exchangeClientVersionV1 is the pre-rename draft name
-    // of engine_getClientVersionV1, kept routable for older CLs.
+    // from the same auto-derived caps list), so the OP table carries the V1s too.
+    // engine_getBlobsV1/V2/V3 are Eth-lane only: the OP lane admits no blob transactions
+    // and does not advertise them. engine_exchangeClientVersionV1 is the pre-rename draft
+    // name of engine_getClientVersionV1, kept routable for older CLs.
     static const std::vector<std::string> caps{"engine_exchangeCapabilities",
         "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3",
         "engine_getPayloadV1", "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4",
         "engine_getPayloadV5", "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3",
         "engine_newPayloadV4", "engine_getPayloadBodiesByHashV1",
-        "engine_getPayloadBodiesByRangeV1", "engine_getBlobsV1", "engine_getClientVersionV1",
-        "engine_exchangeClientVersionV1"};
+        "engine_getPayloadBodiesByRangeV1", "engine_getPayloadBodiesByHashV2",
+        "engine_getPayloadBodiesByRangeV2", "engine_getBlobsV1", "engine_getBlobsV2",
+        "engine_getBlobsV3", "engine_getClientVersionV1", "engine_exchangeClientVersionV1"};
     return caps;
 }
 
@@ -264,16 +269,104 @@ PayloadStatus makeStatus(PayloadValidationStatus status, std::optional<h256> lat
     };
 }
 
+bool l1MethodInWindow(L1Method method, std::uint32_t version, evmc_revision revision)
+{
+    // One table for the three fork-gated L1 methods (execution-apis per-fork files, "Update
+    // the methods of previous forks" sections; geth's checkFork sets):
+    //   newPayload   V1 none | V2 <Cancun | V3 Cancun | V4 Prague,Osaka | V5 Amsterdam
+    //   getPayload   V1 none | V2 <Cancun | V3 Cancun | V4 Prague | V5 Osaka | V6 Amsterdam
+    //   fcu          V1 <Cancun | V2 <Cancun | V3 Cancun,Prague,Osaka | V4 Amsterdam
+    // The BPO forks map to EVMC_OSAKA and ride the Osaka entries (geth: BPO1/BPO2 in the same
+    // checkFork sets). Amsterdam has no evmc revision in this binary, so its methods are never
+    // in window; a timestamp at or past amsterdam_time never reaches here — revisionAt throws
+    // UnsupportedFork for it, which is the same -38005 the previous forks' methods owe there.
+    auto const v = static_cast<ApiVersion>(version);
+    switch (method)
+    {
+    case L1Method::NewPayload:
+        switch (v)
+        {
+        case ApiVersion::V1:
+            return true;  // shanghai.md adds no -38005 rule and geth's NewPayloadV1 checks none
+        case ApiVersion::V2:
+            return revision < EVMC_CANCUN;
+        case ApiVersion::V3:
+            return revision == EVMC_CANCUN;
+        case ApiVersion::V4:
+            return revision == EVMC_PRAGUE || revision == EVMC_OSAKA;
+        case ApiVersion::V5:
+            return false;
+        }
+        return false;
+    case L1Method::GetPayload:
+        switch (v)
+        {
+        case ApiVersion::V1:
+            return true;
+        case ApiVersion::V2:
+            return revision < EVMC_CANCUN;
+        case ApiVersion::V3:
+            return revision == EVMC_CANCUN;
+        case ApiVersion::V4:
+            return revision == EVMC_PRAGUE;
+        case ApiVersion::V5:
+            return revision == EVMC_OSAKA;
+        }
+        return false;
+    case L1Method::ForkchoiceUpdated:
+        switch (v)
+        {
+        case ApiVersion::V1:
+        case ApiVersion::V2:
+            return revision < EVMC_CANCUN;  // Paris and Shanghai (geth fcuV1/fcuV2)
+        case ApiVersion::V3:
+            // prague.md names Cancun and Prague; osaka.md adds no fcuV4, so V3 is the only
+            // method that can build an Osaka block (geth checkFork Cancun..Osaka, BPO1, BPO2).
+            return revision == EVMC_CANCUN || revision == EVMC_PRAGUE || revision == EVMC_OSAKA;
+        case ApiVersion::V4:
+        case ApiVersion::V5:
+            return false;
+        }
+        return false;
+    }
+    return false;
+}
+
+void requireL1MethodWindow(L1Method method, std::uint32_t version, evmc_revision revision)
+{
+    if (l1MethodInWindow(method, version, revision))
+    {
+        return;
+    }
+    static constexpr std::array<std::string_view, 3> names{
+        "newPayloadV", "getPayloadV", "forkchoiceUpdatedV"};
+    std::string what{names[static_cast<std::size_t>(method)]};
+    what += std::to_string(version);
+    what += method == L1Method::GetPayload ?
+                ": the payload was built for a fork outside this method's window" :
+                ": the timestamp falls in a fork outside this method's window";
+    BOOST_THROW_EXCEPTION(UnsupportedFork{} << bcos::errinfo_comment{std::move(what)});
+}
+
 void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,
-    std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion)
+    std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion,
+    std::optional<evmc_revision> l1Revision)
 {
     if (!isGetPayloadVersionCompatible(static_cast<ApiVersion>(requestVersion), builtVersion))
     {
         BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                                   "Payload version is incompatible with requested method version"});
     }
-    if (requestVersion >= static_cast<std::uint32_t>(ApiVersion::V4) &&
-        !payload.withdrawalsRoot.has_value())
+    if (l1Revision.has_value())
+    {
+        // L1 (execution-apis): the per-method fork window (l1MethodInWindow) on the revision
+        // the payload was built at. The L1 V4/V5 shapes add executionRequests (and at V5 the
+        // Osaka blobs bundle) on top of ExecutionPayloadV3; the OP-dialect withdrawalsRoot
+        // checked below is not part of them.
+        requireL1MethodWindow(L1Method::GetPayload, requestVersion, *l1Revision);
+    }
+    else if (requestVersion >= static_cast<std::uint32_t>(ApiVersion::V4) &&
+             !payload.withdrawalsRoot.has_value())
     {
         BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                                   "Payload does not carry the V4+ response shape"});

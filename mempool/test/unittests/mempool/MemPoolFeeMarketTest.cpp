@@ -680,11 +680,82 @@ BOOST_AUTO_TEST_CASE(blobs_by_versioned_hashes)
     BOOST_CHECK(!items[1].has_value());
     BOOST_REQUIRE(items[2].has_value());
     BOOST_CHECK(items[0]->blob == blobs[0]);
-    BOOST_CHECK(items[0]->proof == proofs[0]);
+    BOOST_CHECK_EQUAL(items[0]->version, engine::BLOB_SIDECAR_VERSION_0);
+    BOOST_REQUIRE_EQUAL(items[0]->proofs.size(), 1);
+    BOOST_CHECK(items[0]->proofs.front() == proofs[0]);
     BOOST_CHECK(items[2]->blob == blobs[1]);
     // The served pair still verifies under KZG.
-    BOOST_CHECK(crypto::kzg::verifyBlobKzgProof(
-        bcos::ref(items[0]->blob), bcos::ref(items[0]->commitment), bcos::ref(items[0]->proof)));
+    BOOST_CHECK(crypto::kzg::verifyBlobKzgProof(bcos::ref(items[0]->blob),
+        bcos::ref(items[0]->commitment), bcos::ref(items[0]->proofs.front())));
+}
+
+/// A version-1 (EIP-7594) sidecar: genuine cell proofs, 128 per blob, blob-major.
+static engine::BlobTxSidecar makeCellProofSidecar(std::size_t blobCount)
+{
+    auto sidecar = makeSidecar(blobCount);
+    sidecar.version = engine::BLOB_SIDECAR_VERSION_1;
+    sidecar.proofs.clear();
+    for (auto const& blob : sidecar.blobs)
+    {
+        std::vector<bcos::bytes> cellProofs;
+        BOOST_REQUIRE(crypto::kzg::computeCellKzgProofs(bcos::ref(blob), cellProofs));
+        sidecar.proofs.insert(sidecar.proofs.end(), cellProofs.begin(), cellProofs.end());
+    }
+    return sidecar;
+}
+
+// EIP-7594: the pool admits the sidecar version the head's fork calls for — version 0
+// before Osaka, version 1 (cell proofs) from Osaka on — and the fork can flip while the
+// process runs. A version-1 item answers its 128 cell proofs per blob, blob-major.
+BOOST_AUTO_TEST_CASE(sidecar_version_follows_the_head_fork)
+{
+    uint64_t headSeconds = 1500;  // Cancun
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1,
+        .headTimestampSeconds = [&headSeconds] { return headSeconds; },
+        .blobForks = protocol::BlobForkTimes{.cancunTime = 1000,
+            .pragueTime = 2000,
+            .osakaTime = 3000,
+            .bpo1Time = 4000,
+            .bpo2Time = 5000}}};
+    std::string sender("sgSgSgSgSgSgSgSgSgSg", 20);
+    BOOST_CHECK_EQUAL(pool.requiredBlobSidecarVersion(), engine::BLOB_SIDECAR_VERSION_0);
+    // Pre-Osaka: cell proofs refused, blob proofs admitted.
+    BOOST_CHECK(pool.tryAdd(makeBlobTx(sender, 0, 1), makeCellProofSidecar(1)) ==
+                TransactionStatus::Malformed);
+    auto v0Tx = makeBlobTx(sender, 0, 1);
+    auto const v0Hash = v0Tx->hash();
+    BOOST_CHECK(pool.tryAdd(std::move(v0Tx), makeSidecar(1)) == TransactionStatus::None);
+    BOOST_CHECK(pool.blobSidecarVersion(v0Hash) == std::optional<std::uint8_t>{0});
+
+    // Osaka: the requirement flips; the pooled version-0 sidecar stays (the seal filter
+    // leaves it pooled), a new version-0 admission is refused, version 1 goes in.
+    headSeconds = 3500;
+    BOOST_CHECK_EQUAL(pool.requiredBlobSidecarVersion(), engine::BLOB_SIDECAR_VERSION_1);
+    BOOST_CHECK(
+        pool.tryAdd(makeBlobTx(sender, 1, 1), makeSidecar(1)) == TransactionStatus::Malformed);
+    auto v1Tx = makeBlobTx(sender, 1, 2);
+    auto const v1Hash = v1Tx->hash();
+    auto v1Sidecar = makeCellProofSidecar(2);
+    auto const v1Proofs = v1Sidecar.proofs;
+    std::vector<crypto::HashType> versionedHashes;
+    for (auto const& commitment : v1Sidecar.commitments)
+    {
+        versionedHashes.push_back(crypto::kzg::versionedHashFromCommitment(bcos::ref(commitment)));
+    }
+    BOOST_CHECK(pool.tryAdd(std::move(v1Tx), std::move(v1Sidecar)) == TransactionStatus::None);
+    BOOST_CHECK(pool.blobSidecarVersion(v1Hash) == std::optional<std::uint8_t>{1});
+    BOOST_CHECK(!pool.blobSidecarVersion(crypto::HashType{}).has_value());
+
+    auto items = pool.blobsByVersionedHashes(std::vector{versionedHashes[1]});
+    BOOST_REQUIRE_EQUAL(items.size(), 1);
+    BOOST_REQUIRE(items[0].has_value());
+    BOOST_CHECK_EQUAL(items[0]->version, engine::BLOB_SIDECAR_VERSION_1);
+    BOOST_REQUIRE_EQUAL(items[0]->proofs.size(), engine::CELL_PROOFS_PER_BLOB);
+    // The second blob's slice of the flat list, and it verifies as that blob's cells.
+    BOOST_CHECK(std::equal(items[0]->proofs.begin(), items[0]->proofs.end(),
+        v1Proofs.begin() + engine::CELL_PROOFS_PER_BLOB));
+    BOOST_CHECK(crypto::kzg::verifyCellKzgProofBatch(std::vector<bcos::bytes>{items[0]->blob},
+        std::vector<bcos::bytes>{items[0]->commitment}, items[0]->proofs));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

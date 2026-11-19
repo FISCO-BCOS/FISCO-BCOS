@@ -186,8 +186,8 @@ GetPayloadResult EngineTracker::getPayload(const PayloadID& payloadId, std::uint
     // BuiltPayload is immutable once published. Copy the shared_ptr
     // under the lock, then check shape and assemble GetPayloadData (tx raw /
     // blobs) outside so FCU publish / newPayload commit are not blocked.
-    engine_common::requireGetPayloadShape(
-        entry->version, entry->executionPayload, entry->parentBeaconBlockRoot, version);
+    engine_common::requireGetPayloadShape(entry->version, entry->executionPayload,
+        entry->parentBeaconBlockRoot, version, entry->l1Revision);
 
     return engine_common::assembleGetPayloadData(*entry, version);
 }

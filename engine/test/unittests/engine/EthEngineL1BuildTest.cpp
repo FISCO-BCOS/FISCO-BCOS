@@ -41,6 +41,7 @@
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <ethereum-executor/EthStorageErrorGuard.h>
+#include <ethereum-executor/EthSystemCalls.h>
 #include <ethereum-executor/EthereumExecutor.h>
 #include <boost/test/unit_test.hpp>
 
@@ -194,9 +195,10 @@ struct EL1BNode
     /// Identical genesis on both nodes: executor config, funded accounts, the canonical
     /// head rows, and the parent header row the build lane derives the L1 context from.
     void seedGenesis(protocol::EthBlockHeaderData const& parent,
-        std::vector<std::pair<evmc_address, u256>> const& funded)
+        std::vector<std::pair<evmc_address, u256>> const& funded,
+        evmc_revision revision = EVMC_CANCUN)
     {
-        writeEthExecutorConfig(backendStorage, EVMC_CANCUN);
+        writeEthExecutorConfig(backendStorage, revision);
         writeRawSysConfig(backendStorage,
             std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
         for (auto const& [addr, balance] : funded)
@@ -347,6 +349,19 @@ engine::BlobTxSidecar el1bMakeSidecar(uint8_t seed)
     sidecar.blobs.push_back(std::move(blob));
     sidecar.commitments.push_back(std::move(commitment));
     sidecar.proofs.push_back(std::move(proof));
+    return sidecar;
+}
+
+/// The EIP-7594 (Osaka) form of el1bMakeSidecar: wrapper version 1 with the blob's 128
+/// genuine cell proofs instead of the one blob proof.
+engine::BlobTxSidecar el1bMakeCellProofSidecar(uint8_t seed)
+{
+    auto sidecar = el1bMakeSidecar(seed);
+    sidecar.version = engine::BLOB_SIDECAR_VERSION_1;
+    sidecar.proofs.clear();
+    BOOST_REQUIRE(
+        crypto::kzg::computeCellKzgProofs(bcos::ref(sidecar.blobs.front()), sidecar.proofs));
+    BOOST_REQUIRE_EQUAL(sidecar.proofs.size(), engine::CELL_PROOFS_PER_BLOB);
     return sidecar;
 }
 
@@ -630,6 +645,216 @@ NewPayloadRequest el1bBuildWithdrawalPayload(auto& fixture, bcos::Address const&
     request.parentBeaconBlockRoot = data->parentBeaconBlockRoot;
     return request;
 }
+
+// ---- Prague / Osaka builds ----------------------------------------------------------
+
+scheduler_v1::EvmcForkTimestamps el1bPragueForks()
+{
+    auto forks = el1bCancunForks();
+    forks.pragueTime = 0;
+    return forks;
+}
+
+scheduler_v1::EvmcForkTimestamps el1bOsakaForks()
+{
+    auto forks = el1bPragueForks();
+    forks.osakaTime = 0;
+    return forks;
+}
+
+/// Runtime code of the EIP-7002 withdrawal-request and EIP-7251 consolidation-request
+/// contracts (the bytes EEST's blockchain-test pre-state carries, also seeded by
+/// tests/eest_rpc_runner.py). A Prague+ block's end-of-block system calls fail on missing
+/// code, so a Prague-era genesis must deploy both.
+constexpr auto c_el1bWithdrawalRequestCode =
+    "3373fffffffffffffffffffffffffffffffffffffffe1460cb5760115f54807fffffffffffffffffffffffffffffff"
+    "ff"
+    "ffffffffffffffffffffffffffffffff146101f457600182026001905f5b5f82111560685781019083028483029004"
+    "91"
+    "6001019190604d565b909390049250505036603814608857366101f457346101f4575f5260205ff35b34106101f457"
+    "60"
+    "0154600101600155600354806003026004013381556001015f35815560010160203590553360601b5f5260385f6014"
+    "37"
+    "604c5fa0600101600355005b6003546002548082038060101160df575060105b5f5b81811461018357828101600302"
+    "60"
+    "040181604c02815460601b8152601401816001015481526020019060020154807fffffffffffffffffffffffffffff"
+    "ff"
+    "ff00000000000000000000000000000000168252906010019060401c908160381c81600701538160301c8160060153"
+    "81"
+    "60281c81600501538160201c81600401538160181c81600301538160101c81600201538160081c8160010153536001"
+    "01"
+    "60e1565b910180921461019557906002556101a0565b90505f6002555f6003555b5f54807fffffffffffffffffffff"
+    "ff"
+    "ffffffffffffffffffffffffffffffffffffffffff14156101cd57505f5b6001546002828201116101e25750505f61"
+    "01"
+    "e8565b01600290035b5f555f600155604c025ff35b5f5ffd";
+constexpr auto c_el1bConsolidationRequestCode =
+    "3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffffffffffffffffff"
+    "ff"
+    "ffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82111560685781019083028483029004"
+    "91"
+    "6001019190604d565b9093900492505050366060146088573661019a573461019a575f5260205ff35b341061019a57"
+    "60"
+    "0154600101600155600354806004026004013381556001015f35815560010160203581556001016040359055336060"
+    "1b"
+    "5f5260605f60143760745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b8181146101"
+    "29"
+    "5782810160040260040181607402815460601b81526014018160010154815260200181600201548152602001906003"
+    "01"
+    "54905260010160e9565b910180921461013b5790600255610146565b90505f6002555f6003555b5f54807fffffffff"
+    "ff"
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffff141561017357505f5b6001546001828201116101"
+    "88"
+    "5750505f61018e565b01600190035b5f555f6001556074025ff35b5f5ffd";
+
+task::Task<void> el1bSeedPragueSystemContracts(
+    RealGlobalStateBackendStorage& storage, crypto::Hash& hashImpl)
+{
+    using namespace bcos::ledger::account;
+    for (auto const& [address, codeHex] :
+        {std::pair{executor_v1::eth::WITHDRAWAL_REQUEST_ADDRESS, c_el1bWithdrawalRequestCode},
+            std::pair{
+                executor_v1::eth::CONSOLIDATION_REQUEST_ADDRESS, c_el1bConsolidationRequestCode}})
+    {
+        EVMAccount<RealGlobalStateBackendStorage> acc(storage, address, nodeAddressTableMode());
+        co_await acc.create();
+        co_await acc.setNonce("1");
+        auto code = bcos::fromHex(std::string(codeHex));
+        auto codeHash = hashImpl.hash(bcos::ref(code));
+        co_await acc.setCode(std::move(code), "", codeHash);
+    }
+}
+
+/// EL1BFixture under a chosen fork schedule / executor revision, with the Prague request
+/// contracts deployed on both nodes' genesis. The pool runs the production EL wiring: the
+/// EIP-7840 blob schedule and the EIP-7594 sidecar-version rule evaluated at a head time
+/// the test controls (poolHeadSeconds; the block's own timestamp by default).
+struct EL1BForkFixture
+{
+    EL1BNode nodeA{"el1bA"};
+    EL1BNode nodeB{"el1bB"};
+    uint64_t poolHeadSeconds;
+    bcos::txpool::MemPoolImpl memPool;
+    StubExecutor stubExecutor;
+    StubScheduler stubScheduler;
+    scheduler_v1::EvmcForkTimestamps forks;
+    evmc_revision revision;
+    std::shared_ptr<initializer::ExternalPayloadVerifierImpl<RealGlobalStateStorage>>
+        externalVerifier;
+    EL1BService service;
+
+    EL1BForkFixture(scheduler_v1::EvmcForkTimestamps forks_, evmc_revision revision_,
+        uint64_t poolHeadSeconds_ = c_blockTimestampMs / 1000)
+      : poolHeadSeconds(poolHeadSeconds_),
+        memPool(bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1,
+            .headTimestampSeconds = [this] { return poolHeadSeconds; },
+            .blobForks = protocol::BlobForkTimes{.cancunTime = forks_.cancunTime,
+                .pragueTime = forks_.pragueTime,
+                .osakaTime = forks_.osakaTime,
+                .bpo1Time = forks_.bpo1Time,
+                .bpo2Time = forks_.bpo2Time}}),
+        forks(forks_),
+        revision(revision_),
+        externalVerifier(
+            std::make_shared<initializer::ExternalPayloadVerifierImpl<RealGlobalStateStorage>>(
+                nodeA.verifier, nodeA.fakeLedger, nodeA.blockFactory, forks,
+                /*chainId=*/1, /*mergeBlock=*/0)),
+        service(memPool, nodeA.storage, stubExecutor, stubScheduler, nodeA.blockFactory,
+            /*ledger=*/nullptr, static_cast<std::uint32_t>(ApiVersion::V4),
+            /*commitObserver=*/nullptr,
+            /*ledgerConfigState=*/nullptr, externalVerifier,
+            /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>())
+    {}
+
+    void seedGenesis(protocol::EthBlockHeaderData const& parent,
+        std::vector<std::pair<evmc_address, u256>> const& funded = {})
+    {
+        for (auto* node : {&nodeA, &nodeB})
+        {
+            node->seedGenesis(parent, funded, revision);
+            task::syncWait(el1bSeedPragueSystemContracts(
+                node->backendStorage, *node->cryptoSuite->hashImpl()));
+        }
+    }
+
+    /// FCU(V3) with default attributes on genesis; returns the payload id.
+    PayloadID buildOnGenesis()
+    {
+        ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+        auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+        auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+        BOOST_REQUIRE(fcu.payloadStatus.status == PayloadValidationStatus::Valid);
+        BOOST_REQUIRE(fcu.payloadId.has_value());
+        return *fcu.payloadId;
+    }
+
+    /// Run @p payload through node B's verify lane under this fixture's schedule.
+    scheduler_v1::EthereumBlockVerificationResult verifyOnNodeB(
+        GetPayloadData const& data, protocol::EthBlockHeaderData const& parent)
+    {
+        NewPayloadRequest request;
+        request.executionPayload = data.executionPayload;
+        request.parentBeaconBlockRoot = data.parentBeaconBlockRoot;
+        request.executionRequests = data.executionRequests;
+        auto converted = engine::detail::executionPayloadToEthBlock(request);
+        auto* external = std::get_if<engine_common::ExternalPayloadBlock>(&converted);
+        BOOST_REQUIRE(external != nullptr);
+        auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+        EL1BVerifier::TransactionDecoder decoder =
+            [&hashImpl](bcos::bytes const& raw) -> protocol::Transaction::Ptr {
+            return bcos::rpc::decodeWeb3RawTransaction(
+                bcos::bytesConstRef(raw.data(), raw.size()), hashImpl);
+        };
+        using ViewType = RealGlobalStateStorage::ViewType;
+        EL1BVerifier::StateRootCalculator<ViewType> stateRootCalc =
+            [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+            BOOST_THROW_EXCEPTION(
+                std::runtime_error{"legacy state-root fold must not run for executor v2"});
+        };
+        return task::syncWait(nodeB.verifier->verifyAndCommit(nodeB.storage, *nodeB.fakeLedger,
+            external->ethHeader, parent, external->rawTransactions, external->rawWithdrawals, forks,
+            /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0, decoder, stateRootCalc));
+    }
+};
+
+struct EL1BPragueFixture : EL1BForkFixture
+{
+    EL1BPragueFixture() : EL1BForkFixture(el1bPragueForks(), EVMC_PRAGUE) {}
+};
+
+/// Amsterdam scheduled at the block being built: nothing this binary can execute.
+scheduler_v1::EvmcForkTimestamps el1bAmsterdamAtBlockForks()
+{
+    auto forks = el1bOsakaForks();
+    forks.amsterdamTime = c_blockTimestampMs / 1000;
+    return forks;
+}
+struct EL1BAmsterdamScheduledFixture : EL1BForkFixture
+{
+    EL1BAmsterdamScheduledFixture() : EL1BForkFixture(el1bAmsterdamAtBlockForks(), EVMC_OSAKA) {}
+};
+
+struct EL1BOsakaFixture : EL1BForkFixture
+{
+    EL1BOsakaFixture() : EL1BForkFixture(el1bOsakaForks(), EVMC_OSAKA) {}
+};
+
+/// The Osaka transition: the fork activates at the block being built (osaka_time = the
+/// block's timestamp) and the pool's head is still the pre-Osaka parent, so it admits
+/// version-0 sidecars right up to the fork.
+scheduler_v1::EvmcForkTimestamps el1bOsakaAtBlockForks()
+{
+    auto forks = el1bPragueForks();
+    forks.osakaTime = c_blockTimestampMs / 1000;
+    return forks;
+}
+struct EL1BOsakaTransitionFixture : EL1BForkFixture
+{
+    EL1BOsakaTransitionFixture()
+      : EL1BForkFixture(el1bOsakaAtBlockForks(), EVMC_OSAKA, c_blockTimestampMs / 1000 - 1)
+    {}
+};
+
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(EthEngineL1BuildTest)
@@ -743,8 +968,8 @@ BOOST_FIXTURE_TEST_CASE(cancunBuildThenVerifyClosedLoop, EL1BFixture)
         bcos::ref(data->blobsBundle->commitments.front()),
         bcos::ref(data->blobsBundle->proofs.front())));
 
-    // (getPayloadV4 is a Prague-shape method; requesting it on this Cancun-built payload is
-    // rejected by requireGetPayloadShape, so the bundle is asserted through V3 only.)
+    // (getPayloadV4 is the Prague method; requesting it on this Cancun-built payload is
+    // -38005 — see cancunGetPayloadV4IsUnsupportedFork — so the bundle is asserted via V3.)
 
     // ---- Node B: verify the payload as an external block and commit it. ----
     NewPayloadRequest request;
@@ -2213,6 +2438,316 @@ BOOST_FIXTURE_TEST_CASE(forcedEnvelopeGasComesOutOfTheSealBudget, EL1BFixture)
     auto const retained = memPool.get(std::vector{crypto::keccak256Hash(bcos::ref(rawPooled[1]))});
     BOOST_REQUIRE_EQUAL(retained.size(), 1);
     BOOST_CHECK(retained[0]);
+}
+
+// Prague: the L1 getPayloadV4 response is ExecutionPayloadV3 + executionRequests (+ a
+// BlobsBundleV1), not the OP-dialect ExecutionPayloadV4 (withdrawalsRoot). Before this,
+// requireGetPayloadShape demanded withdrawalsRoot for every V4+ call and the L1 build,
+// which leaves it unset, could never hand its Prague payload (and its executionRequests)
+// to the CL: -38005 on every getPayloadV4.
+BOOST_FIXTURE_TEST_CASE(pragueGetPayloadV4CarriesExecutionRequests, EL1BPragueFixture)
+{
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    seedGenesis(parent);
+    auto payloadId = buildOnGenesis();
+
+    auto data = task::syncWait(service.getPayload(payloadId, 4));
+    BOOST_REQUIRE(data);
+    // No deposits and no EL-triggered requests in the block: present-but-empty list, the
+    // shape prague.md requires (and the value the header's requestsHash commits to).
+    BOOST_REQUIRE(data->executionRequests.has_value());
+    BOOST_CHECK(data->executionRequests->empty());
+    BOOST_REQUIRE(data->blobsBundle.has_value());
+    BOOST_CHECK(data->blobsBundle->blobs.empty());
+    BOOST_CHECK(!data->executionPayload.withdrawalsRoot.has_value());  // L1 shape
+    BOOST_CHECK(data->executionPayload.transactions.empty());
+
+    // The payload is a real Prague block: node B commits it under the same schedule and
+    // the committed header is Prague-era (requestsHash stamped).
+    auto result = verifyOnNodeB(*data, parent);
+    BOOST_CHECK(result.valid);
+    BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+    BOOST_CHECK(result.header->ethBlockVersion() == protocol::EthBlockVersion::PRAGUE);
+
+    // Outside the method windows (cancun.md V3 = Cancun only, osaka.md V5 = Osaka+): -38005.
+    BOOST_CHECK_THROW(task::syncWait(service.getPayload(payloadId, 3)), UnsupportedFork);
+    BOOST_CHECK_THROW(task::syncWait(service.getPayload(payloadId, 5)), UnsupportedFork);
+}
+
+// Prague: an EL-triggered EIP-7002 withdrawal request travels from the block's end-of-block
+// system call into getPayloadV4's executionRequests (one EIP-7685 entry: type 0x01 followed
+// by the 76-byte record source address ++ pubkey ++ amount) and node B's requestsHash check
+// accepts the block. The present-but-empty fallback alone cannot produce this entry, so the
+// test pins the build -> cache -> getPayload pipe, not just the shape.
+BOOST_FIXTURE_TEST_CASE(pragueGetPayloadV4CarriesTheBlockWithdrawalRequest, EL1BPragueFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto senderKey = secp.generateKeyPair();
+    auto const sender = el1bEvmcAddress(senderKey->address(nodeA.cryptoSuite->hashImpl()));
+    auto const contract = executor_v1::eth::WITHDRAWAL_REQUEST_ADDRESS;
+
+    // EIP-7002 request: 56 bytes of calldata (48-byte validator pubkey ++ 8-byte amount) and
+    // a value covering the fee, which is 1 wei at zero excess (fake_exponential(1, 0, 17)).
+    bcos::rpc::Web3Transaction call;
+    call.type = bcos::rpc::TransactionType::EIP1559;
+    call.chainId = 1;
+    call.nonce = 0;
+    call.maxPriorityFeePerGas = u256(100000000);
+    call.maxFeePerGas = u256(2000000000);
+    call.gasLimit = 200000;
+    call.to = bcos::Address(bcos::bytesConstRef(contract.bytes, sizeof(contract.bytes)));
+    call.value = u256(1);
+    call.data = bcos::bytes(56, 0x11);
+    auto rawCall = el1bSign(call, *senderKey);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    seedGenesis(parent, {{sender, u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, rawCall);
+    auto payloadId = buildOnGenesis();
+
+    auto data = task::syncWait(service.getPayload(payloadId, 4));
+    BOOST_REQUIRE(data);
+    BOOST_REQUIRE_EQUAL(data->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(data->executionPayload.transactions[0].raw == rawCall);
+    BOOST_REQUIRE(data->executionRequests.has_value());
+    BOOST_REQUIRE_EQUAL(data->executionRequests->size(), 1);
+    auto const& request = data->executionRequests->front();
+    BOOST_REQUIRE_EQUAL(request.size(), 1 + 20 + 56);
+    BOOST_CHECK_EQUAL(request[0], 0x01);  // EIP-7685 withdrawal request type
+    BOOST_CHECK(bcos::bytes(request.begin() + 1, request.begin() + 21) ==
+                bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
+    BOOST_CHECK(bcos::bytes(request.begin() + 21, request.end()) == call.data);
+
+    auto result = verifyOnNodeB(*data, parent);
+    BOOST_CHECK(result.valid);
+    BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+}
+
+// The Osaka transition block: a blob transaction whose version-0 (EIP-4844) sidecar was
+// pooled before the fork stays pooled — getPayloadV5's BlobsBundleV2 wants EIP-7594 cell
+// proofs, so a bundle built from it is not what a CL verifies. The sender's plain transfer
+// ahead of it still seals; the blob transaction keeps its sidecar in the pool.
+BOOST_FIXTURE_TEST_CASE(osakaBlobTransactionWithV0SidecarStaysPooled, EL1BOsakaTransitionFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto senderKey = secp.generateKeyPair();
+    auto const sender = el1bEvmcAddress(senderKey->address(nodeA.cryptoSuite->hashImpl()));
+    auto const recipient = el1bEvmcAddress(0x21);
+
+    bcos::rpc::Web3Transaction transfer;
+    transfer.type = bcos::rpc::TransactionType::EIP1559;
+    transfer.chainId = 1;
+    transfer.nonce = 0;
+    transfer.maxPriorityFeePerGas = u256(100000000);
+    transfer.maxFeePerGas = u256(2000000000);
+    transfer.gasLimit = 21000;
+    transfer.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    transfer.value = u256(100);
+    auto rawTransfer = el1bSign(transfer, *senderKey);
+
+    auto sidecar = el1bMakeSidecar(0x2a);
+    auto const versionedHash =
+        crypto::kzg::versionedHashFromCommitment(bcos::ref(sidecar.commitments.front()));
+    bcos::rpc::Web3Transaction blob;
+    blob.type = bcos::rpc::TransactionType::EIP4844;
+    blob.chainId = 1;
+    blob.nonce = 1;
+    blob.maxPriorityFeePerGas = u256(100000000);
+    blob.maxFeePerGas = u256(2000000000);
+    blob.gasLimit = 21000;
+    blob.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    blob.value = u256(7);
+    blob.maxFeePerBlobGas = u256(1000000000);
+    blob.blobVersionedHashes = {versionedHash};
+    auto rawBlob = el1bSign(blob, *senderKey);
+    auto const blobHash = bcos::rpc::decodeWeb3RawTransaction(
+        bcos::bytesConstRef(rawBlob.data(), rawBlob.size()), hashImpl)
+                              ->hash();
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    seedGenesis(parent, {{sender, u256(1000000000000000000ULL)}});
+    el1bPoolAdd(memPool, hashImpl, rawTransfer);
+    el1bPoolAdd(memPool, hashImpl, rawBlob, std::move(sidecar));
+    auto payloadId = buildOnGenesis();
+
+    auto data = task::syncWait(service.getPayload(payloadId, 5));
+    BOOST_REQUIRE(data);
+    BOOST_REQUIRE_EQUAL(data->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(data->executionPayload.transactions[0].raw == rawTransfer);
+    BOOST_REQUIRE(data->executionPayload.blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*data->executionPayload.blobGasUsed, u256(0));
+    BOOST_REQUIRE(data->blobsBundle.has_value());
+    BOOST_CHECK(data->blobsBundle->blobs.empty());
+    BOOST_CHECK(data->blobsBundle->proofs.empty());
+    BOOST_CHECK(memPool.hasBlobSidecar(blobHash));  // still pooled, sidecar intact
+
+    auto result = verifyOnNodeB(*data, parent);
+    BOOST_CHECK(result.valid);
+    BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+}
+
+// Osaka: getPayloadV5 answers the Osaka response (BlobsBundleV2 — same three-array shape,
+// cell proofs — plus executionRequests); V3/V4 are outside their windows.
+BOOST_FIXTURE_TEST_CASE(osakaGetPayloadV5AnswersBundleAndRequests, EL1BOsakaFixture)
+{
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    seedGenesis(parent);
+    auto payloadId = buildOnGenesis();
+
+    auto data = task::syncWait(service.getPayload(payloadId, 5));
+    BOOST_REQUIRE(data);
+    BOOST_REQUIRE(data->blobsBundle.has_value());
+    BOOST_CHECK(data->blobsBundle->commitments.empty());
+    BOOST_CHECK(data->blobsBundle->proofs.empty());
+    BOOST_CHECK(data->blobsBundle->blobs.empty());
+    BOOST_REQUIRE(data->executionRequests.has_value());
+    BOOST_CHECK(data->executionRequests->empty());
+    BOOST_CHECK(!data->executionPayload.withdrawalsRoot.has_value());
+
+    auto result = verifyOnNodeB(*data, parent);
+    BOOST_CHECK(result.valid);
+    BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+
+    BOOST_CHECK_THROW(task::syncWait(service.getPayload(payloadId, 4)), UnsupportedFork);
+    BOOST_CHECK_THROW(task::syncWait(service.getPayload(payloadId, 3)), UnsupportedFork);
+}
+
+// Osaka: a blob transaction with an EIP-7594 version-1 sidecar seals, and getPayloadV5's
+// BlobsBundleV2 carries its blob, commitment and the 128 cell proofs — the bundle a Fulu CL
+// verifies with verify_cell_kzg_proof_batch. Node B commits the block.
+BOOST_FIXTURE_TEST_CASE(osakaBlobTransactionWithCellProofsSealsIntoBundleV2, EL1BOsakaFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto senderKey = secp.generateKeyPair();
+    auto const sender = el1bEvmcAddress(senderKey->address(nodeA.cryptoSuite->hashImpl()));
+    auto const recipient = el1bEvmcAddress(0x21);
+
+    auto sidecar = el1bMakeCellProofSidecar(0x2b);
+    auto const expectedBlob = sidecar.blobs.front();
+    auto const expectedCommitment = sidecar.commitments.front();
+    auto const expectedProofs = sidecar.proofs;
+    auto const versionedHash =
+        crypto::kzg::versionedHashFromCommitment(bcos::ref(sidecar.commitments.front()));
+    bcos::rpc::Web3Transaction blob;
+    blob.type = bcos::rpc::TransactionType::EIP4844;
+    blob.chainId = 1;
+    blob.nonce = 0;
+    blob.maxPriorityFeePerGas = u256(100000000);
+    blob.maxFeePerGas = u256(2000000000);
+    blob.gasLimit = 21000;
+    blob.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    blob.value = u256(7);
+    blob.maxFeePerBlobGas = u256(1000000000);
+    blob.blobVersionedHashes = {versionedHash};
+    auto rawBlob = el1bSign(blob, *senderKey);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    seedGenesis(parent, {{sender, u256(1000000000000000000ULL)}});
+    // The pool (head at Osaka) refuses a version-0 sidecar for the same envelope and
+    // admits the version-1 one.
+    BOOST_CHECK_EQUAL(memPool.requiredBlobSidecarVersion(), engine::BLOB_SIDECAR_VERSION_1);
+    {
+        auto v0 = bcos::rpc::decodeWeb3RawTransaction(
+            bcos::bytesConstRef(rawBlob.data(), rawBlob.size()), hashImpl);
+        v0->verify(hashImpl, secp);
+        BOOST_CHECK(memPool.tryAdd(std::move(v0), el1bMakeSidecar(0x2b)) ==
+                    protocol::TransactionStatus::Malformed);
+    }
+    el1bPoolAdd(memPool, hashImpl, rawBlob, std::move(sidecar));
+    auto payloadId = buildOnGenesis();
+
+    auto data = task::syncWait(service.getPayload(payloadId, 5));
+    BOOST_REQUIRE(data);
+    BOOST_REQUIRE_EQUAL(data->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(data->executionPayload.transactions[0].raw == rawBlob);
+    BOOST_REQUIRE(data->executionPayload.blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*data->executionPayload.blobGasUsed, u256(131072));
+    BOOST_REQUIRE(data->blobsBundle.has_value());
+    auto const& bundle = *data->blobsBundle;
+    BOOST_REQUIRE_EQUAL(bundle.blobs.size(), 1);
+    BOOST_REQUIRE_EQUAL(bundle.commitments.size(), 1);
+    BOOST_REQUIRE_EQUAL(bundle.proofs.size(), engine::CELL_PROOFS_PER_BLOB);
+    BOOST_CHECK(bundle.blobs.front() == expectedBlob);
+    BOOST_CHECK(bundle.commitments.front() == expectedCommitment);
+    BOOST_CHECK(bundle.proofs == expectedProofs);
+    BOOST_CHECK(
+        crypto::kzg::verifyCellKzgProofBatch(bundle.blobs, bundle.commitments, bundle.proofs));
+
+    auto result = verifyOnNodeB(*data, parent);
+    BOOST_CHECK(result.valid);
+    BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+}
+
+// Cancun: V3 serves the payload; the Prague method is -38005 (UnsupportedFork, the
+// execution-apis window error), not the "payload built by another method version" error.
+BOOST_FIXTURE_TEST_CASE(cancunGetPayloadV4IsUnsupportedFork, EL1BFixture)
+{
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {});
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    BOOST_CHECK(!data->executionRequests.has_value());  // V3 carries no executionRequests
+    BOOST_CHECK_THROW(task::syncWait(service.getPayload(*fcu.payloadId, 4)), UnsupportedFork);
+    BOOST_CHECK_THROW(task::syncWait(service.getPayload(*fcu.payloadId, 5)), UnsupportedFork);
+}
+
+// EL mode: forkchoiceUpdated's version must match the fork of payloadAttributes.timestamp
+// (cancun.md "Update the methods of previous forks" for V2; geth fcuV1/V2 Paris+Shanghai
+// only): on a Cancun-from-genesis chain V1 and V2 attributes answer -38005 before any state
+// is read, V3 builds, and a null-attributes head update is never fork-gated.
+BOOST_FIXTURE_TEST_CASE(forkchoiceUpdatedMethodWindowFollowsTheAttributesFork, EL1BFixture)
+{
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {});
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+
+    auto attributesV2 = makePayloadAttributesV2(c_blockTimestampMs);
+    BOOST_CHECK_THROW(
+        task::syncWait(service.updateForkchoice(state, &attributesV2, 2)), UnsupportedFork);
+    auto attributesV1 = attributesV2;
+    attributesV1.withdrawals.reset();
+    BOOST_CHECK_THROW(
+        task::syncWait(service.updateForkchoice(state, &attributesV1, 1)), UnsupportedFork);
+
+    auto attributesV3 = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributesV3, 3));
+    BOOST_CHECK(fcu.payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK(fcu.payloadId.has_value());
+
+    auto headOnly = task::syncWait(service.updateForkchoice(state, nullptr, 2));
+    BOOST_CHECK(headOnly.payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK(!headOnly.payloadId.has_value());
+}
+
+// amsterdam_time scheduled at the block being built: the second before is Osaka; at the
+// fork every fork-gated method answers -38005 (osaka.md / amsterdam.md "Update the methods
+// of previous forks") because this binary has no Amsterdam execution — the fork schedule
+// lookup itself refuses the timestamp, before FCU reads state or newPayload checks a shape.
+BOOST_FIXTURE_TEST_CASE(
+    amsterdamTimestampIsUnsupportedForkOnEveryGatedMethod, EL1BAmsterdamScheduledFixture)
+{
+    auto const amsterdamSeconds = static_cast<int64_t>(c_blockTimestampMs / 1000);
+    BOOST_CHECK_EQUAL(externalVerifier->revisionAt(amsterdamSeconds - 1), EVMC_OSAKA);
+    BOOST_CHECK_THROW(externalVerifier->revisionAt(amsterdamSeconds), UnsupportedFork);
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    seedGenesis(parent);
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    BOOST_CHECK_THROW(
+        task::syncWait(service.updateForkchoice(state, &attributes, 3)), UnsupportedFork);
+
+    NewPayloadRequest request;
+    request.executionPayload.timestamp = c_blockTimestampMs;
+    BOOST_CHECK_THROW(task::syncWait(service.newPayload(request, 4)), UnsupportedFork);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
