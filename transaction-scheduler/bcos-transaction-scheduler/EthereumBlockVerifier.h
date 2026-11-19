@@ -306,10 +306,10 @@ inline protocol::BlockHeader::Ptr makeExecutionBlockHeader(
 }
 
 /// Overlay the per-block Ethereum EVM context (base fee, blob gas, prevRandao,
-/// difficulty, chain id, revision) onto a LedgerConfig fetched from storage via
-/// ledger::getLedgerConfig. The overlay wins over the system-config values.
+/// difficulty, revision) onto a LedgerConfig fetched from storage via
+/// ledger::getLedgerConfig. Preserve its chain id from the existing chain configuration.
 inline void fillExecutionLedgerConfig(protocol::EthBlockHeaderData const& ethHeader,
-    ledger::LedgerConfig& config, EvmcForkTimestamps const& schedule, uint64_t chainId)
+    ledger::LedgerConfig& config, EvmcForkTimestamps const& schedule)
 {
     config.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
     config.setEVMCRevision(
@@ -359,7 +359,13 @@ inline void fillExecutionLedgerConfig(protocol::EthBlockHeaderData const& ethHea
             .bpo1Time = schedule.bpo1Time,
             .bpo2Time = schedule.bpo2Time},
         static_cast<uint64_t>(ethHeader.timestamp)));
+}
 
+/// Block-import callers supply their configured chain id explicitly.
+inline void fillExecutionLedgerConfig(protocol::EthBlockHeaderData const& ethHeader,
+    ledger::LedgerConfig& config, EvmcForkTimestamps const& schedule, uint64_t chainId)
+{
+    fillExecutionLedgerConfig(ethHeader, config, schedule);
     // chain id -> big-endian evmc_uint256be.
     evmc_uint256be cid{};
     bcos::bytes chainIdBytes(kChainIdBytes, 0);

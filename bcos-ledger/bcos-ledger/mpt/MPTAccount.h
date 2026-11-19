@@ -265,6 +265,12 @@ public:
         co_return account->nonce.template convert_to<std::string>();
     }
 
+    bcos::task::Task<bool> hasStorageAt(bcos::h256 const& stateRoot)
+    {
+        auto const account = co_await readLeaf(stateRoot);
+        co_return account && account->storageRoot != emptyRootHash();
+    }
+
     // The inherited flat reads, including the tag-forwarding overload HostContext calls with
     // BYPASS_READ_SET / BYPASS_MULTILAYER. Re-exported because the historical overload below
     // would otherwise hide the whole storage() overload set.

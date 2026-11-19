@@ -330,9 +330,10 @@ struct EthL1Policy
     /// Execute the precompile for @p msg. Only called when isPrecompile
     /// returned true for msg.code_address; the L1 default forwards to the
     /// shared table.
-    static evmc::Result callPrecompile(evmc_revision rev, evmc_message const& msg) noexcept
+    static evmc::Result callPrecompile(
+        evmc_revision rev, evmc_message const& msg, std::string_view* error = nullptr) noexcept
     {
-        return evm::call_precompile(rev, msg);
+        return evm::call_precompile(rev, msg, error);
     }
 
     /// Build a BCOS receipt from the executed EVM result (no evmone receipt
