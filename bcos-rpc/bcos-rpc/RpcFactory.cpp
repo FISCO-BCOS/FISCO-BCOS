@@ -468,7 +468,7 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     // JsonRpcImpl_2_0
     auto filterSystem = std::make_shared<JsonRpcFilterSystem>(*m_ioServicePool->getIOService(),
         _groupManager, m_nodeConfig->groupId(), m_nodeConfig->rpcFilterTimeout(),
-        m_nodeConfig->rpcMaxProcessBlock());
+        m_nodeConfig->rpcMaxProcessBlock(), m_nodeConfig->rpcMaxBlockRange());
     auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(
         _groupManager, m_gateway, _wsService, filterSystem, m_nodeConfig->forceSender());
     jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
@@ -493,7 +493,7 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
     // FilterSystem::insertFilter is not shared concurrently.
     auto filterSystem = std::make_shared<Web3FilterSystem>(*m_ioServicePool->getIOService(),
         _groupManager, m_nodeConfig->groupId(), m_nodeConfig->web3FilterTimeout(),
-        m_nodeConfig->web3MaxProcessBlock());
+        m_nodeConfig->web3MaxProcessBlock(), m_nodeConfig->web3MaxBlockRange());
 
     auto const& engineListener = m_nodeConfig->engineApiListener();
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),

@@ -18,8 +18,9 @@ public:
         rpc = factory->buildLocalRpc(groupInfo, nodeService);
         web3JsonRpc = rpc->web3JsonRpc();
         BOOST_CHECK(web3JsonRpc != nullptr);
-        filterSystem = std::make_shared<Web3FilterSystem>(
-            *ioServicePool->getIOService(), rpc->groupManager(), "test-group", 600000, 10);
+        filterSystem = std::make_shared<Web3FilterSystem>(*ioServicePool->getIOService(),
+            rpc->groupManager(), "test-group", 600000,
+            /*maxBlockProcessPerReq=*/10, /*maxBlockRange=*/10);
     }
     Json::Value onRPCRequestWrapper(std::string_view request, rpc::Sender _diySender = nullptr)
     {
@@ -160,8 +161,9 @@ BOOST_AUTO_TEST_CASE(test_filter_expiration)
     request->setToBlock(100);
 
     auto timeout = 200;
-    filterSystem = std::make_shared<Web3FilterSystem>(
-        *ioServicePool->getIOService(), rpc->groupManager(), "test-group", timeout, 10);
+    filterSystem = std::make_shared<Web3FilterSystem>(*ioServicePool->getIOService(),
+        rpc->groupManager(), "test-group", timeout, /*maxBlockProcessPerReq=*/10,
+        /*maxBlockRange=*/10);
 
     const auto filterId = task::syncWait(filterSystem->newFilter(request));
 
@@ -175,6 +177,297 @@ BOOST_AUTO_TEST_CASE(test_filter_expiration)
     u256 id(filterId);
     BOOST_CHECK_THROW(
         task::syncWait(filterSystem->getFilterChanges(id)), bcos::rpc::JsonRpcException);
+}
+
+// 1001: a one-shot eth_getLogs must never answer a truncated log set. The range cap in this
+// fixture is 10 blocks; a wider window is an error, not a silent prefix of the requested range.
+// Streaming (eth_getFilterChanges) keeps its cursor semantics and its own, separate paging step.
+BOOST_AUTO_TEST_CASE(test_getLogsOverRangeLimitFailsClosed)
+{
+    for (int i = 0; i < 20; ++i)
+    {
+        m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 1);
+    }
+    auto const latest = filterSystem->getLatestBlockNumber();
+    BOOST_REQUIRE_GE(latest, 16);
+
+    auto parseRequest = [&latest](std::string const& json) {
+        Json::Reader reader;
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(json, value));
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(value, latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt,
+            std::nullopt, false);
+        return request;
+    };
+
+    // 11 blocks (0x5..0xf) is one over the 10-block cap: refuse rather than return a prefix.
+    BOOST_CHECK_THROW(task::syncWait(filterSystem->getLogs(
+                          parseRequest(R"({"fromBlock":"0x5","toBlock":"0xf"})"))),
+        bcos::rpc::JsonRpcException);
+
+    // Exactly the cap (0x5..0xe) still answers.
+    auto logs = task::syncWait(
+        filterSystem->getLogs(parseRequest(R"({"fromBlock":"0x5","toBlock":"0xe"})")));
+    BOOST_TEST(logs.isArray());
+}
+
+// eth_getFilterLogs is the third caller of getLogsImpl (after eth_getLogs and the legacy
+// getLogs), so it inherits the same fail-closed bound. It is easy to miss because
+// eth_getFilterChanges -- the other half of the filter workflow -- keeps paginating, so a
+// reviewer reading only about eth_getLogs would think the backfill still works.
+BOOST_AUTO_TEST_CASE(getFilterLogsOverRangeLimitFailsClosed)
+{
+    for (int i = 0; i < 20; ++i)
+    {
+        m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 1);
+    }
+    auto const latest = filterSystem->getLatestBlockNumber();
+    BOOST_REQUIRE_GE(latest, 16);
+
+    // Go through fromJson: it is what resolves the block tags and sets the isLatest flags that
+    // getLogsImpl reads. A hand-built request left at the defaults would resolve both ends to
+    // "latest" and silently test a one-block window.
+    auto const newFilterFor = [&latest, this](std::string const& json) {
+        Json::Reader reader;
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(json, value));
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(value, latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt,
+            std::nullopt, false);
+        return task::syncWait(filterSystem->newFilter(request));
+    };
+
+    // A filter spanning more than the 10-block cap: its backfill is refused, not truncated.
+    auto const wideId = newFilterFor(R"({"fromBlock":"0x0","toBlock":"latest"})");
+    BOOST_REQUIRE(!wideId.empty());
+    BOOST_CHECK_THROW(
+        task::syncWait(filterSystem->getFilterLogs(u256(wideId))), bcos::rpc::JsonRpcException);
+
+    // A filter inside the budget still answers -- the bound, not filters in general, is what
+    // this test pins.
+    auto const narrowId = newFilterFor(R"({"fromBlock":"latest","toBlock":"latest"})");
+    BOOST_REQUIRE(!narrowId.empty());
+    auto const logs = task::syncWait(filterSystem->getFilterLogs(u256(narrowId)));
+    BOOST_TEST(logs.isArray());
+}
+
+// `address` and `topics` are optional in the Ethereum filter spec: an omitted or null field
+// matches everything, which is what LogMatcher already does for an empty set.
+BOOST_AUTO_TEST_CASE(filterRequestAcceptsMissingAddressAndTopics)
+{
+    Json::Reader reader;
+    auto parse = [&reader](std::string const& s) {
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(s, value));
+        return value;
+    };
+
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"fromBlock":"0x0","toBlock":"0x5"})"), 100, 1, 2, std::nullopt,
+            std::nullopt, false);
+        BOOST_CHECK(request->addresses().empty());
+        BOOST_CHECK(request->topics().empty());
+    }
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"fromBlock":"0x0","toBlock":"0x5",
+            "address":null,"topics":null})"),
+            100, 1, 2, std::nullopt, std::nullopt, false);
+        BOOST_CHECK(request->addresses().empty());
+        BOOST_CHECK(request->topics().empty());
+    }
+    // A topics-only request still filters by topic position 0.
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"fromBlock":"0x0","toBlock":"0x5","topics":["0xaa"]})"), 100, 1,
+            2, std::nullopt, std::nullopt, false);
+        BOOST_CHECK(request->addresses().empty());
+        BOOST_REQUIRE_EQUAL(request->topics().size(), 1U);
+        BOOST_CHECK(request->topics()[0].contains("0xaa"));
+    }
+}
+
+// The whole premise of making address/topics optional is that LogMatcher treats an empty
+// address set and an absent topic position as "match all". The two tests above cannot falsify
+// that claim -- they stop at the parser and at isArray(), both of which hold for an empty
+// result. This seeds a block whose receipt carries a real log (status None, unlike
+// addNewBlock's fake receipts) and asserts the log actually comes back for a range-only filter
+// and for an address-only filter, i.e. the two request shapes the change exists to accept.
+BOOST_AUTO_TEST_CASE(getLogsEmptyFilterMatchesAllLogs)
+{
+    // Append above the fixture's existing chain: overwriting a seeded block would test nothing
+    // (and FakeLedger indexes blocks by position).
+    auto const number = m_ledger->blockNumber() + 1;
+    std::string const logAddress = "abababababababababababababababababababab";
+    h256 const topic0("0x1111111111111111111111111111111111111111111111111111111111111111");
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(number);
+    header->setParentInfo({number - 1, h256(0U)});
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+
+    // LogMatcher walks the block's transaction metadata (one receipt per entry), so a receipt
+    // alone is invisible to eth_getLogs -- the block needs the matching transaction row too.
+    // The row only supplies the hash eth_getLogs echoes back, so a synthetic one is enough.
+    block->appendTransactionMetaData(
+        m_blockFactory->createTransactionMetaData(h256(1U), std::string("/apps/ab")));
+
+    std::vector<protocol::LogEntry> logs;
+    logs.emplace_back(toAddress(logAddress).asBytes(), h256s{topic0}, bytes{});
+    bytes output;
+    auto receipt = m_blockFactory->receiptFactory()->createReceipt(
+        u256(21000), logAddress, logs, /*status=*/0, ref(output), number);
+    block->appendReceipt(receipt);
+    m_ledger->appendBuiltBlock(std::move(block));
+
+    auto const latest = filterSystem->getLatestBlockNumber();
+    BOOST_REQUIRE_GE(latest, number);
+    auto parseRequest = [&latest](std::string const& json) {
+        Json::Reader reader;
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(json, value));
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(value, latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt,
+            std::nullopt, false);
+        return request;
+    };
+    auto const blockTag = toQuantity(number);
+
+    // Range only -- neither address nor topics. Before the fix this was rejected outright.
+    auto const rangeOnly = task::syncWait(filterSystem->getLogs(
+        parseRequest(R"({"fromBlock":")" + blockTag + R"(","toBlock":")" + blockTag + R"("})")));
+    BOOST_REQUIRE_EQUAL(rangeOnly.size(), 1U);
+    BOOST_CHECK_EQUAL(rangeOnly[0U]["topics"][0U].asString(), topic0.hexPrefixed());
+    BOOST_CHECK_EQUAL(rangeOnly[0U]["data"].asString(), "0x");
+
+    // Address only -- no range at all, the shape ethers' queryFilter(event) / web3.js
+    // getPastLogs({address}) send. Both range fields default to "latest", and the block just
+    // appended is the head, so this must find the log.
+    auto const addressOnly = task::syncWait(filterSystem->getLogs(
+        parseRequest(R"({"address":"0xabababababababababababababababababababab"})")));
+    BOOST_REQUIRE_EQUAL(addressOnly.size(), 1U);
+
+    // A different address still matches nothing: this pins that address filtering is applied,
+    // not that every filter returns everything.
+    auto const otherAddress = task::syncWait(filterSystem->getLogs(
+        parseRequest(R"({"address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
+    BOOST_CHECK(otherAddress.empty());
+}
+
+// The one-shot range cap and the streaming paging step are separate knobs. They used to be one
+// member, so raising the cap for eth_getLogs also multiplied the per-poll work of
+// eth_getFilterChanges / eth_getBlockChanges / eth_getPendingTransactions by the same factor.
+// This builds a system with the original 10-block paging step and the 1000-block cap shipped
+// alongside it, then asserts a range far wider than the step is answered in a single one-shot
+// call: the two values are read at different places, so moving one leaves the other alone.
+BOOST_AUTO_TEST_CASE(oneShotRangeCapIsIndependentOfPagingStep)
+{
+    for (int i = 0; i < 20; ++i)
+    {
+        m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 1);
+    }
+    auto wideCap = std::make_shared<Web3FilterSystem>(*ioServicePool->getIOService(),
+        rpc->groupManager(), "test-group", 600000, /*maxBlockProcessPerReq=*/10,
+        /*maxBlockRange=*/1000);
+    auto const latest = wideCap->getLatestBlockNumber();
+    BOOST_REQUIRE_GE(latest, 16);
+
+    Json::Reader reader;
+    Json::Value value;
+    BOOST_REQUIRE(reader.parse(R"({"fromBlock":"0x0","toBlock":"latest"})", value));
+    auto request = std::make_shared<Web3FilterRequest>();
+    request->fromJson(
+        value, latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
+
+    // ~20 blocks is twice the paging step but well inside the cap, so it must be answered.
+    auto const logs = task::syncWait(wideCap->getLogs(request));
+    BOOST_TEST(logs.isArray());
+}
+
+// EIP-234 makes blockHash an alternative to the {fromBlock, toBlock} pair, not an addition, so a
+// request carrying both is rejected. Accepting it would take the single-block branch in
+// getLogsImpl and answer a range query with one block's logs -- the same "plausible-looking
+// smaller result" the range cap exists to eliminate.
+BOOST_AUTO_TEST_CASE(filterRequestRejectsBlockHashCombinedWithRange)
+{
+    Json::Reader reader;
+    auto parse = [&reader](std::string const& s) {
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(s, value));
+        return value;
+    };
+
+    auto const newRequest = []() { return std::make_shared<Web3FilterRequest>(); };
+
+    {
+        auto request = newRequest();
+        BOOST_CHECK_THROW(request->fromJson(parse(R"({"blockHash":"0x1234","fromBlock":"0x1"})"),
+                              100, 1, 2, std::nullopt, std::nullopt, false),
+            bcos::rpc::JsonRpcException);
+    }
+    {
+        auto request = newRequest();
+        BOOST_CHECK_THROW(request->fromJson(parse(R"({"blockhash":"0x1234","toBlock":"0x2"})"), 100,
+                              1, 2, std::nullopt, std::nullopt, false),
+            bcos::rpc::JsonRpcException);
+    }
+    // Either side alone is still accepted: this is about the combination, not about blockHash.
+    {
+        auto request = newRequest();
+        request->fromJson(
+            parse(R"({"blockHash":"0x1234"})"), 100, 1, 2, std::nullopt, std::nullopt, false);
+        BOOST_CHECK_EQUAL(request->blockHash(), "0x1234");
+    }
+    {
+        auto request = newRequest();
+        request->fromJson(parse(R"({"fromBlock":"0x1","toBlock":"0x2"})"), 100, 1, 2, std::nullopt,
+            std::nullopt, false);
+        BOOST_CHECK(request->blockHash().empty());
+    }
+}
+
+// The remaining criteria are optional too, and a blockHash is an alternative to the range: a
+// spec-conformant client sends either {fromBlock, toBlock} or {blockHash}, and ethers/web3.js
+// omit the range entirely when the caller gives only an address. Each of those shapes used to be
+// rejected (or, for blockHash, silently ignored because only the all-lowercase spelling was read).
+BOOST_AUTO_TEST_CASE(filterRequestAcceptsBlockHashAndDefaultsRange)
+{
+    Json::Reader reader;
+    auto parse = [&reader](std::string const& s) {
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(s, value));
+        return value;
+    };
+
+    // blockHash only (the JSON-RPC spelling) -- no fromBlock/toBlock at all.
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(
+            parse(R"({"blockHash":"0x1234"})"), 100, 1, 2, std::nullopt, std::nullopt, false);
+        BOOST_CHECK_EQUAL(request->blockHash(), "0x1234");
+    }
+    // blockhash, the spelling older builds of this file read and therefore what clients written
+    // against them send.
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(
+            parse(R"({"blockhash":"0x5678"})"), 100, 1, 2, std::nullopt, std::nullopt, false);
+        BOOST_CHECK_EQUAL(request->blockHash(), "0x5678");
+    }
+    // An omitted range defaults to "latest" (the real head), not block 0 and not an error.
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(
+            parse(R"({"address":"0x1234"})"), 100, 1, 2, std::nullopt, std::nullopt, false);
+        BOOST_CHECK_EQUAL(request->fromBlock(), 100);
+        BOOST_CHECK(request->fromIsLatest());
+        BOOST_CHECK_EQUAL(request->toBlock(), 100);
+        BOOST_CHECK(request->toIsLatest());
+    }
 }
 
 // Finding F (round-2): FilterRequest::fromJson must resolve "latest"/"safe"/"finalized"
@@ -225,6 +518,200 @@ BOOST_AUTO_TEST_CASE(filterBlockTagResolvesAgainstHeadAndDepths)
         BOOST_CHECK_EQUAL(request->fromBlock(), 0);
         BOOST_CHECK_EQUAL(request->toBlock(), 5);
     }
+}
+
+// EIP-234: the successful result must belong to the requested hash. The ledger resolves a hash
+// to a height and then reads that height in a separate call, so a reorg in between can make the
+// second read return a different block. This pins the fail-closed answer: the stale hash maps to
+// a height whose header is not that hash, and the query must error instead of reporting the logs
+// of whichever block now occupies the height.
+BOOST_AUTO_TEST_CASE(blockHashReorgBetweenLookupAndReadFailsClosed)
+{
+    auto const head = static_cast<size_t>(m_ledger->blockNumber());
+    BOOST_REQUIRE_GE(head, 1U);
+    auto const blocks = m_ledger->ledgerData();
+
+    auto const headHash = blocks[head]->blockHeader()->hash();
+
+    // A hash that indexes "the height where it used to live", while the block now stored there
+    // carries a different header -- the state a reorg leaves behind between the two reads.
+    auto const staleHash = blocks[head - 1]->blockHeader()->hash();
+    BOOST_REQUIRE(staleHash != headHash);
+    m_ledger->indexBlockHash(staleHash, static_cast<protocol::BlockNumber>(head));
+
+    auto const latest = filterSystem->getLatestBlockNumber();
+    Json::Reader reader;
+    auto parse = [&reader](std::string const& s) {
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(s, value));
+        return value;
+    };
+    auto const blockHashRequest = [&latest, &parse](crypto::HashType const& hash) {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"blockHash":")" + hash.hexPrefixed() + R"("})"), latest,
+            /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
+        return request;
+    };
+
+    // Control: the hash of the block actually stored at its height still answers.
+    auto const currentLogs = task::syncWait(filterSystem->getLogs(blockHashRequest(headHash)));
+    BOOST_TEST(currentLogs.isArray());
+
+    // The stale mapping must not answer with the logs of the block that replaced it.
+    BOOST_CHECK_THROW(task::syncWait(filterSystem->getLogs(blockHashRequest(staleHash))),
+        bcos::rpc::JsonRpcException);
+}
+
+// An empty blockHash is not the same as no blockHash: getLogsImpl selects the hash branch on a
+// non-empty string, so storing "" would fall through to the omitted-range defaults (both
+// "latest") and answer a request that named one specific block with the head block's logs. Both
+// spellings must be rejected, and a non-empty hash must still be accepted.
+BOOST_AUTO_TEST_CASE(filterRequestRejectsEmptyBlockHash)
+{
+    Json::Reader reader;
+    auto parse = [&reader](std::string const& s) {
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(s, value));
+        return value;
+    };
+
+    for (char const* key : {"blockHash", "blockhash"})
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        BOOST_CHECK_THROW(request->fromJson(parse(std::string("{\"") + key + "\":\"\"}"), 100, 1, 2,
+                              std::nullopt, std::nullopt, false),
+            bcos::rpc::JsonRpcException);
+    }
+
+    // Control: the rejection is about the empty selector, not about hash-only requests.
+    auto request = std::make_shared<Web3FilterRequest>();
+    request->fromJson(
+        parse(R"({"blockHash":"0x1234"})"), 100, 1, 2, std::nullopt, std::nullopt, false);
+    BOOST_CHECK_EQUAL(request->blockHash(), "0x1234");
+}
+
+// The range cap bounds how many blocks are read; it cannot bound how much comes back, because one
+// block may now carry thousands of transactions and every matching log is appended to the
+// response array before it is serialized. A result above MAX_RETURNED_LOGS_PER_QUERY is refused
+// rather than truncated -- truncating would be the same "plausible-looking partial answer" the
+// range cap exists to remove. The negative control shows the cap is not just rejecting everything.
+BOOST_AUTO_TEST_CASE(getLogsRefusesMoreLogsThanTheResponseCap)
+{
+    auto const number = m_ledger->blockNumber() + 1;
+    std::string const logAddress = "abababababababababababababababababababab";
+    h256 const topic0("0x2222222222222222222222222222222222222222222222222222222222222222");
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(number);
+    header->setParentInfo({number - 1, h256(0U)});
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+    block->appendTransactionMetaData(
+        m_blockFactory->createTransactionMetaData(h256(2U), std::string("/apps/ab")));
+
+    // One log over the cap, all in a single receipt: one block must not be able to grow the
+    // response past the ceiling.
+    std::vector<protocol::LogEntry> logs;
+    logs.reserve(MAX_RETURNED_LOGS_PER_QUERY + 1);
+    for (size_t i = 0; i <= MAX_RETURNED_LOGS_PER_QUERY; ++i)
+    {
+        logs.emplace_back(toAddress(logAddress).asBytes(), h256s{topic0}, bytes{});
+    }
+    bytes output;
+    auto receipt = m_blockFactory->receiptFactory()->createReceipt(
+        u256(21000), logAddress, logs, /*status=*/0, ref(output), number);
+    block->appendReceipt(receipt);
+    m_ledger->appendBuiltBlock(std::move(block));
+
+    auto const latest = filterSystem->getLatestBlockNumber();
+    BOOST_REQUIRE_GE(latest, number);
+    auto parseRequest = [&latest](std::string const& json) {
+        Json::Reader reader;
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(json, value));
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(value, latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt,
+            std::nullopt, false);
+        return request;
+    };
+    auto const blockTag = toQuantity(number);
+    auto const rangeOfThatBlock =
+        R"({"fromBlock":")" + blockTag + R"(","toBlock":")" + blockTag + R"("})";
+
+    // Every log matches (no criteria) and there is one more than the cap allows.
+    BOOST_CHECK_THROW(task::syncWait(filterSystem->getLogs(parseRequest(rangeOfThatBlock))),
+        bcos::rpc::JsonRpcException);
+
+    // The ceiling must not depend on the selector: the same dense block selected by hash has to
+    // be refused too. Without the shared path the hash branch returned the whole array, so one
+    // query shape answered while the other errored.
+    auto const blockHashOfThatBlock = m_ledger->ledgerData()[number]->blockHeader()->hash();
+    BOOST_CHECK_THROW(task::syncWait(filterSystem->getLogs(parseRequest(
+                          R"({"blockHash":")" + blockHashOfThatBlock.hexPrefixed() + R"("})"))),
+        bcos::rpc::JsonRpcException);
+
+    // Control: an address that matches nothing answers an empty array -- the cap is a ceiling on
+    // the result, not a refusal of the range.
+    auto const noMatch = task::syncWait(filterSystem->getLogs(
+        parseRequest(R"({"fromBlock":")" + blockTag + R"(","toBlock":")" + blockTag +
+                     R"(","address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
+    BOOST_CHECK(noMatch.empty());
+
+    // Same control through the hash branch, so the shared path is exercised on the allow side
+    // as well: an unmatched address must answer empty, not throw.
+    auto const noMatchByHash = task::syncWait(filterSystem->getLogs(
+        parseRequest(R"({"blockHash":")" + blockHashOfThatBlock.hexPrefixed() +
+                     R"(","address":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"})")));
+    BOOST_CHECK(noMatchByHash.empty());
+}
+
+// The cap has to be enforced while the result is built, not after: one dense block can produce
+// every match it has before a post-hoc size check would fire, so "at most 10000 entries" would
+// only bound successful responses, not the array's peak. This pins the early stop directly on the
+// matcher -- the array ends at the budget and the outcome says it stopped there.
+BOOST_AUTO_TEST_CASE(logMatcherStopsAtTheBudgetBeforeAppending)
+{
+    auto const number = m_ledger->blockNumber() + 1;
+    std::string const logAddress = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+    h256 const topic0("0x3333333333333333333333333333333333333333333333333333333333333333");
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(number);
+    header->setParentInfo({number - 1, h256(0U)});
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+    block->appendTransactionMetaData(
+        m_blockFactory->createTransactionMetaData(h256(3U), std::string("/apps/ab")));
+
+    constexpr size_t kLogs = 5;
+    constexpr size_t kBudget = 2;
+    std::vector<protocol::LogEntry> logs;
+    logs.reserve(kLogs);
+    for (size_t i = 0; i < kLogs; ++i)
+    {
+        logs.emplace_back(toAddress(logAddress).asBytes(), h256s{topic0}, bytes{});
+    }
+    bytes output;
+    auto receipt = m_blockFactory->receiptFactory()->createReceipt(
+        u256(21000), logAddress, logs, /*status=*/0, ref(output), number);
+    block->appendReceipt(receipt);
+
+    Json::Reader reader;
+    Json::Value params;
+    BOOST_REQUIRE(reader.parse(R"({})", params));
+    auto request = std::make_shared<Web3FilterRequest>();
+    request->fromJson(
+        params, number, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
+
+    Json::Value result(Json::arrayValue);
+    auto const outcome = filterSystem->matcher()->matches(request, block, result, kBudget);
+
+    // Stopped mid-block: two entries, and the flag says the third was never constructed.
+    BOOST_CHECK_EQUAL(result.size(), kBudget);
+    BOOST_CHECK_EQUAL(outcome.matched, kBudget);
+    BOOST_CHECK(outcome.budgetExceeded);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
