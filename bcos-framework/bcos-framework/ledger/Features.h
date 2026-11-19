@@ -102,6 +102,7 @@ public:
         // the current upstream bugfix_tx_intrinsic_gas implementation. A chain enabling either
         // flag must run a uniform node implementation. Full rules also live in ethereum-executor
         // (executor_version >= 2).
+        // Prague also requires bugfix_evm_create2_delegatecall_staticcall_codecopy.
         feature_evm_prague,  // Prague revision and BLS12-381; depends on feature_evm_cancun
         feature_evm_osaka,   // Osaka revision and p256verify; depends on feature_evm_prague
         feature_evm_timestamp,

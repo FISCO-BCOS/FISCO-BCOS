@@ -329,6 +329,9 @@ BOOST_AUTO_TEST_CASE(featureWithoutDependencyIsRefusedByGovernance)
         });
 }
 
+// Governance holds EVM fork flags to the dependency table: feature_evm_prague needs
+// feature_evm_cancun and bugfix_evm_create2_delegatecall_staticcall_codecopy already enabled.
+// This executive has neither; the refusal names the first missing one in Flag order.
 BOOST_AUTO_TEST_CASE(evmForkFlagWithoutPreviousForkIsRefusedByGovernance)
 {
     SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
@@ -341,7 +344,9 @@ BOOST_AUTO_TEST_CASE(evmForkFlagWithoutPreviousForkIsRefusedByGovernance)
     BOOST_CHECK_EXCEPTION(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError,
         [](PrecompiledError const& e) {
             auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
-            return msg != nullptr && msg->find("feature_evm_cancun") != std::string::npos;
+            return msg != nullptr &&
+                   msg->find("bugfix_evm_create2_delegatecall_staticcall_codecopy") !=
+                       std::string::npos;
         });
 }
 
