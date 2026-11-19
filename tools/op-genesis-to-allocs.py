@@ -11,6 +11,23 @@ artifacts). Output: a single INI fragment carrying
   * [eth_genesis_header]  — the full Ethereum B0 header (22 keys)
   * [op_fork_timestamps]  — the OP fork schedule (regolith_time .. karst_time)
 
+state_root and the header hash are recomputed from the accounts and the header
+fields the way op-geth's Genesis.ToBlock does (fork-gated fields the JSON omits
+are derived, see derive_fork_fields).
+
+This tool never creates accounts. Chain-specific predeploys (the bcos-l2-contracts
+contracts, or any other) go into the genesis the OP way, as plain alloc entries: the
+harness's tools/opstack-genesis/build-allocs.py in FISCO-BCOS/op-stack-e2e-tests merges
+them onto the op-deployer genesis, and its --out-json merged alloc is passed here with
+--alloc (tools/op-genesis-repro.sh does both steps). --alloc must keep every --genesis
+account unchanged and may add accounts; the merged state_root and hash are then emitted
+and rollup.json must be updated to that hash. A hash from --genesis-hash / rollup.json
+genesis.l2.hash (and a stateRoot in the JSON) must equal what the --genesis accounts
+produce, else the tool aborts.
+
+Requires the python packages eth-hash, rlp and trie
+(tools/.ci/c2-e2e-requirements.txt).
+
 The emitted format is pinned to the C++ parsers in
 bcos-tool/bcos-tool/NodeConfig.cpp:
 
@@ -37,16 +54,12 @@ bcos-tool/bcos-tool/NodeConfig.cpp:
       down the ladder, and scheduling a pre-Isthmus fork requires
       isthmus_time to be set (NodeConfig.cpp:1462-1482).
 
-state_root is NOT part of a geth genesis JSON (it is derived from the allocs).
-This tool does not compute the MPT; when the JSON carries no stateRoot it
-emits a zero PLACEHOLDER. Ledger::buildGenesisBlock recomputes the state root
-from [alloc.*] and refuses to boot on mismatch, so a placeholder fails safe —
-fill it in from `eth-sync-check --genesis <genesis.json>` (or the chain's
-published value) and verify the whole fragment with
-`eth-sync-check --genesis-ini <config.genesis>` before starting a node.
+Ledger::buildGenesisBlock recomputes the state root from [alloc.*] and the
+hash from the header fields and refuses to boot on mismatch;
+`eth-sync-check --genesis-ini <config.genesis>` runs the same checks offline.
 
 Usage:
-    python3 tools/op-genesis-to-allocs.py --genesis genesis.json \\
+    python3 tools/op-genesis-to-allocs.py --genesis genesis.json [--alloc allocs.json] \\
         [--rollup rollup.json] [--genesis-hash 0x...] [--name op-sepolia] \\
         [--timestamp] -o config.genesis.fragment.ini
 
@@ -70,9 +83,6 @@ ethereum-optimism/superchain-registry/main/superchain/extra/dictionary
     python3 tools/op-genesis-to-allocs.py --genesis op-genesis.json \\
         --rollup rollup.json --name op-sepolia -o op-sepolia.genesis.ini
 
-    # then fill state_root and verify:
-    eth-sync-check --genesis op-genesis.json            # prints the state root
-    eth-sync-check --genesis-ini <merged config.genesis> # re-parses + re-roots
 """
 import argparse
 import datetime
@@ -86,6 +96,12 @@ EMPTY_UNCLES_HASH = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd4
 ZERO_HASH = "0x" + "00" * 32
 ZERO_ADDRESS = "0x" + "00" * 20
 ZERO_BLOOM = "0x" + "00" * 256
+
+# EIP-7685 empty requests hash, sha256(""): op-geth Genesis.ToBlock sets it from Prague on.
+EMPTY_REQUESTS_HASH = "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+INITIAL_BASE_FEE = 1000000000  # params.InitialBaseFee: London genesis without baseFeePerGas
+# Isthmus+ genesis: withdrawalsRoot = this predeploy's storage root (op-geth core/genesis.go).
+L2_TO_L1_MESSAGE_PASSER = 0x4200000000000000000000000000000000000016
 
 UINT64_MAX = (1 << 64) - 1
 UINT256_MAX = (1 << 256) - 1
@@ -125,6 +141,14 @@ ACCEPTED_OP_FORK_KEYS = tuple(key for key, _ in OP_FORK_LADDER)
 def die(msg):
     sys.stderr.write(f"error: {msg}\n")
     raise SystemExit(1)
+
+
+try:
+    import rlp
+    from eth_hash.auto import keccak
+    from trie import HexaryTrie
+except ImportError as _error:  # pragma: no cover - dependency hint only
+    die(f"{_error}: install tools/.ci/c2-e2e-requirements.txt (eth-hash, rlp, trie)")
 
 
 def strip0x(value):
@@ -258,13 +282,75 @@ def emit_allocs(allocs):
     return lines
 
 
+def storage_root(storage):
+    """Secure storage trie root; zero-valued slots do not exist in the trie."""
+    trie = HexaryTrie(db={})
+    for slot, value in storage.items():
+        number = int(value, 16)
+        if number:
+            trie[keccak(bytes.fromhex(slot[2:]))] = rlp.encode(number)
+    return trie.root_hash
+
+
+def state_root(allocs):
+    """Secure state trie root over the accounts, as op-geth Genesis.ToBlock builds it
+    (and Ledger::computeGenesisStateTrie recomputes at boot)."""
+    trie = HexaryTrie(db={})
+    for account in allocs:
+        code = bytes.fromhex(account["code"][2:])
+        trie[keccak(bytes.fromhex(account["address"][2:]))] = rlp.encode([
+            account["nonce"], account["balance"], storage_root(account["storage"]),
+            keccak(code)])
+    return trie.root_hash
+
+
 # ---------------------------------------------------------------------------
 # eth_genesis_header
 # ---------------------------------------------------------------------------
 
-def build_header(genesis, source, genesis_hash):
-    """Return (ordered [(key, value)], placeholder_warnings)."""
-    warnings = []
+def derive_fork_fields(genesis, timestamp, allocs):
+    """The fork-gated header fields op-geth's Genesis.ToBlock (core/genesis.go
+    toBlockWithRoot) sets for this genesis, keyed by the [eth_genesis_header] name, with
+    op-geth's defaults; a key is absent when its fork is not active at genesis."""
+    config = genesis.get("config") or {}
+
+    def active(key, now):
+        value = config.get(key)
+        return value is not None and parse_amount(value, key) <= now
+
+    derived = {}
+    if active("londonBlock", 0):
+        derived["base_fee_per_gas"] = hex(INITIAL_BASE_FEE)
+    if active("shanghaiTime", timestamp):
+        derived["withdrawals_root"] = EMPTY_TRIE_ROOT
+    if active("cancunTime", timestamp):
+        derived.update(blob_gas_used="0x0", excess_blob_gas="0x0",
+                       parent_beacon_block_root=ZERO_HASH)
+    if active("pragueTime", timestamp):
+        derived["requests_hash"] = EMPTY_REQUESTS_HASH
+    if active("isthmusTime", timestamp):
+        # statedb.GetStorageRoot: the passer's storage root, the zero hash if it is absent.
+        passer = [a for a in allocs if int(a["address"], 16) == L2_TO_L1_MESSAGE_PASSER]
+        derived["withdrawals_root"] = (
+            "0x" + storage_root(passer[0]["storage"]).hex() if passer else ZERO_HASH)
+    if active("amsterdamTime", timestamp):
+        die("Amsterdam active at genesis: op-geth adds header fields this tool does not emit")
+    return derived
+
+
+def header_hash(fields):
+    """keccak256(rlp(header)) over every field but `hash`, in the geth Header order the
+    fields list already has."""
+    quantities = ("difficulty", "number", "gas_limit", "gas_used", "timestamp",
+                  "base_fee_per_gas", "blob_gas_used", "excess_blob_gas")
+    items = [int(value, 16) if key in quantities else bytes.fromhex(value[2:])
+             for key, value in fields]
+    return "0x" + keccak(rlp.encode(items)).hex()
+
+
+def build_header(genesis, source, genesis_hash, allocs):
+    """Return the ordered [(key, value)] header over `allocs`. A stateRoot in the genesis
+    JSON and `genesis_hash` (when given) must match what these accounts produce."""
 
     def get(*names):
         for name in names:
@@ -272,17 +358,10 @@ def build_header(genesis, source, genesis_hash):
                 return genesis[name]
         return None
 
-    state_root = get("stateRoot")
-    if state_root is None:
-        state_root = ZERO_HASH
-        warnings.append(
-            "state_root: not present in the genesis JSON — PLACEHOLDER zeros "
-            "emitted; fill from `eth-sync-check --genesis` output before boot")
-    if genesis_hash is None:
-        genesis_hash = ZERO_HASH
-        warnings.append(
-            "hash: no genesis hash available (pass --genesis-hash or a "
-            "rollup.json carrying genesis.l2.hash) — PLACEHOLDER zeros emitted")
+    computed_root = "0x" + state_root(allocs).hex()
+    if get("stateRoot") is not None and \
+            fixed_hex(get("stateRoot"), 64, "stateRoot") != computed_root:
+        die(f"{source}: stateRoot {get('stateRoot')} != computed {computed_root}")
 
     number = parse_amount(get("number") or 0, "number")
     if number != 0:
@@ -294,14 +373,15 @@ def build_header(genesis, source, genesis_hash):
         die(f"{source}: timestamp {timestamp} exceeds int64 milliseconds bound "
             f"(NodeConfig.cpp:430-438)")
 
-    if get("gasLimit") is None:
-        die(f"{source}: missing gasLimit (required for [eth_genesis_header].gas_limit)")
+    if not parse_amount(get("gasLimit") or 0, "gasLimit"):
+        # op-geth would substitute params.GenesisGasLimit; an OP genesis always sets it.
+        die(f"{source}: missing or zero gasLimit")
 
     fields = [
         ("parent_hash", fixed_hex(get("parentHash") or ZERO_HASH, 64, "parentHash")),
         ("sha3_uncles", fixed_hex(get("sha3Uncles") or EMPTY_UNCLES_HASH, 64, "sha3Uncles")),
         ("miner", fixed_hex(get("coinbase", "miner") or ZERO_ADDRESS, 40, "coinbase")),
-        ("state_root", fixed_hex(state_root, 64, "stateRoot")),
+        ("state_root", computed_root),
         ("transactions_root",
          fixed_hex(get("transactionsRoot") or EMPTY_TRIE_ROOT, 64, "transactionsRoot")),
         ("receipts_root",
@@ -328,11 +408,38 @@ def build_header(genesis, source, genesis_hash):
          lambda v, l: fixed_hex(v, 64, l)),
         ("requests_hash", get("requestsHash"), lambda v, l: fixed_hex(v, 64, l)),
     ]
+    # op-geth emits a field iff its fork is active at genesis. The base fee and the blob gas
+    # counters take the genesis JSON value when set (g.BaseFee / g.BlobGasUsed /
+    # g.ExcessBlobGas); the roots are always derived, so a JSON value must agree.
+    derived = derive_fork_fields(genesis, timestamp, allocs)
+    json_wins = ("base_fee_per_gas", "blob_gas_used", "excess_blob_gas")
     for ini_key, value, render in optional:
-        if value is not None:
-            fields.append((ini_key, render(value, ini_key)))
-    fields.append(("hash", fixed_hex(genesis_hash, 64, "hash")))
-    return fields, warnings
+        if ini_key not in derived:
+            if value is not None:
+                die(f"{source}: {ini_key} is set but its fork is not active at genesis")
+            continue
+        rendered = render(derived[ini_key], ini_key)
+        if value is not None and ini_key in json_wins:
+            rendered = render(value, ini_key)
+        elif value is not None and render(value, ini_key) != rendered:
+            die(f"{source}: {ini_key} {value} != derived {rendered}")
+        fields.append((ini_key, rendered))
+    computed_hash = header_hash(fields)
+    if genesis_hash is not None and fixed_hex(genesis_hash, 64, "hash") != computed_hash:
+        die(f"{source}: genesis hash {genesis_hash} != computed {computed_hash}; the "
+            "output would not reproduce the input chain's genesis")
+    fields.append(("hash", computed_hash))
+    return fields
+
+
+def merge_alloc(base, merged, source):
+    """--alloc must be the genesis accounts unchanged, plus any extra accounts
+    (build-allocs.py adds proxies and implementations). Returns whether it added any."""
+    by_address = {account["address"]: account for account in merged}
+    for account in base:
+        if by_address.get(account["address"]) != account:
+            die(f"{source}: account {account['address']} of --genesis is missing or changed")
+    return len(by_address) > len(base)
 
 
 # ---------------------------------------------------------------------------
@@ -435,6 +542,9 @@ def main(argv=None):
                         help="embed the generation time in the header comment "
                              "(default off: identical inputs must produce "
                              "byte-identical output)")
+    parser.add_argument("--alloc",
+                        help="geth-style alloc JSON (address -> account) replacing the "
+                             "genesis JSON's alloc, e.g. build-allocs.py --out-json")
     parser.add_argument("-o", "--output", required=True, help="output INI path")
     args = parser.parse_args(argv)
 
@@ -465,11 +575,19 @@ def main(argv=None):
                     f"timestamp ({json_ts})\n")
 
     allocs = load_allocs(genesis, args.genesis)
-    header_fields, warnings = build_header(genesis, args.genesis, genesis_hash)
+    # The inputs (stateRoot, --genesis-hash / rollup hash) describe the --genesis chain:
+    # checked against its own accounts even when --alloc adds accounts.
+    header_fields = build_header(genesis, args.genesis, genesis_hash, allocs)
+    if args.alloc:
+        base = allocs
+        allocs = load_allocs({"alloc": load_json(args.alloc)}, args.alloc)
+        if merge_alloc(base, allocs, args.alloc):
+            header_fields = build_header(genesis, args.genesis, None, allocs)
+            if genesis_hash is not None:
+                sys.stderr.write(f"warning: {genesis_hash} is the genesis hash WITHOUT the "
+                                 "accounts --alloc adds; set rollup.json genesis.l2.hash to "
+                                 f"{header_fields[-1][1]}\n")
     raw_times, fork_source = collect_fork_times(genesis, rollup)
-
-    for warning in warnings:
-        sys.stderr.write(f"warning: {warning}\n")
 
     lines = []
     lines.append("; " + "=" * 75)
@@ -485,16 +603,11 @@ def main(argv=None):
                      + datetime.datetime.now(datetime.timezone.utc).strftime(
                          "%Y-%m-%d %H:%M:%S UTC"))
     lines.append(";")
-    lines.append("; VERIFY BEFORE BOOT:")
-    lines.append(";   1. state_root (and hash, unless taken from the rollup) is a")
-    lines.append(";      zero PLACEHOLDER when absent from the inputs. Fill")
-    lines.append(";      state_root from:  eth-sync-check --genesis <genesis.json>")
-    lines.append(";   2. Verify the merged genesis end-to-end:")
-    lines.append(";        eth-sync-check --genesis-ini <config.genesis>")
-    lines.append(";      Node startup (Ledger::buildGenesisBlock) recomputes the MPT")
-    lines.append(";      stateRoot from [alloc.*] and keccak(rlp(header)) from the 21")
-    lines.append(";      header fields, and refuses to boot on mismatch — a placeholder")
-    lines.append(";      therefore fails safe.")
+    if args.alloc:
+        lines.append(f"; accounts from: {args.alloc}")
+    lines.append("; Node startup (Ledger::buildGenesisBlock) recomputes state_root from")
+    lines.append("; [alloc.*] and keccak(rlp(header)) from the header fields and refuses")
+    lines.append("; to boot on mismatch; eth-sync-check --genesis-ini runs the same checks.")
     lines.append("; " + "=" * 75)
     lines.append("")
     lines.append(f"; {len(allocs)} genesis accounts, ascending address order; "
@@ -503,12 +616,6 @@ def main(argv=None):
 
     lines.append("[eth_genesis_header]")
     for key, value in header_fields:
-        if key == "state_root" and value == ZERO_HASH:
-            lines.append("    ; FIXME: placeholder — replace with the state root "
-                         "computed over the allocs above")
-        if key == "hash" and value == ZERO_HASH:
-            lines.append("    ; FIXME: placeholder — replace with the canonical "
-                         "genesis block hash")
         lines.append(f"    {key}={value}")
     lines.append("")
 

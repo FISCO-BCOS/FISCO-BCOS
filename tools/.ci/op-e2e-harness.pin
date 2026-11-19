@@ -1,0 +1,13 @@
+# Pinned FISCO-BCOS/op-stack-e2e-tests revision: the harness c2-e2e.yml and workflow.yml
+# check out, and the source of the op-deployer genesis tools/op-genesis-repro.sh converts.
+# FISCO-BCOS/op-stack-e2e-tests#13 moves the harness to the 3.18 config surface
+# ([engine_rpc], no [op_fork_schedule], separate config.ini / config.genesis, no
+# SystemConfig feature_flags slot). This is that PR's head commit, reachable through
+# refs/pull/13/head; re-pin to its merge commit on the default branch once it merges.
+# It descends from the previous pin 5a2ad071a, so it keeps the kona native replay
+# phase 3.6 and setup_c2.sh's [web3_rpc] enable_debug_api=true (kona-host's preimage
+# oracle).
+commit=dac984d09777de634279025b6f6013106ae42b5c
+# sha256 of tools/opstack-genesis/op-fork-base-allocs.json at that commit (the harness's
+# committed `op-deployer inspect genesis` output). Update together with the commit.
+base_genesis_sha256=9b33b2433446f67d0efa7e9f2da8e59366ccf9b6ceb4e98f9351f9c8c6da57f8
