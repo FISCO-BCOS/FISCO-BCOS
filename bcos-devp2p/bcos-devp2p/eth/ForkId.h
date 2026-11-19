@@ -20,10 +20,14 @@
 #pragma once
 
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
+#include <optional>
 #include <span>
+#include <string>
+#include <vector>
 
 namespace bcos::devp2p::eth
 {
@@ -92,4 +96,33 @@ inline ForkId forkIdFromTimeLadder(uint32_t _checksum, uint64_t _genesisTime,
     return forkIdFromTimeLadder(
         _checksum, _genesisTime, _localHeadTime, std::span<const uint64_t>(_forks));
 }
+
+// EIP-2124 validation of a REMOTE fork-id against the local chain (port of geth
+// forkid.NewFilter / Filter). Built once from the chain genesis and its fork ladder;
+// accepts() is evaluated at the local head of the moment. Fork points are gathered the
+// way geth's gatherForks does: block forks of 0 and time forks at/before the genesis
+// time are dropped, adjacent duplicates collapse, and an unscheduled UINT64_MAX ends
+// the ladder.
+class ForkFilter
+{
+public:
+    ForkFilter(bcos::h256 const& _genesisHash, uint64_t _genesisTime,
+        std::span<const uint64_t> _blockForks, std::span<const uint64_t> _timeForks);
+
+    // Empty = the remote fork-id is compatible with the local chain at the given head;
+    // otherwise the EIP-2124 rejection reason (remote stale / local incompatible or
+    // stale), for the Disconnect log line.
+    std::optional<std::string> reject(
+        ForkId const& _remote, uint64_t _headNumber, uint64_t _headTime) const;
+    bool accepts(ForkId const& _remote, uint64_t _headNumber, uint64_t _headTime) const
+    {
+        return !reject(_remote, _headNumber, _headTime).has_value();
+    }
+
+private:
+    std::vector<uint64_t> m_blockForks;
+    std::vector<uint64_t> m_timeForks;
+    // m_sums[i] = checksum after the first i fork points (m_sums[0] = crc32(genesis)).
+    std::vector<uint32_t> m_sums;
+};
 }  // namespace bcos::devp2p::eth

@@ -44,8 +44,13 @@ public:
     bcos::codec::rlp::RlpResult<Message> decode(bytesConstRef _frameData) const;
 
     void enableCompression() { m_compressionEnabled = true; }
+    // Largest DECOMPRESSED payload decode accepts (default kMaxFrameSize). Raw snappy
+    // inflates up to ~21x (a 3-byte copy-2 element yields 64 bytes), so a frame-size
+    // limit alone does not bound the buffer a peer can make us allocate.
+    void setMaxDecompressedSize(size_t _size) { m_maxDecompressedSize = _size; }
 
 private:
     bool m_compressionEnabled{false};
+    size_t m_maxDecompressedSize{kMaxFrameSize};
 };
 }  // namespace bcos::devp2p::rlpx

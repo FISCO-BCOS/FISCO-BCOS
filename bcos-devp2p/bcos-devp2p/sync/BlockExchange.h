@@ -111,6 +111,13 @@ public:
         return m_headerChain.requestHeaderByHash(_session, _hash);
     }
 
+    // See HeaderChain::requestPinnedHashes.
+    std::vector<bcos::h256> requestPinnedHashes(
+        rlpx::Session& _session, bcos::h256 const& _tipHash, uint64_t _tipNumber)
+    {
+        return m_headerChain.requestPinnedHashes(_session, _tipHash, _tipNumber);
+    }
+
 private:
     HeaderChain m_headerChain;
     BodySequence m_bodySequence;

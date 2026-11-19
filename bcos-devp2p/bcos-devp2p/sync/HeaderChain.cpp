@@ -55,8 +55,9 @@ namespace
 // Shared reply loop: wait for the BlockHeaders reply carrying `_requestId`,
 // answering Ping along the way (ignoring a Ping makes geth mark us "useless")
 // and discarding peer broadcasts (NewBlockHashes/Transactions/NewBlock/
-// NewPooledTransactionHashes) that arrive while we wait. Throws on any protocol
-// violation (request-id mismatch, more headers than requested, disconnect).
+// NewPooledTransactionHashes) and valid BlockRangeUpdate announcements that
+// arrive while we wait. Throws on any protocol violation (request-id mismatch,
+// more headers than requested, inverted block range, disconnect).
 // Returns the raw wire encodings of the replied headers (0.._amount).
 std::vector<bcos::bytes> recvBlockHeadersReply(
     rlpx::Session& _session, uint64_t _requestId, uint64_t _amount)
@@ -73,14 +74,25 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
                                response.data.data(), std::min<size_t>(response.data.size(), 100)));
         if (response.id == rlpx::baseMsg::Ping)
         {
-            // RLPx base protocol: Ping (id 0x02) is answered with Pong (id 0x03).
+            // RLPx base protocol: Ping (id 0x02) is answered with Pong (id 0x03). It counts
+            // against the same limit as broadcasts: each frame restarts the socket timeout,
+            // so a peer pinging forever would otherwise never have to answer the request.
             _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, {}});
             BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain") << "answered Ping with Pong";
+            if (++ignoredBroadcasts > 64)
+            {
+                throw std::runtime_error("HeaderChain: too many frames before BlockHeaders");
+            }
             continue;
         }
         if (response.id == rlpx::baseMsg::Pong)
         {
-            continue;  // answer to a Ping we (currently) never send; ignore
+            // answer to a Ping we (currently) never send; ignore
+            if (++ignoredBroadcasts > 64)
+            {
+                throw std::runtime_error("HeaderChain: too many frames before BlockHeaders");
+            }
+            continue;
         }
         if (response.id != eth::frameId(eth::msg::BlockHeaders))
         {
@@ -106,6 +118,26 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
                 {
                     throw std::runtime_error(
                         "HeaderChain: too many broadcast messages before BlockHeaders");
+                }
+                continue;
+            }
+            // BlockRangeUpdate (msg 0x11 / frame id 0x21 = 33, eth/69+): the peer announces its
+            // range on every head advance, also while our request is outstanding (geth: each
+            // >= 32 blocks). A malformed or inverted range is a breach (EIP-7642:
+            // disconnect); a valid one is skipped like the broadcasts above.
+            if (response.id == eth::frameId(eth::msg::BlockRangeUpdate))
+            {
+                auto update = unwrapOrThrow(eth::decodeBlockRangeUpdate(bytesConstRef(
+                                                response.data.data(), response.data.size())),
+                    "HeaderChain: malformed BlockRangeUpdate: ");
+                if (!update.valid())
+                {
+                    throw std::runtime_error(
+                        "HeaderChain: BlockRangeUpdate with earliest > latest");
+                }
+                if (++ignoredBroadcasts > 64)
+                {
+                    throw std::runtime_error("HeaderChain: too many frames before BlockHeaders");
                 }
                 continue;
             }
@@ -252,6 +284,63 @@ std::optional<HeaderWithHash> HeaderChain::requestHeaderByHash(
             "HeaderChain: peer returned a header for the wrong hash (fork or reorg)");
     }
     return header;
+}
+
+std::vector<bcos::h256> HeaderChain::requestPinnedHashes(
+    rlpx::Session& _session, bcos::h256 const& _tipHash, uint64_t _tipNumber)
+{
+    if (_tipNumber < m_nextNumber)
+    {
+        throw std::invalid_argument("HeaderChain: pinned tip is below the next block");
+    }
+    std::vector<bcos::h256> hashes(_tipNumber - m_nextNumber + 1);
+    auto expectedHash = _tipHash;
+    auto expectedNumber = _tipNumber;
+    size_t remaining = hashes.size();
+    while (remaining > 0)
+    {
+        eth::GetBlockHeadersMessage request;
+        request.requestId = ++m_requestId;
+        request.originHash = expectedHash;
+        request.amount = std::min<uint64_t>(remaining, m_maxHeadersPerRequest);
+        request.reverse = true;
+        _session.sendMessage(
+            rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
+                eth::encodeGetBlockHeaders(request)});
+        auto const wireHeaders = recvBlockHeadersReply(_session, request.requestId, request.amount);
+        if (wireHeaders.empty())
+        {
+            throw std::runtime_error("HeaderChain: peer cannot serve the pinned chain");
+        }
+        for (auto const& rlp : wireHeaders)
+        {
+            bcos::protocol::EthBlockHeader header;
+            try
+            {
+                header.rlpDecode(bytesConstRef(rlp.data(), rlp.size()));
+            }
+            catch (bcos::codec::rlp::RlpDecodeException const& e)
+            {
+                throw std::runtime_error("HeaderChain: header RLP decode failed: " +
+                                         bcos::codec::rlp::rlpErrorMessage(e, "malformed header"));
+            }
+            if (bcos::crypto::keccak256Hash(bytesConstRef(rlp.data(), rlp.size())) !=
+                    expectedHash ||
+                static_cast<uint64_t>(header.data().number) != expectedNumber)
+            {
+                throw std::runtime_error("HeaderChain: header does not match the pinned chain");
+            }
+            --remaining;
+            hashes[remaining] = expectedHash;
+            expectedHash = header.data().parentInfo.blockHash;
+            --expectedNumber;
+        }
+    }
+    if (expectedHash != m_anchorHash)
+    {
+        throw ParentHashMismatch("HeaderChain: the pinned chain does not build on the anchor");
+    }
+    return hashes;
 }
 
 void HeaderChain::advance(uint64_t _count, HeaderWithHash const& _lastHeader)

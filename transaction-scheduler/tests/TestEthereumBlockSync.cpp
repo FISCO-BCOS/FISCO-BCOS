@@ -423,7 +423,7 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
             try
             {
                 auto established = server.accept();
-                bcos::devp2p::test::serveRequests(established.session, chain);
+                bcos::devp2p::test::serveRequests(established, chain);
             }
             catch (...)
             {}
@@ -634,7 +634,7 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
             try
             {
                 auto established = server.accept();
-                bcos::devp2p::test::serveRequests(established.session, chain);
+                bcos::devp2p::test::serveRequests(established, chain);
             }
             catch (...)
             {}
@@ -927,7 +927,7 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
                 try
                 {
                     auto established = server.accept();
-                    bcos::devp2p::test::serveRequests(established.session, chain);
+                    bcos::devp2p::test::serveRequests(established, chain);
                 }
                 catch (...)
                 {}
