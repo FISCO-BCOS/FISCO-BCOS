@@ -13,9 +13,10 @@ class Web3FilterSystem : public FilterSystem
 {
 public:
     Web3FilterSystem(boost::asio::io_context& _ioService, GroupManager::Ptr groupManager,
-        const std::string& groupId, int filterTimeout, int maxBlockProcessPerReq)
+        const std::string& groupId, int filterTimeout, int maxBlockProcessPerReq, int maxBlockRange)
       : FilterSystem(_ioService, groupManager, groupId,
-            std::make_shared<Web3FilterRequestFactory>(), filterTimeout, maxBlockProcessPerReq)
+            std::make_shared<Web3FilterRequestFactory>(), filterTimeout, maxBlockProcessPerReq,
+            maxBlockRange)
     {}
 
     virtual int32_t InvalidParamsCode() override { return Web3JsonRpcError::Web3DefaultError; }

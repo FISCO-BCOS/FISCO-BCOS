@@ -37,7 +37,7 @@ public:
     Web3JsonRpcImpl(std::string const& _groupId, uint32_t _batchRequestSizeLimit,
         bcos::rpc::GroupManager::Ptr const& _groupManager, FilterSystem::Ptr filterSystem,
         bool syncTransaction, bool _enableOPEngine, bool _enableMinerApi = false,
-        bool _enableDebugApi = false);
+        bool _enableDebugApi = false, bool _enableTraceApi = false);
     ~Web3JsonRpcImpl() = default;
 
     void setJwtVerifier(bcos::rpc::JwtVerifier::Ptr _jwtVerifier)

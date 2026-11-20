@@ -83,6 +83,8 @@ public:
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
 
     /// eth_call pinned at a block height: forward to the selected scheduler.
+    void traceTransaction(crypto::HashType const& hash, scheduler::TraceOptions options,
+        std::function<void(Error::Ptr, std::shared_ptr<scheduler::CallTrace>)> callback) override;
     void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
 

@@ -62,6 +62,7 @@ struct EngineRpcConfig
     int32_t clockSkewSecs = 60;
     bool enableMinerApi = false;
     bool enableDebugApi = false;
+    bool enableTraceApi = false;
     // OP lane only: how many blocks newPayload may sit above the finalized (backend) tip before
     // it answers SYNCING. Range [16, 100000].
     std::int64_t unfinalizedWindow = 1024;
@@ -224,6 +225,8 @@ public:
     uint16_t rpcListenPort() const;
     uint32_t rpcFilterTimeout() const;
     uint32_t rpcMaxProcessBlock() const;
+    /// [rpc] filter_max_block_range: the one-shot eth_getLogs / getLogs range cap
+    uint32_t rpcMaxBlockRange() const;
     bool rpcSmSsl() const;
     bool rpcDisableSsl() const;
     /// [rpc] ipc_enable: the local attach socket under storage.data_path (default true)
@@ -235,6 +238,8 @@ public:
     uint16_t web3RpcListenPort() const;
     uint32_t web3FilterTimeout() const;
     uint32_t web3MaxProcessBlock() const;
+    /// [web3_rpc] filter_max_block_range: the one-shot eth_getLogs / eth_getFilterLogs cap
+    uint32_t web3MaxBlockRange() const;
     uint32_t web3BatchRequestSizeLimit() const;
     uint32_t web3HttpBodySizeLimit() const;
     bool web3EnableCors() const;
@@ -279,6 +284,9 @@ public:
     // enable_debug_api); neither reaches the other port.
     bool engineApiDebugApi() const;
     bool enableDebugApi() const;
+    // Read-only call tracing over retained state; no archive requirement, per listener.
+    bool engineApiTraceApi() const;
+    bool enableTraceApi() const;
     // OP unfinalized window ([engine_rpc] unfinalized_window, see EngineRpcConfig).
     std::int64_t opUnfinalizedWindow() const;
 
@@ -634,6 +642,7 @@ private:
     uint16_t m_rpcListenPort{};
     uint32_t m_rpcFilterTimeout{};
     uint32_t m_rpcMaxProcessBlock{};
+    uint32_t m_rpcMaxBlockRange{};
     bool m_rpcSmSsl{};
     bool m_rpcDisableSsl = false;
     bool m_rpcIpcEnable = true;
@@ -644,6 +653,7 @@ private:
     uint16_t m_web3RpcListenPort{};
     uint32_t m_web3FilterTimeout{};
     uint32_t m_web3MaxProcessBlock{};
+    uint32_t m_web3MaxBlockRange{};
     uint32_t m_web3BatchRequestSizeLimit{};
     uint32_t m_web3HttpBodySizeLimit{};
     // cors config for web3 rpc
@@ -666,6 +676,7 @@ private:
     // config for the Engine API listener ([engine_rpc])
     bool m_enableMinerApi = false;
     bool m_enableDebugApi = false;
+    bool m_enableTraceApi = false;
     EngineRpcConfig m_engineRpc;
 
     // config for the hidden [debug] section (blockDriver() and the DebugSelfProduce driver)

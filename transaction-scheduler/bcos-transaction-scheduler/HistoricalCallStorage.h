@@ -36,6 +36,7 @@
 #include <memory>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
+#include <set>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -128,6 +129,8 @@ public:
         // Account-table rows: the block's MPT is the source of truth.
         if (auto address = ledger::mpt::parseAccountTable(keyView.m_table))
         {
+            if (m_clearedAccounts.contains(*address))
+                co_return storage2::NOT_EXISTS_TYPE{};
             co_return co_await resolveAccountRow(*address, keyView);
         }
         // The SYS_TABLES row of an account table: existence == leaf presence at the root.
@@ -185,19 +188,56 @@ public:
         co_return values;
     }
 
-    /// Ordered iteration cannot be answered from an MPT — slot keys are hashed into the
-    /// trie, so enumerating flat keys would need the whole preimage set — and the execute
-    /// path never range-scans ACCOUNT state (HostContext reads point keys only). What does
-    /// range during a call is the legacy precompiled table plane (LegacyStorageWrapper over
-    /// /sys/ and BFS tables), which is pass-through territory here; serve it from the
-    /// latest view like every other pass-through read.
-    auto range(auto&&... args) -> task::Task<
-        storage2::ReturnType<std::invoke_result_t<storage2::Range, LatestView&, decltype(args)...>>>
+    task::Task<bool> historicalHasStorage(std::string_view table)
     {
-        co_return co_await storage2::range(*m_latestView, std::forward<decltype(args)>(args)...);
+        auto address = ledger::mpt::parseAccountTable(table);
+        if (!address || m_clearedAccounts.contains(*address))
+            co_return false;
+        co_return co_await accountAt(*address).hasStorageAt(m_stateRoot);
+    }
+    void clearHistoricalAccount(std::string_view table)
+    {
+        if (auto address = ledger::mpt::parseAccountTable(table))
+            m_clearedAccounts.insert(*address);
+    }
+
+    /// Ethereum slots are hashed in the trie: never leak the latest flat account plane
+    /// into a historical account range. Point reads and hasStorageAt use the rooted trie;
+    /// the enclosing View's own mutable layer still participates in its merged range.
+    template <class Iterator>
+    struct HistoricalIterator
+    {
+        Iterator inner;
+        bool filterAccounts;
+        auto next() -> decltype(inner.next())
+        {
+            if (filterAccounts)
+                co_return std::nullopt;
+            while (auto row = co_await inner.next())
+            {
+                if (!filterAccounts || !ledger::mpt::parseAccountTable(
+                                           executor_v1::StateKeyView(std::get<0>(*row)).m_table))
+                    co_return row;
+            }
+            co_return std::nullopt;
+        }
+    };
+    auto range(auto&&... args)
+    {
+        using Iterator = storage2::ReturnType<
+            std::invoke_result_t<storage2::Range, LatestView&, decltype(args)...>>;
+        return rangeImpl<Iterator>(std::forward<decltype(args)>(args)...);
+    }
+    template <class Iterator>
+    task::Task<HistoricalIterator<Iterator>> rangeImpl(auto&&... args)
+    {
+        co_return HistoricalIterator<Iterator>{
+            co_await storage2::range(*m_latestView, std::forward<decltype(args)>(args)...),
+            m_ethLaneNaming};
     }
 
 private:
+    std::set<Address> m_clearedAccounts;
     static executor_v1::StateKeyView asStateKeyView(auto const& key)
     {
         using KeyType = std::decay_t<decltype(key)>;
@@ -290,6 +330,10 @@ private:
                 co_return storage2::NOT_EXISTS_TYPE{};
             }
             auto codeHash = co_await account.codeHash(m_stateRoot);
+            // A committed nonempty hash requires its bytecode preimage. The flat
+            // executor otherwise treats a missing code row as empty code.
+            if (m_ethLaneNaming)
+                co_await account.code(m_stateRoot);
             // Raw 32 bytes, exactly as EVMAccount::setCode writes the row.
             co_return storage::Entry{concepts::bytebuffer::toView(codeHash)};
         }

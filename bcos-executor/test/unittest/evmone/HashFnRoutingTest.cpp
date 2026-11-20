@@ -5,6 +5,8 @@
  *         falls back to upstream ethash::keccak256 when not.
  *  @file HashFnRoutingTest.cpp
  */
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <evmone/evmone.h>
 #include <boost/test/unit_test.hpp>
 #include <cstring>
@@ -73,6 +75,38 @@ BOOST_AUTO_TEST_CASE(keccak256OpcodeFallsBackToKeccakWhenUnset)
     BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     BOOST_REQUIRE_EQUAL(result.output_size, 32U);
     BOOST_CHECK_EQUAL(std::memcmp(result.output_data, kKeccakEmptyDigest, 32), 0);
+}
+
+BOOST_AUTO_TEST_CASE(sm3OpcodeIsUnchangedWithoutATracer)
+{
+    // The SM3 "abc" standard vector, through the actual EVM hash opcode in both
+    // interpreters. The trace cancellation patch must not change either normal path.
+    constexpr uint8_t code[] = {0x62, 0x61, 0x62, 0x63, 0x60, 0x00, 0x52, 0x60, 0x03, 0x60, 0x1d,
+        0x20, 0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xf3};
+    auto expected = fromHex("66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0");
+    for (bool advanced : {false, true})
+    {
+        evmc::VM vm{evmc_create_evmone()};
+        if (advanced)
+        {
+            BOOST_REQUIRE_EQUAL(vm.set_option("advanced", ""), EVMC_SET_OPTION_SUCCESS);
+        }
+        static_cast<evmone::VM*>(vm.get_raw_pointer())->hash_fn =
+            [](evmc_host_context*, const uint8_t* data, size_t size) {
+                auto digest = crypto::sm3Hash(bytesConstRef(data, size));
+                evmc_bytes32 result{};
+                std::copy(digest.begin(), digest.end(), result.bytes);
+                return result;
+            };
+        evmc_message msg{};
+        msg.kind = EVMC_CALL;
+        msg.gas = 100000;
+        auto result =
+            vm.execute(kEmptyHostInterface, nullptr, EVMC_SHANGHAI, msg, code, sizeof(code));
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
+        BOOST_REQUIRE_EQUAL(result.output_size, expected.size());
+        BOOST_CHECK_EQUAL(std::memcmp(result.output_data, expected.data(), expected.size()), 0);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

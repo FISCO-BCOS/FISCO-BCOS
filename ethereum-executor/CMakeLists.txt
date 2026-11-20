@@ -26,7 +26,7 @@ target_include_directories(ethereum-executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/ethereum-executor>)
 target_link_libraries(ethereum-executor PUBLIC
-    evm-precompiles bcos-framework bcos-protocol
+    evm-precompiles bcos-framework bcos-protocol codec
     evmone::evmone evmone::precompiles intx::intx TBB::tbb)
 set_target_properties(ethereum-executor PROPERTIES UNITY_BUILD OFF)
 

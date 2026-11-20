@@ -121,7 +121,8 @@ PrecompileAnalysis ecpairing_analyze(bytes_view input, evmc_revision rev) noexce
 PrecompileAnalysis blake2bf_analyze(bytes_view input, evmc_revision) noexcept
 {
     // NOLINTNEXTLINE(bugprone-suspicious-stringview-data-usage)
-    return {input.size() == 213 ? intx::be::unsafe::load<uint32_t>(input.data()) : GasCostMax, 64};
+    return {input.size() == 213 ? intx::be::unsafe::load<uint32_t>(input.data()) : GasCostMax, 64,
+        input.size() == 213 ? std::string_view{} : "invalid input length"};
 }
 
 PrecompileAnalysis expmod_analyze(bytes_view input, evmc_revision rev) noexcept
@@ -149,9 +150,9 @@ PrecompileAnalysis expmod_analyze(bytes_view input, evmc_revision rev) noexcept
     };
 
     static constexpr auto calc_mult_complexity_eip7883 = [](uint32_t max_len) noexcept {
-        // With EIP-7823 the computation never overflows.
-        assert(max_len <= MODEXP_LEN_LIMIT_EIP7823);
-        const auto num_words = (max_len + 7) / 8;
+        // Also compute the fee envelope of an EIP-7823-rejected input for
+        // tracing. Widen before adding/squaring; every u32 length fits in u64.
+        const auto num_words = (uint64_t{max_len} + 7) / 8;
         const auto mult_complexity = max_len <= 32 ? 16 : num_words * num_words * 2;
         return uint64_t{mult_complexity};
     };
@@ -193,10 +194,9 @@ PrecompileAnalysis expmod_analyze(bytes_view input, evmc_revision rev) noexcept
     const auto exp_len256 = be::unsafe::load<uint256>(&input_header[32]);
     const auto mod_len256 = be::unsafe::load<uint256>(&input_header[64]);
 
-    // Check the declared input lengths against the practical (2**32)
-    // or specified (EIP-7823: 2**10) limits.
-    const auto len_limit =
-        rev < EVMC_OSAKA ? std::numeric_limits<uint32_t>::max() : MODEXP_LEN_LIMIT_EIP7823;
+    // Keep the existing practical (2**32) rejection before converting lengths.
+    // The EIP-7823 rejection below also carries its pre-validation gas envelope.
+    constexpr auto len_limit = std::numeric_limits<uint32_t>::max();
     if (base_len256 > len_limit || mod_len256 > len_limit)
         return {GasCostMax, 0};
 
@@ -216,6 +216,15 @@ PrecompileAnalysis expmod_analyze(bytes_view input, evmc_revision rev) noexcept
     const auto max_len = std::max(mod_len, base_len);
     const auto gas = umul(calc_mult_complexity(max_len), adjusted_exp_len) / final_divisor;
     const auto gas_clamped = std::clamp<uint128>(gas, min_gas, GasCostMax);
+    if (rev >= EVMC_OSAKA &&
+        (base_len > MODEXP_LEN_LIMIT_EIP7823 || exp_len > MODEXP_LEN_LIMIT_EIP7823 ||
+            mod_len > MODEXP_LEN_LIMIT_EIP7823))
+    {
+        // Preserve the original rejection/gas/status. geth charges RequiredGas
+        // before Run validates this cap, so only expose the reason with enough gas.
+        return {GasCostMax, 0, "one or more of base/exponent/modulus length exceeded 1024 bytes",
+            static_cast<int64_t>(gas_clamped)};
+    }
     return {static_cast<int64_t>(gas_clamped), mod_len};
 }
 
@@ -243,13 +252,11 @@ PrecompileAnalysis bls12_g1msm_analyze(bytes_view input, evmc_revision) noexcept
         539, 538, 537, 536, 536, 535, 534, 533, 532, 532, 531, 530, 529, 528, 528, 527, 526, 525,
         525, 524, 523, 522, 522, 521, 520, 520, 519};
 
-    if (input.empty() || input.size() % BLS12_G1_MUL_INPUT_SIZE != 0)
-        return {GasCostMax, 0};
-
     const auto k = input.size() / BLS12_G1_MUL_INPUT_SIZE;
-    assert(k > 0);
-    const auto discount = DISCOUNTS[std::min(k, std::size(DISCOUNTS)) - 1];
+    const auto discount = k == 0 ? 0 : DISCOUNTS[std::min(k, std::size(DISCOUNTS)) - 1];
     const auto cost = (G1MUL_GAS_COST * discount * static_cast<int64_t>(k)) / 1000;
+    if (input.empty() || input.size() % BLS12_G1_MUL_INPUT_SIZE != 0)
+        return {GasCostMax, 0, "invalid input length", cost};
     return {cost, BLS12_G1_POINT_SIZE};
 }
 
@@ -271,13 +278,11 @@ PrecompileAnalysis bls12_g2msm_analyze(bytes_view input, evmc_revision) noexcept
         543, 542, 541, 541, 540, 539, 538, 537, 537, 536, 535, 535, 534, 533, 532, 532, 531, 530,
         530, 529, 528, 528, 527, 526, 526, 525, 524, 524};
 
-    if (input.empty() || input.size() % BLS12_G2_MUL_INPUT_SIZE != 0)
-        return {GasCostMax, 0};
-
     const auto k = input.size() / BLS12_G2_MUL_INPUT_SIZE;
-    assert(k > 0);
-    const auto discount = DISCOUNTS[std::min(k, std::size(DISCOUNTS)) - 1];
+    const auto discount = k == 0 ? 0 : DISCOUNTS[std::min(k, std::size(DISCOUNTS)) - 1];
     const auto cost = (G2MUL_GAS_COST * discount * static_cast<int64_t>(k)) / 1000;
+    if (input.empty() || input.size() % BLS12_G2_MUL_INPUT_SIZE != 0)
+        return {GasCostMax, 0, "invalid input length", cost};
     return {cost, BLS12_G2_POINT_SIZE};
 }
 
@@ -285,16 +290,15 @@ PrecompileAnalysis bls12_pairing_check_analyze(bytes_view input, evmc_revision) 
 {
     static constexpr auto PAIR_SIZE = BLS12_G1_POINT_SIZE + BLS12_G2_POINT_SIZE;
 
-    if (input.empty() || input.size() % PAIR_SIZE != 0)
-        return {GasCostMax, 0};
-
     const auto npairs = static_cast<int64_t>(input.size()) / PAIR_SIZE;
 
     static constexpr auto BLS12_PAIRING_CHECK_BASE_FEE_PRECOMPILE_GAS = 37700;
     static constexpr auto BLS12_PAIRING_CHECK_FEE_PRECOMPILE_GAS = 32600;
-    return {BLS12_PAIRING_CHECK_BASE_FEE_PRECOMPILE_GAS +
-                BLS12_PAIRING_CHECK_FEE_PRECOMPILE_GAS * npairs,
-        32};
+    const auto cost = BLS12_PAIRING_CHECK_BASE_FEE_PRECOMPILE_GAS +
+                      BLS12_PAIRING_CHECK_FEE_PRECOMPILE_GAS * npairs;
+    if (input.empty() || input.size() % PAIR_SIZE != 0)
+        return {GasCostMax, 0, "invalid input length", cost};
+    return {cost, 32};
 }
 
 PrecompileAnalysis bls12_map_fp_to_g1_analyze(bytes_view, evmc_revision) noexcept
@@ -476,11 +480,15 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
     using namespace evmmax::bn254;
 
     const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
+    if (!p.has_value()) [[unlikely]]
+        return {EVMC_PRECOMPILE_FAILURE, 0, "invalid fp.Element encoding"};
+    if (!validate(*p)) [[unlikely]]
+        return {EVMC_PRECOMPILE_FAILURE, 0, "point is not on curve"};
     const auto q = AffinePoint::from_bytes(input_span.subspan<64, 64>());
-    if (!p.has_value() || !q.has_value()) [[unlikely]]
-        return {EVMC_PRECOMPILE_FAILURE, 0};
-    if (!validate(*p) || !validate(*q)) [[unlikely]]
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+    if (!q.has_value()) [[unlikely]]
+        return {EVMC_PRECOMPILE_FAILURE, 0, "invalid fp.Element encoding"};
+    if (!validate(*q)) [[unlikely]]
+        return {EVMC_PRECOMPILE_FAILURE, 0, "point is not on curve"};
 
     const auto res = evmmax::ecc::add_affine(*p, *q);
     const std::span<uint8_t, 64> output_span{output, 64};
@@ -502,8 +510,10 @@ ExecutionResult ecmul_execute(const uint8_t* input, size_t input_size, uint8_t* 
     using namespace evmmax::bn254;
 
     const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
-    if (!p.has_value() || !validate(*p)) [[unlikely]]
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+    if (!p.has_value()) [[unlikely]]
+        return {EVMC_PRECOMPILE_FAILURE, 0, "invalid fp.Element encoding"};
+    if (!validate(*p)) [[unlikely]]
+        return {EVMC_PRECOMPILE_FAILURE, 0, "point is not on curve"};
 
     const auto c = intx::be::unsafe::load<uint256>(input_buffer + 64);
 
@@ -521,7 +531,7 @@ ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8
     assert(output_size >= OUTPUT_SIZE);
 
     if (input_size % PAIR_SIZE != 0)
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+        return {EVMC_PRECOMPILE_FAILURE, 0, "bad elliptic curve pairing size"};
 
     std::vector<std::pair<evmmax::bn254::Point, evmmax::bn254::ExtPoint>> pairs;
     pairs.reserve(input_size / PAIR_SIZE);  // TODO: may throw std::bad_alloc.
@@ -540,9 +550,10 @@ ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8
         pairs.emplace_back(p, q);
     }
 
-    const auto res = evmmax::bn254::pairing_check(pairs);
+    std::string_view error;
+    const auto res = evmmax::bn254::pairing_check(pairs, &error);
     if (!res.has_value())
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+        return {EVMC_PRECOMPILE_FAILURE, 0, error};
 
     std::fill_n(output, OUTPUT_SIZE, 0);
     output[OUTPUT_SIZE - 1] = *res ? 1 : 0;
@@ -582,7 +593,7 @@ ExecutionResult blake2bf_execute(const uint8_t* input, [[maybe_unused]] size_t i
 
     const auto f = *input;
     if (f != 0 && f != 1) [[unlikely]]
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+        return {EVMC_PRECOMPILE_FAILURE, 0, "invalid final flag"};
 
     crypto::blake2b_compress(rounds, h, m, t, f != 0);
     std::memcpy(output, h, sizeof(h));
@@ -594,16 +605,17 @@ ExecutionResult point_evaluation_execute(const uint8_t* input, size_t input_size
 {
     assert(output_size >= 64);
     if (input_size != 192)
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+        return {EVMC_PRECOMPILE_FAILURE, 0, "invalid input length"};
 
+    std::string_view error;
     const auto r = crypto::kzg_verify_proof(reinterpret_cast<const std::byte*>(&input[0]),
         reinterpret_cast<const std::byte*>(&input[32]),
         reinterpret_cast<const std::byte*>(&input[64]),
         reinterpret_cast<const std::byte*>(&input[96]),
-        reinterpret_cast<const std::byte*>(&input[96 + 48]));
+        reinterpret_cast<const std::byte*>(&input[96 + 48]), &error);
 
     if (!r)
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+        return {EVMC_PRECOMPILE_FAILURE, 0, error};
 
     // Return FIELD_ELEMENTS_PER_BLOB and BLS_MODULUS as padded 32 byte big endian values
     // as required by the EIP-4844.
@@ -615,13 +627,15 @@ ExecutionResult point_evaluation_execute(const uint8_t* input, size_t input_size
 ExecutionResult bls12_g1add_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
 {
+    std::string_view error;
     if (input_size != 2 * BLS12_G1_POINT_SIZE)
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+        return {EVMC_PRECOMPILE_FAILURE, 0, "invalid input length"};
 
     assert(output_size == BLS12_G1_POINT_SIZE);
 
-    if (!crypto::bls::g1_add(output, &output[64], input, &input[64], &input[128], &input[192]))
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+    if (!crypto::bls::g1_add(
+            output, &output[64], input, &input[64], &input[128], &input[192], &error))
+        return {EVMC_PRECOMPILE_FAILURE, 0, error};
 
     return {EVMC_SUCCESS, BLS12_G1_POINT_SIZE};
 }
@@ -629,6 +643,7 @@ ExecutionResult bls12_g1add_execute(const uint8_t* input, size_t input_size, uin
 ExecutionResult bls12_g1msm_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
 {
+    std::string_view error;
     // Checked in `_analyze` function which must be called before.
     assert(input_size % BLS12_G1_MUL_INPUT_SIZE == 0);
     assert(output_size == BLS12_G1_POINT_SIZE);
@@ -636,14 +651,14 @@ ExecutionResult bls12_g1msm_execute(const uint8_t* input, size_t input_size, uin
     if (input_size == BLS12_G1_MUL_INPUT_SIZE)
     {
         // Optimize single multiplication case.
-        if (!crypto::bls::g1_mul(output, &output[64], input, &input[64], &input[128]))
-            return {EVMC_PRECOMPILE_FAILURE, 0};
+        if (!crypto::bls::g1_mul(output, &output[64], input, &input[64], &input[128], &error))
+            return {EVMC_PRECOMPILE_FAILURE, 0, error};
     }
     else
     {
         // TODO: g1_msm() may throw std::bad_alloc.
-        if (!crypto::bls::g1_msm(output, &output[64], input, input_size))
-            return {EVMC_PRECOMPILE_FAILURE, 0};
+        if (!crypto::bls::g1_msm(output, &output[64], input, input_size, &error))
+            return {EVMC_PRECOMPILE_FAILURE, 0, error};
     }
 
     return {EVMC_SUCCESS, BLS12_G1_POINT_SIZE};
@@ -652,13 +667,15 @@ ExecutionResult bls12_g1msm_execute(const uint8_t* input, size_t input_size, uin
 ExecutionResult bls12_g2add_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
 {
+    std::string_view error;
     if (input_size != 2 * BLS12_G2_POINT_SIZE)
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+        return {EVMC_PRECOMPILE_FAILURE, 0, "invalid input length"};
 
     assert(output_size == BLS12_G2_POINT_SIZE);
 
-    if (!crypto::bls::g2_add(output, &output[128], input, &input[128], &input[256], &input[384]))
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+    if (!crypto::bls::g2_add(
+            output, &output[128], input, &input[128], &input[256], &input[384], &error))
+        return {EVMC_PRECOMPILE_FAILURE, 0, error};
 
     return {EVMC_SUCCESS, BLS12_G2_POINT_SIZE};
 }
@@ -666,6 +683,7 @@ ExecutionResult bls12_g2add_execute(const uint8_t* input, size_t input_size, uin
 ExecutionResult bls12_g2msm_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
 {
+    std::string_view error;
     // Checked in `_analyze` function which must be called before.
     assert(input_size % BLS12_G2_MUL_INPUT_SIZE == 0);
     assert(output_size == BLS12_G2_POINT_SIZE);
@@ -673,14 +691,14 @@ ExecutionResult bls12_g2msm_execute(const uint8_t* input, size_t input_size, uin
     if (input_size == BLS12_G2_MUL_INPUT_SIZE)
     {
         // Optimize single multiplication case.
-        if (!crypto::bls::g2_mul(output, &output[128], input, &input[128], &input[256]))
-            return {EVMC_PRECOMPILE_FAILURE, 0};
+        if (!crypto::bls::g2_mul(output, &output[128], input, &input[128], &input[256], &error))
+            return {EVMC_PRECOMPILE_FAILURE, 0, error};
     }
     else
     {
         // TODO: g2_msm() may throw std::bad_alloc.
-        if (!crypto::bls::g2_msm(output, &output[128], input, input_size))
-            return {EVMC_PRECOMPILE_FAILURE, 0};
+        if (!crypto::bls::g2_msm(output, &output[128], input, input_size, &error))
+            return {EVMC_PRECOMPILE_FAILURE, 0, error};
     }
 
     return {EVMC_SUCCESS, BLS12_G2_POINT_SIZE};
@@ -689,12 +707,13 @@ ExecutionResult bls12_g2msm_execute(const uint8_t* input, size_t input_size, uin
 ExecutionResult bls12_pairing_check_execute(const uint8_t* input, size_t input_size,
     uint8_t* output, [[maybe_unused]] size_t output_size) noexcept
 {
+    std::string_view error;
     // Checked in `_analyze` function which must be called before.
     assert(input_size % (BLS12_G1_POINT_SIZE + BLS12_G2_POINT_SIZE) == 0);
     assert(output_size == 32);
 
-    if (!crypto::bls::pairing_check(output, input, input_size))
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+    if (!crypto::bls::pairing_check(output, input, input_size, &error))
+        return {EVMC_PRECOMPILE_FAILURE, 0, error};
 
     return {EVMC_SUCCESS, 32};
 }
@@ -702,13 +721,14 @@ ExecutionResult bls12_pairing_check_execute(const uint8_t* input, size_t input_s
 ExecutionResult bls12_map_fp_to_g1_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
 {
+    std::string_view error;
     if (input_size != BLS12_FIELD_ELEMENT_SIZE)
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+        return {EVMC_PRECOMPILE_FAILURE, 0, "invalid input length"};
 
     assert(output_size == BLS12_G1_POINT_SIZE);
 
-    if (!crypto::bls::map_fp_to_g1(output, &output[64], input))
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+    if (!crypto::bls::map_fp_to_g1(output, &output[64], input, &error))
+        return {EVMC_PRECOMPILE_FAILURE, 0, error};
 
     return {EVMC_SUCCESS, BLS12_G1_POINT_SIZE};
 }
@@ -716,13 +736,14 @@ ExecutionResult bls12_map_fp_to_g1_execute(const uint8_t* input, size_t input_si
 ExecutionResult bls12_map_fp2_to_g2_execute(const uint8_t* input, size_t input_size,
     uint8_t* output, [[maybe_unused]] size_t output_size) noexcept
 {
+    std::string_view error;
     if (input_size != 2 * BLS12_FIELD_ELEMENT_SIZE)
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+        return {EVMC_PRECOMPILE_FAILURE, 0, "invalid input length"};
 
     assert(output_size == BLS12_G2_POINT_SIZE);
 
-    if (!crypto::bls::map_fp2_to_g2(output, &output[128], input))
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+    if (!crypto::bls::map_fp2_to_g2(output, &output[128], input, &error))
+        return {EVMC_PRECOMPILE_FAILURE, 0, error};
 
     return {EVMC_SUCCESS, BLS12_G2_POINT_SIZE};
 }
@@ -815,7 +836,8 @@ bool is_precompile(evmc_revision rev, const evmc::address& addr) noexcept
     return AVAILABILITY_LOOKUP_TABLE[to_lookup_index(addr)] <= to_underlying(rev);
 }
 
-evmc::Result call_precompile(evmc_revision rev, const evmc_message& msg) noexcept
+evmc::Result call_precompile(
+    evmc_revision rev, const evmc_message& msg, std::string_view* error) noexcept
 {
     static constexpr auto EXECUTION_LOOKUP_TABLE = [] {
         struct Entry
@@ -834,15 +856,21 @@ evmc::Result call_precompile(evmc_revision rev, const evmc_message& msg) noexcep
     const auto [analyze, execute] = EXECUTION_LOOKUP_TABLE[to_lookup_index(msg.code_address)];
 
     const bytes_view input{msg.input_data, msg.input_size};
-    const auto [gas_cost, max_output_size] = analyze(input, rev);
+    const auto analysis = analyze(input, rev);
+    const auto gas_cost = analysis.gas_cost;
+    const auto max_output_size = analysis.max_output_size;
+    if (error)
+        *error = msg.gas >= analysis.error_gas ? analysis.error : std::string_view{};
     const auto gas_left = msg.gas - gas_cost;
     if (gas_left < 0)
         return evmc::Result{EVMC_OUT_OF_GAS};
 
     // Allocate buffer for the precompile's output and pass its ownership to evmc::Result.
     const auto output_data = new (std::nothrow) uint8_t[max_output_size];  // TODO: handle nullptr.
-    const auto [status_code, output_size] =
+    const auto [status_code, output_size, executionError] =
         execute(msg.input_data, msg.input_size, output_data, max_output_size);
+    if (error && !executionError.empty())
+        *error = executionError;
     const evmc_result result{
         status_code, status_code == EVMC_SUCCESS ? gas_left : 0, 0, output_data, output_size,
         [](const evmc_result* res) noexcept { delete[] res->output_data; },

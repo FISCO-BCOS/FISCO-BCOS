@@ -738,6 +738,19 @@ task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInt
 task::Task<bool> tag_invoke(ledger::tag_t<getFeature> /*unused*/, LedgerInterface& ledger,
     ledger::Features::Flag flag, protocol::BlockNumber blockNumber);
 
+template <class Storage>
+task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(ledger::tag_t<getReceipt>,
+    Storage& storage, crypto::HashType const& hash, protocol::BlockFactory& blockFactory)
+{
+    auto entry = co_await storage2::readOne(
+        storage, executor_v1::StateKeyView{SYS_HASH_2_RECEIPT, concepts::bytebuffer::toView(hash)});
+    if (!entry)
+        co_return nullptr;
+    auto const encoded = entry->get();
+    co_return blockFactory.receiptFactory()->createReceipt(
+        bytesConstRef(reinterpret_cast<byte const*>(encoded.data()), encoded.size()));
+}
+
 task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
     ledger::tag_t<getReceipt>, LedgerInterface& ledger, crypto::HashType const& txHash);
 

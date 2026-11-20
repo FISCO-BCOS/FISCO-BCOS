@@ -468,7 +468,7 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     // JsonRpcImpl_2_0
     auto filterSystem = std::make_shared<JsonRpcFilterSystem>(*m_ioServicePool->getIOService(),
         _groupManager, m_nodeConfig->groupId(), m_nodeConfig->rpcFilterTimeout(),
-        m_nodeConfig->rpcMaxProcessBlock());
+        m_nodeConfig->rpcMaxProcessBlock(), m_nodeConfig->rpcMaxBlockRange());
     auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(
         _groupManager, m_gateway, _wsService, filterSystem, m_nodeConfig->forceSender());
     jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
@@ -485,7 +485,7 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
     boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager, bool _enableEngineRpc,
-    bool _enableMinerApi, bool _enableDebugApi)
+    bool _enableMinerApi, bool _enableDebugApi, bool _enableTraceApi)
 {
     // Each RPC surface (web3 / engine) gets its own FilterSystem so that
     // filter stores are isolated across ports (filters created on one port
@@ -493,14 +493,14 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
     // FilterSystem::insertFilter is not shared concurrently.
     auto filterSystem = std::make_shared<Web3FilterSystem>(*m_ioServicePool->getIOService(),
         _groupManager, m_nodeConfig->groupId(), m_nodeConfig->web3FilterTimeout(),
-        m_nodeConfig->web3MaxProcessBlock());
+        m_nodeConfig->web3MaxProcessBlock(), m_nodeConfig->web3MaxBlockRange());
 
     auto const& engineListener = m_nodeConfig->engineApiListener();
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
         _enableEngineRpc ? engineListener.batchRequestSizeLimit :
                            m_nodeConfig->web3BatchRequestSizeLimit(),
         std::move(_groupManager), std::move(filterSystem), m_nodeConfig->web3SyncTransaction(),
-        _enableEngineRpc, _enableMinerApi, _enableDebugApi);
+        _enableEngineRpc, _enableMinerApi, _enableDebugApi, _enableTraceApi);
 
     // if enable engine rpc, set jwt verifier and register engine json http request handler
     if (_enableEngineRpc)
@@ -604,9 +604,9 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
         // [engine_rpc] enable_miner_api (OP lane only), the web3 port under [web3_rpc]
         // enable_miner_api — the batcher handshake can no longer leak onto the public
         // listener.
-        auto engineJsonRpc =
-            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), engineWsService, groupManager, true,
-                m_nodeConfig->engineApiMinerApi(), m_nodeConfig->engineApiDebugApi());
+        auto engineJsonRpc = buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), engineWsService,
+            groupManager, true, m_nodeConfig->engineApiMinerApi(),
+            m_nodeConfig->engineApiDebugApi(), m_nodeConfig->engineApiTraceApi());
 
         rpc->setOpEngineJsonRpcImpl(std::move(engineJsonRpc));
         rpc->setOpEngineService(std::move(engineWsService));
@@ -617,7 +617,8 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
         auto web3WsService = buildWsService(std::move(web3Config));
 
         auto web3JsonRpc = buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService,
-            groupManager, false, m_nodeConfig->enableMinerApi(), m_nodeConfig->enableDebugApi());
+            groupManager, false, m_nodeConfig->enableMinerApi(), m_nodeConfig->enableDebugApi(),
+            m_nodeConfig->enableTraceApi());
 
         auto weakPtrWeb3JsonRpc = std::weak_ptr<Web3JsonRpcImpl>(web3JsonRpc);
 

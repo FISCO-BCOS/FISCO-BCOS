@@ -291,9 +291,8 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
             .parentHash = it->second.parentHash,
             .header = it->second.header};
     }
-    void finalizeUpTo(
-        bcos::crypto::HashType const& blockHash, std::function<void(bcos::Error::Ptr)> callback)
-        override
+    void finalizeUpTo(bcos::crypto::HashType const& blockHash,
+        std::function<void(bcos::Error::Ptr)> callback) override
     {
         BOOST_CHECK_EQUAL(admitted.erase(blockHash), 1U);
         callback(nullptr);

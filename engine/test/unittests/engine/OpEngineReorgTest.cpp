@@ -230,7 +230,7 @@ struct ReorgFixture
         opDelegate->setBlockNumberNotifier(
             [this](bcos::protocol::BlockNumber n) { finalizeNotifications.push_back(n); });
         service = std::make_unique<OpEngine>(memPool, multiLayerStorage, seam, blockFactory,
-            bcos::engine::c_defaultBlockTxCountLimit, opDelegate, nullptr,
+            opDelegate, nullptr,
             /*allowSynthesizedL1Attributes=*/false, unfinalizedWindow);
     }
     void restart() { start(); }

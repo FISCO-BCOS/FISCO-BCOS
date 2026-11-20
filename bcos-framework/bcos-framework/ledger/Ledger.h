@@ -245,6 +245,11 @@ inline constexpr struct GetReceipt
     {
         co_return co_await tag_invoke(*this, ledger, hash);
     }
+    task::Task<protocol::TransactionReceipt::Ptr> operator()(
+        auto& storage, crypto::HashType hash, protocol::BlockFactory& blockFactory) const
+    {
+        co_return co_await tag_invoke(*this, storage, hash, blockFactory);
+    }
 } getReceipt{};
 
 inline constexpr struct GetTransactions
