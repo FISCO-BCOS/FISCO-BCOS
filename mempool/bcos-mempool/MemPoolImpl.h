@@ -21,6 +21,7 @@
 #include <concepts>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <queue>
 #include <string_view>
 #include <unordered_set>
@@ -642,6 +643,23 @@ public:
 
             it = nextIt;
         }
+    }
+
+    /// Advance an account nonce through the sender's gapless run in the live pool.
+    u256 pendingNonce(std::string_view sender, u256 nonce) const
+    {
+        if (nonce > std::numeric_limits<int64_t>::max())
+        {
+            return nonce;
+        }
+        std::lock_guard lock(m_mutex);
+        auto const& index = m_transactions.get<0>();
+        for (auto it = index.lower_bound(std::make_tuple(sender, nonce.convert_to<int64_t>()));
+            it != index.end() && it->sender() == sender && it->nonce() == nonce; ++it)
+        {
+            ++nonce;
+        }
+        return nonce;
     }
 
     /// Every pooled transaction, each tagged with whether seal() would pick it against

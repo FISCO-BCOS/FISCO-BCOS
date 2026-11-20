@@ -1,6 +1,7 @@
 #include "bcos-rpc/filter/FilterSystem.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include <bcos-framework/protocol/ReceiptBlockPosition.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <utility>
 
 #define CPU_CORES (std::thread::hardware_concurrency() + 1)
@@ -89,9 +90,24 @@ NodeService::Ptr FilterSystem::getNodeService(
     return nodeService;
 }
 
+namespace
+{
+// Polling filters have a height cursor. Use finalized blocks on OP so a replacement
+// at a previously observed height cannot disappear behind the cursor.
+task::Task<protocol::BlockNumber> pollingTip(NodeService& nodeService)
+{
+    if (auto const& reader = nodeService.opCanonicalReader())
+    {
+        co_return (co_await reader->finalized()).number;
+    }
+    co_return co_await ledger::getCurrentBlockNumber(*nodeService.ledger());
+}
+}  // namespace
+
 task::Task<std::string> FilterSystem::newBlockFilter(std::string_view groupId)
 {
-    auto latestBlockNumber = getLatestBlockNumber(groupId);
+    auto nodeService = getNodeService(groupId, "newBlockFilter");
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto filter = std::make_shared<Filter>(
         BlocksSubscription, 0, nullptr, false, latestBlockNumber + 1, groupId);
     auto id = insertFilter(filter);
@@ -102,7 +118,8 @@ task::Task<std::string> FilterSystem::newBlockFilter(std::string_view groupId)
 
 task::Task<std::string> FilterSystem::newPendingTxFilter(std::string_view groupId)
 {
-    auto latestBlockNumber = getLatestBlockNumber(groupId);
+    auto nodeService = getNodeService(groupId, "newPendingTxFilter");
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto filter = std::make_shared<Filter>(
         PendingTransactionsSubscription, 0, nullptr, false, latestBlockNumber + 1, groupId);
     auto id = insertFilter(filter);
@@ -120,7 +137,8 @@ task::Task<std::string> FilterSystem::newFilter(std::string_view groupId, Filter
                             << LOG_KV("toBlock", params->toBlock());
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "invalid block range params"));
     }
-    auto latestBlockNumber = getLatestBlockNumber(groupId);
+    auto nodeService = getNodeService(groupId, "newFilter");
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto filter = std::make_shared<Filter>(
         LogsSubscription, 0, params, false, latestBlockNumber + 1, groupId);
     auto id = insertFilter(filter);
@@ -169,9 +187,8 @@ task::Task<Json::Value> FilterSystem::getFilterChangeImpl(std::string_view group
 task::Task<Json::Value> FilterSystem::getBlockChangeImpl(
     std::string_view groupId, Filter::Ptr filter)
 {
-    // getLatestBlockNumber and getBlockHash use the same ledger
-    auto ledger = getNodeService(groupId, "getBlockChangeImpl")->ledger();
-    auto latestBlockNumber = getLatestBlockNumber(*ledger);
+    auto nodeService = getNodeService(groupId, "getBlockChangeImpl");
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto startBlockNumber = filter->startBlockNumber();
 
     if (latestBlockNumber < startBlockNumber)
@@ -191,7 +208,7 @@ task::Task<Json::Value> FilterSystem::getBlockChangeImpl(
     Json::Value jResult(Json::arrayValue);
     for (auto i = 0; i < processBlockNum; ++i)
     {
-        auto hash = co_await ledger::getBlockHash(*ledger, startBlockNumber + i);
+        auto hash = co_await ledger::getBlockHash(*nodeService->ledger(), startBlockNumber + i);
         jResult.append(hash.hexPrefixed());
     }
     co_return jResult;
@@ -200,9 +217,8 @@ task::Task<Json::Value> FilterSystem::getBlockChangeImpl(
 task::Task<Json::Value> FilterSystem::getPendingTxChangeImpl(
     std::string_view groupId, Filter::Ptr filter)
 {
-    // getLatestBlockNumber and getBlockData use the same ledger
-    auto ledger = getNodeService(groupId, "getPendingTxChangeImpl")->ledger();
-    auto latestBlockNumber = getLatestBlockNumber(*ledger);
+    auto nodeService = getNodeService(groupId, "getPendingTxChangeImpl");
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto startBlockNumber = filter->startBlockNumber();
     if (latestBlockNumber < startBlockNumber)
     {  // Since the last query, no new blocks have been generated
@@ -223,7 +239,7 @@ task::Task<Json::Value> FilterSystem::getPendingTxChangeImpl(
     for (auto i = 0; i < processBlockNum; ++i)
     {
         auto block = co_await ledger::getBlockData(
-            *ledger, i + startBlockNumber, bcos::ledger::TRANSACTIONS_HASH);
+            *nodeService->ledger(), i + startBlockNumber, bcos::ledger::TRANSACTIONS_HASH);
         for (std::size_t index = 0; index < block->transactionsMetaDataSize(); ++index)
         {
             jRes.append(block->transactionHash(index).hexPrefixed());
@@ -234,9 +250,8 @@ task::Task<Json::Value> FilterSystem::getPendingTxChangeImpl(
 
 task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId, Filter::Ptr filter)
 {
-    // getLatestBlockNumber and getLogsInternal use the same ledger
-    auto ledger = getNodeService(groupId, "getLogsImpl")->ledger();
-    auto latestBlockNumber = getLatestBlockNumber(*ledger);
+    auto nodeService = getNodeService(groupId, "getLogsImpl");
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto startBlockNumber = filter->startBlockNumber();
     auto fromBlock = filter->params()->fromBlock();
     auto toBlock = filter->params()->toBlock();
@@ -283,7 +298,8 @@ task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId,
                       << LOG_KV("nextStartBlockNumber", begin + processBlockNum)
                       << LOG_KV("begin", begin) << LOG_KV("end", end) << LOG_KV("from", begin)
                       << LOG_KV("to", begin + processBlockNum - 1);
-    co_return co_await getLogsInternal(*ledger, std::move(params), /*enforceLogCountCap=*/false);
+    co_return co_await getLogsInternal(
+        *nodeService, std::move(params), /*enforceLogCountCap=*/false);
 }
 
 task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId, u256 filterID)
@@ -302,8 +318,8 @@ task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId
 task::Task<Json::Value> FilterSystem::getLogsImpl(
     std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange)
 {
-    // getLatestBlockNumber and getLogsInPool use the same ledger
-    auto ledger = getNodeService(groupId, "getLogsImpl")->ledger();
+    // getLatestBlockNumber and getLogsInternal use the same node service
+    auto nodeService = getNodeService(groupId, "getLogsImpl");
     if (!params->blockHash().empty())
     {  // when blockHash is not empty, match logs within the specified block
         auto matcher = m_matcher;
@@ -319,26 +335,34 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         // transaction list and receipts from one read snapshot is the complete fix and is tracked
         // separately, because it needs a ledger/storage API this layer does not have.
         protocol::Block::Ptr block;
-        int64_t blockNumber = 0;
         for (int attempt = 0; attempt < 2; ++attempt)
         {
-            try
+            constexpr auto flags = ledger::HEADER | ledger::RECEIPTS | ledger::TRANSACTIONS_HASH;
+            if (auto const& reader = nodeService->opCanonicalReader())
             {
-                blockNumber = co_await ledger::getBlockNumber(*ledger, requestedHash);
+                block = co_await reader->unfinalizedBlock(requestedHash, flags);
             }
-            catch (std::exception& e)
+            if (!block)
             {
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "unknown block"));
+                auto const ledger = nodeService->ledger();
+                protocol::BlockNumber blockNumber;
+                try
+                {
+                    blockNumber = co_await ledger::getBlockNumber(*ledger, requestedHash);
+                }
+                catch (std::exception const&)
+                {
+                    BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "unknown block"));
+                }
+                block = co_await ledger::getBlockData(*ledger, blockNumber, flags);
             }
-            block = co_await ledger::getBlockData(*ledger, blockNumber,
-                bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
-            if (block->blockHeader()->hash() == requestedHash)
+            if (block && protocol::canonicalBlockHash(*block->blockHeader()) == requestedHash)
             {
                 break;
             }
             FILTER_LOG(WARNING) << LOG_BADGE("getLogsImpl") << LOG_DESC("block hash changed")
                                 << LOG_KV("requestedHash", requestedHash.hex())
-                                << LOG_KV("blockNumber", blockNumber) << LOG_KV("attempt", attempt);
+                                << LOG_KV("attempt", attempt);
             block = nullptr;
         }
         if (block == nullptr)
@@ -353,13 +377,14 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         // Same response ceiling as the range branch. Selecting a dense block by hash would
         // otherwise bypass the cap that rejects it when selected by height, making the advertised
         // one-shot bound depend on which selector the caller happened to use.
+        auto const blockNumber = block->blockHeader()->number();
         requireWithinLogBudget(matcher->matches(params, block, jArray, MAX_RETURNED_LOGS_PER_QUERY),
             blockNumber, blockNumber);
         co_return jArray;
     }
     else
     {
-        auto latestBlockNumber = getLatestBlockNumber(*ledger);
+        auto latestBlockNumber = getLatestBlockNumber(*nodeService);
         auto fromBlock = params->fromBlock();
         auto toBlock = params->toBlock();
         if (needCheckRange && !params->checkBlockRange())
@@ -412,12 +437,13 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         params->setToBlock(toBlock);
         // One-shot caller: a result larger than MAX_RETURNED_LOGS_PER_QUERY is refused rather
         // than returned, because there is no cursor to resume from (see getLogsInternal).
-        co_return co_await getLogsInternal(*ledger, std::move(params), /*enforceLogCountCap=*/true);
+        co_return co_await getLogsInternal(
+            *nodeService, std::move(params), /*enforceLogCountCap=*/true);
     }
 }
 
 task::Task<Json::Value> FilterSystem::getLogsInternal(
-    bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params, bool enforceLogCountCap)
+    NodeService& nodeService, FilterRequest::Ptr params, bool enforceLogCountCap)
 {
     auto fromBlock = params->fromBlock();
     auto toBlock = params->toBlock();
@@ -425,7 +451,7 @@ task::Task<Json::Value> FilterSystem::getLogsInternal(
     auto matcher = m_matcher;
     for (auto number = fromBlock; number <= toBlock; ++number)
     {
-        auto block = co_await ledger::getBlockData(ledger, number,
+        auto block = co_await canonicalBlockByNumber(nodeService, number,
             bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
         // Derive the block position before matching: the matcher reads logIndex off the receipts,
         // and a stored value is not authoritative (historical rows may predate the field).
