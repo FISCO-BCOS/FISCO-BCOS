@@ -59,7 +59,7 @@ public:
         return layer;
     }
 
-    std::optional<std::string> read(auto& view, std::string_view key)
+    std::optional<std::string> readRow(auto& view, std::string_view key)
     {
         auto entry = task::syncWait(storage2::readOne(view, StateKeyView{"t"sv, key}));
         if (!entry)
@@ -97,17 +97,17 @@ BOOST_AUTO_TEST_CASE(layerOrderNewestWins)
     auto b1Only = layerWith("x"sv, "b1x"sv);
 
     auto view = multiLayerStorage.forkChain({b1, b1Only, b2});
-    BOOST_CHECK_EQUAL(read(view, "k"sv).value_or("<none>"), "b2");
-    BOOST_CHECK_EQUAL(read(view, "x"sv).value_or("<none>"), "b1x");
-    BOOST_CHECK_EQUAL(read(view, "b"sv).value_or("<none>"), "backend-only");
+    BOOST_CHECK_EQUAL(readRow(view, "k"sv).value_or("<none>"), "b2");
+    BOOST_CHECK_EQUAL(readRow(view, "x"sv).value_or("<none>"), "b1x");
+    BOOST_CHECK_EQUAL(readRow(view, "b"sv).value_or("<none>"), "backend-only");
 
     // Reversed order flips the winner: the caller owns the ordering.
     auto reversed = multiLayerStorage.forkChain({b2, b1});
-    BOOST_CHECK_EQUAL(read(reversed, "k"sv).value_or("<none>"), "b1");
+    BOOST_CHECK_EQUAL(readRow(reversed, "k"sv).value_or("<none>"), "b1");
 
     // A null entry is skipped rather than dereferenced.
     auto withNull = multiLayerStorage.forkChain({b1, nullptr, b2});
-    BOOST_CHECK_EQUAL(read(withNull, "k"sv).value_or("<none>"), "b2");
+    BOOST_CHECK_EQUAL(readRow(withNull, "k"sv).value_or("<none>"), "b2");
 }
 
 // Two sibling chains over the same parent: each chain's view sees its own layer and the
@@ -130,21 +130,21 @@ BOOST_AUTO_TEST_CASE(siblingLayerInvisibleAndDequeIgnored)
 
     auto viewA = multiLayerStorage.forkChain({parent, siblingA});
     auto viewB = multiLayerStorage.forkChain({parent, siblingB});
-    BOOST_CHECK_EQUAL(read(viewA, "s"sv).value_or("<none>"), "a");
-    BOOST_CHECK_EQUAL(read(viewB, "s"sv).value_or("<none>"), "b");
-    BOOST_CHECK_EQUAL(read(viewA, "p"sv).value_or("<none>"), "parent");
-    BOOST_CHECK_EQUAL(read(viewB, "p"sv).value_or("<none>"), "parent");
-    BOOST_CHECK(!read(viewA, "q"sv).has_value());
-    BOOST_CHECK(!read(viewB, "q"sv).has_value());
+    BOOST_CHECK_EQUAL(readRow(viewA, "s"sv).value_or("<none>"), "a");
+    BOOST_CHECK_EQUAL(readRow(viewB, "s"sv).value_or("<none>"), "b");
+    BOOST_CHECK_EQUAL(readRow(viewA, "p"sv).value_or("<none>"), "parent");
+    BOOST_CHECK_EQUAL(readRow(viewB, "p"sv).value_or("<none>"), "parent");
+    BOOST_CHECK(!readRow(viewA, "q"sv).has_value());
+    BOOST_CHECK(!readRow(viewB, "q"sv).has_value());
     // fork() still sees the deque — forkChain is a different plane, not a replacement.
     auto plain = multiLayerStorage.fork();
-    BOOST_CHECK_EQUAL(read(plain, "q"sv).value_or("<none>"), "queued");
+    BOOST_CHECK_EQUAL(readRow(plain, "q"sv).value_or("<none>"), "queued");
     multiLayerStorage.popFrontStorage();
 
     // An empty chain is the committed plane.
     auto committed = multiLayerStorage.forkChain({});
-    BOOST_CHECK(!read(committed, "s"sv).has_value());
-    BOOST_CHECK(!read(committed, "p"sv).has_value());
+    BOOST_CHECK(!readRow(committed, "s"sv).has_value());
+    BOOST_CHECK(!readRow(committed, "p"sv).has_value());
 
     // Writes on top of a chain view land in its own mutable, not in the chain's layers.
     auto viewC = multiLayerStorage.forkChain({parent, siblingA});
@@ -152,8 +152,8 @@ BOOST_AUTO_TEST_CASE(siblingLayerInvisibleAndDequeIgnored)
     storage::Entry entry;
     entry.set(std::string("c"));
     task::syncWait(storage2::writeOne(viewC, StateKey{"t"sv, "s"sv}, std::move(entry)));
-    BOOST_CHECK_EQUAL(read(viewC, "s"sv).value_or("<none>"), "c");
-    BOOST_CHECK_EQUAL(read(viewA, "s"sv).value_or("<none>"), "a");
+    BOOST_CHECK_EQUAL(readRow(viewC, "s"sv).value_or("<none>"), "c");
+    BOOST_CHECK_EQUAL(readRow(viewA, "s"sv).value_or("<none>"), "a");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
