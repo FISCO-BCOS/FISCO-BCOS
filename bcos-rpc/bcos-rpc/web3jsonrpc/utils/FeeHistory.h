@@ -19,14 +19,15 @@
 
 #pragma once
 
-#include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlobSchedule.h>
+#include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-task/Task.h>
 #include <evmc/evmc.h>
 #include <json/json.h>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
@@ -63,6 +64,12 @@ std::vector<u256> rewardPercentiles(std::vector<RewardSample> samples,
 /// Canyon activation block itself is predicted with the Bedrock denominator.
 u256 nextOpBaseFee(protocol::BlockHeader const& parent);
 
+/// Where eth_feeHistory reads its blocks: (number, ledger::getBlockData flags) → block. The
+/// endpoint passes rpc::canonicalBlockByNumber so an unfinalized head-chain block (OP Engine
+/// lane, D1 §10.2) is read from the window like every other block read.
+using FeeHistoryBlockSource =
+    std::function<task::Task<protocol::Block::Ptr>(protocol::BlockNumber, int32_t)>;
+
 /// geth's params.InitialBaseFee (1 gwei): the base fee of a block whose parent carried none.
 inline constexpr uint64_t c_initialBaseFee = 1'000'000'000;
 
@@ -97,7 +104,7 @@ uint64_t blobBaseFeeUpdateFraction(std::optional<protocol::BlobScheduleConfig> c
 /// @param rev the block revision (ledgerConfig->evmcRevision()): the last-resort fraction source,
 ///        and what tells whether Osaka's EIP-7918 update rule is active. Both are the sources
 ///        eth_blobBaseFee passes, so the two producers resolve from an identical triple.
-task::Task<Json::Value> buildOpFeeHistory(ledger::LedgerInterface& ledger,
+task::Task<Json::Value> buildOpFeeHistory(FeeHistoryBlockSource const& blockSource,
     protocol::BlockNumber newest, protocol::BlockNumber head, std::uint64_t blockCount,
     std::vector<double> const& percentiles, bool isOpStackLane,
     protocol::BlobForkTimes const& blobForks,

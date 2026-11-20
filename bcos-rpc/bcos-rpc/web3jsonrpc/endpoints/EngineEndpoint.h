@@ -65,6 +65,8 @@ private:
     /// EIP-2718 transactions; withdrawals only for Shanghai+ blocks), or Json::nullValue
     /// when the block — or a Shanghai+ block's withdrawals sidecar row — is unavailable.
     task::Task<Json::Value> payloadBodyAtNumber(protocol::BlockNumber number);
+    /// The ExecutionPayloadBodyV1 of a fetched block (transactions' wire bytes, withdrawals).
+    task::Task<Json::Value> payloadBodyOf(protocol::Block::Ptr const& block);
 
     /// Build a JSON-RPC error response when the engine service is unavailable.
     void buildEngineNotAvailableError(Json::Value& response) const;

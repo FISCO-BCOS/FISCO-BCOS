@@ -16,6 +16,7 @@ add_executable(opstack-executor-tests
     OpRecentBlockHashesTest.cpp
     OpDepositEnvelopeTest.cpp
     SmokeCompileTest.cpp
+    OpSchedulerPolicyTest.cpp
     support/SeedPreStateTest.cpp
     OpSchedulerSeamSmokeTest.cpp
     OpRollupCostGoldenTest.cpp
