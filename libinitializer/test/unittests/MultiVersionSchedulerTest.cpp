@@ -224,7 +224,7 @@ BOOST_AUTO_TEST_CASE(callAtBlockAndAdoptProbeReachSelectedScheduler)
     BOOST_CHECK_EQUAL(slots[2]->m_callAtBlockCount, 0);
     BOOST_CHECK_EQUAL(slots[2]->m_adoptCount, 0);
 
-    // Unfinalized-window pair: without the forwarders the defaults answer nullopt / no-op
+    // Unfinalized-window pair: without the forwarders the defaults answer nullopt / error
     // and the OP engine would never see OpScheduler's window through this wrapper.
     auto entry = scheduler->unfinalizedBlock(bcos::crypto::HashType{});
     BOOST_REQUIRE(entry.has_value());
@@ -237,6 +237,18 @@ BOOST_AUTO_TEST_CASE(callAtBlockAndAdoptProbeReachSelectedScheduler)
     BOOST_CHECK_EQUAL(slots[3]->m_finalizeCount, 1);
     BOOST_CHECK_EQUAL(slots[2]->m_windowLookupCount, 0);
     BOOST_CHECK_EQUAL(slots[2]->m_finalizeCount, 0);
+}
+
+BOOST_AUTO_TEST_CASE(schedulerWithoutWindowRejectsFinalization)
+{
+    auto& scheduler = *slots[2];
+    h256 const hash(1);
+    BOOST_CHECK(!scheduler.SchedulerInterface::unfinalizedBlock(hash));
+    Error::Ptr error;
+    scheduler.SchedulerInterface::finalizeUpTo(
+        hash, [&](Error::Ptr result) { error = std::move(result); });
+    BOOST_REQUIRE(error);
+    BOOST_CHECK_EQUAL(error->errorCode(), bcos::scheduler::SchedulerError::InvalidStatus);
 }
 
 // The shutdown sweep reaches every WIRED slot and tolerates the unwired one. Initializer

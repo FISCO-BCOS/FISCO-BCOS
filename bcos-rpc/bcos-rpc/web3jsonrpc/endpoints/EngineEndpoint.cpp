@@ -595,9 +595,8 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByHashV1(
         try
         {
             // By hash, any branch: an OP window block (a replaced sibling too) resolves like
-            // eth_getBlockByHash; the ledger for finalized ones. The body's withdrawals half
-            // still reads the ledger's SYS_NUMBER_2_WITHDRAWALS row, which the OP lane never
-            // writes, so a Canyon+ OP block's body is null here as before this change.
+            // eth_getBlockByHash; the ledger for finalized ones. payloadBodyOf renders an
+            // empty withdrawals array for Canyon+ OP blocks.
             block = co_await canonicalBlockByHash(*m_nodeService, crypto::HashType(blockHash),
                 bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
         }

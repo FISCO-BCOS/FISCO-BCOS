@@ -83,24 +83,10 @@ task::Task<protocol::Block::Ptr> bcos::rpc::canonicalBlockByHash(
         }
     }
     auto const number = co_await ledger::getBlockNumber(*nodeService.ledger(), blockHash);
-    co_return co_await ledger::getBlockData(*nodeService.ledger(), number, blockFlag);
-}
-
-task::Task<crypto::HashType> bcos::rpc::canonicalBlockHashAt(
-    NodeService& nodeService, protocol::BlockNumber blockNumber)
-{
-    if (auto const& reader = nodeService.opCanonicalReader())
+    if (number < 0)
     {
-        if (blockNumber > (co_await reader->finalized()).number)
-        {
-            auto const hash = co_await reader->canonicalHashAt(blockNumber);
-            if (!hash)
-            {
-                // Same contract as the ledger's getBlockHash for a missing row.
-                throwNotOnCanonicalChain(blockNumber);
-            }
-            co_return *hash;
-        }
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError,
+            "Invalid block number for hash " + blockHash.hexPrefixed()));
     }
-    co_return co_await ledger::getBlockHash(*nodeService.ledger(), blockNumber);
+    co_return co_await ledger::getBlockData(*nodeService.ledger(), number, blockFlag);
 }
