@@ -123,8 +123,9 @@ struct ReadPlaneFixture
         nodeService->setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
         nodeService->setMPTNodeReader(bcos::storage2::makeMPTNodeReader(f.backendStorage));
         nodeService->setOpCanonicalReader(reader);
-        filters = std::make_shared<bcos::rpc::Web3FilterSystem>(
-            io, std::make_shared<SingleNodeGroupManager>(nodeService), "group0", 60, 10);
+        filters = std::make_shared<bcos::rpc::Web3FilterSystem>(io,
+            std::make_shared<SingleNodeGroupManager>(nodeService), "group0", 60,
+            /*maxBlockProcessPerReq=*/10, /*maxBlockRange=*/10);
         eth = std::make_unique<bcos::rpc::EthEndpoint>(nodeService, filters, false);
     }
 

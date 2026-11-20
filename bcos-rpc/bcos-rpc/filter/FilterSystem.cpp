@@ -1,6 +1,7 @@
 #include "bcos-rpc/filter/FilterSystem.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include <bcos-framework/protocol/ReceiptBlockPosition.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <utility>
 
 #define CPU_CORES (std::thread::hardware_concurrency() + 1)
@@ -11,9 +12,10 @@ using namespace bcos::rpc::filter;
 
 FilterSystem::FilterSystem(boost::asio::io_context& _ioService, GroupManager::Ptr groupManager,
     std::string groupId, FilterRequestFactory::Ptr factory, int filterTimeout,
-    int maxBlockProcessPerReq)
+    int maxBlockProcessPerReq, int maxBlockRange)
   : m_filterTimeout(filterTimeout),
     m_maxBlockProcessPerReq(maxBlockProcessPerReq),
+    m_maxBlockRange(maxBlockRange),
     m_groupManager(std::move(groupManager)),
     m_group(std::move(groupId)),
     m_matcher(std::make_shared<LogMatcher>()),
@@ -282,7 +284,8 @@ task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId,
                       << LOG_KV("nextStartBlockNumber", begin + processBlockNum)
                       << LOG_KV("begin", begin) << LOG_KV("end", end) << LOG_KV("from", begin)
                       << LOG_KV("to", begin + processBlockNum - 1);
-    co_return co_await getLogsInternal(*nodeService, std::move(params));
+    co_return co_await getLogsInternal(
+        *nodeService, std::move(params), /*enforceLogCountCap=*/false);
 }
 
 task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId, u256 filterID)
@@ -306,24 +309,63 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
     if (!params->blockHash().empty())
     {  // when blockHash is not empty, match logs within the specified block
         auto matcher = m_matcher;
+        auto const requestedHash =
+            bcos::crypto::HashType(params->blockHash(), bcos::crypto::HashType::FromHex);
+        // EIP-234: a successful result must belong to the requested hash. The ledger resolves a
+        // hash to a height and reads the block at that height in two independent reads with no
+        // request-wide snapshot, so a legitimate reorg between them can make the second read
+        // return a different block (or none) for the same height. Answering it would report
+        // another block's logs under the hash the caller asked for. Re-resolve once with a fresh
+        // mapping and fail closed if the header still does not match: this closes the interleaving
+        // that returns another block's logs. It checks the header only; assembling the header,
+        // transaction list and receipts from one read snapshot is the complete fix and is tracked
+        // separately, because it needs a ledger/storage API this layer does not have.
         protocol::Block::Ptr block;
-        try
+        for (int attempt = 0; attempt < 2; ++attempt)
         {
-            // By hash, any branch: a replaced sibling still answers for its own logs, as
-            // eth_getBlockByHash does (D1 §10.2).
-            block = co_await canonicalBlockByHash(*nodeService,
-                bcos::crypto::HashType(params->blockHash(), bcos::crypto::HashType::FromHex),
-                bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
+            constexpr auto flags = ledger::HEADER | ledger::RECEIPTS | ledger::TRANSACTIONS_HASH;
+            if (auto const& reader = nodeService->opCanonicalReader())
+            {
+                block = co_await reader->unfinalizedBlock(requestedHash, flags);
+            }
+            if (!block)
+            {
+                auto const ledger = nodeService->ledger();
+                protocol::BlockNumber blockNumber;
+                try
+                {
+                    blockNumber = co_await ledger::getBlockNumber(*ledger, requestedHash);
+                }
+                catch (std::exception const&)
+                {
+                    BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "unknown block"));
+                }
+                block = co_await ledger::getBlockData(*ledger, blockNumber, flags);
+            }
+            if (block && protocol::canonicalBlockHash(*block->blockHeader()) == requestedHash)
+            {
+                break;
+            }
+            FILTER_LOG(WARNING) << LOG_BADGE("getLogsImpl") << LOG_DESC("block hash changed")
+                                << LOG_KV("requestedHash", requestedHash.hex())
+                                << LOG_KV("attempt", attempt);
+            block = nullptr;
         }
-        catch (std::exception& e)
+        if (block == nullptr)
         {
+            // Do not answer with whatever currently sits at the height the hash used to map to.
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "unknown block"));
         }
         Json::Value jArray(Json::arrayValue);
         // Derive the block position before matching: the matcher reads logIndex off the receipts,
         // and a stored value is not authoritative (historical rows may predate the field).
         protocol::stampReceiptBlockPositions(*block);
-        matcher->matches(params, block, jArray);
+        // Same response ceiling as the range branch. Selecting a dense block by hash would
+        // otherwise bypass the cap that rejects it when selected by height, making the advertised
+        // one-shot bound depend on which selector the caller happened to use.
+        auto const blockNumber = block->blockHeader()->number();
+        requireWithinLogBudget(matcher->matches(params, block, jArray, MAX_RETURNED_LOGS_PER_QUERY),
+            blockNumber, blockNumber);
         co_return jArray;
     }
     else
@@ -349,15 +391,45 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         {
             co_return Json::Value(Json::arrayValue);
         }
-        auto processBlockNum = std::min(toBlock - fromBlock + 1, m_maxBlockProcessPerReq);
+        // This function has three entry points, and all three now fail closed on a range wider
+        // than m_maxBlockRange:
+        //   * eth_getLogs                     (FilterSystem::getLogs)
+        //   * eth_getFilterLogs               (FilterSystem::getFilterLogsImpl)
+        //   * getLogs on the legacy JSON-RPC   (JsonRpcImpl_2_0::getLogs)
+        // None of them has a cursor, so truncating would answer a *smaller, plausible-looking*
+        // log set instead of the requested one and silently hide events. Only the paginating
+        // path -- getLogChangeImpl / eth_getFilterChanges -- keeps its silent clamp, because it
+        // advances startBlockNumber and the caller resumes from there.
+        //
+        // m_maxBlockRange is deliberately NOT the same knob as m_maxBlockProcessPerReq: the
+        // latter is the paging step those streaming paths spend on every poll, so raising it to
+        // a query-sized window would multiply the work of each eth_getFilterChanges call. The
+        // range cap is web3_rpc.filter_max_block_range (rpc.filter_max_block_range on the
+        // legacy listener); raise it to widen the one-shot window.
+        auto const blockRange = toBlock - fromBlock + 1;
+        if (blockRange > m_maxBlockRange)
+        {
+            FILTER_LOG(WARNING) << LOG_BADGE("getLogsImpl") << LOG_DESC("block range exceeds limit")
+                                << LOG_KV("fromBlock", fromBlock) << LOG_KV("toBlock", toBlock)
+                                << LOG_KV("blockRange", blockRange)
+                                << LOG_KV("maxBlockRange", m_maxBlockRange);
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
+                "block range too large: requested " + std::to_string(blockRange) +
+                    " blocks, limit is " + std::to_string(m_maxBlockRange) +
+                    " (filter_max_block_range); retry in chunks of " +
+                    std::to_string(m_maxBlockRange) + " blocks"));
+        }
         params->setFromBlock(fromBlock);
-        params->setToBlock(fromBlock + processBlockNum - 1);
-        co_return co_await getLogsInternal(*nodeService, std::move(params));
+        params->setToBlock(toBlock);
+        // One-shot caller: a result larger than MAX_RETURNED_LOGS_PER_QUERY is refused rather
+        // than returned, because there is no cursor to resume from (see getLogsInternal).
+        co_return co_await getLogsInternal(
+            *nodeService, std::move(params), /*enforceLogCountCap=*/true);
     }
 }
 
 task::Task<Json::Value> FilterSystem::getLogsInternal(
-    NodeService& nodeService, FilterRequest::Ptr params)
+    NodeService& nodeService, FilterRequest::Ptr params, bool enforceLogCountCap)
 {
     auto fromBlock = params->fromBlock();
     auto toBlock = params->toBlock();
@@ -370,7 +442,30 @@ task::Task<Json::Value> FilterSystem::getLogsInternal(
         // Derive the block position before matching: the matcher reads logIndex off the receipts,
         // and a stored value is not authoritative (historical rows may predate the field).
         protocol::stampReceiptBlockPositions(*block);
-        matcher->matches(params, block, jArray);
+        // The budget is the query's, not the block's: _result accumulates across the loop, so
+        // LogMatcher compares against its TOTAL size and stops before appending the entry that
+        // would cross the cap. Checking after matches() returned would have let one dense block
+        // materialise all of its matches before the guard fired.
+        requireWithinLogBudget(
+            matcher->matches(params, block, jArray,
+                enforceLogCountCap ? MAX_RETURNED_LOGS_PER_QUERY : /*unlimited=*/0),
+            fromBlock, toBlock);
     }
     co_return jArray;
+}
+
+void FilterSystem::requireWithinLogBudget(
+    LogMatcher::BlockMatchOutcome const& outcome, int64_t fromBlock, int64_t toBlock)
+{
+    if (!outcome.budgetExceeded)
+    {
+        return;
+    }
+    FILTER_LOG(WARNING) << LOG_BADGE("getLogsImpl") << LOG_DESC("too many logs matched")
+                        << LOG_KV("fromBlock", fromBlock) << LOG_KV("toBlock", toBlock)
+                        << LOG_KV("matchedLogs", outcome.matched)
+                        << LOG_KV("maxLogs", MAX_RETURNED_LOGS_PER_QUERY);
+    BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(),
+        "too many logs matched: over " + std::to_string(MAX_RETURNED_LOGS_PER_QUERY) +
+            " logs in the requested range; narrow the range or add an address/topic filter"));
 }

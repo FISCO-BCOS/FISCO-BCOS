@@ -37,7 +37,8 @@ std::optional<EndpointsMapping::Handler> EndpointsMapping::findHandler(
     return it->second;
 }
 
-void EndpointsMapping::addHandlers(bool enableOPEngine, bool enableMinerApi, bool enableDebugApi)
+void EndpointsMapping::addHandlers(
+    bool enableOPEngine, bool enableMinerApi, bool enableDebugApi, bool enableTraceApi)
 {
     if (enableOPEngine)
     {
@@ -55,6 +56,10 @@ void EndpointsMapping::addHandlers(bool enableOPEngine, bool enableMinerApi, boo
     if (enableDebugApi)
     {
         addDebugHandlers();
+    }
+    if (enableTraceApi)
+    {
+        m_handlers[methodString(EthMethod::debug_traceTransaction)] = &Endpoints::traceTransaction;
     }
     for (auto& [method, _] : m_handlers)
     {

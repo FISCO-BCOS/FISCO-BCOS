@@ -23,6 +23,7 @@
 #include "../ledger/LedgerConfig.h"
 #include "../protocol/Block.h"
 #include "SchedulerTypeDef.h"
+#include "TransactionTrace.h"
 #include "bcos-task/Task.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
@@ -70,6 +71,14 @@ public:
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
     {
         call(std::move(tx), std::move(callback));
+    }
+
+    virtual void traceTransaction(crypto::HashType const&, TraceOptions,
+        std::function<void(Error::Ptr, std::shared_ptr<CallTrace>)> callback)
+    {
+        callback(BCOS_ERROR_PTR(SchedulerError::InvalidStatus,
+                     "transaction tracing is unavailable for this scheduler"),
+            nullptr);
     }
 
     // Adopt a verify=false probe as the pending block without re-executing.

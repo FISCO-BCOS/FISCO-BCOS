@@ -23,6 +23,7 @@
 #include "BaselineScheduler.h"
 
 #include "BaselineSchedulerMPTHelpers.h"
+#include "EthereumBlockVerifier.h"
 #include "HistoricalCallStorage.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
@@ -61,6 +62,7 @@
 #include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <evmone/vm.hpp>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/iterator/operations.hpp>
 #include <range/v3/view/enumerate.hpp>
@@ -754,6 +756,11 @@ template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Le
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::~BaselineScheduler() noexcept
 {
+    {
+        std::unique_lock lock(m_traceMutex);
+        m_traceStopping = true;
+        m_traceDrained.wait(lock, [&] { return m_activeTraceCount == 0; });
+    }
     m_asyncGroup.wait();
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
@@ -902,6 +909,236 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setTraceForkSchedule(
+    EvmcForkTimestamps const& schedule)
+{
+    m_traceForks = std::make_unique<EvmcForkTimestamps const>(schedule);
+}
+
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::traceTransaction(
+    crypto::HashType const& hash, scheduler::TraceOptions options,
+    std::function<void(Error::Ptr, std::shared_ptr<scheduler::CallTrace>)> callback)
+{
+    if constexpr (!std::same_as<Executor, executor_v1::eth::EthereumExecutor>)
+    {
+        callback(BCOS_ERROR_PTR(scheduler::SchedulerError::InvalidStatus,
+                     "callTracer requires the L1 Ethereum executor"),
+            nullptr);
+    }
+    else
+    {
+        if (!m_traceForks)
+        {
+            callback(BCOS_ERROR_PTR(scheduler::SchedulerError::InvalidStatus,
+                         "callTracer fork schedule is unavailable"),
+                nullptr);
+            return;
+        }
+        using Self = decltype(this);
+        struct Admission
+        {
+            Self self;
+            explicit Admission(Self owner) : self(owner) {}
+            Admission(Admission&& other) noexcept : self(std::exchange(other.self, nullptr)) {}
+            Admission(Admission const&) = delete;
+            ~Admission()
+            {
+                if (!self)
+                    return;
+                std::lock_guard lock(self->m_traceMutex);
+                --self->m_activeTraceCount;
+                s_activeTraces.fetch_sub(1);
+                self->m_traceDrained.notify_all();
+            }
+        };
+        std::unique_lock traceLock(m_traceMutex);
+        auto prior = s_activeTraces.fetch_add(1);
+        if (m_traceStopping || prior >= 2)
+        {
+            s_activeTraces.fetch_sub(1);
+            traceLock.unlock();
+            callback(
+                BCOS_ERROR_PTR(scheduler::SchedulerError::UnknownError,
+                    "transaction tracing unavailable: concurrency limit (2) or scheduler stopping"),
+                nullptr);
+            return;
+        }
+        ++m_activeTraceCount;
+        Admission admitted(this);
+        traceLock.unlock();
+        task::wait([](decltype(this) self, crypto::HashType hash, scheduler::TraceOptions options,
+                       decltype(callback) callback, Admission admission) -> task::Task<void> {
+            (void)admission;
+            try
+            {
+                if (options.timeout <= std::chrono::milliseconds::zero() ||
+                    options.timeout > std::chrono::seconds(30))
+                    throw std::invalid_argument("trace timeout must be between 1ms and 30s");
+                evmc::VM vm{evmc_create_evmone()};
+                auto collector = std::make_unique<executor_v1::eth::EthereumCallTracer>(options);
+                auto* tracer = collector.get();
+                // A fresh evmc_create_evmone VM starts in baseline mode. Its
+                // traced dispatch performs cancellation before every opcode.
+                static_cast<evmone::VM*>(vm.get_raw_pointer())->add_tracer(std::move(collector));
+
+                auto view = self->m_multiLayerStorage.get().forkCommitted();
+                auto receipt = co_await ledger::getReceipt(view, hash, self->m_blockFactory.get());
+                if (!receipt)
+                {
+                    callback(BCOS_ERROR_PTR(scheduler::SchedulerError::InvalidBlockNumber,
+                                 "transaction not found"),
+                        nullptr);
+                    co_return;
+                }
+                tracer->check();
+                const auto number = receipt->blockNumber();
+                if (number <= 0)
+                    throw std::runtime_error("transaction has no replayable parent block");
+                auto block = co_await ledger::getBlockData(view, number,
+                    ledger::HEADER | ledger::TRANSACTIONS, self->m_blockFactory.get());
+                auto parent = co_await ledger::getBlockData(
+                    view, number - 1, ledger::HEADER, self->m_blockFactory.get());
+                auto const root = parent->blockHeader()->stateRoot();
+                if (root == crypto::HashType{})
+                    BOOST_THROW_EXCEPTION(ledger::mpt::MPTInvariantViolation()
+                                          << errinfo_comment("parent MPT state root unavailable"));
+                auto config =
+                    co_await ledger::getLedgerConfig(view, number - 1, self->m_blockFactory.get());
+                if (config->executorVersion() != ledger::ETHEREUM_EXECUTOR_VERSION)
+                    throw std::runtime_error("callTracer requires an L1 Ethereum block");
+                auto ethHeader = protocol::EthBlockHeader(*block->blockHeader()).data();
+                auto const targetBlockHash = protocol::ethHeaderHash(ethHeader);
+                if (calculateEthereumTransactionRoot(*block) != ethHeader.txsRoot)
+                    throw std::runtime_error(
+                        "transaction body does not match target block commitment; retry");
+                auto canonical = co_await ledger::getBlockHash(view, number, ledger::fromStorage);
+                if (!canonical || *canonical != targetBlockHash)
+                    throw std::runtime_error(
+                        "canonical chain changed during transaction tracing; retry");
+                // Pin the complete BLOCKHASH window to the target block's ancestry.
+                // The global executor provider consults current canonical rows and cannot
+                // be used by a historical replay concurrent with chain selection.
+                std::map<int64_t, evmc::bytes32> ancestorHashes;
+                auto expectedParent = ethHeader.parentInfo.blockHash;
+                for (auto n = number - 1; n >= 0 && number - n <= 256; --n)
+                {
+                    tracer->check();
+                    auto ancestor = n == number - 1 ?
+                                        parent :
+                                        co_await ledger::getBlockData(
+                                            view, n, ledger::HEADER, self->m_blockFactory.get());
+                    auto data = protocol::EthBlockHeader(*ancestor->blockHeader()).data();
+                    auto actual = protocol::ethHeaderHash(data);
+                    if (actual != expectedParent)
+                        throw std::runtime_error(
+                            "canonical ancestry changed during transaction tracing; retry");
+                    evmc::bytes32 hashBytes{};
+                    std::copy_n(actual.data(), 32, hashBytes.bytes);
+                    ancestorHashes.emplace(n, hashBytes);
+                    if (n > 0)
+                        expectedParent = data.parentInfo.blockHash;
+                }
+                fillExecutionLedgerConfig(ethHeader, *config, *self->m_traceForks);
+                auto header = makeExecutionBlockHeader(ethHeader, self->m_blockFactory.get(),
+                    config->compatibilityVersion(), *self->m_traceForks);
+                auto rev = *config->evmcRevisionForBlock(number);
+                HistoricalStateBackend<typename MultiLayerStorage::ViewType> backend(
+                    view, root, ledger::account::nodeAddressTableMode(), true);
+                storage2::View<typename MultiLayerStorage::MutableStorage, void, decltype(backend)>
+                    replay(std::addressof(backend));
+                replay.newMutable();
+                executor_v1::eth::EthereumExecutor::BlockContext context;
+                context.storageErrorSlot =
+                    std::make_shared<executor_v1::eth::EthStorageErrorSlot>();
+                context.traceVM = &vm;
+                context.tracer = tracer;
+                context.traceBlockHashLookup = [hashes = std::move(ancestorHashes)](
+                                                   int64_t n, int64_t) {
+                    auto it = hashes.find(n);
+                    return it == hashes.end() ? evmc::bytes32{} : it->second;
+                };
+                if (rev >= EVMC_CANCUN)
+                {
+                    auto error = co_await applyBlockStartSystemCalls(
+                        replay, vm, ethHeader, rev, context.storageErrorSlot);
+                    tracer->check();
+                    if (error)
+                        throw std::runtime_error(*error);
+                }
+                bool found = false;
+                for (size_t i = 0; i < block->transactionsSize(); ++i)
+                {
+                    tracer->check();
+                    auto tx = block->transactions()[i];
+                    const bool target = tx->hash() == hash;
+                    tracer->setRecording(target);
+                    auto execution = co_await self->m_executor.get().createExecuteContext(
+                        replay, *header, *tx, static_cast<int>(i), *config, false, context);
+                    co_await execution.prepare();
+                    co_await execution.execute();
+                    auto replayReceipt = co_await execution.finish();
+                    tracer->check();
+                    executor_v1::eth::throwEthStorageErrorIfPoisoned(
+                        *context.storageErrorSlot, "trace replay: ");
+                    if (execution.m_validationError)
+                        throw std::runtime_error("historical transaction replay validation failed");
+                    if (target)
+                    {
+                        if (!replayReceipt || replayReceipt->gasUsed() != receipt->gasUsed() ||
+                            replayReceipt->status() != receipt->status())
+                            throw std::runtime_error(
+                                "historical replay differs from committed transaction receipt");
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found || !tracer->result())
+                    throw std::runtime_error("transaction body unavailable in canonical block");
+                auto finalView = self->m_multiLayerStorage.get().forkCommitted();
+                auto finalCanonical =
+                    co_await ledger::getBlockHash(finalView, number, ledger::fromStorage);
+                if (!finalCanonical || *finalCanonical != targetBlockHash)
+                    throw std::runtime_error(
+                        "canonical chain changed during transaction tracing; retry");
+                callback(nullptr, tracer->result());
+            }
+            catch (ledger::mpt::MPTInvariantViolation const&)
+            {
+                callback(BCOS_ERROR_PTR(scheduler::SchedulerError::MPTStateUnavailable,
+                             "transaction replay state unavailable (outside retention window or "
+                             "missing)"),
+                    nullptr);
+            }
+            catch (ledger::NotFoundBlockHeader const&)
+            {
+                callback(BCOS_ERROR_PTR(scheduler::SchedulerError::MPTStateUnavailable,
+                             "transaction replay block header unavailable"),
+                    nullptr);
+            }
+            catch (executor_v1::eth::EthStorageError const&)
+            {
+                callback(BCOS_ERROR_PTR(scheduler::SchedulerError::MPTStateUnavailable,
+                             "transaction replay state unavailable (outside retention window or "
+                             "missing)"),
+                    nullptr);
+            }
+            catch (bcos::Error const& e)
+            {
+                callback(BCOS_ERROR_PTR(scheduler::SchedulerError::UnknownError, e.errorMessage()),
+                    nullptr);
+            }
+            catch (std::exception const& e)
+            {
+                callback(
+                    BCOS_ERROR_PTR(scheduler::SchedulerError::UnknownError, e.what()), nullptr);
+            }
+        }(this, hash, options, std::move(callback), std::move(admitted)));
+    }
+}
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::reset(
     [[maybe_unused]] std::function<void(Error::Ptr)> callback)
 {
@@ -978,6 +1215,11 @@ template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Le
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stop()
 {
+    {
+        std::unique_lock lock(m_traceMutex);
+        m_traceStopping = true;
+        m_traceDrained.wait(lock, [&] { return m_activeTraceCount == 0; });
+    }
     resetMPTCommitObserver();
 };
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>

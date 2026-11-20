@@ -336,9 +336,17 @@ BOOST_AUTO_TEST_CASE(TransactionsLedgerThenHeadChain)
     // A finalized transaction is the ledger's, whatever the head (FakeLedger serves the
     // receipts it was handed through storeTxAndReceipt).
     h256 const ledgerTx(0xeeU);
-    m_ledger->storeTxAndReceipt(
-        makeReadPlaneTx(7, ledgerTx), m_blockFactory->receiptFactory()->createReceipt(21'000, "",
-                                          std::vector<protocol::LogEntry>{}, 0, {}, tip));
+    auto tx = makeReadPlaneTx(7, ledgerTx);
+    auto receipt = m_blockFactory->receiptFactory()->createReceipt(
+        21'000, "", std::vector<protocol::LogEntry>{}, 0, {}, tip);
+    auto finalizedBlock = m_blockFactory->createBlock();
+    finalizedBlock->setBlockHeader(m_ledger->ledgerData().at(tip)->blockHeader());
+    finalizedBlock->appendTransaction(tx);
+    finalizedBlock->appendTransactionMetaData(
+        m_blockFactory->createTransactionMetaData(ledgerTx, std::string{}));
+    finalizedBlock->appendReceipt(receipt);
+    m_ledger->replaceBlock(finalizedBlock);
+    m_ledger->storeTxAndReceipt(tx, receipt);
     auto ledgerReceipt =
         call("eth_getTransactionReceipt", params({ledgerTx.hexPrefixed()}))["result"];
     BOOST_REQUIRE(ledgerReceipt.isObject());
@@ -372,11 +380,7 @@ BOOST_AUTO_TEST_CASE(LogsOverTheWindow)
     BOOST_CHECK_EQUAL(logs[0U]["blockHash"].asString(), hashA.hexPrefixed());
     // By block hash: the side branch's own logs.
     Json::Value byHash(Json::objectValue);
-    // FilterRequest::fromJson reads the lowercase "blockhash" key and insists on the range
-    // keys even then (pre-existing parser behaviour, not this change's).
-    byHash["blockhash"] = hashB.hexPrefixed();
-    byHash["fromBlock"] = "latest";
-    byHash["toBlock"] = "latest";
+    byHash["blockHash"] = hashB.hexPrefixed();
     byHash["address"] = Json::Value(Json::arrayValue);
     byHash["topics"] = Json::Value(Json::arrayValue);
     logs = call("eth_getLogs", params({byHash}))["result"];

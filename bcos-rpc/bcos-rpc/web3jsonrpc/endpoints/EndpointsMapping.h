@@ -40,10 +40,11 @@ public:
     /// debug_getRawReceipts / debug_executePayload) on THIS listener only, behind the same
     /// per-listener convention ([engine_rpc] vs [web3_rpc] enable_debug_api). Off by default —
     /// it serves the fault-proof preimage oracle (kona-host), not general clients.
-    EndpointsMapping(
-        bool enableOPEngine = false, bool enableMinerApi = false, bool enableDebugApi = false)
+    /// enableTraceApi: register callTracer independently of the archive/preimage gate.
+    EndpointsMapping(bool enableOPEngine = false, bool enableMinerApi = false,
+        bool enableDebugApi = false, bool enableTraceApi = false)
     {
-        addHandlers(enableOPEngine, enableMinerApi, enableDebugApi);
+        addHandlers(enableOPEngine, enableMinerApi, enableDebugApi, enableTraceApi);
     };
     ~EndpointsMapping() = default;
     EndpointsMapping(const EndpointsMapping&) = delete;
@@ -52,8 +53,8 @@ public:
     [[nodiscard]] std::optional<Handler> findHandler(const std::string& _method) const;
 
 private:
-    void addHandlers(
-        bool enableOPEngine = false, bool enableMinerApi = false, bool enableDebugApi = false);
+    void addHandlers(bool enableOPEngine = false, bool enableMinerApi = false,
+        bool enableDebugApi = false, bool enableTraceApi = false);
     void addEngineHandlers();
     void addEthHandlers();
     void addMinerHandlers();

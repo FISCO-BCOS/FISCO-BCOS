@@ -83,13 +83,12 @@ inline executor::PrecompiledExecutor adaptEvmPrecompiled(EvmPrecompileExecute ex
             return {false, bytes(failureOutputSize, 0)};
         }
         bytes output(maxOutputSize, 0);
-        const auto [status, outputSize] =
-            execute(inputData, in.size(), output.data(), output.size());
-        if (status != EVMC_SUCCESS)
+        const auto result = execute(inputData, in.size(), output.data(), output.size());
+        if (result.status_code != EVMC_SUCCESS)
         {
             return {false, bytes(failureOutputSize, 0)};
         }
-        output.resize(outputSize);
+        output.resize(result.output_size);
         return {true, std::move(output)};
     };
 }

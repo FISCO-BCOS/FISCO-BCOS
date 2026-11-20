@@ -532,12 +532,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_ethereumSerialScheduler =
             std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
         m_ethereumExecutor = ethereumExecutor;
+        auto const traceForkSchedule = EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig);
         std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, m_mptCommitObserver, blockDriver == bcos::tool::BlockDriver::PBFT,
-                evmcRevisionSchedule);
+                evmcRevisionSchedule,
+                m_nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION ?
+                    &traceForkSchedule :
+                    nullptr);
         // Engine-driven modes on the v2 EthereumExecutor: build the Engine API service wired
         // to the ethereum scheduler + EthereumExecutor so blocks are built with
         // Ethereum-compliant semantics. It is built when something drives it: the
@@ -606,12 +610,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_ethereumSerialScheduler =
             std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
         m_ethereumExecutor = ethereumExecutor;
+        auto const traceForkSchedule = EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig);
         std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, m_mptCommitObserver, blockDriver == bcos::tool::BlockDriver::PBFT,
-                evmcRevisionSchedule);
+                evmcRevisionSchedule,
+                m_nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION ?
+                    &traceForkSchedule :
+                    nullptr);
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above.
         if (!engineApiForV1Only && !opStackMode &&
