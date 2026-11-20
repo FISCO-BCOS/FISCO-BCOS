@@ -63,6 +63,9 @@ struct EngineRpcConfig
     bool enableMinerApi = false;
     bool enableDebugApi = false;
     bool enableTraceApi = false;
+    // OP lane only: how many blocks newPayload may sit above the finalized (backend) tip before
+    // it answers SYNCING. Range [16, 100000].
+    std::int64_t unfinalizedWindow = 1024;
 };
 
 class NodeConfig
@@ -284,6 +287,8 @@ public:
     // Read-only call tracing over retained state; no archive requirement, per listener.
     bool engineApiTraceApi() const;
     bool enableTraceApi() const;
+    // OP unfinalized window ([engine_rpc] unfinalized_window, see EngineRpcConfig).
+    std::int64_t opUnfinalizedWindow() const;
 
     // The DebugSelfProduce driver's block parameters, from the hidden [debug] section:
     // block_interval (ms, default 1000), produce_empty_blocks (default true), fee_recipient

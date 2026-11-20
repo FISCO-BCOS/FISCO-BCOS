@@ -19,6 +19,7 @@
  */
 
 #include "EngineEndpoint.h"
+#include "bcos-rpc/web3jsonrpc/utils/CanonicalReads.h"
 #include "bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h"
 #include "include/BuildInfo.h"
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -467,12 +468,13 @@ task::Task<void> EngineEndpoint::handleNewPayload(
 
 task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumber number)
 {
-    auto const& ledger = m_nodeService->ledger();
     protocol::Block::Ptr block;
     try
     {
-        block = co_await ledger::getBlockData(
-            *ledger, number, bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
+        // The canonical chain: the ledger, or on the OP lane the head chain's window above
+        // the finalized tip (rpc::canonicalBlockByNumber).
+        block = co_await canonicalBlockByNumber(
+            *m_nodeService, number, bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
     }
     catch (std::exception const&)
     {
@@ -480,6 +482,13 @@ task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumbe
         // GetBlockByNumber-miss path — not an RPC error.
         co_return Json::nullValue;
     }
+    co_return co_await payloadBodyOf(block);
+}
+
+task::Task<Json::Value> EngineEndpoint::payloadBodyOf(protocol::Block::Ptr const& block)
+{
+    auto const number = block->blockHeader()->number();
+    auto const& ledger = m_nodeService->ledger();
 
     Json::Value body(Json::objectValue);
     Json::Value transactions(Json::arrayValue);
@@ -576,28 +585,32 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByHashV1(
             "engine_getPayloadBodiesByHashV1: requested count too large: " +
                 std::to_string(hashes.size())));
     }
-    auto const& ledger = m_nodeService->ledger();
     Json::Value result(Json::arrayValue);
     for (auto const& hashValue : hashes)
     {
         // parseH256 maps malformed hex / wrong length to -32602.
         auto const blockHash = parseH256(
             hashValue.isString() ? std::string_view(hashValue.asString()) : std::string_view());
-        protocol::BlockNumber number = -1;
+        protocol::Block::Ptr block;
         try
         {
-            number = co_await ledger::getBlockNumber(*ledger, crypto::HashType(blockHash));
+            // By hash, any branch: an OP window block (a replaced sibling too) resolves like
+            // eth_getBlockByHash; the ledger for finalized ones. The body's withdrawals half
+            // still reads the ledger's SYS_NUMBER_2_WITHDRAWALS row, which the OP lane never
+            // writes, so a Canyon+ OP block's body is null here as before this change.
+            block = co_await canonicalBlockByHash(*m_nodeService, crypto::HashType(blockHash),
+                bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
         }
         catch (std::exception const&)
         {
             // A lookup fault on an unknown hash reads as "not found" below.
         }
-        if (number < 0)
+        if (!block)
         {
             result.append(Json::nullValue);
             continue;
         }
-        result.append(co_await payloadBodyAtNumber(number));
+        result.append(co_await payloadBodyOf(block));
     }
     buildJsonContent(result, response);
 }
@@ -624,8 +637,7 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV1(
             "engine_getPayloadBodiesByRangeV1: requested count too large: " +
                 std::to_string(count)));
     }
-    auto const& ledger = m_nodeService->ledger();
-    auto const head = co_await ledger::getCurrentBlockNumber(*ledger);
+    auto const head = co_await canonicalLatestNumber(*m_nodeService);
     Json::Value result(Json::arrayValue);
     // A range beyond the latest block answers an empty array (no trailing nulls); the
     // start <= head guard also keeps start + count - 1 from overflowing.

@@ -14,7 +14,6 @@
 #include <opstack-executor/OpExecutionPolicy.h>
 #include <opstack-executor/OpForkSpec.h>
 #include <opstack-executor/OpScheduler.h>
-#include <opstack-executor/OpSchedulerPolicy.h>
 
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
