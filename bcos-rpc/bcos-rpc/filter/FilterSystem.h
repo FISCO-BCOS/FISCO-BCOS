@@ -5,6 +5,7 @@
 #include "bcos-rpc/filter/LogMatcher.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include "bcos-rpc/groupmgr/NodeService.h"
+#include "bcos-rpc/web3jsonrpc/utils/CanonicalReads.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BucketMap.h"
@@ -115,8 +116,7 @@ public:
 public:
     int64_t getLatestBlockNumber(std::string_view groupId)
     {
-        auto ledger = getNodeService(groupId, "getCurrentBlockNumber")->ledger();
-        return getLatestBlockNumber(*ledger);
+        return getLatestBlockNumber(*getNodeService(groupId, "getCurrentBlockNumber"));
     }
     int64_t getLatestBlockNumber() { return getLatestBlockNumber(m_group); }
 
@@ -147,8 +147,8 @@ protected:
     //        the one-shot callers, which have no cursor and cannot resume past the overflow; the
     //        streaming path (getLogChangeImpl) leaves it off, because it pages by block and a
     //        rejected poll would be retried forever against the same blocks.
-    task::Task<Json::Value> getLogsInternal(bcos::ledger::LedgerInterface& ledger,
-        FilterRequest::Ptr params, bool enforceLogCountCap = false);
+    task::Task<Json::Value> getLogsInternal(
+        NodeService& nodeService, FilterRequest::Ptr params, bool enforceLogCountCap = false);
 
     /// Throw when a one-shot match stopped on the response ceiling. Shared by the blockHash and
     /// the range branches so the ceiling cannot depend on the request selector.
@@ -167,12 +167,15 @@ protected:
         }
         return accessor.value();
     }
-    static int64_t getLatestBlockNumber(bcos::ledger::LedgerInterface& _ledger)
+    /// `latest` as the endpoints see it: the ledger's current number, or on the OP Engine lane
+    /// the tracker head (rpc::canonicalLatestNumber) — every block read below routes the same
+    /// way, so a filter never names a height it cannot then read.
+    static int64_t getLatestBlockNumber(NodeService& _nodeService)
     {
         int64_t latest = 0;
-        task::wait([](bcos::ledger::LedgerInterface& ledger, int64_t& ret) -> task::Task<void> {
-            ret = co_await ledger::getCurrentBlockNumber(ledger);
-        }(_ledger, latest));
+        task::wait([](NodeService& nodeService, int64_t& ret) -> task::Task<void> {
+            ret = co_await canonicalLatestNumber(nodeService);
+        }(_nodeService, latest));
         return latest;
     }
 

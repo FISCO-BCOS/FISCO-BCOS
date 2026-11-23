@@ -164,4 +164,26 @@ template <class Storage>
     return {owner, std::addressof(*owner->erased)};
 }
 
+/// The same handle over a storage the CALLER hands over (a forked chain view of the OP
+/// unfinalized window, OpCanonicalReaderImpl::mptNodeReaderAt): the view, the adapter and
+/// the handle share one lifetime.
+template <class Storage>
+[[nodiscard]] std::shared_ptr<AnyStorage<bcos::h256, bcos::bytes>> makeOwningMPTNodeReader(
+    Storage storage)
+{
+    struct OwningReader
+    {
+        Storage storage;
+        MPTNodeReadStorage<Storage> adapter;
+        std::optional<AnyStorage<bcos::h256, bcos::bytes>> erased;
+
+        explicit OwningReader(Storage s) : storage(std::move(s)), adapter(storage)
+        {
+            erased.emplace(adapter);
+        }
+    };
+    auto owner = std::make_shared<OwningReader>(std::move(storage));
+    return {owner, std::addressof(*owner->erased)};
+}
+
 }  // namespace bcos::storage2
