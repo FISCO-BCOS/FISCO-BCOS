@@ -26,6 +26,7 @@
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-storage/MPTNodeReadStorage.h>
 #include <bcos-utilities/Common.h>
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -58,22 +59,17 @@ public:
         co_return BlockRef{.hash = hash, .number = number};
     }
 
-    task::Task<BlockRef> head() override
-    {
-        if (auto tracked = m_engineService->trackedHead())
-        {
-            co_return BlockRef{.hash = tracked->hash, .number = tracked->blockNumber};
-        }
-        co_return co_await finalized();
-    }
+    task::Task<BlockRef> head() override { co_return validatedHead(co_await finalized()); }
 
     task::Task<protocol::BlockNumber> safeNumber() override
     {
+        auto const fin = co_await finalized();
+        auto const tip = validatedHead(fin);
         if (auto safe = m_engineService->getSafeBlockNumber())
         {
-            co_return *safe;
+            co_return std::clamp(*safe, fin.number, tip.number);
         }
-        co_return (co_await finalized()).number;
+        co_return fin.number;
     }
 
     task::Task<std::optional<crypto::HashType>> canonicalHashAt(
@@ -145,7 +141,7 @@ public:
     task::Task<std::shared_ptr<MPTNodeReader>> mptNodeReaderAt(
         crypto::HashType const& blockHash) override
     {
-        auto view = co_await m_delegate->viewAt(blockHash);
+        auto view = co_await m_delegate->mptViewAt(blockHash);
         if (!view)
         {
             co_return nullptr;
@@ -166,6 +162,18 @@ public:
     }
 
 private:
+    BlockRef validatedHead(BlockRef const& fin) const
+    {
+        if (auto tracked = m_engineService->trackedHead();
+            tracked && (tracked->blockNumber > fin.number ?
+                               m_delegate->unfinalizedBlock(tracked->hash).has_value() :
+                               tracked->hash == fin.hash))
+        {
+            return BlockRef{.hash = tracked->hash, .number = tracked->blockNumber};
+        }
+        return fin;
+    }
+
     std::shared_ptr<const void> m_backendOwner;
     std::shared_ptr<EngineServiceT> m_engineService;
     std::shared_ptr<DelegateT> m_delegate;

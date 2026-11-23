@@ -88,6 +88,7 @@ public:
     static constexpr bool c_hasUnfinalizedWindow =
         requires(DelegateType& delegate, bcos::h256 const& hash) {
             delegate.viewAt(hash);
+            delegate.mptViewAt(hash);
             delegate.windowBlockView(hash);
             delegate.setCanonicalHeadProvider(nullptr);
         };
@@ -120,7 +121,7 @@ public:
         {
             if (delegate)
             {
-                auto& service = *holder->m_service;
+                auto& service = holder->m_service;
                 // The scheduler is also owned by MultiVersionScheduler and may outlive this
                 // holder at shutdown: a head read after the engine is gone answers "no head"
                 // (finalized plane) instead of touching a destroyed tracker.
@@ -140,7 +141,8 @@ public:
                 initializer->m_opCanonicalReader = std::make_shared<
                     bcos::engine::OpCanonicalReaderImpl<ConcreteEngineService, DelegateType>>(
                     holder->m_storageInitializer,
-                    std::shared_ptr<ConcreteEngineService>(holder, holder->m_service.get()),
+                    std::shared_ptr<ConcreteEngineService>(
+                        holder, std::addressof(holder->m_service)),
                     delegate, std::move(blockFactory));
             }
         }
@@ -253,19 +255,18 @@ private:
           : m_storageInitializer(std::move(storageInitializer)),
             m_memPool(memPool),
             m_scheduler(std::move(scheduler)),
-            m_service(
-                std::make_unique<ConcreteEngineService>(m_memPool, m_storageInitializer->storage(),
-                    *m_scheduler, std::move(blockFactory), std::move(delegate), std::move(daCaps),
-                    allowSynthesizedL1Attributes, unfinalizedWindow)),
+            m_service(m_memPool, m_storageInitializer->storage(), *m_scheduler,
+                std::move(blockFactory), std::move(delegate), std::move(daCaps),
+                allowSynthesizedL1Attributes, unfinalizedWindow),
             m_any(std::in_place_type<EngineServiceRef<ConcreteEngineService>>,
-                EngineServiceRef<ConcreteEngineService>{m_service.get()})
+                EngineServiceRef<ConcreteEngineService>{std::addressof(m_service)})
         {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;
         std::reference_wrapper<bcos::txpool::MemPoolImpl> m_memPool;
         std::shared_ptr<SchedulerType> m_scheduler;
         /// Declared before m_any: the adapter inside m_any points at it.
-        std::unique_ptr<ConcreteEngineService> m_service;
+        ConcreteEngineService m_service;
         bcos::engine::AnyEngineService m_any;
     };
 

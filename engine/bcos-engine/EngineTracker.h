@@ -99,6 +99,7 @@ public:
     class ExclusiveAccess;
     class SharedAccess;
 
+    static void validateForkchoice(const ResolvedForkchoice& resolved);
     ForkchoiceApplyResult applyForkchoice(const ResolvedForkchoice& resolved);
     GetPayloadResult getPayload(const PayloadID& payloadId, std::uint32_t version) const;
     std::optional<TrackedHeadBlock> trackedHead() const;

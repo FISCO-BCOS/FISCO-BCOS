@@ -122,6 +122,28 @@ using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, Backend
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
+struct FaultyMergeMLS : MLS
+{
+    using MLS::MLS;
+    int failOnMergeCall = 0;
+    int mergeCalls = 0;
+    std::function<void(int)> onBeforeMerge;
+
+    bcos::task::Task<void> mergeToBackends(auto&... fromStorage)
+    {
+        auto const call = ++mergeCalls;
+        if (onBeforeMerge)
+        {
+            onBeforeMerge(call);
+        }
+        if (failOnMergeCall > 0 && call == failOnMergeCall)
+        {
+            throw bcos::evm::engine::OpStorageError("injected mergeToBackends failure");
+        }
+        co_await MLS::mergeToBackends(fromStorage...);
+    }
+};
+
 bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 {
     return std::make_shared<bcos::crypto::CryptoSuite>(
@@ -1301,6 +1323,153 @@ BOOST_AUTO_TEST_CASE(WindowStateMachine)
     BOOST_REQUIRE(stale.err != nullptr);
     BOOST_CHECK_EQUAL(
         stale.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
+}
+
+/// Multi-block finalizeUpTo prunes non-descendant siblings immediately as each block lands on
+/// disk (never leaving a sibling stacked over a finalized competitor on a mid-chain error) and
+/// invokes block-number notifiers after releasing m_commitMutex.
+BOOST_AUTO_TEST_CASE(FinalizeMultiBlockPrunesPerBlockAndNotifiesUnlocked)
+{
+    using FaultyScheduler = bcos::executor_v1::opstack::OpScheduler<FaultyMergeMLS>;
+
+    BackendMemStorage backendStorage{1};
+    CheckpointBackend checkpointBackend{backendStorage};
+    FaultyMergeMLS multiLayerStorage{checkpointBackend};
+    auto receiptFactory = makeReceiptFactory();
+    auto hashImpl = makeCryptoSuite()->hashImpl();
+    auto blockFactory = makeBlockFactory();
+    auto legacyStorage =
+        std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(backendStorage);
+    auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyStorage, 1000);
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
+    bcos::ledger::OpForkSchedule forkSchedule{};
+    FaultyScheduler scheduler(receiptFactory, hashImpl, kChainId, forkSchedule, blockFactory,
+        multiLayerStorage, ledger, ioServicePool);
+
+    seedSysTables(multiLayerStorage);
+    auto const genesisRoot = computeAndPersistGenesisTrie(multiLayerStorage);
+    seedCallGenesis(multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+
+    auto runBlock = [&](bcos::protocol::BlockHeader::Ptr header,
+                        std::vector<bcos::bytes> const& envelopes,
+                        bcos::crypto::HashType const& parentHash) {
+        header->setParentInfo(bcos::protocol::ParentInfo{
+            .blockNumber = header->number() - 1, .blockHash = parentHash});
+        auto makeBlock = [&](bcos::protocol::BlockHeader::Ptr h) {
+            auto blk = blockFactory->createBlock();
+            blk->setBlockHeader(std::move(h));
+            for (auto const& env : envelopes)
+            {
+                auto tx = buildFiscoTx(env, hashImpl);
+                BOOST_REQUIRE(tx != nullptr);
+                blk->appendTransaction(std::move(tx));
+            }
+            return blk;
+        };
+        bcos::protocol::BlockHeader::Ptr probed;
+        scheduler.executeBlock(makeBlock(header), /*verify=*/false,
+            [&](bcos::Error::Ptr err, bcos::protocol::BlockHeader::Ptr out, bool) {
+                BOOST_REQUIRE_MESSAGE(err == nullptr, (err ? err->errorMessage() : std::string{}));
+                probed = std::move(out);
+            });
+        auto const announcedHash = bcos::protocol::canonicalBlockHash(*probed);
+        bcos::protocol::BlockHeader::Ptr verified;
+        scheduler.executeBlock(makeBlock(probed), /*verify=*/true,
+            [&](bcos::Error::Ptr err, bcos::protocol::BlockHeader::Ptr out, bool) {
+                BOOST_REQUIRE_MESSAGE(err == nullptr, (err ? err->errorMessage() : std::string{}));
+                verified = std::move(out);
+            });
+        scheduler.commitBlock(verified, [&](bcos::Error::Ptr err, bcos::ledger::LedgerConfig::Ptr) {
+            BOOST_REQUIRE_MESSAGE(err == nullptr, (err ? err->errorMessage() : std::string{}));
+        });
+        return std::pair{announcedHash, verified};
+    };
+
+    auto dep1 = opeth::encodeOpEthDepositEnvelope(makeDeposit());
+    auto dep2a = depositEnvWithSource(
+        0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_bytes32);
+    auto dep2b = depositEnvWithSource(
+        0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc_bytes32);
+    auto dep3b = depositEnvWithSource(
+        0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd_bytes32);
+
+    auto [h1, hdr1] =
+        runBlock(makeHeaderAt(1, bcos::u256(1'000'000'000)), {dep1}, bcos::crypto::HashType{});
+    bcos::Error::Ptr finErr;
+    scheduler.finalizeUpTo(h1, [&](bcos::Error::Ptr e) { finErr = std::move(e); });
+    BOOST_REQUIRE(finErr == nullptr);
+    BOOST_REQUIRE_EQUAL(multiLayerStorage.mergeCalls, 1);
+
+    auto [h2a, hdr2a] = runBlock(makeHeaderAt(2, bcos::u256(2'000'000'000)), {dep2a}, h1);
+    auto [h2b, hdr2b] = runBlock(makeHeaderAt(2, bcos::u256(2'000'000'000)), {dep2b}, h1);
+    auto [h3b, hdr3b] = runBlock(makeHeaderAt(3, bcos::u256(3'000'000'000)), {dep3b}, h2b);
+    BOOST_REQUIRE_EQUAL(scheduler.windowSize(), 3U);
+
+    // During multi-block finalizeUpTo(h3b): merge #2 commits B2b, merge #3 fails on B3b.
+    // Right before merge #3 starts, sibling B2a must ALREADY be pruned so no reader can stack
+    // B2a atop finalized B2b.
+    bool checkedMidLoop = false;
+    bool siblingPresentMidLoop = true;
+    bool siblingViewPresentMidLoop = true;
+    multiLayerStorage.failOnMergeCall = 3;
+    multiLayerStorage.onBeforeMerge = [&](int call) {
+        if (call == 3)
+        {
+            checkedMidLoop = true;
+            siblingPresentMidLoop = scheduler.unfinalizedBlock(h2a).has_value();
+            siblingViewPresentMidLoop = bcos::task::syncWait(scheduler.viewAt(h2a)).has_value();
+        }
+    };
+
+    std::vector<bcos::protocol::BlockNumber> notified;
+    bool commitLockHeldInNotifier = false;
+    bool notifierProbeSawPendingDropped = false;
+    scheduler.setBlockNumberNotifier([&](bcos::protocol::BlockNumber n) {
+        notified.push_back(n);
+        // Probing commitBlock inside the notifier must see OpPendingDropped (lock free),
+        // never "Another block is committing!" (m_commitMutex still held).
+        bcos::Error::Ptr probeErr;
+        scheduler.commitBlock(hdr2a,
+            [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) { probeErr = std::move(e); });
+        if (probeErr &&
+            probeErr->errorMessage().find("Another block is committing") != std::string::npos)
+        {
+            commitLockHeldInNotifier = true;
+        }
+        if (probeErr && boost::get_error_info<bcos::engine::OpPendingDropped>(*probeErr) != nullptr)
+        {
+            notifierProbeSawPendingDropped = true;
+        }
+    });
+
+    scheduler.finalizeUpTo(h3b, [&](bcos::Error::Ptr e) { finErr = std::move(e); });
+    BOOST_REQUIRE(finErr != nullptr);
+    BOOST_CHECK_EQUAL(finErr->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
+    BOOST_CHECK(checkedMidLoop);
+    BOOST_CHECK(!siblingPresentMidLoop);
+    BOOST_CHECK(!siblingViewPresentMidLoop);
+    BOOST_CHECK(!commitLockHeldInNotifier);
+    BOOST_CHECK(notifierProbeSawPendingDropped);
+    BOOST_REQUIRE_EQUAL(notified.size(), 1U);
+    BOOST_CHECK_EQUAL(notified.front(), 2);
+    // Post-failure state is consistent: B2b finalized, B2a gone, B3b resumable.
+    BOOST_CHECK_EQUAL(scheduler.finalizedNumber(), 2);
+    BOOST_CHECK_EQUAL(scheduler.finalizedHash().hex(), h2b.hex());
+    BOOST_CHECK(!scheduler.unfinalizedBlock(h2a).has_value());
+    BOOST_CHECK(scheduler.unfinalizedBlock(h3b).has_value());
+    BOOST_CHECK_EQUAL(scheduler.windowSize(), 1U);
+
+    // Retry succeeds cleanly once storage recovers.
+    multiLayerStorage.failOnMergeCall = 0;
+    multiLayerStorage.onBeforeMerge = nullptr;
+    finErr = nullptr;
+    scheduler.finalizeUpTo(h3b, [&](bcos::Error::Ptr e) { finErr = std::move(e); });
+    BOOST_REQUIRE(finErr == nullptr);
+    BOOST_CHECK_EQUAL(scheduler.finalizedNumber(), 3);
+    BOOST_CHECK_EQUAL(scheduler.finalizedHash().hex(), h3b.hex());
+    BOOST_CHECK_EQUAL(scheduler.windowSize(), 0U);
+    BOOST_REQUIRE_EQUAL(notified.size(), 2U);
+    BOOST_CHECK_EQUAL(notified.back(), 3);
 }
 /// execute-only construction (null ledger) must not deref; commit returns InvalidStatus.
 BOOST_AUTO_TEST_CASE(CommitWithoutLedgerReturnsInvalidStatus)

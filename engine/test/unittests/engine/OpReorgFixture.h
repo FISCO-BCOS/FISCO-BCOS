@@ -108,11 +108,14 @@ struct StubMemPool
     /// parent chain's SYS_CURRENT_STATE): OpReadPlaneTest pins that it is the head chain's,
     /// not the finalized plane's. Unset = plain stub.
     std::function<void(bcos::protocol::BlockNumber)> onSeal;
+    int removeCalls = 0;
 
     void removeByHash(std::span<bcos::crypto::HashType const>) {}
     template <class View>
     void remove(View&)
-    {}
+    {
+        ++removeCalls;
+    }
     template <class View, class OutputIt>
     void seal(int64_t, View& view, OutputIt)
     {

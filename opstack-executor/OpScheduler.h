@@ -242,6 +242,32 @@ public:
         co_return m_multiLayerStorage->forkChain(chainLayersLocked(it->second));
     }
 
+    /// Chain view for content-addressed MPT reads: window block, finalized tip, or any canonical
+    /// finalized block on disk (whose trie nodes live in the committed backend).
+    task::Task<std::optional<ViewType>> mptViewAt(bcos::crypto::HashType blockHash)
+    {
+        if (auto view = co_await viewAt(blockHash))
+        {
+            co_return view;
+        }
+        if (blockHash == bcos::crypto::HashType{})
+        {
+            co_return std::nullopt;
+        }
+        auto committed = m_multiLayerStorage->forkCommitted();
+        auto number = co_await ledger::getBlockNumber(committed, blockHash, ledger::fromStorage);
+        if (!number || *number < 0 || *number > m_finalizedNumber.load())
+        {
+            co_return std::nullopt;
+        }
+        auto canonical = co_await ledger::getBlockHash(committed, *number, ledger::fromStorage);
+        if (!canonical || *canonical != blockHash)
+        {
+            co_return std::nullopt;
+        }
+        co_return committed;
+    }
+
     /// Capture an admitted block's height and its view under the same window lock.
     task::Task<std::optional<std::pair<protocol::BlockNumber, ViewType>>> windowBlockView(
         bcos::crypto::HashType blockHash)
@@ -1113,6 +1139,30 @@ private:
     /// next FCU(finalized=F) resumes from there.
     task::Task<Error::Ptr> coFinalizeUpTo(bcos::crypto::HashType target)
     {
+        std::vector<protocol::BlockNumber> finalizedNumbers;
+        Error::Ptr error;
+        auto captureError = [&](std::string_view prefix) {
+            auto eptr = std::current_exception();
+            std::string detail;
+            try
+            {
+                std::rethrow_exception(eptr);
+            }
+            catch (std::exception const& e)
+            {
+                detail = boost::diagnostic_information(e);
+            }
+            catch (...)
+            {
+                detail = "(" + describeException(eptr) + ")";
+            }
+            auto message = fmt::format("{} {}", prefix, detail);
+            OP_SCHEDULER_LOG(ERROR) << message;
+            if (!error)
+            {
+                error = BCOS_ERROR_UNIQUE_PTR(classifyException(eptr), message);
+            }
+        };
         try
         {
             // Blocking: an FCU waits for an in-flight admit rather than failing; an execute
@@ -1130,9 +1180,8 @@ private:
                 std::lock_guard<std::mutex> lock(m_windowMutex);
                 if (target != bcos::crypto::HashType{} && target == m_finalizedHash)
                 {
-                    // Already the finalized tip. Prune anyway: a previous run may have merged
-                    // the last block and then failed in the notifier before pruning.
-                    pruneWindowLocked(target);
+                    // Already the finalized tip. Prune any stale non-descendants idempotently.
+                    pruneWindowLocked(target, m_finalizedNumber.load());
                     co_return nullptr;
                 }
                 auto cursor = target;
@@ -1158,85 +1207,99 @@ private:
                 std::reverse(chain.begin(), chain.end());
             }
 
+            std::size_t pruned = 0;
+            std::size_t remaining = 0;
+            finalizedNumbers.reserve(chain.size());
             for (auto& block : chain)
             {
-                // One merge per block: state + ledger rows land together.
+                // One merge per block: state + ledger rows land together. Prune non-descendants
+                // under the same window lock that advances m_finalizedHash so no reader can ever
+                // stack a sibling atop a finalized competitor.
                 co_await m_multiLayerStorage->mergeToBackends(*block.state, *block.ledger);
                 {
                     std::lock_guard<std::mutex> lock(m_windowMutex);
                     m_window.erase(block.hash);
                     m_finalizedNumber.store(block.number);
                     m_finalizedHash = block.hash;
+                    pruned += pruneWindowLocked(block.hash, block.number);
+                    remaining = m_window.size();
                 }
                 OP_SCHEDULER_LOG(INFO)
                     << "Finalized block " << block.number << " " << block.hash.abridged();
-                notifyBlockNumber(block.number);
+                finalizedNumbers.push_back(block.number);
             }
 
-            std::size_t pruned = 0;
-            std::size_t remaining = 0;
-            {
-                std::lock_guard<std::mutex> lock(m_windowMutex);
-                pruned = pruneWindowLocked(target);
-                remaining = m_window.size();
-            }
             OP_SCHEDULER_LOG(INFO)
                 << "Finalize finished" << LOG_KV("finalized", chain.back().number)
                 << LOG_KV("merged", chain.size()) << LOG_KV("pruned", pruned)
                 << LOG_KV("windowBlocks", remaining);
-            co_return nullptr;
-        }
-        catch (std::exception& e)
-        {
-            auto message = fmt::format("Finalize failed! {}", boost::diagnostic_information(e));
-            OP_SCHEDULER_LOG(ERROR) << message;
-            co_return BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message);
         }
         catch (...)
         {
-            auto message = std::string{"Finalize failed! ("} +
-                           describeException(std::current_exception()) + ")";
-            OP_SCHEDULER_LOG(ERROR) << message;
-            co_return BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message);
+            captureError("Finalize failed!");
         }
+
+        // Notify after m_commitMutex is released (matching pre-window coCommitBlock), including
+        // any prefix blocks that landed before a mid-chain failure.
+        try
+        {
+            for (auto const number : finalizedNumbers)
+            {
+                notifyBlockNumber(number);
+            }
+        }
+        catch (...)
+        {
+            captureError("Finalize notifier failed!");
+        }
+        co_return error;
     }
 
     /// Drop every window block that does not descend from @p root, and every staged block
     /// whose parent is no longer resolvable. Caller holds m_windowMutex.
-    std::size_t pruneWindowLocked(bcos::crypto::HashType const& root)
+    std::size_t pruneWindowLocked(
+        bcos::crypto::HashType const& root, protocol::BlockNumber rootNumber)
     {
-        std::unordered_multimap<bcos::crypto::HashType, bcos::crypto::HashType> children;
-        for (auto const& [hash, layer] : m_window)
+        std::size_t pruned = 0;
+        // Every window entry descends from the prior finalized tip; a non-descendant of @p root
+        // exists iff at least one remaining entry sits at or below @p rootNumber (a sibling of
+        // @p root). Skip graph construction on the linear common path.
+        bool const hasNonDescendant = std::any_of(m_window.begin(), m_window.end(),
+            [rootNumber](auto const& kv) { return kv.second.number <= rootNumber; });
+        if (hasNonDescendant)
         {
-            children.emplace(layer.parentHash, hash);
-        }
-        std::unordered_set<bcos::crypto::HashType> keep;
-        std::vector<bcos::crypto::HashType> stack{root};
-        while (!stack.empty())
-        {
-            auto parent = stack.back();
-            stack.pop_back();
-            auto [begin, end] = children.equal_range(parent);
-            for (auto it = begin; it != end; ++it)
+            std::unordered_multimap<bcos::crypto::HashType, bcos::crypto::HashType> children;
+            for (auto const& [hash, layer] : m_window)
             {
-                if (keep.insert(it->second).second)
+                children.emplace(layer.parentHash, hash);
+            }
+            std::unordered_set<bcos::crypto::HashType> keep;
+            std::vector<bcos::crypto::HashType> stack{root};
+            while (!stack.empty())
+            {
+                auto parent = stack.back();
+                stack.pop_back();
+                auto [begin, end] = children.equal_range(parent);
+                for (auto it = begin; it != end; ++it)
                 {
-                    stack.push_back(it->second);
+                    if (keep.insert(it->second).second)
+                    {
+                        stack.push_back(it->second);
+                    }
                 }
             }
-        }
-        std::size_t pruned = 0;
-        for (auto it = m_window.begin(); it != m_window.end();)
-        {
-            if (keep.contains(it->first))
+            for (auto it = m_window.begin(); it != m_window.end();)
             {
-                ++it;
-                continue;
+                if (keep.contains(it->first))
+                {
+                    ++it;
+                    continue;
+                }
+                OP_SCHEDULER_LOG(INFO) << "Pruned side-branch block " << it->second.number << " "
+                                       << it->first.abridged();
+                it = m_window.erase(it);
+                ++pruned;
             }
-            OP_SCHEDULER_LOG(INFO)
-                << "Pruned side-branch block " << it->second.number << " " << it->first.abridged();
-            it = m_window.erase(it);
-            ++pruned;
         }
         for (auto it = m_staged.begin(); it != m_staged.end();)
         {

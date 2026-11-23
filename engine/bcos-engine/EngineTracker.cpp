@@ -29,7 +29,15 @@
 namespace bcos::engine
 {
 
-ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& resolved)
+namespace
+{
+bool requiresCanonical(h256 const& hash, std::optional<bcos::protocol::BlockNumber> const& number)
+{
+    return hash != bcos::h256{} && number.has_value();
+}
+}  // namespace
+
+void EngineTracker::validateForkchoice(const ResolvedForkchoice& resolved)
 {
     const auto& headBlockNumber = resolved.headNumber;
     const auto& safeBlockNumber = resolved.safeNumber;
@@ -61,10 +69,6 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     // The gate and the store below share this one predicate: a hash that is set but
     // whose number the resolver could not resolve is rejected here, so the store can
     // never observe that state and silently wipe a stored height.
-    auto requiresCanonical = [](h256 const& hash,
-                                 std::optional<bcos::protocol::BlockNumber> const& number) {
-        return hash != bcos::h256{} && number.has_value();
-    };
     if (resolved.state.safeBlockHash != bcos::h256{} && !safeBlockNumber.has_value())
     {
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
@@ -96,6 +100,14 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
                                   "Forkchoice finalized block not in canonical chain"});
     }
+}
+
+ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& resolved)
+{
+    validateForkchoice(resolved);
+    const auto& headBlockNumber = resolved.headNumber;
+    const auto& safeBlockNumber = resolved.safeNumber;
+    const auto& finalizedBlockNumber = resolved.finalizedNumber;
 
     std::unique_lock lock(m_mutex);
     bool rewind = false;

@@ -469,15 +469,90 @@ BOOST_AUTO_TEST_CASE(scheduler_reads_and_seal_view_follow_the_head)
     BOOST_CHECK_EQUAL(t.nonce("latest"), bcos::toQuantity(bcos::u256(headNonce)));
 
     // A build on B2b (sequencer lane, noTxPool=false) seals against B2b's chain: the view's
-    // current number is 2, not the finalized 1.
+    // current number is 2, not the finalized 1, and it must not prune the mempool against an
+    // unfinalized view (eviction waits for finality so rewinding never drops pooled txs).
     std::vector<bcos::protocol::BlockNumber> sealedAt;
     t.f.memPool.onSeal = [&](bcos::protocol::BlockNumber n) { sealedAt.push_back(n); };
+    auto const removesBeforeBuild = t.f.memPool.removeCalls;
     auto attributes = ReorgFixture::attrs(3, 1);
     attributes.noTxPool = false;
     auto built = t.f.fcu(t.f.fc(s.h2b, c.h1, c.h1), &attributes);
     BOOST_REQUIRE(built.payloadStatus.status == PayloadValidationStatus::Valid);
     BOOST_REQUIRE_EQUAL(sealedAt.size(), 1U);
     BOOST_CHECK_EQUAL(sealedAt.front(), 2);
+    BOOST_CHECK_EQUAL(t.f.memPool.removeCalls, removesBeforeBuild);
+}
+
+// Multi-block finalize advancing past B2b to B3b leaves B2b's content-addressed trie nodes in
+// the committed backend: mptNodeReaderAt(B2b) must still resolve them (preventing a race
+// failure between block lookup and proof read), while a pruned sibling stays null and flat
+// stateStorageAt stays restricted to the window or finalized tip.
+BOOST_AUTO_TEST_CASE(mpt_reader_survives_multi_block_finalize)
+{
+    ReadPlaneFixture t;
+    auto c = setupB1B2a(t.f);
+    auto s = deriveB2b(t.f, c);
+    auto b3b = t.f.build(t.f.fc(s.h2b, c.h1, c.h1), 3, 1);
+    auto h3b = t.f.hashOf(b3b);
+    BOOST_REQUIRE(t.f.np(b3b).status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(
+        t.f.fcu(t.f.fc(h3b, h3b, h3b)).payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE_EQUAL(t.f.backendNumber(), 3);
+
+    auto mpt2b = bcos::task::syncWait(t.reader->mptNodeReaderAt(s.h2b));
+    BOOST_REQUIRE(mpt2b != nullptr);
+    auto rootNode =
+        bcos::task::syncWait(bcos::storage2::readOne(*mpt2b, s.b2b.executionPayload.stateRoot));
+    BOOST_REQUIRE(rootNode.has_value());
+    BOOST_CHECK(!rootNode->empty());
+    // Pruned sibling and unknown hashes stay null; flat stateStorageAt does not serve historical
+    // finalized heights below the tip.
+    BOOST_CHECK(bcos::task::syncWait(t.reader->mptNodeReaderAt(c.h2a)) == nullptr);
+    BOOST_CHECK(bcos::task::syncWait(t.reader->stateStorageAt(s.h2b)) == nullptr);
+    BOOST_CHECK(bcos::task::syncWait(t.reader->stateStorageAt(h3b)) != nullptr);
+}
+
+// If finalization advances on disk without updating the tracker (e.g. a mid-chain merge error
+// after pruning the previously tracked branch), or a head rewind leaves safe > head, head() and
+// safeNumber() preserve finalized <= safe <= head so RPC reads never observe a pruned or
+// out-of-range block tag.
+BOOST_AUTO_TEST_CASE(reader_falls_back_to_finalized_when_tracked_head_is_pruned)
+{
+    ReadPlaneFixture t;
+    auto c = setupB1B2a(t.f);
+    auto s = deriveB2b(t.f, c);
+    // Extend branch A to B3a and set head = safe = B3a (safe > future fin = 2), then finalize
+    // competing B2b directly on the scheduler (modeling a partial multi-block finalize that merged
+    // B2b, pruned B2a/B3a, and aborted before updating the tracker).
+    auto b3a = t.f.build(t.f.fc(c.h2a, c.h1, c.h1), 3, 1);
+    auto h3a = t.f.hashOf(b3a);
+    BOOST_REQUIRE(t.f.np(b3a).status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(
+        t.f.fcu(t.f.fc(h3a, h3a, c.h1)).payloadStatus.status == PayloadValidationStatus::Valid);
+    bcos::Error::Ptr finErr;
+    t.f.opDelegate->finalizeUpTo(s.h2b, [&](bcos::Error::Ptr e) { finErr = std::move(e); });
+    BOOST_REQUIRE(finErr == nullptr);
+
+    auto const head = bcos::task::syncWait(t.reader->head());
+    BOOST_CHECK_EQUAL(head.hash.hex(), s.h2b.hex());
+    BOOST_CHECK_EQUAL(head.number, 2);
+    // Tracked safe was 3 (> fin = 2), must clamp to head (2) rather than escaping above latest.
+    BOOST_CHECK_EQUAL(bcos::task::syncWait(t.reader->safeNumber()), 2);
+    BOOST_CHECK_EQUAL(t.blockByNumber("latest", false)["hash"].asString(), s.h2b.hexPrefixed());
+    BOOST_CHECK_EQUAL(t.blockByNumber("safe", false)["hash"].asString(), s.h2b.hexPrefixed());
+    BOOST_CHECK_EQUAL(t.balance("latest"), "0xf");
+
+    // Rewinding head with safe=0x0 also keeps safeNumber() clamped to head().number.
+    auto b3b = t.f.build(t.f.fc(s.h2b, s.h2b, s.h2b), 3, 1);
+    auto h3b = t.f.hashOf(b3b);
+    BOOST_REQUIRE(t.f.np(b3b).status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(
+        t.f.fcu(t.f.fc(h3b, h3b, s.h2b)).payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE_EQUAL(bcos::task::syncWait(t.reader->safeNumber()), 3);
+    BOOST_REQUIRE(t.f.fcu(t.f.fc(s.h2b, bcos::h256{}, bcos::h256{})).payloadStatus.status ==
+                  PayloadValidationStatus::Valid);
+    BOOST_CHECK_EQUAL(bcos::task::syncWait(t.reader->safeNumber()), 2);
+    BOOST_CHECK_EQUAL(t.blockByNumber("safe", false)["hash"].asString(), s.h2b.hexPrefixed());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

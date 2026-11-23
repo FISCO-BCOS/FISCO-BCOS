@@ -23,6 +23,8 @@
 
 #include "OpReorgFixture.h"
 #include <boost/test/unit_test.hpp>
+#include <atomic>
+#include <future>
 
 
 BOOST_AUTO_TEST_SUITE(OpEngineReorgTest)
@@ -153,6 +155,13 @@ BOOST_AUTO_TEST_CASE(rows2_3_4_depth_rewind_and_finalize_past_side_branch)
     // §12.3 row 5: finalized neither in the window nor on disk → -38002.
     BOOST_CHECK_THROW(f.fcu(f.fc(h4b, h3b, bcos::h256(std::string(64, 'f')))),
         bcos::engine::InvalidForkchoiceState);
+    // Crossing finalized via safe or finalized cursor (B1 < finalizedTip B2b) → -38002,
+    // leaving tracker safe/finalized heights intact.
+    BOOST_CHECK_THROW(f.fcu(f.fc(h4b, c.h1, bcos::h256{})), bcos::engine::InvalidForkchoiceState);
+    BOOST_CHECK_THROW(f.fcu(f.fc(h4b, s.h2b, c.h1)), bcos::engine::InvalidForkchoiceState);
+    BOOST_CHECK_THROW(f.fcu(f.fc(h4b, c.h1, c.h1)), bcos::engine::InvalidForkchoiceState);
+    BOOST_CHECK_EQUAL(f.service->getSafeBlockNumber().value_or(-1), 3);
+    BOOST_CHECK_EQUAL(f.service->getFinalizedBlockNumber().value_or(-1), 2);
     // The finalized tip itself is a legal head (heartbeat after a full finalize).
     BOOST_CHECK(
         f.fcu(f.fc(s.h2b, s.h2b, s.h2b)).payloadStatus.status == PayloadValidationStatus::Valid);
@@ -300,6 +309,273 @@ BOOST_AUTO_TEST_CASE(window_depth_backpressure)
     BOOST_CHECK(f.np(b3).status == PayloadValidationStatus::Valid);
     BOOST_CHECK(f.fcu(f.fc(h3, h1, h1)).payloadStatus.status == PayloadValidationStatus::Valid);
     BOOST_CHECK_EQUAL(f.balanceAt(h3), bcos::u256(12));
+}
+
+// FCU atomicity & concurrency:
+// (a) A failed finalizeUpTo must not leave the tracker pointing at the failed FCU's head/safe/
+//     finalized.
+// (b) A concurrent FCU targeting a sibling (including with non-zero safe/finalized at the old
+//     tip) whose lookup happened before another FCU finalized the competing branch must observe
+//     the prune and answer SYNCING (never writing a pruned hash or throwing spurious -38002).
+// (c) A same-chain concurrent FCU whose safe block moves from window to disk during another
+//     FCU's finalization must retry cleanly and answer VALID.
+// (d) A same-chain FCU starting while another FCU is already mid-finalizeUpTo (odd epoch) must
+//     still detect the concurrent finalization and answer VALID.
+BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurrent_fcu)
+{
+    struct HookedDelegate final : bcos::scheduler::SchedulerInterface
+    {
+        std::shared_ptr<Delegate> inner;
+        std::function<void(bcos::crypto::HashType const&, std::function<void(bcos::Error::Ptr)>)>
+            onFinalize;
+        std::function<void(bcos::crypto::HashType const&)> onUnfinalizedLookup;
+
+        explicit HookedDelegate(std::shared_ptr<Delegate> d) : inner(std::move(d)) {}
+
+        void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
+            std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> cb)
+            override
+        {
+            inner->executeBlock(std::move(block), verify, std::move(cb));
+        }
+        void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
+            std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> cb)
+            override
+        {
+            inner->adoptProbeAsPending(std::move(block), std::move(cb));
+        }
+        void commitBlock(bcos::protocol::BlockHeader::Ptr header,
+            std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> cb) override
+        {
+            inner->commitBlock(std::move(header), std::move(cb));
+        }
+        void finalizeUpTo(bcos::crypto::HashType const& blockHash,
+            std::function<void(bcos::Error::Ptr)> cb) override
+        {
+            if (onFinalize)
+            {
+                onFinalize(blockHash, std::move(cb));
+                return;
+            }
+            inner->finalizeUpTo(blockHash, std::move(cb));
+        }
+        std::optional<UnfinalizedBlock> unfinalizedBlock(
+            bcos::crypto::HashType const& blockHash) const override
+        {
+            auto result = inner->unfinalizedBlock(blockHash);
+            if (onUnfinalizedLookup)
+            {
+                onUnfinalizedLookup(blockHash);
+            }
+            return result;
+        }
+        void status(
+            std::function<void(bcos::Error::Ptr, bcos::protocol::Session::ConstPtr)> cb) override
+        {
+            inner->status(std::move(cb));
+        }
+        void call(bcos::protocol::Transaction::Ptr tx,
+            std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr)> cb)
+            override
+        {
+            inner->call(std::move(tx), std::move(cb));
+        }
+        void getCode(std::string_view contract,
+            std::function<void(bcos::Error::Ptr, bcos::bytes)> cb) override
+        {
+            inner->getCode(contract, std::move(cb));
+        }
+        void getABI(std::string_view contract,
+            std::function<void(bcos::Error::Ptr, std::string)> cb) override
+        {
+            inner->getABI(contract, std::move(cb));
+        }
+        void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
+            std::function<void(bcos::Error::Ptr)> cb) override
+        {
+            inner->preExecuteBlock(std::move(block), verify, std::move(cb));
+        }
+        void reset(std::function<void(bcos::Error::Ptr)> cb) override
+        {
+            inner->reset(std::move(cb));
+        }
+        bcos::task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+            std::string_view address, std::string_view key,
+            bcos::protocol::BlockNumber number) override
+        {
+            co_return co_await inner->getPendingStorageAt(address, key, number);
+        }
+    };
+
+    ReorgFixture f;
+    auto c = setupB1B2a(f);
+    auto s = deriveB2b(f, c);
+
+    // Rebind the service onto HookedDelegate over the SAME window & backend (no restart).
+    auto hooked = std::make_shared<HookedDelegate>(f.opDelegate);
+    f.service = std::make_unique<OpEngine>(f.memPool, f.multiLayerStorage, f.seam, f.blockFactory,
+        hooked, nullptr, /*allowSynthesizedL1Attributes=*/false, f.unfinalizedWindow);
+    BOOST_REQUIRE(
+        f.fcu(f.fc(s.h2b, c.h1, c.h1)).payloadStatus.status == PayloadValidationStatus::Valid);
+
+    // (a) finalizeUpTo fails: FCU throws OpExecutionInternalError and leaves tracker intact.
+    hooked->onFinalize = [](bcos::crypto::HashType const&,
+                             std::function<void(bcos::Error::Ptr)> cb) {
+        cb(BCOS_ERROR_UNIQUE_PTR(
+            bcos::scheduler::SchedulerError::OpStorageFault, "injected finalize failure"));
+    };
+    BOOST_CHECK_THROW(f.fcu(f.fc(c.h2a, c.h2a, c.h2a)), bcos::engine::OpExecutionInternalError);
+    BOOST_CHECK_EQUAL(f.trackedHead().value_or(bcos::h256{}).hex(), s.h2b.hex());
+    BOOST_CHECK_EQUAL(f.service->getSafeBlockNumber().value_or(-1), 1);
+    BOOST_CHECK_EQUAL(f.service->getFinalizedBlockNumber().value_or(-1), 1);
+    hooked->onFinalize = nullptr;
+
+    // (b) Deterministic race: FCU2(head=B2a) resolves B2a before FCU1 finalizes B2b (pruning
+    // B2a), then FCU2 resumes. FCU2 must answer SYNCING and leave trackedHead at B2b.
+    // Also build B3b on B2b so part (c) can test a same-chain FCU racing finalization of B3b.
+    auto b3b = f.build(f.fc(s.h2b, c.h1, c.h1), 3, 1);
+    auto h3b = f.hashOf(b3b);
+    BOOST_REQUIRE(f.np(b3b).status == PayloadValidationStatus::Valid);
+    auto b4b = f.build(f.fc(h3b, c.h1, c.h1), 4, 1);
+    auto h4b = f.hashOf(b4b);
+    BOOST_REQUIRE(f.np(b4b).status == PayloadValidationStatus::Valid);
+
+    struct PromiseRelease
+    {
+        std::promise<void>& p;
+        std::atomic<bool> released{false};
+        void release()
+        {
+            if (!released.exchange(true))
+            {
+                p.set_value();
+            }
+        }
+        ~PromiseRelease() { release(); }
+    };
+    struct ScopeRelease
+    {
+        PromiseRelease& guard;
+        ~ScopeRelease() { guard.release(); }
+    };
+
+    {
+        std::promise<void> fcu2ResolvedB2a;
+        std::promise<void> fcu1FinalizedB2b;
+        auto fcu1DoneFuture = fcu1FinalizedB2b.get_future().share();
+        std::atomic<bool> pausedOnce{false};
+        PromiseRelease releaseResolved{fcu2ResolvedB2a};
+        hooked->onUnfinalizedLookup = [&](bcos::crypto::HashType const& hash) {
+            if (hash == c.h2a && !pausedOnce.exchange(true))
+            {
+                releaseResolved.release();
+                fcu1DoneFuture.wait();
+            }
+        };
+
+        // Pass safe=B1, finalized=B1 so FCU2 also exercises the safe/finalized < finalizedTip
+        // check after FCU1 advances finalizedTip from 1 to 2: must retry and answer SYNCING
+        // (linearizable with after-FCU1), never a non-linearizable -38002.
+        std::future<bcos::engine::ForkchoiceUpdatedResult> fcu2Future =
+            std::async(std::launch::async, [&]() {
+                ScopeRelease onExit{releaseResolved};
+                return f.fcu(f.fc(c.h2a, c.h1, c.h1));
+            });
+        PromiseRelease releaseFcu1{fcu1FinalizedB2b};
+        fcu2ResolvedB2a.get_future().wait();
+        auto fcu1Res = f.fcu(f.fc(s.h2b, s.h2b, s.h2b));
+        releaseFcu1.release();
+        auto const fcu2Result = fcu2Future.get();
+        hooked->onUnfinalizedLookup = nullptr;
+        BOOST_REQUIRE(fcu1Res.payloadStatus.status == PayloadValidationStatus::Valid);
+        BOOST_CHECK(fcu2Result.payloadStatus.status == PayloadValidationStatus::Syncing);
+        BOOST_CHECK_EQUAL(f.trackedHead().value_or(bcos::h256{}).hex(), s.h2b.hex());
+        BOOST_CHECK_EQUAL(f.service->getFinalizedBlockNumber().value_or(-1), 2);
+    }
+
+    // (c) Same-chain race: FCU2(head=B4b, safe=B3b, finalized=0x0) resolves B3b as inWindow
+    // before FCU1 finalizes B3b. FCU2 must retry cleanly and answer VALID, never spurious -38002.
+    {
+        std::promise<void> fcu2ResolvedB3b;
+        std::promise<void> fcu1FinalizedB3b;
+        auto fcu1DoneFuture = fcu1FinalizedB3b.get_future().share();
+        std::atomic<bool> pausedOnce{false};
+        PromiseRelease releaseResolved{fcu2ResolvedB3b};
+        hooked->onUnfinalizedLookup = [&](bcos::crypto::HashType const& hash) {
+            if (hash == h3b && !pausedOnce.exchange(true))
+            {
+                releaseResolved.release();
+                fcu1DoneFuture.wait();
+            }
+        };
+
+        std::future<bcos::engine::ForkchoiceUpdatedResult> fcu2Future =
+            std::async(std::launch::async, [&]() {
+                ScopeRelease onExit{releaseResolved};
+                return f.fcu(f.fc(h4b, h3b, bcos::h256{}));
+            });
+        PromiseRelease releaseFcu1{fcu1FinalizedB3b};
+        fcu2ResolvedB3b.get_future().wait();
+        auto fcu1Res = f.fcu(f.fc(h3b, h3b, h3b));
+        releaseFcu1.release();
+        auto const fcu2Result = fcu2Future.get();
+        hooked->onUnfinalizedLookup = nullptr;
+        BOOST_REQUIRE(fcu1Res.payloadStatus.status == PayloadValidationStatus::Valid);
+        BOOST_CHECK(fcu2Result.payloadStatus.status == PayloadValidationStatus::Valid);
+        BOOST_CHECK_EQUAL(f.trackedHead().value_or(bcos::h256{}).hex(), h4b.hex());
+        BOOST_CHECK_EQUAL(f.service->getSafeBlockNumber().value_or(-1), 3);
+    }
+
+    // (d) Mid-finalize race: FCU2 starts WHILE FCU1 is already inside finalizeUpTo(B4b) (odd
+    // epoch), resolves B4b in-window before B4b is evicted, then hits isOnChainOf after eviction.
+    // Even/odd epoch tracking must still recognize the concurrent finalization and answer VALID.
+    {
+        auto b5b = f.build(f.fc(h4b, h3b, h3b), 5, 1);
+        auto h5b = f.hashOf(b5b);
+        BOOST_REQUIRE(f.np(b5b).status == PayloadValidationStatus::Valid);
+
+        std::promise<void> fcu1EnteredFinalize;
+        std::promise<void> fcu2ResolvedB4b;
+        std::promise<void> fcu1EvictedB4b;
+        auto fcu2DoneResolve = fcu2ResolvedB4b.get_future().share();
+        auto fcu1EvictedFuture = fcu1EvictedB4b.get_future().share();
+        std::atomic<bool> pausedOnce{false};
+        PromiseRelease releaseEntered{fcu1EnteredFinalize};
+
+        hooked->onFinalize = [&](bcos::crypto::HashType const& hash,
+                                 std::function<void(bcos::Error::Ptr)> cb) {
+            PromiseRelease releaseEvict{fcu1EvictedB4b};
+            releaseEntered.release();
+            fcu2DoneResolve.wait();
+            hooked->inner->finalizeUpTo(hash, std::move(cb));
+            releaseEvict.release();
+        };
+
+        std::future<bcos::engine::ForkchoiceUpdatedResult> fcu1Future =
+            std::async(std::launch::async, [&]() {
+                ScopeRelease onExit{releaseEntered};
+                return f.fcu(f.fc(h4b, h4b, h4b));
+            });
+        PromiseRelease releaseResolve{fcu2ResolvedB4b};
+        fcu1EnteredFinalize.get_future().wait();
+
+        hooked->onUnfinalizedLookup = [&](bcos::crypto::HashType const& hash) {
+            if (hash == h4b && !pausedOnce.exchange(true))
+            {
+                releaseResolve.release();
+                fcu1EvictedFuture.wait();
+            }
+        };
+        auto const fcu2Result = f.fcu(f.fc(h5b, h4b, bcos::h256{}));
+        auto const fcu1Result = fcu1Future.get();
+        hooked->onUnfinalizedLookup = nullptr;
+        hooked->onFinalize = nullptr;
+        BOOST_REQUIRE(fcu1Result.payloadStatus.status == PayloadValidationStatus::Valid);
+        BOOST_CHECK(fcu2Result.payloadStatus.status == PayloadValidationStatus::Valid);
+        BOOST_CHECK_EQUAL(f.trackedHead().value_or(bcos::h256{}).hex(), h5b.hex());
+        BOOST_CHECK_EQUAL(f.service->getSafeBlockNumber().value_or(-1), 4);
+        BOOST_CHECK_EQUAL(f.service->getFinalizedBlockNumber().value_or(-1), 4);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -113,15 +113,18 @@ public:
     virtual task::Task<std::optional<ChainTransaction>> transactionOnHeadChain(
         crypto::HashType const& txHash) = 0;
 
-    /// MPT node reader over the chain view of @p blockHash (a window block or the finalized
-    /// tip): the trie nodes of that chain's every height, so one reader at head() serves any
-    /// height on the head chain. Null when @p blockHash resolves to no view.
+    /// MPT node reader over the chain view of @p blockHash (a window block, the finalized
+    /// tip, or any canonical finalized block below the tip): the trie nodes of that chain's
+    /// heights, so one reader at head() serves any height on the head chain and historical
+    /// canonical finalized blocks stay provable across finalization. Null when @p blockHash
+    /// resolves to no view.
     virtual task::Task<std::shared_ptr<MPTNodeReader>> mptNodeReaderAt(
         crypto::HashType const& blockHash) = 0;
 
-    /// Flat state view of the chain of @p blockHash (same resolution as mptNodeReaderAt): the
-    /// plane eth_getStorageAt's flat read, the content-addressed code store and the mempool
-    /// snapshot consult on the OP lane.
+    /// Flat state view of the chain of @p blockHash (a window block or the finalized tip;
+    /// historical finalized heights below the tip return null): the plane eth_getStorageAt's
+    /// flat read, the content-addressed code store and the mempool snapshot consult on the
+    /// OP lane.
     virtual task::Task<std::shared_ptr<StateStorage>> stateStorageAt(
         crypto::HashType const& blockHash) = 0;
 };

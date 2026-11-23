@@ -123,89 +123,166 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         };
     }
 
-    // Head: any block of the unfinalized window or of the finalized ledger. Unknown → SYNCING
-    // (zero was INVALID above). A ledger block strictly below the finalized tip is a request
-    // to rewind finalized state, which the OP lane never does (D7): -38002. The tip itself is
-    // a legal head (restart: FCU(head=safe=finalized=tip), D1 §13.2).
-    auto head = co_await resolveBlock(forkchoiceState.headBlockHash);
-    if (!head.has_value())
+    std::optional<ResolvedBlock> head;
+    bool didFinalize = false;
+    while (true)
     {
-        co_return ForkchoiceUpdatedResult{
-            .payloadStatus =
-                makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
-            .payloadId = std::nullopt,
+        auto const epochBefore = m_fcuFinalizeEpoch.load(std::memory_order_acquire);
+        // Odd epoch means a finalizeUpTo is currently in flight; wait for m_fcuMutex to
+        // release instead of spinning or surfacing a transient resolution failure.
+        auto finalizedConcurrently = [&]() {
+            if ((epochBefore & 1U) == 0U &&
+                m_fcuFinalizeEpoch.load(std::memory_order_acquire) == epochBefore)
+            {
+                return false;
+            }
+            std::scoped_lock waitLock(m_fcuMutex);
+            return true;
         };
-    }
-    auto const finalizedTip = co_await finalizedTipNumber();
-    if (!head->inWindow && head->number < finalizedTip)
-    {
-        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
-                                  "Forkchoice head is below the finalized block; the finalized "
-                                  "chain does not rewind"});
-    }
-    // All-zero safe/finalized hashes are the Engine-API "not set" value: skip resolution and
-    // ancestry checks for that field (op-geth SetSafe/SetFinalized are only called for
-    // non-zero hashes). A non-zero unresolvable safe/finalized is InvalidForkchoiceState
-    // (op-geth); "canonical" for them means "on the head's ancestor chain", which for a
-    // window head walks the window and for the finalized part reads NUMBER_2_HASH.
-    bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
-    bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
-    std::optional<ResolvedBlock> safe;
-    std::optional<ResolvedBlock> finalized;
-    if (safeSet)
-    {
-        safe = co_await resolveBlock(forkchoiceState.safeBlockHash);
-    }
-    if (finalizedSet)
-    {
-        finalized = co_await resolveBlock(forkchoiceState.finalizedBlockHash);
-    }
-    if ((safeSet && !safe.has_value()) || (finalizedSet && !finalized.has_value()))
-    {
-        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
-                                  "Forkchoice safe or finalized block is unknown"});
-    }
-    bool const safeCanonical = !safeSet || co_await isOnChainOf(*head, *safe);
-    bool const finalizedCanonical = !finalizedSet || co_await isOnChainOf(*head, *finalized);
 
-    ResolvedForkchoice resolved{
-        .state = forkchoiceState,
-        .headNumber = head->number,
-        .safeNumber = safe ? std::optional(safe->number) : std::nullopt,
-        .finalizedNumber = finalized ? std::optional(finalized->number) : std::nullopt,
-        // A ledger block is canonical by construction (the backend holds finalized blocks
-        // only); a window block is vouched for by headKnown instead.
-        .headCanonical = !head->inWindow,
-        .payloadAttributesPresent = payloadAttributes != nullptr,
-        .safeCanonical = safeCanonical,
-        .finalizedCanonical = finalizedCanonical,
-        .headKnown = true,
-    };
-    // Throws InvalidForkchoiceState (-38002) on ordering / ancestry violations. A Rewind is
-    // a REAL head switch to an older block here (headKnown): the tracker moved, `latest`
-    // follows it, and attributes below build on that older head (D1 §11.3 derivation reorg).
-    auto const outcome = m_tracker.applyForkchoice(resolved);
-    if (outcome == ForkchoiceApplyResult::Rewind)
-    {
-        BCOS_LOG(INFO) << LOG_BADGE("OpEngineService") << LOG_DESC("forkchoice head rewound")
-                       << LOG_KV("head", forkchoiceState.headBlockHash.abridged())
-                       << LOG_KV("number", head->number);
-    }
-
-    // Finalized advancing into the window: merge tip..F and prune the side branches. Runs
-    // after the tracker accepted the triple, so a rejected FCU never finalizes anything.
-    if (finalized && finalized->inWindow)
-    {
-        requireDelegate();
-        bcos::Error::Ptr finalizeError;
-        m_delegate->finalizeUpTo(
-            finalized->hash, [&](bcos::Error::Ptr error) { finalizeError = std::move(error); });
-        if (finalizeError)
+        // Head: any block of the unfinalized window or of the finalized ledger. Unknown → SYNCING
+        // (zero was INVALID above). A ledger block strictly below the finalized tip is a request
+        // to rewind finalized state, which the OP lane never does (D7): -38002. The tip itself is
+        // a legal head (restart: FCU(head=safe=finalized=tip), D1 §13.2).
+        head = co_await resolveBlock(forkchoiceState.headBlockHash);
+        if (!head.has_value())
         {
-            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                      std::string("finalizing the unfinalized window failed: ") +
-                                      finalizeError->errorMessage()});
+            if (finalizedConcurrently())
+            {
+                continue;
+            }
+            co_return ForkchoiceUpdatedResult{
+                .payloadStatus =
+                    makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
+                .payloadId = std::nullopt,
+            };
         }
+        auto const finalizedTip = co_await finalizedTipNumber();
+        if (!head->inWindow && head->number < finalizedTip)
+        {
+            BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                      "Forkchoice head is below the finalized block; the finalized "
+                                      "chain does not rewind"});
+        }
+        // All-zero safe/finalized hashes are the Engine-API "not set" value: skip resolution and
+        // ancestry checks for that field (op-geth SetSafe/SetFinalized are only called for
+        // non-zero hashes). A non-zero unresolvable safe/finalized is InvalidForkchoiceState
+        // (op-geth); "canonical" for them means "on the head's ancestor chain", which for a
+        // window head walks the window and for the finalized part reads NUMBER_2_HASH.
+        bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
+        bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
+        std::optional<ResolvedBlock> safe;
+        std::optional<ResolvedBlock> finalized;
+        if (safeSet)
+        {
+            safe = co_await resolveBlock(forkchoiceState.safeBlockHash);
+        }
+        if (finalizedSet)
+        {
+            finalized = co_await resolveBlock(forkchoiceState.finalizedBlockHash);
+        }
+        if ((safeSet && !safe.has_value()) || (finalizedSet && !finalized.has_value()))
+        {
+            if (finalizedConcurrently())
+            {
+                continue;
+            }
+            BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                      "Forkchoice safe or finalized block is unknown"});
+        }
+        bool const safeCanonical = !safeSet || co_await isOnChainOf(*head, *safe);
+        bool const finalizedCanonical = !finalizedSet || co_await isOnChainOf(*head, *finalized);
+        // A concurrent same-chain finalization can move safe/finalized out of the window between
+        // resolveBlock and isOnChainOf; re-resolve cleanly instead of throwing a spurious -38002.
+        if ((!safeCanonical || !finalizedCanonical) && finalizedConcurrently())
+        {
+            continue;
+        }
+
+        ResolvedForkchoice resolved{
+            .state = forkchoiceState,
+            .headNumber = head->number,
+            .safeNumber = safe ? std::optional(safe->number) : std::nullopt,
+            .finalizedNumber = finalized ? std::optional(finalized->number) : std::nullopt,
+            // A ledger block is canonical by construction (the backend holds finalized blocks
+            // only); a window block is vouched for by headKnown instead.
+            .headCanonical = !head->inWindow,
+            .payloadAttributesPresent = payloadAttributes != nullptr,
+            .safeCanonical = safeCanonical,
+            .finalizedCanonical = finalizedCanonical,
+            .headKnown = true,
+        };
+        // Throws InvalidForkchoiceState (-38002) on ordering / ancestry violations before
+        // touching disk or the tracker.
+        EngineTracker::validateForkchoice(resolved);
+        if ((safe && !safe->inWindow && safe->number < finalizedTip) ||
+            (finalized && !finalized->inWindow && finalized->number < finalizedTip))
+        {
+            if (finalizedConcurrently())
+            {
+                continue;
+            }
+            BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                      "Forkchoice safe or finalized block is below the finalized "
+                                      "tip; the finalized chain does not rewind"});
+        }
+
+        // Serialize the synchronous finalize + tracker commit step (never held across co_await).
+        // If another FCU invoked finalizeUpTo while this call resolved its inputs, re-resolve
+        // against the updated finality boundary instead of committing a pruned or stale head.
+        ForkchoiceApplyResult outcome = ForkchoiceApplyResult::Applied;
+        {
+            std::unique_lock fcuLock(m_fcuMutex);
+            auto const windowMissing = [&](std::optional<ResolvedBlock> const& blk) {
+                return blk && blk->inWindow && m_delegate &&
+                       !m_delegate->unfinalizedBlock(blk->hash).has_value();
+            };
+            if (m_fcuFinalizeEpoch.load(std::memory_order_acquire) != epochBefore ||
+                windowMissing(head) || windowMissing(safe) || windowMissing(finalized))
+            {
+                continue;
+            }
+            // Finalized advancing into the window: merge tip..F and prune side branches BEFORE
+            // updating the tracker, so a failed finalization never mutates tracked head/safe/fin.
+            if (finalized && finalized->inWindow)
+            {
+                requireDelegate();
+                // Odd on entry, even on exit (including partial mid-chain failure) so concurrent
+                // FCUs that started before or during finalizeUpTo re-resolve cleanly.
+                struct EpochGuard
+                {
+                    std::atomic<std::uint64_t>& epoch;
+                    EpochGuard(std::atomic<std::uint64_t>& e) : epoch(e)
+                    {
+                        epoch.fetch_add(1, std::memory_order_acq_rel);
+                    }
+                    ~EpochGuard() { epoch.fetch_add(1, std::memory_order_release); }
+                } epochGuard{m_fcuFinalizeEpoch};
+                bcos::Error::Ptr finalizeError;
+                m_delegate->finalizeUpTo(finalized->hash,
+                    [&](bcos::Error::Ptr error) { finalizeError = std::move(error); });
+                if (finalizeError)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        OpExecutionInternalError{} << bcos::errinfo_comment{
+                            std::string("finalizing the unfinalized window failed: ") +
+                            finalizeError->errorMessage()});
+                }
+                didFinalize = true;
+            }
+            outcome = m_tracker.applyForkchoice(resolved);
+        }
+        if (outcome == ForkchoiceApplyResult::Rewind)
+        {
+            BCOS_LOG(INFO) << LOG_BADGE("OpEngineService") << LOG_DESC("forkchoice head rewound")
+                           << LOG_KV("head", forkchoiceState.headBlockHash.abridged())
+                           << LOG_KV("number", head->number);
+        }
+        break;
+    }
+
+    if (didFinalize)
+    {
         // Finalized transactions no longer count against the sender's pending budget.
         auto committed = m_globalStateStorage.forkCommitted();
         m_memPool.remove(committed);
@@ -428,7 +505,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         // nothing here; the candidate execution below rejects them.
         auto const blockGasLimit = static_cast<int64_t>(payloadAttributes.gasLimit.value());
         sealView.newMutable();
-        m_memPool.remove(sealView);
+        // Do not call m_memPool.remove(sealView) here: sealView may carry unfinalized window
+        // layers whose transactions must survive a rewind; seal() already skips nonces below
+        // accountNonce(sealView), and finalized transactions are pruned on finalizeUpTo.
         m_memPool.seal(engine_common::poolGasBudget(blockGasLimit, forcedEnvelopes,
                            *m_blockFactory->cryptoSuite()->hashImpl(), /*allowDeposit=*/true),
             sealView, std::back_inserter(sealedTxs));

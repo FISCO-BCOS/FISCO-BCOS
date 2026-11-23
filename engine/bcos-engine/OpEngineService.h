@@ -50,6 +50,7 @@
 #include <boost/lexical_cast.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -239,8 +240,9 @@ public:
     /// The chain view of a block hash (OpScheduler::viewAt): a window block's ancestor chain
     /// or the finalized tip, nullopt for anything else. buildOpPayload seals the mempool
     /// against the PARENT's chain through it (D1 §10.2: the seal view follows the head, not
-    /// the finalized plane), so MemPoolImpl::remove judges "already on chain" by the nonce the
-    /// unfinalized head chain carries. Unset = the finalized plane (test stubs).
+    /// the finalized plane), so MemPoolImpl::seal filters already-executed nonces against the
+    /// unfinalized head chain without evicting transactions before finality. Unset = the
+    /// finalized plane (test stubs).
     using ChainViewProvider = std::function<task::Task<std::optional<ViewType>>(h256 const&)>;
     void setChainViewProvider(ChainViewProvider provider)
     {
@@ -373,6 +375,10 @@ private:
     /// newPayload run-ahead bound over the finalized tip (blocks); beyond it newPayload
     /// answers SYNCING (backpressure: op-node retries, nothing is lost).
     int64_t m_unfinalizedWindow;
+    /// Serializes the synchronous finalize + tracker commit step of updateForkchoice (never
+    /// held across a co_await) so concurrent FCUs cannot apply a pruned or stale head.
+    std::mutex m_fcuMutex;
+    std::atomic<std::uint64_t> m_fcuFinalizeEpoch{0};
     /// See setChainViewProvider. Set once at wiring, before any request is served.
     ChainViewProvider m_chainViewProvider;
 };
