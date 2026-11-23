@@ -1,6 +1,6 @@
 #include <bcos-ledger/mpt/NodeDecoder.h>
-#include <bcos-ledger/mpt/NodeStorageCodec.h>
 #include <bcos-ledger/mpt/NodeEncoder.h>
+#include <bcos-ledger/mpt/NodeStorageCodec.h>
 #include <bcos-ledger/mpt/TrieNode.h>
 #include <boost/test/unit_test.hpp>
 #include <limits>
@@ -16,17 +16,16 @@ BOOST_AUTO_TEST_CASE(RoundTripPreservesRawNodeRlp)
     extension.child = {0xa0};
     extension.child.insert(extension.child.end(), 32, 0x44);
     auto const raw = encodeRaw(TrieNode{extension});
-    for (auto const& [refCount, deadline] : {std::pair<uint64_t, uint64_t>{1, 0},
-             {2, 100}, {std::numeric_limits<uint64_t>::max(),
-                          std::numeric_limits<uint64_t>::max()}})
+    for (auto const& [refCount, deadline] : {std::pair<uint64_t, uint64_t>{1, 0}, {2, 100},
+             {std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()}})
     {
         auto stored = encodeStoredNode(bcos::ref(raw), refCount, deadline);
         auto decoded = decodeStoredNode(bcos::ref(stored));
         BOOST_CHECK_EQUAL(decoded.refCount, refCount);
         BOOST_CHECK_EQUAL(decoded.deadline, deadline);
         BOOST_CHECK(decoded.rlp == raw);
-        BOOST_CHECK(std::get<ExtensionNode>(decodeNode(bcos::ref(decoded.rlp))).child ==
-                    extension.child);
+        BOOST_CHECK(
+            std::get<ExtensionNode>(decodeNode(bcos::ref(decoded.rlp))).child == extension.child);
     }
 }
 
