@@ -43,11 +43,10 @@
 #include "bcos-framework/protocol/BlobSchedule.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/MPTNodeReadStorage.h"
 #include "bcos-ledger/mpt/MPTPruner.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-single-consensus/SingleNodeConsensus.h"
-#include "bcos-storage/MPTNodeBatchReader.h"
-#include "bcos-storage/MPTNodeReadStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
@@ -459,11 +458,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         auto& pruneBackend = m_globalStateStorageInitializer->storage().latestBackend();
         auto pruner = std::make_shared<
-            ledger::mpt::MPTPruner<std::remove_reference_t<decltype(pruneBackend)>>>(pruneBackend,
-            m_nodeConfig->mptPruneWindow(),
-            [db = std::addressof(pruneBackend.rocksDB())](std::span<bcos::h256 const> hashes) {
-                return storage2::readMPTNodeBatch(*db, hashes);
-            });
+            ledger::mpt::MPTPruner<std::remove_reference_t<decltype(pruneBackend)>>>(
+            pruneBackend, m_nodeConfig->mptPruneWindow());
         // Startup restores persistent counts when metadata matches; otherwise init rebuilds them
         // from the window's state roots, then handles pre-existing
         // unreachable "/mpt/" garbage as storage.mpt_prune_sweep_garbage directs: off (the

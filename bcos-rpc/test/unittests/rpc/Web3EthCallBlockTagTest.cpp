@@ -21,9 +21,9 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/MPTNodeReadStorage.h>
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
-#include <bcos-storage/MPTNodeReadStorage.h>
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <future>

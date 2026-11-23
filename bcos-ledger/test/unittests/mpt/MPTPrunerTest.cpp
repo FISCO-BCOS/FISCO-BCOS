@@ -27,7 +27,6 @@
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/Trie.h>
 #include <bcos-storage/KeyPrefixes.h>
-#include <bcos-storage/MPTNodeBatchReader.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
 #include <rocksdb/db.h>
@@ -1400,12 +1399,7 @@ BOOST_FIXTURE_TEST_CASE(StartupSweepParallelShardsOnRocksDB, RocksDBSweepFixture
     std::vector<std::pair<uint64_t, uint64_t>> progress;
     std::atomic<uint64_t> inFlight{0};
     std::atomic<uint64_t> maxInFlight{0};
-    std::atomic<size_t> batchReads{0};
-    RocksPruner pruner(
-        backend, N, [db = rocksDB.get(), &batchReads](std::span<bcos::h256 const> hashes) {
-            ++batchReads;
-            return bcos::storage2::readMPTNodeBatch(*db, hashes);
-        });
+    RocksPruner pruner(backend, N);
     std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, root}};
     bcos::task::syncWait(pruner.init(1, /*executorVersion=*/0, rootLookupOf(roots),
         /*sweepGarbage=*/true, [&progress, &inFlight, &maxInFlight](uint64_t done, uint64_t total) {
@@ -1458,7 +1452,6 @@ BOOST_FIXTURE_TEST_CASE(StartupSweepParallelShardsOnRocksDB, RocksDBSweepFixture
     }
     BOOST_CHECK_EQUAL(countRowsInTable(backend, bcos::storage2::kMPTTable), live.size());
     BOOST_CHECK_NO_THROW(liveNodeHashes(nodes, root));
-    BOOST_CHECK_GT(batchReads.load(), 0U);
     // Phase 1 counted the live set over RocksDB too (MultiGet read path).
     for (auto const& hash : live)
     {
@@ -1466,15 +1459,12 @@ BOOST_FIXTURE_TEST_CASE(StartupSweepParallelShardsOnRocksDB, RocksDBSweepFixture
     }
 }
 
-BOOST_FIXTURE_TEST_CASE(StartupFastReaderFailsLoudOnMissingNode, RocksDBSweepFixture)
+BOOST_FIXTURE_TEST_CASE(StartupRebuildFailsLoudOnMissingNode, RocksDBSweepFixture)
 {
     RocksPruneBackend backend(*rocksDB, bcos::storage2::rocksdb::StateKeyResolver{},
         bcos::storage2::rocksdb::StateValueResolver{});
     writeMptActivation(backend, /*activation=*/0);
-    RocksPruner pruner(
-        backend, /*pruneWindow=*/2, [db = rocksDB.get()](std::span<bcos::h256 const> hashes) {
-            return bcos::storage2::readMPTNodeBatch(*db, hashes);
-        });
+    RocksPruner pruner(backend, /*pruneWindow=*/2);
     std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, makeHash(0x01)}};
     BOOST_CHECK_THROW(bcos::task::syncWait(pruner.init(
                           1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false)),

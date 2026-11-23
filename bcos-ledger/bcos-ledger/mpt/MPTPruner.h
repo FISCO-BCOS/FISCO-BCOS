@@ -174,7 +174,7 @@ struct SweepInlineCompletionCheck<Backend, true>
 ///    recovers only roots still on disk, so the walk stops there and the effective window
 ///    starts at the first surviving root.
 ///    Phases 1 and 2 share ONE traversal implementation (walkTrie): the stack, the batched
-///    node-row read (the injected RocksDB reader or the storage2::readSome fallback) and the
+///    node-row read (storage2::readSome, MultiGet on RocksDB) and the
 ///    descend rules live there once; each phase supplies only its per-node callback
 ///    (count-and-descend vs. dedup-against-m_counts-then-arm).
 ///  - Phase 3 (first-sweep of pre-existing garbage): scan the "/mpt/" table; a row in neither
@@ -231,8 +231,6 @@ public:
     /// features, so the callable need not distinguish. Aliased from the observer base so the
     /// rollback hook (coOnRollback) and the startup rebuild share one type.
     using StateRootLookup = CommitObserver::StateRootLookup;
-    using NodeBatchReader =
-        std::function<std::vector<std::optional<bcos::bytes>>(std::span<bcos::h256 const>)>;
 
     /// Called after each deleted chunk of the startup sweep: rows deleted so far, garbage rows
     /// found so far (the total is unknown until the scan finishes; the last call reports the
@@ -246,10 +244,8 @@ public:
     ///                        (no cache layer may sit between). Must outlive the pruner.
     /// @param pruneWindow     N: a node whose refcount hits 0 at block b becomes deletable once
     ///                        block b + N is committed.
-    MPTPruner(Backend& backend, int64_t pruneWindow, NodeBatchReader nodeBatchReader = {})
-      : m_backend(std::addressof(backend)),
-        m_pruneWindow(pruneWindow),
-        m_nodeBatchReader(std::move(nodeBatchReader))
+    MPTPruner(Backend& backend, int64_t pruneWindow)
+      : m_backend(std::addressof(backend)), m_pruneWindow(pruneWindow)
     {}
 
     /// Restore persistent pruning state at boot. A matching head and prune window loads only
@@ -1008,36 +1004,16 @@ private:
         {
             co_return result;
         }
-        if (m_nodeBatchReader)
+        auto keys = hashes | std::views::transform([](auto const& hash) {
+            return bcos::ledger::mptNodeStateKey(hash);
+        }) | std::ranges::to<std::vector>();
+        auto const entries = co_await bcos::storage2::readSome(*m_backend, std::move(keys));
+        for (size_t i = 0; i < entries.size(); ++i)
         {
-            auto const nodes = m_nodeBatchReader(hashes);
-            if (nodes.size() != hashes.size())
+            if (entries[i])
             {
-                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                          "MPT pruning: node batch reader returned a different "
-                                          "result count"));
-            }
-            for (size_t i = 0; i < nodes.size(); ++i)
-            {
-                if (nodes[i])
-                {
-                    result.emplace(hashes[i], decodeStoredNode(bcos::ref(*nodes[i])));
-                }
-            }
-        }
-        else
-        {
-            auto keys = hashes | std::views::transform([](auto const& hash) {
-                return bcos::ledger::mptNodeStateKey(hash);
-            }) | std::ranges::to<std::vector>();
-            auto const entries = co_await bcos::storage2::readSome(*m_backend, std::move(keys));
-            for (size_t i = 0; i < entries.size(); ++i)
-            {
-                if (entries[i])
-                {
-                    auto const raw = entries[i]->get();
-                    result.emplace(hashes[i], decodeStoredNode(raw));
-                }
+                auto const raw = entries[i]->get();
+                result.emplace(hashes[i], decodeStoredNode(raw));
             }
         }
         co_return result;
@@ -1343,10 +1319,7 @@ private:
                         {
                             way.keyHashes.push_back(hash);
                             way.decodeAccount.push_back(false);
-                            if (!m_nodeBatchReader)
-                            {
-                                way.keys.push_back(bcos::ledger::mptNodeStateKey(hash));
-                            }
+                            way.keys.push_back(bcos::ledger::mptNodeStateKey(hash));
                         }
                         way.decodeAccount[it->second] = way.decodeAccount[it->second] || isAccount;
                         way.accepted.emplace_back(hash, isAccount);
@@ -1369,60 +1342,28 @@ private:
                     way.fetch.run([this, &way] {
                         try
                         {
-                            if (m_nodeBatchReader)
+                            auto const readStart = std::chrono::steady_clock::now();
+                            auto const entries = bcos::task::tbb::syncWait(
+                                bcos::storage2::readSome(*m_backend, std::move(way.keys)));
+                            way.readMicros = elapsedMicros(readStart);
+                            auto const decodeStart = std::chrono::steady_clock::now();
+                            for (size_t slot = 0; slot < entries.size(); ++slot)
                             {
-                                auto const readStart = std::chrono::steady_clock::now();
-                                auto const nodes = m_nodeBatchReader(way.keyHashes);
-                                way.readMicros = elapsedMicros(readStart);
-                                auto const decodeStart = std::chrono::steady_clock::now();
-                                if (nodes.size() != way.keyHashes.size())
+                                auto const& entry = entries[slot];
+                                if (!entry)
                                 {
                                     BOOST_THROW_EXCEPTION(
                                         MPTInvariantViolation{} << bcos::errinfo_comment(
-                                            "MPT pruning rebuild: node batch reader returned "
-                                            "a different result count"));
+                                            "MPT pruning rebuild: reachable node row missing "
+                                            "from the committed backend (hash " +
+                                            way.keyHashes[slot].abridged() + ")"));
                                 }
-                                for (size_t slot = 0; slot < nodes.size(); ++slot)
-                                {
-                                    if (!nodes[slot])
-                                    {
-                                        BOOST_THROW_EXCEPTION(
-                                            MPTInvariantViolation{} << bcos::errinfo_comment(
-                                                "MPT pruning rebuild: reachable node row missing "
-                                                "from the committed backend (hash " +
-                                                way.keyHashes[slot].abridged() + ")"));
-                                    }
-                                    auto stored = decodeStoredNode(bcos::ref(*nodes[slot]));
-                                    way.decoded[slot] = decodeNodeReferences(
-                                        bcos::ref(stored.rlp), way.decodeAccount[slot]);
-                                }
-                                way.decodeMicros = elapsedMicros(decodeStart);
+                                auto const raw = entry->get();
+                                auto stored = decodeStoredNode(raw);
+                                way.decoded[slot] = decodeNodeReferences(
+                                    bcos::ref(stored.rlp), way.decodeAccount[slot]);
                             }
-                            else
-                            {
-                                auto const readStart = std::chrono::steady_clock::now();
-                                auto const entries = bcos::task::tbb::syncWait(
-                                    bcos::storage2::readSome(*m_backend, std::move(way.keys)));
-                                way.readMicros = elapsedMicros(readStart);
-                                auto const decodeStart = std::chrono::steady_clock::now();
-                                for (size_t slot = 0; slot < entries.size(); ++slot)
-                                {
-                                    auto const& entry = entries[slot];
-                                    if (!entry)
-                                    {
-                                        BOOST_THROW_EXCEPTION(
-                                            MPTInvariantViolation{} << bcos::errinfo_comment(
-                                                "MPT pruning rebuild: reachable node row missing "
-                                                "from the committed backend (hash " +
-                                                way.keyHashes[slot].abridged() + ")"));
-                                    }
-                                    auto const raw = entry->get();
-                                    auto stored = decodeStoredNode(raw);
-                                    way.decoded[slot] = decodeNodeReferences(
-                                        bcos::ref(stored.rlp), way.decodeAccount[slot]);
-                                }
-                                way.decodeMicros = elapsedMicros(decodeStart);
-                            }
+                            way.decodeMicros = elapsedMicros(decodeStart);
                         }
                         catch (...)
                         {
@@ -1552,7 +1493,6 @@ private:
 
     Backend* m_backend;
     int64_t m_pruneWindow;
-    NodeBatchReader m_nodeBatchReader;
     bool m_allowRebuild = true;
     // The chain's executor_version, captured by init and replayed by coOnRollback's rebuild
     // (the lane — legacy vs Ethereum — decides firstMptBlock; it is genesis-fixed, so the

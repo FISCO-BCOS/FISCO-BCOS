@@ -26,9 +26,8 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-ledger/mpt/MPTNodeReadStorage.h>
 #include <bcos-storage/KeyPrefixes.h>
-#include <bcos-storage/MPTNodeBatchReader.h>
-#include <bcos-storage/MPTNodeReadStorage.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
 #include <boost/filesystem.hpp>
@@ -134,26 +133,6 @@ BOOST_AUTO_TEST_CASE(readSomeKeepsOrderAndGaps)
         BOOST_CHECK(!values[1].has_value());  // negative control: the gap stays a gap
         BOOST_REQUIRE(values[2].has_value());
         BOOST_CHECK(*values[2] == nodeRlpB());
-    }());
-}
-
-BOOST_AUTO_TEST_CASE(batchReaderKeepsOrderAndGaps)
-{
-    task::syncWait([this]() -> task::Task<void> {
-        StateRocksDB storage(*rocksDB, StateKeyResolver{}, StateValueResolver{});
-        co_await writeNodeRow(storage, hashA, nodeRlpA());
-        co_await writeNodeRow(storage, hashB, nodeRlpB());
-
-        std::vector<h256> keys{hashA, hashMissing, hashB};
-        auto values = storage2::readMPTNodeBatch(*rocksDB, keys);
-        BOOST_REQUIRE_EQUAL(values.size(), 3U);
-        BOOST_REQUIRE(values[0].has_value());
-        BOOST_CHECK(bcos::storage2::decodeStoredNode(bcos::ref(*values[0])).rlp == nodeRlpA());
-        BOOST_CHECK(!values[1].has_value());
-        BOOST_REQUIRE(values[2].has_value());
-        BOOST_CHECK(bcos::storage2::decodeStoredNode(bcos::ref(*values[2])).rlp == nodeRlpB());
-        std::vector<h256> empty;
-        BOOST_CHECK(storage2::readMPTNodeBatch(*rocksDB, empty).empty());
     }());
 }
 
