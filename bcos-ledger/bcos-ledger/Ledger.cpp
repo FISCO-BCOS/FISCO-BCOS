@@ -39,6 +39,7 @@
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include "mpt/Constants.h"
+#include "mpt/NodeStorageCodec.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -1992,7 +1993,7 @@ bool Ledger::buildGenesisBlock(
             for (auto& [nodeHash, nodeRlp] : ethStateTrie.nodes)
             {
                 Entry nodeEntry;
-                nodeEntry.set(std::move(nodeRlp));
+                nodeEntry.set(mpt::encodeStoredNode(bcos::ref(nodeRlp), 1));
                 task::syncWait(storage2::writeOne(
                     *m_stateStorage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry)));
             }

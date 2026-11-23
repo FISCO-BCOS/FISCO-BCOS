@@ -46,6 +46,7 @@
 #include "bcos-ledger/mpt/MPTPruner.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-single-consensus/SingleNodeConsensus.h"
+#include "bcos-storage/MPTNodeBatchReader.h"
 #include "bcos-storage/MPTNodeReadStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
@@ -450,8 +451,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // MPT pruning (storage.mpt_prune_window; pathdb spec §4.8): ONE pruner instance shared by
     // every baseline scheduler variant built below — MultiVersionScheduler activates exactly
-    // one at a time, and the pruner's state (reference counts and the delete queue) is fully
-    // in-memory, so sharing carries no cross-version conflict. Every pruner read hits
+    // one at a time, so sharing carries no cross-version conflict. Every pruner read hits
     // latestBackend() DIRECTLY: no cache layer may sit between the pruner and the physical
     // rows (MPTPruner.h contract). -1 (the default) disables pruning entirely: the schedulers
     // keep their built-in NoopCommitObserver.
@@ -459,10 +459,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         auto& pruneBackend = m_globalStateStorageInitializer->storage().latestBackend();
         auto pruner = std::make_shared<
-            ledger::mpt::MPTPruner<std::remove_reference_t<decltype(pruneBackend)>>>(
-            pruneBackend, m_nodeConfig->mptPruneWindow());
-        // Startup rebuild: nothing pruning-related is persisted, so init re-derives the counts
-        // and the delete queue from the window's state roots, then handles pre-existing
+            ledger::mpt::MPTPruner<std::remove_reference_t<decltype(pruneBackend)>>>(pruneBackend,
+            m_nodeConfig->mptPruneWindow(),
+            [db = std::addressof(pruneBackend.rocksDB())](std::span<bcos::h256 const> hashes) {
+                return storage2::readMPTNodeBatch(*db, hashes);
+            });
+        // Startup restores persistent counts when metadata matches; otherwise init rebuilds them
+        // from the window's state roots, then handles pre-existing
         // unreachable "/mpt/" garbage as storage.mpt_prune_sweep_garbage directs: off (the
         // default) skips the scan entirely (init only logs a hint); on deletes the garbage in
         // SWEEP_DELETE_CHUNK batches while scanning (MPTPruner.h Phase 3). Throws
@@ -479,7 +482,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             [](uint64_t done, uint64_t total) {
                 INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning: garbage sweep progress")
                                       << LOG_KV("deleted", done) << LOG_KV("total", total);
-            }));
+            },
+            /*forceRebuild=*/false, m_nodeConfig->mptPruneAllowRebuild()));
 
         INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning enabled")
                               << LOG_KV("window", m_nodeConfig->mptPruneWindow())

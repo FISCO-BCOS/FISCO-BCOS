@@ -17,6 +17,7 @@
  * @brief Unit tests for TrieNode RLP decoding — round-trips against NodeEncoder (spec §5.5)
  */
 
+#include <bcos-ledger/mpt/Account.h>
 #include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/NodeDecoder.h>
 #include <bcos-ledger/mpt/NodeEncoder.h>
@@ -153,6 +154,69 @@ BOOST_AUTO_TEST_CASE(RoundTripBranchMixedChildren)
     BOOST_CHECK(got.children[10].inlineRef().toBytes() == tinyRaw);
     BOOST_CHECK(got.value.empty());
     BOOST_CHECK(encodeRaw(decoded) == raw);
+}
+
+BOOST_AUTO_TEST_CASE(DecodeReferencesOnly)
+{
+    ExtensionNode ext;
+    ext.sharedNibbles = {3, 4, 5};
+    ext.child = decoderHashChildRef(0x77);
+    bcos::bytes extRaw = encodeRaw(TrieNode{ext});
+    auto extReferences = decodeNodeReferences(bcos::ref(extRaw), false);
+    BOOST_REQUIRE_EQUAL(extReferences.children.size(), 1U);
+    BOOST_CHECK_EQUAL(extReferences.children[0], bcos::h256(bcos::bytes(32, 0x77)));
+    BOOST_CHECK(!extReferences.accountLeaf);
+
+    BranchNode branch;
+    branch.children[3].setHash(
+        bcos::h256("0x2222222222222222222222222222222222222222222222222222222222222222"));
+    LeafNode tiny;
+    tiny.keyNibbles = {7};
+    tiny.value = {0x01};
+    bcos::bytes tinyRaw = encodeRaw(TrieNode{tiny});
+    branch.children[10].setInline(bcos::ref(tinyRaw));
+    bcos::bytes branchRaw = encodeRaw(TrieNode{branch});
+    auto branchReferences = decodeNodeReferences(bcos::ref(branchRaw), false);
+    BOOST_REQUIRE_EQUAL(branchReferences.children.size(), 1U);
+    BOOST_CHECK(branchReferences.children[0] == branch.children[3].hash());
+
+    Account account;
+    account.storageRoot =
+        bcos::h256("0x3333333333333333333333333333333333333333333333333333333333333333");
+    LeafNode accountLeaf;
+    accountLeaf.keyNibbles = {1, 2};
+    accountLeaf.value = account.encode();
+    bcos::bytes accountRaw = encodeRaw(TrieNode{accountLeaf});
+    auto accountReferences = decodeNodeReferences(bcos::ref(accountRaw), true);
+    BOOST_CHECK(accountReferences.accountLeaf);
+    BOOST_REQUIRE(accountReferences.storageRoot.has_value());
+    BOOST_CHECK_EQUAL(*accountReferences.storageRoot, account.storageRoot);
+
+    auto storageReferences = decodeNodeReferences(bcos::ref(accountRaw), false);
+    BOOST_CHECK(!storageReferences.accountLeaf);
+    BOOST_CHECK(!storageReferences.storageRoot.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(DecodeReferencesRejectsMalformedInput)
+{
+    BOOST_CHECK_EXCEPTION(
+        decodeNodeReferences(bcos::ref(bcos::bytes{0x83, 0x01, 0x02, 0x03}), false), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "not a node list"); });
+    BOOST_CHECK_EXCEPTION(decodeNodeReferences(bcos::ref(bcos::bytes{0xc5, 0x01, 0x02}), false),
+        MPTDecodeError, [](auto const& e) { return errinfoContains(e, "malformed RLP header"); });
+    BOOST_CHECK_EXCEPTION(
+        decodeNodeReferences(bcos::ref(bcos::bytes{0xc3, 0x80, 0x80, 0x80}), false), MPTDecodeError,
+        [](auto const& e) { return errinfoContains(e, "item count"); });
+}
+
+BOOST_AUTO_TEST_CASE(DecodeReferencesRejectsInvalidAccountOnlyForAccountTrie)
+{
+    LeafNode leaf;
+    leaf.keyNibbles = {1};
+    leaf.value = {0x01};
+    bcos::bytes raw = encodeRaw(TrieNode{leaf});
+    BOOST_CHECK_NO_THROW(decodeNodeReferences(bcos::ref(raw), false));
+    BOOST_CHECK_THROW(decodeNodeReferences(bcos::ref(raw), true), MPTDecodeError);
 }
 
 // Malformed input: a non-empty top-level string is not a valid node.

@@ -18,8 +18,7 @@
  *        PRODUCTION persistence stack (FullChainFixture: real RocksDB, real Ledger, real
  *        prewrite/merge). A live MPTPruner (window N=2) replaces the probe observer via
  *        setMPTCommitObserver and blocks are driven through executeBlock+commitBlock:
- *          (a) the pruner keeps ALL state in memory — no /sys/mpt_prune_* metadata row ever
- *              lands on the backend;
+ *          (a) counts and deletion metadata persist inline and in the prune tables;
  *          (b) past the window the committed "/mpt/" node-row count plateaus (bounded);
  *          (c) roots inside [head-N, head] keep their nodes, older roots are deleted;
  *          (d) a fresh pruner over the same backend (the restart path) REBUILDS the in-memory
@@ -69,7 +68,7 @@ bool nodeRowInBackend(FCBackend& backend, h256 const& hash)
     return task::syncWait(storage2::existsOne(backend, bcos::ledger::mptNodeStateKey(hash)));
 }
 
-/// Rows under any "/sys/mpt_prune_*" table — the in-memory pruner must never write one.
+/// Rows under any "/sys/mpt_prune_*" table — persistent queue and head metadata.
 size_t pruneMetadataRowCount(FCBackend& backend)
 {
     return task::syncWait([](FCBackend& backend) -> task::Task<size_t> {
@@ -121,11 +120,11 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoCommitPath)
 
         if (number >= 2)  // MPT blocks only; block 1 is XOR and fires no observer
         {
-            // (a) The in-memory count of the just-committed root: exactly one reference, no
-            // deadline — and no metadata row may have landed with any block.
+            // (a) The persistent count of the just-committed root: exactly one reference, no
+            // deadline — and the queue/head metadata is present.
             BOOST_CHECK(pruner->countOf(header->stateRoot()) == std::optional<uint64_t>{1});
             BOOST_CHECK(!pruner->deadlineOf(header->stateRoot()).has_value());
-            BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
+            BOOST_CHECK_GT(pruneMetadataRowCount(backend), 0U);
         }
         roots[number] = header->stateRoot();
         nodeCounts[number] = fixture.backendNodeCount();
@@ -185,7 +184,7 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoCommitPath)
             "in-window root of block " + std::to_string(number) + " was pruned after restart");
     }
     BOOST_CHECK_EQUAL(fixture.backendNodeCount(), nodeCounts[8]);  // plateau held
-    BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
+    BOOST_CHECK_GT(pruneMetadataRowCount(backend), 0U);
 }
 
 BOOST_AUTO_TEST_CASE(midChainEnableRebuildsFromStateRoots)
@@ -234,7 +233,7 @@ BOOST_AUTO_TEST_CASE(midChainEnableRebuildsFromStateRoots)
         BOOST_CHECK_MESSAGE(!nodeRowInBackend(backend, roots[number]),
             "out-of-window root of block " + std::to_string(number) + " still on disk");
     }
-    BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
+    BOOST_CHECK_GT(pruneMetadataRowCount(backend), 0U);
 }
 
 BOOST_AUTO_TEST_CASE(batchedRebuildWithSharedStorageTrie)

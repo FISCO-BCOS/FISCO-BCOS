@@ -14,9 +14,9 @@
  *  limitations under the License.
  *
  * @file MPTPruner.h
- * @brief MPTPruner — the reference-counting, windowed-deletion CommitObserver with fully
- *        in-memory counts: rebuilt by a reachability walk over the recent state roots at
- *        every startup; only expired "/mpt/" node deletions land in the block's WriteBatch
+ * @brief MPTPruner — reference-counting, windowed deletion with counts inline in the
+ *        node storage RLP, a persistent deadline queue, and on-demand batched reads;
+ *        node updates, deletions and queue changes share the block's WriteBatch
  *        (spec §4.8, §5.6)
  */
 #pragma once
@@ -26,6 +26,7 @@
 #include "Constants.h"
 #include "Errors.h"
 #include "NodeDecoder.h"
+#include "NodeStorageCodec.h"
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/FeaturesStorage.h>
 #include <bcos-framework/storage/Entry.h>
@@ -44,12 +45,15 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <functional>
 #include <map>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -116,19 +120,15 @@ struct SweepInlineCompletionCheck<Backend, true>
 /// Reference-counting MPT pruning (spec §4.8), one instance per chain over the committed-state
 /// backend (production: GlobalStateStorage::latestBackend()).
 ///
-/// All pruning state is IN MEMORY — no refcount rows, queue rows, watermarks or seed markers are
-/// persisted anywhere:
-///  - m_counts:  hash → {count, deadline?}. One reference CREATION (each emission of the node by
-///    a trie build — MPTDeltaLayer::refCountDeltas, NOT the deduplicated newNodes map) is +1; one
-///    obsoletion is −1, saturating at 0. A count dropping to 0 schedules the deletion at
-///    blockNumber + pruneWindow; rising back above 0 before then revokes the schedule.
-///  - m_pending: deadline → hashes, the delete queue. Confirmed deletions erase the Entry (a
-///    later revival re-creates it via its +1).
-///
-/// Because nothing is persisted, every startup REBUILDS both tables by walking the committed
-/// tries (init): the window guarantee keeps the roots of [head−N, head] complete on disk, so the
-/// walk is always resolvable. A restart therefore self-heals any drift, and enabling pruning on
-/// an existing chain needs no seeding or guard — the rebuild covers whatever history is on disk.
+/// Persistent pruning state:
+///  - each "/mpt/" row stores [refCount, deadline, rawNodeRlp]. The hash is still computed only
+///    over rawNodeRlp; the metadata never changes the state root.
+///  - the deadline queue is persisted separately and cached as m_pending. Node and queue updates
+///    share the block's WriteBatch. Head root, tracked count and prune window are also persisted.
+///  - m_counts is used only as a temporary reachability map during an explicit rebuild. Normal
+///    startup restores metadata and the queue, then reads counts on demand — it does not populate
+///    a full in-memory count map. A missing/mismatched head, changed window or rollback forces a
+///    reachability rebuild and writes its result back to the node rows.
 ///
 /// Per block, coPreparePruneRows runs inside the commit coroutine under the commit mutex, BEFORE
 /// the block's storage layers merge. It never touches m_counts/m_pending directly: the block's
@@ -153,7 +153,8 @@ struct SweepInlineCompletionCheck<Backend, true>
 /// block o > r, so its deletion is consumed at o + N >= r + N + 1 — every state root in
 /// [head − N, head] keeps its full node set on disk (N + 1 provable states).
 ///
-/// Startup rebuild (init), given head = currentBlock and the first MPT block firstMptBlock
+/// Explicit rebuild (forceRebuild, missing/mismatched metadata, or a garbage sweep), given head
+/// = currentBlock and the first MPT block firstMptBlock
 /// (scenario B/L2: genesis, block 0; scenario A: feature_mpt_state_root's activation block + 1 —
 /// the activation block itself still commits a legacy XOR root), window start
 /// S = max(firstMptBlock, head−N):
@@ -173,9 +174,9 @@ struct SweepInlineCompletionCheck<Backend, true>
 ///    recovers only roots still on disk, so the walk stops there and the effective window
 ///    starts at the first surviving root.
 ///    Phases 1 and 2 share ONE traversal implementation (walkTrie): the stack, the batched
-///    node-row read (storage2::readSome — MultiGet underneath) and the descend rules live
-///    there once; each phase supplies only its per-node callback (count-and-descend vs.
-///    dedup-against-m_counts-then-arm).
+///    node-row read (the injected RocksDB reader or the storage2::readSome fallback) and the
+///    descend rules live there once; each phase supplies only its per-node callback
+///    (count-and-descend vs. dedup-against-m_counts-then-arm).
 ///  - Phase 3 (first-sweep of pre-existing garbage): scan the "/mpt/" table; a row in neither
 ///    the counts nor the queue is unreachable garbage (historical leak, or nodes written before
 ///    pruning was enabled). Driven by storage.mpt_prune_sweep_garbage: disabled (the default)
@@ -230,6 +231,8 @@ public:
     /// features, so the callable need not distinguish. Aliased from the observer base so the
     /// rollback hook (coOnRollback) and the startup rebuild share one type.
     using StateRootLookup = CommitObserver::StateRootLookup;
+    using NodeBatchReader =
+        std::function<std::vector<std::optional<bcos::bytes>>(std::span<bcos::h256 const>)>;
 
     /// Called after each deleted chunk of the startup sweep: rows deleted so far, garbage rows
     /// found so far (the total is unknown until the scan finishes; the last call reports the
@@ -243,24 +246,29 @@ public:
     ///                        (no cache layer may sit between). Must outlive the pruner.
     /// @param pruneWindow     N: a node whose refcount hits 0 at block b becomes deletable once
     ///                        block b + N is committed.
-    MPTPruner(Backend& backend, int64_t pruneWindow)
-      : m_backend(std::addressof(backend)), m_pruneWindow(pruneWindow)
+    MPTPruner(Backend& backend, int64_t pruneWindow, NodeBatchReader nodeBatchReader = {})
+      : m_backend(std::addressof(backend)),
+        m_pruneWindow(pruneWindow),
+        m_nodeBatchReader(std::move(nodeBatchReader))
     {}
 
-    /// Rebuild the in-memory counts and delete queue from the committed state (see the class
-    /// comment for the three phases). Runs synchronously at boot, before the scheduler starts
-    /// committing — no concurrency. No persistence, no startup guard: any chain state with the
-    /// window's roots intact rebuilds correctly. @p sweepGarbage mirrors
+    /// Restore persistent pruning state at boot. A matching head and prune window loads only
+    /// metadata and the deadline queue; otherwise the three rebuild phases run synchronously
+    /// before the scheduler starts committing. @p forceRebuild forces that reachability walk;
+    /// @p allowRebuild=false refuses it with an actionable error instead of allocating the map.
+    /// @p sweepGarbage mirrors
     /// storage.mpt_prune_sweep_garbage: false skips the Phase-3 garbage scan entirely (only an
     /// informational hint is logged), true deletes the unreachable rows while scanning.
     /// @throws MPTInvariantViolation when a
     /// reachable node row is missing (the trie is the source of truth — fail loud, same
     /// convention as Trie.h) or the head header carries no root.
     bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock, int64_t executorVersion,
-        StateRootLookup stateRootAt, bool sweepGarbage, GarbageProgress progress = {})
+        StateRootLookup stateRootAt, bool sweepGarbage, GarbageProgress progress = {},
+        bool forceRebuild = false, bool allowRebuild = true)
     {
         m_watermark.store(currentBlock, std::memory_order_relaxed);
         m_executorVersion = executorVersion;
+        m_allowRebuild = allowRebuild;
 
         bcos::ledger::Features features;
         co_await features.readFromStorage(*m_backend, currentBlock);
@@ -299,6 +307,32 @@ public:
                     std::to_string(currentBlock)));
         }
 
+        m_headRoot = *headRoot;
+        auto const metadata = co_await readMetadataState(*headRoot);
+        if ((forceRebuild || sweepGarbage || !metadata.present || !metadata.matches) &&
+            !allowRebuild)
+        {
+            BOOST_THROW_EXCEPTION(
+                MPTInvariantViolation{} << bcos::errinfo_comment(
+                    "MPT pruning: reference-count rebuild requires a full reachability walk "
+                    "and a large temporary in-memory map. Set "
+                    "storage.mpt_prune_allow_rebuild=true and restart to allow it, or set "
+                    "storage.mpt_prune_window=-1 to disable pruning"));
+        }
+        m_counts.clear();
+        m_pending.clear();
+        if (!forceRebuild && !sweepGarbage && metadata.present && metadata.matches)
+        {
+            m_trackedCount = metadata.tracked;
+            co_await loadQueue();
+            MPT_PRUNER_LOG(INFO) << "MPT pruning: restored persistent reference counts"
+                                 << LOG_KV("head", currentBlock)
+                                 << LOG_KV("tracked", m_trackedCount)
+                                 << LOG_KV("scheduled", pendingCount());
+            co_return;
+        }
+
+        m_trackedCount = 0;
         // Phase 1: count the head state's references.
         MPT_PRUNER_LOG(INFO) << "MPT pruning: rebuild phase 1 — counting the head state's "
                                 "references (a full trie walk, progress logged every "
@@ -348,6 +382,8 @@ public:
                                  << LOG_KV("scheduled", pendingCount());
         }
 
+        co_await persistRebuild(*headRoot);
+
         // Phase 3: unreachable-garbage sweep. With the sweep disabled (the config default) the
         // scan is SKIPPED outright — even counting the garbage would cost the full-table
         // "/mpt/" scan the option exists to avoid on large chains. The hint is logged
@@ -367,6 +403,7 @@ public:
                                  << LOG_KV("tracked", m_counts.size())
                                  << LOG_KV("scheduled", pendingCount())
                                  << LOG_KV("sweepGarbage", false);
+            m_counts.clear();
             co_return;
         }
         // sweepGarbage=true: scan the "/mpt/" table for unreachable rows (never counted, never
@@ -523,40 +560,26 @@ public:
                                     garbageDeleted.load(std::memory_order_relaxed))
                              << LOG_KV("sweepGarbage", sweepGarbage);
         m_lastSweepDeleted = garbageDeleted.load(std::memory_order_relaxed);
+        m_counts.clear();
     }
 
-    /// The pruning rows for @p blockNumber: only the deletions of expired nodes — pruning keeps
-    /// no metadata on disk. Pure in-memory computation plus no reads; issues no writes itself.
+    /// The pruning rows for @p blockNumber: node/metadata upserts, expired deletions and queue
+    /// changes, computed from batched reads of only the affected nodes.
     /// IDEMPOTENT under commit retry: the block's effects are staged on the m_staged* overlay
-    /// and land on m_counts/m_pending only in onCommit (which the commit flow calls after the
-    /// block's WriteBatch landed), so a retried block recomputes from the pre-block state and
+    /// and written by the caller. onCommit updates only the in-memory queue and watermark after
+    /// the block's WriteBatch landed, so a retried prepare recomputes from the pre-block state and
     /// produces the identical batch — applying the refCountDeltas twice would schedule (and
     /// eventually delete) nodes a parallel trie still references.
     bcos::task::Task<PruneRowBatch> coPreparePruneRows(
         bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& delta) override
     {
         PruneRowBatch out;
-        // Fresh overlay per prepare; entries it does not touch read through to the base tables.
-        // A previous uncommitted overlay (a failed commit whose retry this is) is DISCARDED —
-        // the retry re-derives everything from the pre-block state.
+        m_originalCounts.clear();
+        m_stagedRaw.clear();
         m_stagedCounts.clear();
         m_stagedDeadlineErases.clear();
         m_stagedDeadlineInserts.clear();
 
-        // A delta that changed nodes but carries an EMPTY refCountDeltas means the tally was
-        // never kept (a build run with trackRefCounts=false — production avoids this via
-        // needsRefCountDeltas — so reaching here is a producer WIRING bug). The set reading
-        // this would fall back to (+1 per newNodes hash, −1 per obsoleted/intraBlock hash)
-        // cannot see duplicate emissions: content-addressed nodes shared across this block's
-        // tries are created once per referencing trie but appear once in the deduplicated
-        // newNodes map, so creations would be under-counted and a later obsoletion would
-        // delete a node another trie still references (MPTDeltaLayer::refCountDeltas'
-        // comment). Fail LOUD, not skip: skipping is not a pure leak either — nodes born in
-        // the skipped block stay uncounted forever, so their later obsoletion could still
-        // delete a live node. Throwing fails this block's commit (coPreparePruneRows is
-        // co_awaited on the BaselineScheduler commit path), surfacing the bug on the first
-        // block it affects. A fully empty delta is the normal empty block and passes through
-        // silently.
         if (delta.refCountDeltas.empty() &&
             (!delta.newNodes.empty() || !delta.obsoletedNodes.empty() ||
                 !delta.intraBlockObsoleted.empty()))
@@ -574,16 +597,15 @@ public:
         }
 
         auto const horizon = static_cast<uint64_t>(blockNumber);
-
-        // Seed the overlay with a copy of every base entry the block can touch: the movements'
-        // hashes, plus every hash sitting in an expired queue bucket (the consumption re-check
-        // below reads those entries as updated by this block).
+        std::unordered_set<bcos::h256, H256FastHash> required;
         for (auto const& [hash, movement] : delta.refCountDeltas)
         {
-            if (auto const it = m_counts.find(hash); it != m_counts.end())
-            {
-                m_stagedCounts.emplace(hash, it->second);
-            }
+            required.insert(hash);
+        }
+        for (auto const& [hash, raw] : delta.newNodes)
+        {
+            required.insert(hash);
+            m_stagedRaw[hash] = raw;
         }
         for (auto const& [deadline, bucket] : m_pending)
         {
@@ -591,17 +613,25 @@ public:
             {
                 break;
             }
-            for (auto const& hash : bucket)
+            required.insert(bucket.begin(), bucket.end());
+        }
+        for (auto const& hash : required)
+        {
+            m_stagedCounts[hash] = {};
+        }
+        auto storedNodes = co_await readStoredNodes(
+            required | std::views::transform([](auto const& hash) { return hash; }) |
+            std::ranges::to<std::vector>());
+        for (auto& [hash, stored] : storedNodes)
+        {
+            Entry entry{.count = stored.refCount, .deadline = {}};
+            if (stored.deadline != 0)
             {
-                if (m_stagedCounts.contains(hash))
-                {
-                    continue;
-                }
-                if (auto const it = m_counts.find(hash); it != m_counts.end())
-                {
-                    m_stagedCounts.emplace(hash, it->second);
-                }
+                entry.deadline = stored.deadline;
             }
+            m_originalCounts.emplace(hash, entry);
+            m_stagedCounts[hash] = entry;
+            m_stagedRaw[hash] = std::move(stored.rlp);
         }
 
         // Apply the block's reference movements ON THE OVERLAY. A node this block revived
@@ -649,16 +679,7 @@ public:
                 // deadline == this entry's deadline confirms the schedule was never revoked or
                 // re-armed (a re-armed node carries a NEWER deadline, mismatching this stale
                 // entry).
-                Entry const* entry = nullptr;
-                if (auto const stagedIt = m_stagedCounts.find(hash);
-                    stagedIt != m_stagedCounts.end())
-                {
-                    entry = std::addressof(stagedIt->second);
-                }
-                else if (auto const baseIt = m_counts.find(hash); baseIt != m_counts.end())
-                {
-                    entry = std::addressof(baseIt->second);
-                }
+                Entry const* entry = std::addressof(m_stagedCounts[hash]);
                 bool const confirmed = entry != nullptr && entry->count == 0 &&
                                        entry->deadline == deadline &&
                                        // Unreachable under correct accounting (an emission this
@@ -702,6 +723,56 @@ public:
             }
         }
 
+        for (auto const& [deadline, hashes] : m_stagedDeadlineErases)
+        {
+            for (auto const& hash : hashes)
+            {
+                out.queueDeletions.push_back(queueStateKey(deadline, hash));
+            }
+        }
+        for (auto const& [deadline, hashes] : m_stagedDeadlineInserts)
+        {
+            for (auto const& hash : hashes)
+            {
+                out.queueUpserts.emplace_back(
+                    queueStateKey(deadline, hash), makeEntry(std::string_view{}));
+            }
+        }
+
+        int64_t tracked = static_cast<int64_t>(m_trackedCount);
+        for (auto const& [hash, staged] : m_stagedCounts)
+        {
+            bool const before = m_originalCounts.contains(hash);
+            bool const after = staged.count != 0 || staged.deadline.has_value();
+            if (before != after)
+            {
+                tracked += after ? 1 : -1;
+            }
+            if (!after)
+            {
+                continue;
+            }
+            auto const original = m_originalCounts.find(hash);
+            bool const changed = original == m_originalCounts.end() ||
+                                 original->second.count != staged.count ||
+                                 original->second.deadline != staged.deadline;
+            if (!changed && !delta.newNodes.contains(hash))
+            {
+                continue;
+            }
+            auto const raw = m_stagedRaw.find(hash);
+            if (raw == m_stagedRaw.end())
+            {
+                continue;
+            }
+            out.upserts.emplace_back(bcos::ledger::mptNodeStateKey(hash),
+                makeEntry(encodeStoredNode(
+                    bcos::ref(raw->second), staged.count, staged.deadline.value_or(0))));
+        }
+        m_stagedTrackedCount = static_cast<uint64_t>(std::max<int64_t>(tracked, 0));
+        appendMetadata(out, m_stagedTrackedCount,
+            delta.stateRoot == bcos::h256{} ? m_headRoot : delta.stateRoot);
+
         // Steady-state observability. `out.deletions` IS the batch handed back to the caller —
         // this block's CONFIRMED deletions. The staged counting (m_staged*) is not yet
         // committed, so tracked/pending/nextDeadline deliberately read the BASE tables: the
@@ -732,11 +803,10 @@ public:
     bool needsRefCountDeltas() const noexcept override { return true; }
 
     /// EL-mode shallow-reorg hook (EthereumChainRollback.h): after a rollback to @p newHead the
-    /// in-memory counts/queue no longer describe the chain — blocks above newHead armed or
-    /// consumed schedules that must be re-derived. Nothing was persisted, so the exact fix is
-    /// the same rebuild every startup runs: discard every table (including any uncommitted
-    /// staged overlay) and re-walk the post-rollback roots. Costs a full head-trie walk per
-    /// reorg — the accepted trade-off for exact self-healing, and only paid when pruning is
+    /// persistent counts/queue no longer describe the chain — blocks above newHead armed or
+    /// consumed schedules that must be re-derived. The exact fix is a forced rebuild: discard the
+    /// temporary overlays, re-walk the post-rollback roots and write the resulting counts back to
+    /// the node rows. Costs a full head-trie walk per reorg, and is only paid when pruning is
     /// enabled (the default Noop observer keeps the hook a no-op). The startup window
     /// invariant (mpt_prune_window >= reorg_window, enforced by NodeConfig) guarantees every
     /// root in [newHead - N, newHead] is still fully resolvable on disk. The garbage sweep is
@@ -745,12 +815,15 @@ public:
     bcos::task::Task<void> coOnRollback(
         bcos::protocol::BlockNumber newHead, StateRootLookup stateRootAt) override
     {
+        m_originalCounts.clear();
+        m_stagedRaw.clear();
         m_stagedCounts.clear();
         m_stagedDeadlineErases.clear();
         m_stagedDeadlineInserts.clear();
         m_counts.clear();
         m_pending.clear();
-        co_await init(newHead, m_executorVersion, std::move(stateRootAt), /*sweepGarbage=*/false);
+        co_await init(newHead, m_executorVersion, std::move(stateRootAt), /*sweepGarbage=*/false,
+            /*progress=*/{}, /*forceRebuild=*/true, m_allowRebuild);
     }
 
     /// After the block's WriteBatch: apply the staged overlay to the base tables and advance
@@ -759,7 +832,7 @@ public:
     /// commit retry reproduces the identical batch. Deletions already landed with the batch —
     /// there is nothing to hand off. The CommitObserver contract forbids throwing and blocking
     /// here.
-    void onCommit(bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& /*delta*/) override
+    void onCommit(bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& delta) override
     {
         for (auto const& [deadline, hashes] : m_stagedDeadlineErases)
         {
@@ -780,20 +853,16 @@ public:
             auto& bucket = m_pending[deadline];
             bucket.insert(hashes.begin(), hashes.end());
         }
-        for (auto const& [hash, staged] : m_stagedCounts)
-        {
-            if (staged.count == 0 && !staged.deadline)
-            {
-                m_counts.erase(hash);  // confirmed-deleted, or never tracked
-            }
-            else
-            {
-                m_counts[hash] = staged;
-            }
-        }
+        m_trackedCount = m_stagedTrackedCount;
+        m_originalCounts.clear();
+        m_stagedRaw.clear();
         m_stagedCounts.clear();
         m_stagedDeadlineErases.clear();
         m_stagedDeadlineInserts.clear();
+        if (delta.stateRoot != bcos::h256{})
+        {
+            m_headRoot = delta.stateRoot;
+        }
 
         auto current = m_watermark.load(std::memory_order_relaxed);
         while (current < blockNumber &&
@@ -803,7 +872,7 @@ public:
     }
 
     /// Highest committed block number this pruner has seen (currentBlock at init(), onCommit
-    /// afterwards). −1 before either. Purely observational — nothing is persisted.
+    /// afterwards). −1 before either. The head root is persisted separately in the metadata.
     bcos::protocol::BlockNumber watermark() const noexcept
     {
         return m_watermark.load(std::memory_order_relaxed);
@@ -816,23 +885,23 @@ public:
     /// already deleted and erased). Introspection for tests and tooling.
     std::optional<uint64_t> countOf(bcos::h256 const& hash) const
     {
-        auto const it = m_counts.find(hash);
-        if (it == m_counts.end())
+        auto stored = bcos::task::syncWait(readStoredNode(hash));
+        if (!stored)
         {
             return std::nullopt;
         }
-        return it->second.count;
+        return stored->refCount;
     }
 
     /// The deletion deadline currently armed for @p hash, or nullopt when none.
     std::optional<uint64_t> deadlineOf(bcos::h256 const& hash) const
     {
-        auto const it = m_counts.find(hash);
-        if (it == m_counts.end())
+        auto stored = bcos::task::syncWait(readStoredNode(hash));
+        if (!stored || stored->deadline == 0)
         {
             return std::nullopt;
         }
-        return it->second.deadline;
+        return stored->deadline;
     }
 
     /// Total scheduled deletions across all deadlines.
@@ -857,7 +926,7 @@ public:
     }
 
     /// Number of hashes with a count entry (counted live nodes plus scheduled ones).
-    size_t trackedCount() const noexcept { return m_counts.size(); }
+    size_t trackedCount() const noexcept { return m_trackedCount; }
 
     /// Steady-state observability: coPreparePruneRows emits one INFO summary every
     /// summaryLogInterval(m_pruneWindow) blocks. The interval tracks the prune window — the
@@ -879,43 +948,278 @@ private:
         std::optional<uint64_t> deadline{};
     };
 
-    /// The hash-addressed children of @p node, plus — for an account-trie leaf — the account's
-    /// storage root. Inline node refs are embedded in their parent and never stored as rows, so
-    /// they carry no count and are not descended into (an inline subtree is < 32 bytes and can
-    /// hold no hash ref of its own).
-    static void descend(
-        TrieNode const& node, bool accountTrie, std::vector<std::pair<bcos::h256, bool>>& stack)
+    struct H256FastHash
     {
-        if (auto const* ext = std::get_if<ExtensionNode>(&node))
+        size_t operator()(bcos::h256 const& hash) const noexcept
         {
-            if (ext->child.size() == HASH_REF_ENCODED_SIZE && ext->child[0] == RLP_HASH_REF_PREFIX)
-            {
-                stack.emplace_back(
-                    bcos::h256(bcos::bytesConstRef(ext->child.data(), ext->child.size())
-                            .getCroppedData(1)),
-                    accountTrie);
-            }
+            size_t value;
+            std::memcpy(&value, hash.data(), sizeof(value));
+            return value;
         }
-        else if (auto const* branch = std::get_if<BranchNode>(&node))
+    };
+
+    using StoredNodeMap = std::unordered_map<bcos::h256, StoredNode, H256FastHash>;
+
+    static bcos::storage::Entry makeEntry(bcos::bytes value)
+    {
+        bcos::storage::Entry entry;
+        entry.set(std::move(value));
+        return entry;
+    }
+
+    static bcos::executor_v1::StateKey metadataKey(std::string_view key)
+    {
+        return {bcos::storage2::kMPTPruneMetaTable, key};
+    }
+
+    static bcos::executor_v1::StateKey queueStateKey(uint64_t deadline, bcos::h256 const& hash)
+    {
+        std::string key(8 + bcos::h256::SIZE, '\0');
+        for (size_t i = 0; i < 8; ++i)
         {
-            for (auto const& child : branch->children)
+            key[i] = static_cast<char>((deadline >> ((7 - i) * 8)) & 0xff);
+        }
+        std::memcpy(key.data() + 8, hash.data(), bcos::h256::SIZE);
+        return {bcos::storage2::kMPTPruneQueueTable, key};
+    }
+
+    static std::pair<uint64_t, bcos::h256> decodeQueueKey(
+        bcos::executor_v1::StateKeyView const& key)
+    {
+        if (key.m_key.size() != 8 + bcos::h256::SIZE)
+        {
+            BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
+                                  << bcos::errinfo_comment("invalid MPT prune queue key length"));
+        }
+        uint64_t deadline = 0;
+        for (size_t i = 0; i < 8; ++i)
+        {
+            deadline = (deadline << 8) | static_cast<uint8_t>(key.m_key[i]);
+        }
+        return {deadline,
+            bcos::h256(bcos::bytesConstRef(
+                reinterpret_cast<bcos::byte const*>(key.m_key.data() + 8), bcos::h256::SIZE))};
+    }
+
+    bcos::task::Task<StoredNodeMap> readStoredNodes(std::vector<bcos::h256> const& hashes) const
+    {
+        StoredNodeMap result;
+        if (hashes.empty())
+        {
+            co_return result;
+        }
+        if (m_nodeBatchReader)
+        {
+            auto const nodes = m_nodeBatchReader(hashes);
+            if (nodes.size() != hashes.size())
             {
-                if (child.kind() == NodeRef::Kind::Hash)
+                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                          "MPT pruning: node batch reader returned a different "
+                                          "result count"));
+            }
+            for (size_t i = 0; i < nodes.size(); ++i)
+            {
+                if (nodes[i])
                 {
-                    stack.emplace_back(child.hash(), accountTrie);
+                    result.emplace(hashes[i], decodeStoredNode(bcos::ref(*nodes[i])));
                 }
             }
         }
-        else if (accountTrie)
+        else
         {
-            if (auto const* leaf = std::get_if<LeafNode>(&node))
+            auto keys = hashes | std::views::transform([](auto const& hash) {
+                return bcos::ledger::mptNodeStateKey(hash);
+            }) | std::ranges::to<std::vector>();
+            auto const entries = co_await bcos::storage2::readSome(*m_backend, std::move(keys));
+            for (size_t i = 0; i < entries.size(); ++i)
             {
-                auto const account = Account::decode(bcos::ref(leaf->value));
-                if (account.storageRoot != emptyRootHash())
+                if (entries[i])
                 {
-                    stack.emplace_back(account.storageRoot, false);
+                    auto const raw = entries[i]->get();
+                    result.emplace(hashes[i], decodeStoredNode(raw));
                 }
             }
+        }
+        co_return result;
+    }
+
+    bcos::task::Task<std::optional<StoredNode>> readStoredNode(bcos::h256 const& hash) const
+    {
+        auto nodes = co_await readStoredNodes({hash});
+        auto const it = nodes.find(hash);
+        if (it == nodes.end())
+        {
+            co_return std::nullopt;
+        }
+        co_return std::move(it->second);
+    }
+
+    static bcos::storage::Entry makeEntry(std::string_view value)
+    {
+        bcos::storage::Entry entry;
+        entry.set(value);
+        return entry;
+    }
+
+    void appendMetadata(PruneRowBatch& out, uint64_t tracked, bcos::h256 const& headRoot) const
+    {
+        out.upserts.emplace_back(metadataKey(bcos::storage2::kMPTPruneTrackedCountKey),
+            makeEntry(std::to_string(tracked)));
+        out.upserts.emplace_back(metadataKey(bcos::storage2::kMPTPruneHeadRootKey),
+            makeEntry(bcos::bytes(headRoot.begin(), headRoot.end())));
+        out.upserts.emplace_back(metadataKey(bcos::storage2::kMPTPruneWindowKey),
+            makeEntry(std::to_string(m_pruneWindow)));
+    }
+
+    struct MetadataState
+    {
+        bool present = false;
+        bool matches = false;
+        uint64_t tracked = 0;
+    };
+
+    bcos::task::Task<MetadataState> readMetadataState(bcos::h256 const& headRoot)
+    {
+        MetadataState state;
+        auto trackedEntry = co_await bcos::storage2::readOne(
+            *m_backend, metadataKey(bcos::storage2::kMPTPruneTrackedCountKey));
+        auto rootEntry = co_await bcos::storage2::readOne(
+            *m_backend, metadataKey(bcos::storage2::kMPTPruneHeadRootKey));
+        auto windowEntry = co_await bcos::storage2::readOne(
+            *m_backend, metadataKey(bcos::storage2::kMPTPruneWindowKey));
+        state.present = trackedEntry && rootEntry && windowEntry;
+        if (!state.present)
+        {
+            co_return state;
+        }
+        auto const trackedRaw = trackedEntry->get();
+        auto const rootRaw = rootEntry->get();
+        auto const windowRaw = windowEntry->get();
+        state.tracked = std::stoull(std::string(trackedRaw));
+        auto const storedWindow = std::stoll(std::string(windowRaw));
+        state.matches =
+            storedWindow == m_pruneWindow && rootRaw.size() == bcos::h256::SIZE &&
+            bcos::h256(bcos::bytesConstRef(
+                reinterpret_cast<bcos::byte const*>(rootRaw.data()), rootRaw.size())) == headRoot;
+        co_return state;
+    }
+
+    bcos::task::Task<void> loadQueue()
+    {
+        auto iterator = co_await bcos::storage2::range(*m_backend, bcos::storage2::RANGE_SEEK,
+            bcos::executor_v1::StateKey{bcos::storage2::kMPTPruneQueueTable, std::string_view{}});
+        while (auto item = co_await iterator.next())
+        {
+            bcos::executor_v1::StateKeyView const key{std::get<0>(*item)};
+            if (key.m_table != bcos::storage2::kMPTPruneQueueTable)
+            {
+                break;
+            }
+            auto const [deadline, hash] = decodeQueueKey(key);
+            m_pending[deadline].insert(hash);
+        }
+    }
+
+    bcos::task::Task<void> clearPersistentQueue()
+    {
+        auto iterator = co_await bcos::storage2::range(*m_backend, bcos::storage2::RANGE_SEEK,
+            bcos::executor_v1::StateKey{bcos::storage2::kMPTPruneQueueTable, std::string_view{}});
+        std::vector<bcos::executor_v1::StateKey> chunk;
+        while (auto item = co_await iterator.next())
+        {
+            bcos::executor_v1::StateKeyView const key{std::get<0>(*item)};
+            if (key.m_table != bcos::storage2::kMPTPruneQueueTable)
+            {
+                break;
+            }
+            chunk.push_back(std::get<0>(*item));
+            if (chunk.size() >= SWEEP_DELETE_CHUNK)
+            {
+                co_await bcos::storage2::removeSome(*m_backend, std::move(chunk));
+                chunk.clear();
+            }
+        }
+        if (!chunk.empty())
+        {
+            co_await bcos::storage2::removeSome(*m_backend, std::move(chunk));
+        }
+    }
+
+    bcos::task::Task<void> persistNodeCounts(std::vector<bcos::h256> const& hashes)
+    {
+        auto storedNodes = co_await readStoredNodes(hashes);
+        std::vector<std::pair<bcos::executor_v1::StateKey, bcos::storage::Entry>> upserts;
+        for (auto const& hash : hashes)
+        {
+            auto const stored = storedNodes.find(hash);
+            if (stored == storedNodes.end())
+            {
+                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                          "MPT pruning rebuild: reachable node row missing"));
+            }
+            auto const& computed = m_counts[hash];
+            upserts.emplace_back(bcos::ledger::mptNodeStateKey(hash),
+                makeEntry(encodeStoredNode(
+                    bcos::ref(stored->second.rlp), computed.count, computed.deadline.value_or(0))));
+        }
+        co_await bcos::storage2::writeSome(*m_backend, std::move(upserts));
+    }
+
+    bcos::task::Task<void> persistRebuild(bcos::h256 const& headRoot)
+    {
+        std::vector<bcos::h256> hashes;
+        for (auto const& [hash, entry] : m_counts)
+        {
+            hashes.push_back(hash);
+            if (hashes.size() >= SWEEP_DELETE_CHUNK)
+            {
+                co_await persistNodeCounts(hashes);
+                hashes.clear();
+            }
+        }
+        if (!hashes.empty())
+        {
+            co_await persistNodeCounts(hashes);
+        }
+
+        co_await clearPersistentQueue();
+        std::vector<std::pair<bcos::executor_v1::StateKey, bcos::storage::Entry>> queueUpserts;
+        for (auto const& [deadline, bucket] : m_pending)
+        {
+            for (auto const& hash : bucket)
+            {
+                queueUpserts.emplace_back(
+                    queueStateKey(deadline, hash), makeEntry(std::string_view{}));
+                if (queueUpserts.size() >= SWEEP_DELETE_CHUNK)
+                {
+                    co_await bcos::storage2::writeSome(*m_backend, std::move(queueUpserts));
+                    queueUpserts.clear();
+                }
+            }
+        }
+        if (!queueUpserts.empty())
+        {
+            co_await bcos::storage2::writeSome(*m_backend, std::move(queueUpserts));
+        }
+
+        PruneRowBatch metadata;
+        m_trackedCount = m_counts.size();
+        m_stagedTrackedCount = m_trackedCount;
+        appendMetadata(metadata, m_trackedCount, headRoot);
+        co_await bcos::storage2::writeSome(*m_backend, std::move(metadata.upserts));
+    }
+
+    static void descend(NodeReferences const& node, bool accountTrie,
+        std::vector<std::pair<bcos::h256, bool>>& stack)
+    {
+        for (auto const& child : node.children)
+        {
+            stack.emplace_back(child, accountTrie);
+        }
+        if (accountTrie && node.accountLeaf && node.storageRoot &&
+            *node.storageRoot != emptyRootHash())
+        {
+            stack.emplace_back(*node.storageRoot, false);
         }
     }
 
@@ -929,9 +1233,9 @@ private:
     /// dominated by the 64KB data-block read + decompress behind every hash-random key —
     /// synchronous, single-threaded work one MultiGet serializes. The walk keeps up to
     /// WALK_READ_WAYS sub-batches' MultiGets running CONCURRENTLY as tbb::task_group tasks,
-    /// multiplying the startup-rebuild throughput on multi-core hosts; 32 outstanding fetches
-    /// keep the storage queue fed without meaningful queueing overhead.
-    static constexpr size_t WALK_READ_WAYS = 32;
+    /// multiplying the startup-rebuild throughput on multi-core hosts; 8 outstanding fetches
+    /// bound the I/O and page-cache pressure on archive-scale databases.
+    static constexpr size_t WALK_READ_WAYS = 8;
 
     /// The single trie-traversal implementation behind BOTH rebuild phases (countWalk and
     /// deadlineWalk below are thin wrappers supplying the per-node callback): iterative over an
@@ -942,8 +1246,8 @@ private:
     ///
     /// Node rows are fetched in BATCHES: up to WALK_READ_BATCH entries are popped per
     /// sub-batch, each run through @p onNode in pop order, and the accepted rows are fetched
-    /// with one storage2::readSome (rocksdb::MultiGet underneath on the production backend)
-    /// instead of a point read per node — the dominant startup-rebuild cost on a cold RocksDB.
+    /// with one batched MultiGet instead of a point read per node — the dominant startup-rebuild
+    /// cost on a cold RocksDB.
     /// Collection, fetch and application are PIPELINED: each sub-batch's fetch (the blocking
     /// MultiGet AND the RLP decode of its rows, both inside the tbb task) is launched as soon
     /// as the sub-batch is collected, up to WALK_READ_WAYS fetches stay in flight, and the
@@ -960,8 +1264,25 @@ private:
     /// relying on MultiGet's duplicate-key contract. The fail-loud contract is unchanged: a
     /// reachable row missing from the batch's results throws the same MPTInvariantViolation,
     /// captured inside the fetch task and rethrown on the walk's thread.
+    struct WalkStats
+    {
+        uint64_t batches = 0;
+        uint64_t nodeReads = 0;
+        uint64_t readMicros = 0;
+        uint64_t decodeMicros = 0;
+        uint64_t waitMicros = 0;
+    };
+
+    static uint64_t elapsedMicros(std::chrono::steady_clock::time_point start)
+    {
+        return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - start)
+                .count());
+    }
+
     template <typename OnNode>
-    bcos::task::Task<void> walkTrie(bcos::h256 root, bool accountTrie, OnNode&& onNode)
+    bcos::task::Task<void> walkTrie(
+        bcos::h256 root, bool accountTrie, OnNode&& onNode, WalkStats* stats = nullptr)
     {
         if (root == emptyRootHash())
         {
@@ -978,13 +1299,16 @@ private:
             std::vector<size_t> resultIndex;
             std::vector<bcos::h256> keyHashes;
             std::vector<bcos::executor_v1::StateKey> keys;
-            std::vector<std::optional<TrieNode>> decoded;  // slot -> parsed node
+            std::vector<bool> decodeAccount;
+            std::vector<std::optional<NodeReferences>> decoded;
+            uint64_t readMicros = 0;
+            uint64_t decodeMicros = 0;
             std::exception_ptr error;
         };
         std::vector<Way> ways(WALK_READ_WAYS);
-        std::unordered_map<bcos::h256, size_t> dedup;  // hash -> slot, per sub-batch
-        size_t head = 0;                               // oldest in-flight sub-batch, next to apply
-        size_t tail = 0;                               // next slot to collect into
+        std::unordered_map<bcos::h256, size_t, H256FastHash> dedup;
+        size_t head = 0;  // oldest in-flight sub-batch, next to apply
+        size_t tail = 0;  // next slot to collect into
         size_t inFlight = 0;
         // A throw anywhere below (onNode, a rethrown fetch error) must first join the
         // in-flight fetch tasks: they reference this frame.
@@ -1004,6 +1328,7 @@ private:
                     way.resultIndex.clear();
                     way.keyHashes.clear();
                     way.keys.clear();
+                    way.decodeAccount.clear();
                     dedup.clear();
                     for (size_t popped = 0; popped < WALK_READ_BATCH && !stack.empty(); ++popped)
                     {
@@ -1013,12 +1338,17 @@ private:
                         {
                             continue;
                         }
-                        auto const [it, inserted] = dedup.try_emplace(hash, way.keys.size());
+                        auto const [it, inserted] = dedup.try_emplace(hash, way.keyHashes.size());
                         if (inserted)
                         {
                             way.keyHashes.push_back(hash);
-                            way.keys.push_back(bcos::ledger::mptNodeStateKey(hash));
+                            way.decodeAccount.push_back(false);
+                            if (!m_nodeBatchReader)
+                            {
+                                way.keys.push_back(bcos::ledger::mptNodeStateKey(hash));
+                            }
                         }
+                        way.decodeAccount[it->second] = way.decodeAccount[it->second] || isAccount;
                         way.accepted.emplace_back(hash, isAccount);
                         way.resultIndex.push_back(it->second);
                     }
@@ -1028,29 +1358,70 @@ private:
                     }
                     way.error = nullptr;
                     way.decoded.clear();
-                    way.decoded.resize(way.keys.size());
+                    way.decoded.resize(way.keyHashes.size());
+                    way.readMicros = 0;
+                    way.decodeMicros = 0;
+                    if (stats)
+                    {
+                        ++stats->batches;
+                        stats->nodeReads += way.keyHashes.size();
+                    }
                     way.fetch.run([this, &way] {
                         try
                         {
-                            auto const entries = bcos::task::tbb::syncWait(
-                                bcos::storage2::readSome(*m_backend, std::move(way.keys)));
-                            for (size_t slot = 0; slot < entries.size(); ++slot)
+                            if (m_nodeBatchReader)
                             {
-                                auto const& entry = entries[slot];
-                                if (!entry)
+                                auto const readStart = std::chrono::steady_clock::now();
+                                auto const nodes = m_nodeBatchReader(way.keyHashes);
+                                way.readMicros = elapsedMicros(readStart);
+                                auto const decodeStart = std::chrono::steady_clock::now();
+                                if (nodes.size() != way.keyHashes.size())
                                 {
-                                    // A reachable node row missing from the committed backend
-                                    // violates the window guarantee the rebuild relies on —
-                                    // fail loud, same convention as Trie.h.
                                     BOOST_THROW_EXCEPTION(
                                         MPTInvariantViolation{} << bcos::errinfo_comment(
-                                            "MPT pruning rebuild: reachable node row missing "
-                                            "from the committed backend (hash " +
-                                            way.keyHashes[slot].abridged() + ")"));
+                                            "MPT pruning rebuild: node batch reader returned "
+                                            "a different result count"));
                                 }
-                                auto const raw = entry->get();
-                                way.decoded[slot] = decodeNode(bcos::bytesConstRef(
-                                    reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+                                for (size_t slot = 0; slot < nodes.size(); ++slot)
+                                {
+                                    if (!nodes[slot])
+                                    {
+                                        BOOST_THROW_EXCEPTION(
+                                            MPTInvariantViolation{} << bcos::errinfo_comment(
+                                                "MPT pruning rebuild: reachable node row missing "
+                                                "from the committed backend (hash " +
+                                                way.keyHashes[slot].abridged() + ")"));
+                                    }
+                                    auto stored = decodeStoredNode(bcos::ref(*nodes[slot]));
+                                    way.decoded[slot] = decodeNodeReferences(
+                                        bcos::ref(stored.rlp), way.decodeAccount[slot]);
+                                }
+                                way.decodeMicros = elapsedMicros(decodeStart);
+                            }
+                            else
+                            {
+                                auto const readStart = std::chrono::steady_clock::now();
+                                auto const entries = bcos::task::tbb::syncWait(
+                                    bcos::storage2::readSome(*m_backend, std::move(way.keys)));
+                                way.readMicros = elapsedMicros(readStart);
+                                auto const decodeStart = std::chrono::steady_clock::now();
+                                for (size_t slot = 0; slot < entries.size(); ++slot)
+                                {
+                                    auto const& entry = entries[slot];
+                                    if (!entry)
+                                    {
+                                        BOOST_THROW_EXCEPTION(
+                                            MPTInvariantViolation{} << bcos::errinfo_comment(
+                                                "MPT pruning rebuild: reachable node row missing "
+                                                "from the committed backend (hash " +
+                                                way.keyHashes[slot].abridged() + ")"));
+                                    }
+                                    auto const raw = entry->get();
+                                    auto stored = decodeStoredNode(raw);
+                                    way.decoded[slot] = decodeNodeReferences(
+                                        bcos::ref(stored.rlp), way.decodeAccount[slot]);
+                                }
+                                way.decodeMicros = elapsedMicros(decodeStart);
                             }
                         }
                         catch (...)
@@ -1069,7 +1440,14 @@ private:
                     break;  // the last pops were all rejected by onNode; nothing to apply
                 }
                 auto& way = ways[head];
+                auto const waitStart = std::chrono::steady_clock::now();
                 way.fetch.wait();
+                if (stats)
+                {
+                    stats->waitMicros += elapsedMicros(waitStart);
+                    stats->readMicros += way.readMicros;
+                    stats->decodeMicros += way.decodeMicros;
+                }
                 if (way.error)
                 {
                     std::rethrow_exception(way.error);
@@ -1098,17 +1476,30 @@ private:
     /// set is kept.
     bcos::task::Task<void> countWalk(bcos::h256 root, bool accountTrie)
     {
+        auto const start = std::chrono::steady_clock::now();
         uint64_t visited = 0;
-        co_await walkTrie(root, accountTrie, [this, &visited](bcos::h256 const& hash) {
-            ++m_counts[hash].count;
-            if (++visited % REBUILD_LOG_INTERVAL == 0)
-            {
-                MPT_PRUNER_LOG(INFO)
-                    << "MPT pruning: rebuild phase 1 progress" << LOG_KV("nodes", visited)
-                    << LOG_KV("tracked", m_counts.size());
-            }
-            return true;
-        });
+        WalkStats stats;
+        co_await walkTrie(
+            root, accountTrie,
+            [this, &visited](bcos::h256 const& hash) {
+                ++m_counts[hash].count;
+                if (++visited % REBUILD_LOG_INTERVAL == 0)
+                {
+                    MPT_PRUNER_LOG(INFO)
+                        << "MPT pruning: rebuild phase 1 progress" << LOG_KV("nodes", visited)
+                        << LOG_KV("tracked", m_counts.size());
+                }
+                return true;
+            },
+            &stats);
+        MPT_PRUNER_LOG(INFO) << "MPT pruning: rebuild phase 1 finished" << LOG_KV("nodes", visited)
+                             << LOG_KV("tracked", m_counts.size())
+                             << LOG_KV("batches", stats.batches)
+                             << LOG_KV("nodeReads", stats.nodeReads)
+                             << LOG_KV("elapsedMs", elapsedMicros(start) / 1000)
+                             << LOG_KV("readTotalMs", stats.readMicros / 1000)
+                             << LOG_KV("decodeTotalMs", stats.decodeMicros / 1000)
+                             << LOG_KV("waitMs", stats.waitMicros / 1000);
     }
 
     /// Phase 2: walk @p root's trie, deduping against m_counts itself (whose key set covers the
@@ -1161,24 +1552,23 @@ private:
 
     Backend* m_backend;
     int64_t m_pruneWindow;
+    NodeBatchReader m_nodeBatchReader;
+    bool m_allowRebuild = true;
     // The chain's executor_version, captured by init and replayed by coOnRollback's rebuild
     // (the lane — legacy vs Ethereum — decides firstMptBlock; it is genesis-fixed, so the
     // init-time value stays correct across a reorg).
     int64_t m_executorVersion = 0;
     std::atomic<int64_t> m_watermark{-1};
     uint64_t m_lastSweepDeleted = 0;
-    std::unordered_map<bcos::h256, Entry> m_counts;
+    uint64_t m_trackedCount = 0;
+    uint64_t m_stagedTrackedCount = 0;
+    bcos::h256 m_headRoot;
+    std::unordered_map<bcos::h256, Entry, H256FastHash> m_counts;
     std::map<uint64_t, std::unordered_set<bcos::h256>> m_pending;
 
-    /// The per-block scratch overlay (see the class comment): populated by coPreparePruneRows,
-    /// applied to m_counts/m_pending by onCommit, and empty outside a commit — the commit flow
-    /// serializes prepare → merge → onCommit under the commit mutex, and a retried prepare
-    /// discards and recomputes the overlay from the pre-block state. m_stagedCounts overlays
-    /// the count entries the block touches (read overlay-then-base); a staged {count 0, no
-    /// deadline} entry tells onCommit to ERASE the base entry (a confirmed deletion — or a
-    /// never-tracked hash, whose erase is a no-op). m_stagedDeadlineErases/Inserts are the
-    /// queue-bucket changes to replay against m_pending.
-    std::unordered_map<bcos::h256, Entry> m_stagedCounts;
+    std::unordered_map<bcos::h256, Entry, H256FastHash> m_originalCounts;
+    std::unordered_map<bcos::h256, bcos::bytes, H256FastHash> m_stagedRaw;
+    std::unordered_map<bcos::h256, Entry, H256FastHash> m_stagedCounts;
     std::map<uint64_t, std::unordered_set<bcos::h256>> m_stagedDeadlineErases;
     std::map<uint64_t, std::unordered_set<bcos::h256>> m_stagedDeadlineInserts;
 };

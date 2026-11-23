@@ -30,17 +30,16 @@
 namespace bcos::ledger::mpt
 {
 
-/// One block's pruning rows, exchanged between the observer and the commit flow: `deletions`
-/// are the keys to remove (expired "/mpt/" node rows). Keyed by executor_v1::StateKey (not an
-/// h256/bytes node-storage pair) because the node rows live in the ordinary "/mpt/" state
-/// table and must merge into the block's prewriteStorage alongside the flat state, so the
-/// commit flow applies them with one storage2::removeSome and no MPT-specific code of its own,
-/// and the deletions land in the SAME WriteBatch as the block data (no "node row deleted,
-/// block data lost" — or the reverse — crash window). Pruning keeps no metadata on disk — all
-/// of its state is in memory (MPTPruner) — so there are no upsert rows to carry.
+/// One block's pruning rows, exchanged between the observer and the commit flow. Node upserts
+/// carry the original node RLP with its inline count/deadline; deletions remove expired rows;
+/// queue upserts/deletions update the persistent deadline index. All of them are applied to
+/// prewriteStorage so they land in the SAME WriteBatch as the block data.
 struct PruneRowBatch
 {
+    std::vector<std::pair<bcos::executor_v1::StateKey, bcos::storage::Entry>> upserts;
     std::vector<bcos::executor_v1::StateKey> deletions;
+    std::vector<std::pair<bcos::executor_v1::StateKey, bcos::storage::Entry>> queueUpserts;
+    std::vector<bcos::executor_v1::StateKey> queueDeletions;
 };
 
 /// The seam for the pathdb pruning spec (§4.8): pruning subscribes to every block's node delta

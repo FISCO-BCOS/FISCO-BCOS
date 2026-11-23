@@ -39,6 +39,11 @@ namespace bcos::storage2
 /// the physical form is produced and parsed solely by StateKeyResolver.
 inline constexpr std::string_view kMPTTable = "/mpt/";
 inline constexpr std::size_t kMPTKeyLength = kMPTTable.size() + 1 + 32;  // 38
+inline constexpr std::string_view kMPTPruneQueueTable = "/sys/mpt_prune_queue/";
+inline constexpr std::string_view kMPTPruneMetaTable = "/sys/mpt_prune_meta/";
+inline constexpr std::string_view kMPTPruneTrackedCountKey = "tracked_count";
+inline constexpr std::string_view kMPTPruneHeadRootKey = "head_root";
+inline constexpr std::string_view kMPTPruneWindowKey = "prune_window";
 
 static_assert(kMPTTable.find(':') == std::string_view::npos,
     "the MPT table name must not contain ':' — StateKeyResolver splits a physical key at its "

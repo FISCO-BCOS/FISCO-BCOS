@@ -21,6 +21,7 @@
  */
 #pragma once
 
+#include "NodeStorageCodec.h"
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -70,7 +71,7 @@ public:
             co_return std::nullopt;
         }
         auto raw = entry->get();
-        co_return bcos::bytes(raw.begin(), raw.end());
+        co_return decodeStoredNode(raw).rlp;
     }
 
     task::Task<std::vector<std::optional<bcos::bytes>>> readSome(::ranges::input_range auto keys)
@@ -90,7 +91,7 @@ public:
                 continue;
             }
             auto raw = entry->get();
-            values.emplace_back(bcos::bytes(raw.begin(), raw.end()));
+            values.emplace_back(decodeStoredNode(raw).rlp);
         }
         co_return values;
     }

@@ -38,6 +38,7 @@
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/Errors.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
+#include "bcos-ledger/mpt/NodeStorageCodec.h"
 #include "bcos-ledger/mpt/StorageValueCodec.h"
 #include "bcos-storage/KeyPrefixes.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
@@ -86,7 +87,7 @@ std::optional<bcos::bytes> backendNode(MWBackendStorage& backend, h256 const& ha
         return std::nullopt;
     }
     auto raw = entry->get();
-    return bcos::bytes(raw.begin(), raw.end());
+    return ledger::mpt::decodeStoredNode(raw).rlp;
 }
 
 /// Count the backend rows living in the "/mpt/" table (committed trie nodes).
@@ -737,7 +738,8 @@ BOOST_AUTO_TEST_CASE(viewNodeStorageBatchReadWrite)
     // Written through the batch path, readable as ordinary "/mpt/" rows of the mutable layer.
     auto storedA = task::syncWait(storage2::readOne(view, storage2::mptNodeStateKey(hashA)));
     BOOST_REQUIRE(storedA);
-    BOOST_CHECK_EQUAL(storedA->get(), std::string("\x01\x02", 2));
+    auto const storedRlp = ledger::mpt::decodeStoredNode(storedA->get()).rlp;
+    BOOST_CHECK_EQUAL(std::string(storedRlp.begin(), storedRlp.end()), std::string("\x01\x02", 2));
 
     // The source map is untouched — the flush copies, so the delta stays whole for the
     // CommitObserver.
