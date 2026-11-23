@@ -432,7 +432,7 @@ BOOST_AUTO_TEST_CASE(RemainingReadsFollowTheHeadChain)
     BOOST_REQUIRE(byIndex.isObject());
     BOOST_CHECK_EQUAL(byIndex["blockHash"].asString(), hashB.hexPrefixed());
     BOOST_CHECK_EQUAL(byIndex["hash"].asString(), txB.hexPrefixed());
-    // Out of range on the window path is the same InvalidParams as on the ledger path.
+    // Both the window and ledger paths return JSON null for an out-of-range index.
     auto outOfRange = call("eth_getTransactionByBlockNumberAndIndex", params({headTag, "0x1"}));
     BOOST_CHECK(outOfRange["result"].isNull());
     BOOST_CHECK_EQUAL(

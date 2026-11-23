@@ -114,7 +114,7 @@ struct ReadPlaneFixture
             [delegate = f.opDelegate](bcos::h256 const& hash) { return delegate->viewAt(hash); });
         // Non-owning: the fixture's unique_ptr owns the service and outlives the reader (the
         // production wiring aliases the composition root's holder instead).
-        reader = std::make_shared<Reader>(
+        reader = std::make_shared<Reader>(nullptr,
             std::shared_ptr<OpEngine>(std::shared_ptr<void>{}, f.service.get()), f.opDelegate,
             f.blockFactory);
 
@@ -246,6 +246,10 @@ struct ReadPlaneFixture
                 BOOST_REQUIRE_MESSAGE(block.isObject(), "eth_getBlockByNumber(" << tag << ")");
                 BOOST_CHECK_EQUAL(block["hash"].asString(), head.hexPrefixed());
                 BOOST_CHECK_EQUAL(block["number"].asString(), numberTag);
+                BOOST_REQUIRE_EQUAL(block["transactions"].size(), 2U);
+                auto const& mint = block["transactions"][1U];
+                BOOST_CHECK_EQUAL(
+                    full ? mint["hash"].asString() : mint.asString(), mintTx.hexPrefixed());
             }
             BOOST_CHECK_EQUAL(balance(tag), balanceHex);
             auto p = proof(tag);
@@ -393,10 +397,19 @@ BOOST_AUTO_TEST_CASE(restart_answers_finalized_for_every_tag)
     ReadPlaneFixture t;
     auto c = setupB1B2a(t.f);
     auto s = deriveB2b(t.f, c);
+    // A client can resolve both hashes before finalization but fetch their rows after it.
+    BOOST_REQUIRE_EQUAL(t.reader->unfinalizedNumberOf(c.h2a).value_or(-1), 2);
+    BOOST_REQUIRE_EQUAL(t.reader->unfinalizedNumberOf(s.h2b).value_or(-1), 2);
     // Finalize B2b (head stays B2b).
     BOOST_REQUIRE(t.f.fcu(t.f.fc(s.h2b, s.h2b, s.h2b)).payloadStatus.status ==
                   PayloadValidationStatus::Valid);
     BOOST_REQUIRE_EQUAL(t.f.backendNumber(), 2);
+    BOOST_CHECK(!bcos::task::syncWait(t.reader->unfinalizedBlock(c.h2a, bcos::ledger::HEADER)));
+    BOOST_CHECK(!bcos::task::syncWait(t.reader->unfinalizedBlock(s.h2b, bcos::ledger::HEADER)));
+    BOOST_CHECK(t.blockByHash(c.h2a, false).isNull());
+    BOOST_CHECK_THROW(t.proof(c.h2a.hexPrefixed()), bcos::rpc::JsonRpcException);
+    BOOST_CHECK_EQUAL(t.blockByHash(s.h2b, false)["hash"].asString(), s.h2b.hexPrefixed());
+    BOOST_CHECK_EQUAL(t.proof(s.h2b.hexPrefixed())["balance"].asString(), "0xf");
 
     t.restart();
     BOOST_CHECK(!t.f.trackedHead().has_value());

@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string_view>
 
 namespace bcos::engine
@@ -32,4 +33,7 @@ namespace bcos::engine
 /// framework and each layer casts it into its native type.
 inline constexpr std::string_view c_emptyRequestsHashHex =
     "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+/// Default number of blocks an OP payload may be ahead of the finalized tip.
+inline constexpr std::int64_t c_defaultUnfinalizedWindow = 1024;
 }  // namespace bcos::engine

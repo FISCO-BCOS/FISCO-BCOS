@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #pragma once
+#include "bcos-framework/engine/Constants.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/security/CloudKmsType.h"
@@ -65,7 +66,7 @@ struct EngineRpcConfig
     bool enableTraceApi = false;
     // OP lane only: how many blocks newPayload may sit above the finalized (backend) tip before
     // it answers SYNCING. Range [16, 100000].
-    std::int64_t unfinalizedWindow = 1024;
+    std::int64_t unfinalizedWindow = engine::c_defaultUnfinalizedWindow;
 };
 
 class NodeConfig

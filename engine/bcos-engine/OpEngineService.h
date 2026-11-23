@@ -24,6 +24,7 @@
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/engine/EngineService.h>
 #include <bcos-framework/engine/Errors.h>
@@ -69,11 +70,6 @@ struct OpPayloadArtifacts
 {
     bcos::protocol::BlockHeader::Ptr canonicalHeader;
 };
-
-/// Default `[engine_rpc] unfinalized_window`: how far newPayload may run ahead of the
-/// finalized (backend) tip before it answers SYNCING. 1024 blocks ≈ 34 min at 2 s/block,
-/// covering op-node's ~12.8 min L1 finality delay plus batcher lag with margin.
-constexpr int64_t c_defaultUnfinalizedWindow = 1024;
 
 namespace engine_common::op
 {
@@ -371,8 +367,9 @@ private:
     /// OpScheduler::reset drops the STAGED (executed, not yet admitted) blocks and the probe
     /// but never the window; a reset landing between another caller's executeBlock and
     /// commitBlock makes that commitBlock fail CLOSED ("Unexpected empty results!" with the
-    /// OpPendingDropped tag), which this service answers by re-executing — convergent, never
-    /// corrupt. This service keeps no per-payload state of its own outside the tracker.
+    /// OpPendingDropped tag). A dropped local build is re-executed by newPayload. If the
+    /// freshly executed slot is dropped before admission, the RPC returns an internal error
+    /// and op-node retries.
     /// newPayload run-ahead bound over the finalized tip (blocks); beyond it newPayload
     /// answers SYNCING (backpressure: op-node retries, nothing is lost).
     int64_t m_unfinalizedWindow;

@@ -59,8 +59,6 @@ BOOST_AUTO_TEST_CASE(unfinalizedWindowPopulated)
     }
 }
 
-// Below 16 op-node could never keep its unsafe head ahead of finalized; above 100000 the
-// window is no bound at all; non-numeric is a parse error like every other int key.
 BOOST_AUTO_TEST_CASE(unfinalizedWindowOutOfRangeRejected)
 {
     for (auto const* ini :
@@ -73,6 +71,13 @@ BOOST_AUTO_TEST_CASE(unfinalizedWindowOutOfRangeRejected)
                 return errinfoContains(e, "engine_rpc.unfinalized_window must be in");
             });
     }
+}
+
+BOOST_AUTO_TEST_CASE(unfinalizedWindowRejectsNonNumericValue)
+{
+    LoaderProbe probe;
+    BOOST_CHECK_THROW(probe.loadEngineRpcConfig(fromIni("[engine_rpc]\nunfinalized_window=abc\n")),
+        boost::property_tree::ptree_bad_data);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

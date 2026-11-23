@@ -1164,6 +1164,19 @@ BOOST_AUTO_TEST_CASE(WindowStateMachine)
     BOOST_REQUIRE(f.scheduler->unfinalizedBlock(h2a).has_value());
     BOOST_CHECK_EQUAL(f.scheduler->windowSize(), 1U);
 
+    // A known hash still has to be at the immediately preceding height.
+    for (auto const& [height, hash] : {std::pair{1, h1}, std::pair{2, h2a}})
+    {
+        auto gappedHeader = makeHeaderAt(height + 2, bcos::u256(4'000'000'000));
+        gappedHeader->setParentInfo(
+            bcos::protocol::ParentInfo{.blockNumber = height, .blockHash = hash});
+        auto gapped = invokeExecute(f, assembleBlock(f, gappedHeader, {depEnv}), /*verify=*/true);
+        BOOST_REQUIRE(gapped.err);
+        BOOST_CHECK_EQUAL(
+            gapped.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
+    }
+    BOOST_CHECK_EQUAL(f.scheduler->windowSize(), 1U);
+
     // (a) A block whose parent hash resolves nowhere: refused by hash, not by a height
     // watermark.
     auto orphanHeader = makeHeaderAt(3, bcos::u256(3'000'000'000));
@@ -1553,6 +1566,7 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockDepositOverBudgetTagsCapacity)
 /// call chain.
 BOOST_AUTO_TEST_CASE(CallHappyPathInjectsRealBaseFee)
 {
+    std::size_t headReads = 0;
     Fixture f;
     // The funded sender must be INSIDE the genesis trie: call() at the latest height is served
     // through the committed MPT, never the flat plane.
@@ -1563,6 +1577,10 @@ BOOST_AUTO_TEST_CASE(CallHappyPathInjectsRealBaseFee)
     auto tx = buildWeb3Tx(
         /*maxFeePerGas=*/bcos::u256(30'000'000'000ULL), /*maxPriorityFeePerGas=*/0);
 
+    f.scheduler->setCanonicalHeadProvider([&]() -> std::optional<bcos::h256> {
+        ++headReads;
+        return std::nullopt;
+    });
     bcos::protocol::TransactionReceipt::Ptr got;
     bcos::Error::Ptr err;
     f.scheduler->call(
@@ -1573,6 +1591,7 @@ BOOST_AUTO_TEST_CASE(CallHappyPathInjectsRealBaseFee)
     BOOST_REQUIRE_MESSAGE(
         err == nullptr, "eth_call must succeed, got error: " << (err ? err->errorMessage() : ""));
     BOOST_REQUIRE(got != nullptr);
+    BOOST_CHECK_EQUAL(headReads, 1U);
     // effectiveGasPrice is a hex string ("0x...", TransactionReceipt.h:75). Parse to u256 and
     // assert
     // == header baseFee(1e9) — exact (EIP-1559 + maxPriority=0 → effectiveGasPrice == baseFee).

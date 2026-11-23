@@ -88,6 +88,7 @@ public:
     static constexpr bool c_hasUnfinalizedWindow =
         requires(DelegateType& delegate, bcos::h256 const& hash) {
             delegate.viewAt(hash);
+            delegate.windowBlockView(hash);
             delegate.setCanonicalHeadProvider(nullptr);
         };
 
@@ -138,6 +139,7 @@ public:
                     [delegate](bcos::h256 const& hash) { return delegate->viewAt(hash); });
                 initializer->m_opCanonicalReader = std::make_shared<
                     bcos::engine::OpCanonicalReaderImpl<ConcreteEngineService, DelegateType>>(
+                    holder->m_storageInitializer,
                     std::shared_ptr<ConcreteEngineService>(holder, holder->m_service.get()),
                     delegate, std::move(blockFactory));
             }

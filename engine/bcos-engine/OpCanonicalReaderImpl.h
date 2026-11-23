@@ -35,18 +35,19 @@ namespace bcos::engine
 
 /// D1 §10.2 rules, in code: heights from @p EngineServiceT (the tracker: trackedHead /
 /// getSafeBlockNumber), views from @p DelegateT (OpScheduler<MLS>: viewAt /
-/// hashAtHeightOnChain / unfinalizedBlock / finalizedTip). Holds the engine service by
-/// reference (owned by the same composition root, EngineServiceInitializer's holder) and the
-/// delegate by shared_ptr.
+/// hashAtHeightOnChain / windowBlockView / finalizedTip). Owns the engine and delegate and
+/// shares the backend owner with the storage handles it returns.
 template <class EngineServiceT, class DelegateT>
 class OpCanonicalReaderImpl final : public OpCanonicalReader
 {
 public:
     using ViewType = typename DelegateT::ViewType;
 
-    OpCanonicalReaderImpl(std::shared_ptr<EngineServiceT> engineService,
-        std::shared_ptr<DelegateT> delegate, bcos::protocol::BlockFactory::Ptr blockFactory)
-      : m_engineService(std::move(engineService)),
+    OpCanonicalReaderImpl(std::shared_ptr<const void> backendOwner,
+        std::shared_ptr<EngineServiceT> engineService, std::shared_ptr<DelegateT> delegate,
+        bcos::protocol::BlockFactory::Ptr blockFactory)
+      : m_backendOwner(std::move(backendOwner)),
+        m_engineService(std::move(engineService)),
         m_delegate(std::move(delegate)),
         m_blockFactory(std::move(blockFactory))
     {}
@@ -92,21 +93,15 @@ public:
     task::Task<protocol::Block::Ptr> unfinalizedBlock(
         crypto::HashType const& blockHash, int32_t blockFlag) override
     {
-        auto entry = m_delegate->unfinalizedBlock(blockHash);
+        auto entry = co_await m_delegate->windowBlockView(blockHash);
         if (!entry)
         {
             co_return nullptr;
         }
-        auto view = co_await m_delegate->viewAt(blockHash);
-        if (!view)
-        {
-            // Finalized between the two lookups: the ledger owns it now.
-            co_return nullptr;
-        }
         // The block's own chain view: NUMBER_2_HASH[number] on it IS this block, so the
         // ledger-shaped decoder answers this branch's rows, not a sibling's.
-        co_return co_await bcos::ledger::getBlockData(
-            *view, entry->number, blockFlag, *m_blockFactory);
+        auto& [number, view] = *entry;
+        co_return co_await bcos::ledger::getBlockData(view, number, blockFlag, *m_blockFactory);
     }
 
     task::Task<std::optional<ChainTransaction>> transactionOnHeadChain(
@@ -136,7 +131,8 @@ public:
             bcos::bytesConstRef(
                 reinterpret_cast<const bcos::byte*>(txBytes.data()), txBytes.size()),
             false, false, false);
-        auto blockHash = co_await m_delegate->hashAtHeightOnChain(tip.hash, receipt->blockNumber());
+        auto blockHash = co_await bcos::ledger::getBlockHash(
+            *view, receipt->blockNumber(), bcos::ledger::fromStorage);
         if (!blockHash)
         {
             co_return std::nullopt;
@@ -154,7 +150,7 @@ public:
         {
             co_return nullptr;
         }
-        co_return storage2::makeOwningMPTNodeReader(std::move(*view));
+        co_return storage2::makeMPTNodeReader(std::move(*view), m_backendOwner);
     }
 
     task::Task<std::shared_ptr<StateStorage>> stateStorageAt(
@@ -166,10 +162,11 @@ public:
             co_return nullptr;
         }
         co_return storage2::makeOwningAnyStorage<executor_v1::StateKey, executor_v1::StateValue>(
-            std::move(*view));
+            std::move(*view), m_backendOwner);
     }
 
 private:
+    std::shared_ptr<const void> m_backendOwner;
     std::shared_ptr<EngineServiceT> m_engineService;
     std::shared_ptr<DelegateT> m_delegate;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

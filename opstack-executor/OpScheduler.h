@@ -92,8 +92,8 @@ namespace bcos::executor_v1::opstack
 #define OP_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("OP_SCHEDULER")
 
 /// executeBlock → commitBlock(admit) → finalizeUpTo. The window key is the CL-announced hash
-/// (canonicalBlockHash of the announced header); do not recompute it from executedHeader
-/// (optional fields are incomplete).
+/// (canonicalBlockHash of the announced header). Admission matches the executed header to
+/// its staged entry; adopting a probe additionally requires its hash to match the announcement.
 template <class MultiLayerStorage>
 class OpScheduler : public scheduler::SchedulerInterface
 {
@@ -240,6 +240,20 @@ public:
             co_return std::nullopt;
         }
         co_return m_multiLayerStorage->forkChain(chainLayersLocked(it->second));
+    }
+
+    /// Capture an admitted block's height and its view under the same window lock.
+    task::Task<std::optional<std::pair<protocol::BlockNumber, ViewType>>> windowBlockView(
+        bcos::crypto::HashType blockHash)
+    {
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        auto it = m_window.find(blockHash);
+        if (it == m_window.end())
+        {
+            co_return std::nullopt;
+        }
+        co_return std::pair{
+            it->second.number, m_multiLayerStorage->forkChain(chainLayersLocked(it->second))};
     }
 
     /// The hash at height @p number on the chain whose tip is @p tipHash: walks the window
@@ -998,9 +1012,8 @@ private:
                     nullptr};
             }
 
-            // Bind the admit to the exact block that was executed. announcedBlockHash is the
-            // CL hash and cannot be recomputed from the executed header (the engine passes the
-            // executed header back), so match on the executed header's canonical hash.
+            // Match the executed header passed back by the engine to the staged execution.
+            // The window index still uses the original CL-announced hash.
             auto const executedHash = bcos::protocol::canonicalBlockHash(*header);
             std::optional<BlockLayer> staged;
             bool alreadyAdmitted = false;
@@ -1054,7 +1067,7 @@ private:
                     nullptr};
             }
 
-            // The parent must still resolve: a finalize in between may have pruned it.
+            // Recheck the parent and height after execution: finalization may have pruned it.
             co_await hydrateFinalized();
             if (auto chain = resolveParentChain(staged->parentHash, number); !chain.error.empty())
             {
@@ -1234,11 +1247,8 @@ private:
         return pruned;
     }
 
-    /// True when @p hash is the finalized tip a chain may sit on. When the ledger has no
-    /// SYS_NUMBER_2_HASH row for the tip (m_finalizedHash zero) or nothing is on disk yet, the
-    /// hash cannot be checked and continuity falls back to the height (@p oldestNumber ==
-    /// finalized + 1) — the same leniency the pre-window scheduler had. Caller holds
-    /// m_windowMutex.
+    /// An initialized ledger anchors every chain at the next height and, when present,
+    /// at the finalized block hash. Caller holds m_windowMutex.
     bool isFinalizedTipLocked(
         bcos::crypto::HashType const& hash, protocol::BlockNumber oldestNumber) const
     {
@@ -1247,11 +1257,8 @@ private:
         {
             return true;
         }
-        if (m_finalizedHash != bcos::crypto::HashType{})
-        {
-            return hash == m_finalizedHash;
-        }
-        return oldestNumber == finalized + 1;
+        return oldestNumber > 0 && oldestNumber - 1 == finalized &&
+               (m_finalizedHash == bcos::crypto::HashType{} || hash == m_finalizedHash);
     }
 
     /// Ancestor layers of @p parentHash, oldest first, walking the window down to the
@@ -1266,6 +1273,12 @@ private:
         auto oldestNumber = number;
         for (auto it = m_window.find(cursor); it != m_window.end(); it = m_window.find(cursor))
         {
+            if (oldestNumber <= 0 || it->second.number != oldestNumber - 1)
+            {
+                out.error = fmt::format("Block {}: nonconsecutive parent at height {}",
+                    oldestNumber, it->second.number);
+                return out;
+            }
             ancestors.push_back(&it->second);
             oldestNumber = it->second.number;
             cursor = it->second.parentHash;
@@ -1959,17 +1972,10 @@ private:
     task::Task<protocol::TransactionReceipt::Ptr> coCallLatest(
         protocol::Transaction::Ptr transaction)
     {
-        // The head chain's current number: its window layers carry SYS_CURRENT_STATE
-        // (prewriteBlockToBuffer), so this is the head height, the backend tip when no head
-        // is tracked.
-        auto view = co_await headView();
-        auto blockNumber =
-            co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-
         // Scenario B by construction (the OP lane builds the complete MPT from genesis):
         // balances live in MPT only. The flat plane has no ACCOUNT_BALANCE rows, so route
         // latest eth_call / estimateGas through the same MPT view as historical calls.
-        auto [err, receipt] = co_await coCallAtBlock(std::move(transaction), blockNumber);
+        auto [err, receipt] = co_await coCallAtBlock(std::move(transaction), std::nullopt);
         if (err)
         {
             BOOST_THROW_EXCEPTION(*err);
@@ -1977,16 +1983,14 @@ private:
         co_return receipt;
     }
 
-    /// eth_call against the MPT at @p blockNumber on the canonical head's chain (headView: the
-    /// window layers stack the head chain's trie nodes and ledger rows over the backend, so a
-    /// finalized height reads exactly the committed plane and an unfinalized one its own
-    /// branch's). Refusals return Error, not throw.
+    /// eth_call on a single head-chain view. Use its tip if @p requestedBlock is absent.
     task::Task<std::tuple<Error::Ptr, protocol::TransactionReceipt::Ptr>> coCallAtBlock(
-        protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber)
+        protocol::Transaction::Ptr transaction, std::optional<protocol::BlockNumber> requestedBlock)
     {
         auto latestView = co_await headView();
         auto latestNumber =
             co_await bcos::ledger::getCurrentBlockNumber(latestView, bcos::ledger::fromStorage);
+        auto const blockNumber = requestedBlock.value_or(latestNumber);
         // Negative or beyond-latest: InvalidBlockNumber.
         if (blockNumber < 0 || blockNumber > latestNumber)
         {
