@@ -298,10 +298,8 @@ task::Task<void> EthEndpoint::syncing(const Json::Value&, Json::Value& response)
     if (engine && *engine && isOpStackLane(co_await readExecutorVersion(*m_nodeService->ledger())))
     {
         // OP lane: op-node drives the chain through forkchoiceUpdated and the PBFT BlockSync
-        // is dormant. Syncing only until the first forkchoice lands; afterwards the tracked head
-        // never passes the tip (it is a local block) and the tip leads it by one between each
-        // newPayload and its forkchoiceUpdated, which must not flap the answer every block.
-        auto const tip = co_await ledger::getCurrentBlockNumber(*m_nodeService->ledger());
+        // is dormant. Report local progress until the first forkchoice lands. Afterwards
+        // payloads arriving between forkchoice updates do not change the syncing status.
         auto const head = engine->getHeadBlockNumber();
         if (head.has_value())
         {
@@ -309,6 +307,7 @@ task::Task<void> EthEndpoint::syncing(const Json::Value&, Json::Value& response)
         }
         else
         {
+            auto const tip = co_await canonicalLatestNumber(*m_nodeService);
             result = Json::objectValue;
             result["startingBlock"] = "0x0";
             result["currentBlock"] = toQuantity(tip);
@@ -678,8 +677,8 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
                 co_return;
             }
         }
-        if (auto const entry = co_await ledger::getStorageAt(
-                *ledger, addressStr, bcos::executor::ACCOUNT_BALANCE, /*blockNumber*/ 0);
+        if (auto const entry =
+                co_await latestAccountField(block, addressStr, bcos::executor::ACCOUNT_BALANCE);
             entry.has_value())
         {
             auto const balanceStr = std::string(entry.value().get());
@@ -937,7 +936,8 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber)
                         << LOG_KV("isLatest", isLatest);
     }
-    if (blockTag == PendingBlock)
+    auto const opPending = blockTag == PendingBlock && m_nodeService->opCanonicalReader();
+    if (blockTag == PendingBlock && !opPending)
     {
         // try to fetch in txpool first
         auto const txpool = m_nodeService->txpool();
@@ -960,27 +960,22 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
         // Same latest semantics as getBalance: an MPT-committed tip is read through its
         // root; a flat-storage tip root answers nullopt and the flat NONCE row below
         // serves the request.
-        if (mptReader)
+        auto const ctx = mptReader ?
+                             co_await tryResolveLatestMptContext(*ledger, block, blockNumber, head,
+                                 mptReader, m_nodeService->mptPruneWindow()) :
+                             std::nullopt;
+        if (ctx && ctx->fullTrie)
         {
-            auto const ctx = co_await tryResolveLatestMptContext(
-                *ledger, block, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
-            if (ctx && ctx->fullTrie)
+            bcos::ledger::mpt::MPTReadView view{*mptReader, ctx->stateRoot};
+            auto const account = co_await view.readAccount(
+                bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+            if (account)
             {
-                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx->stateRoot};
-                auto const account = co_await view.readAccount(
-                    bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
-                if (account)
-                {
-                    nonce = account->nonce;
-                }
-                Json::Value result = toQuantity(nonce);
-                buildJsonContent(result, response);
-                co_return;
+                nonce = account->nonce;
             }
         }
-        if (auto const entry = co_await ledger::getStorageAt(
-                *ledger, addressStr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*blockNumber*/ 0);
-            entry.has_value())
+        else if (auto const entry = co_await latestAccountField(
+                     block, addressStr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE))
         {
             nonce = u256(entry.value().get());
         }
@@ -1006,6 +1001,12 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 EthHistoricalStateUnavailable, "Account not in trie (dormant in scenario A)"));
         }
+    }
+    if (auto* pool = m_nodeService->memPool(); opPending && pool)
+    {
+        auto const sender =
+            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight};
+        nonce = pool->pendingNonce(sender.toRawString(), nonce);
     }
     Json::Value result = toQuantity(nonce);
     buildJsonContent(result, response);
@@ -2480,21 +2481,29 @@ task::Task<EthEndpoint::StateReadContext> EthEndpoint::stateReadContext(
     auto const& reader = m_nodeService->opCanonicalReader();
     if (reader && chainHash)
     {
-        // A specific unfinalized block by hash (eth_getProof): its own chain's rows and trie,
-        // even when it is a replaced sibling. Finalized between the caller's window lookup and
-        // this one → fall through to the ledger + committed plane like every other by-hash
-        // path.
+        // A proof by hash must remain tied to this exact block through finalization.
         if (auto block = co_await reader->unfinalizedBlock(*chainHash, bcos::ledger::HEADER))
         {
             co_return StateReadContext{.block = std::move(block),
                 .mptReader = co_await reader->mptNodeReaderAt(*chainHash)};
         }
+        if (blockNumber <= (co_await reader->finalized()).number)
+        {
+            auto block = co_await ledger::getBlockData(
+                *m_nodeService->ledger(), blockNumber, bcos::ledger::HEADER);
+            if (block && block->blockHeader() &&
+                protocol::canonicalBlockHash(*block->blockHeader()) == *chainHash)
+            {
+                co_return StateReadContext{
+                    .block = std::move(block), .mptReader = m_nodeService->mptNodeReader()};
+            }
+        }
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, std::string(c_blockNotFoundMessage)));
     }
     if (reader && co_await isUnfinalizedHeight(blockNumber))
     {
-        // The head chain's view stacks every ancestor's trie nodes over the backend, so one
-        // reader at the head serves any height on that chain. A height the head chain does
-        // not reach reads as "no block" (the caller's Block-not-found), like a ledger miss.
+        // Resolve the trie against the selected header's chain even if head changes before
+        // the storage lookup. A height the head chain does not reach reads as "no block".
         StateReadContext context;
         try
         {
@@ -2507,7 +2516,11 @@ task::Task<EthEndpoint::StateReadContext> EthEndpoint::stateReadContext(
                             << LOG_KV("blockNumber", blockNumber)
                             << LOG_KV("error", e.errorMessage());
         }
-        context.mptReader = co_await reader->mptNodeReaderAt((co_await reader->head()).hash);
+        if (context.block && context.block->blockHeader())
+        {
+            context.mptReader = co_await reader->mptNodeReaderAt(
+                protocol::canonicalBlockHash(*context.block->blockHeader()));
+        }
         co_return context;
     }
     co_return StateReadContext{.block = co_await ledger::getBlockData(
@@ -2523,6 +2536,29 @@ task::Task<std::shared_ptr<NodeService::StateStorage>> EthEndpoint::latestStateS
     }
     auto const& provider = m_nodeService->stateStorageProvider();
     co_return provider ? provider() : nullptr;
+}
+
+task::Task<std::optional<storage::Entry>> EthEndpoint::latestAccountField(
+    protocol::Block::Ptr const& block, std::string_view address, std::string_view field)
+{
+    if (auto const& reader = m_nodeService->opCanonicalReader())
+    {
+        if (!block || !block->blockHeader())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, std::string(c_blockNotFoundMessage)));
+        }
+        auto const state =
+            co_await reader->stateStorageAt(protocol::canonicalBlockHash(*block->blockHeader()));
+        if (!state)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "No state storage for block"));
+        }
+        auto const table = ledger::account::ethLaneAccountTableName(
+            bcos::Address{address, bcos::Address::FromHex, bcos::Address::AlignRight});
+        co_return co_await storage2::readOne(*state, executor_v1::StateKeyView{table, field});
+    }
+    co_return co_await ledger::getStorageAt(*m_nodeService->ledger(), address, field, 0);
 }
 
 task::Task<protocol::Block::Ptr> EthEndpoint::unfinalizedBlockByHash(
@@ -2605,12 +2641,10 @@ task::Task<void> EthEndpoint::blobBaseFee(const Json::Value&, Json::Value& respo
     auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
     Json::Value result = Json::nullValue;
 
-    bcos::protocol::Block::Ptr head;
-    if (auto block =
-            co_await ledger::getBlockData(*ledger, ledgerConfig->blockNumber(), ledger::HEADER))
-    {
-        head = std::move(block);
-    }
+    auto const headNumber = m_nodeService->opCanonicalReader() ?
+                                co_await canonicalLatestNumber(*m_nodeService) :
+                                ledgerConfig->blockNumber();
+    auto const head = co_await canonicalBlockByNumber(*m_nodeService, headNumber, ledger::HEADER);
 
     // The OP lane has no blob schedule and no EIP-4844 pricing to resolve: op-geth reports
     // minBlobGasPrice as 1 when the header carries excessBlobGas (Ecotone+) and 0 otherwise,

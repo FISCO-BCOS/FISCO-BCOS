@@ -145,6 +145,10 @@ private:
     /// wired (tars-built NodeService).
     task::Task<std::shared_ptr<NodeService::StateStorage>> latestStateStorage();
 
+    /// Read a flat account field from the same block selected for the latest MPT read.
+    task::Task<std::optional<storage::Entry>> latestAccountField(
+        protocol::Block::Ptr const& block, std::string_view address, std::string_view field);
+
     /// True when @p blockNumber is above the OP facade's finalized tip (an unfinalized height
     /// served from the window); false off the OP lane.
     task::Task<bool> isUnfinalizedHeight(protocol::BlockNumber blockNumber);

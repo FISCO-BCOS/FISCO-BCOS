@@ -109,9 +109,8 @@ public:
     // ---- Unfinalized window (OP Engine lane, D1 方案 A) ----
     // On the OP lane commitBlock ADMITS an executed block into an in-memory window rooted at
     // the finalized (backend) tip; nothing reaches the backend until finalizeUpTo. Same-height
-    // siblings coexist; the Engine tracker decides which one is canonical. Every other
-    // scheduler has no window: the defaults answer "unknown block" and "nothing to finalize",
-    // and MultiVersionScheduler forwards both (every new method here must be forwarded there).
+    // siblings coexist; the Engine tracker decides which one is canonical. Schedulers with
+    // no window report an unknown block on lookup and reject finalization.
 
     /// One block of the unfinalized window, as the engine needs it for parent resolution.
     struct UnfinalizedBlock
@@ -137,7 +136,8 @@ public:
     virtual void finalizeUpTo(
         bcos::crypto::HashType const& /*blockHash*/, std::function<void(Error::Ptr)> callback)
     {
-        callback(nullptr);
+        callback(BCOS_ERROR_PTR(
+            SchedulerError::InvalidStatus, "unfinalized window is unavailable for this scheduler"));
     }
 
     // for performance, do the things before executing block in executor.

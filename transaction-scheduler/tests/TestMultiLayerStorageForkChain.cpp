@@ -90,13 +90,16 @@ BOOST_AUTO_TEST_CASE(layerOrderNewestWins)
         storage::Entry only;
         only.set(std::string("backend-only"));
         task::syncWait(storage2::writeOne(seed, StateKey{"t"sv, "b"sv}, std::move(only)));
+        storage::Entry shadowed;
+        shadowed.set(std::string("backend-x"));
+        task::syncWait(storage2::writeOne(seed, StateKey{"t"sv, "x"sv}, std::move(shadowed)));
         task::syncWait(multiLayerStorage.mergeView(std::move(seed)));
     }
     auto b1 = layerWith("k"sv, "b1"sv);
     auto b2 = layerWith("k"sv, "b2"sv);
     auto b1Only = layerWith("x"sv, "b1x"sv);
 
-    auto view = multiLayerStorage.forkChain({b1, b1Only, b2});
+    auto view = multiLayerStorage.forkChain({b1Only, b1, b2});
     BOOST_CHECK_EQUAL(readRow(view, "k"sv).value_or("<none>"), "b2");
     BOOST_CHECK_EQUAL(readRow(view, "x"sv).value_or("<none>"), "b1x");
     BOOST_CHECK_EQUAL(readRow(view, "b"sv).value_or("<none>"), "backend-only");

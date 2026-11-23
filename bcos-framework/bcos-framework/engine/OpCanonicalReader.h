@@ -91,12 +91,17 @@ public:
 
     /// The height of an unfinalized (window) block, any branch; nullopt when @p blockHash is
     /// not in the window (finalized or unknown).
+    /// Called concurrently with window writes. Use a short, synchronized metadata lookup
+    /// with no I/O or awaiting other work under the window lock. The result does not pin
+    /// the window entry for subsequent reads.
     virtual std::optional<protocol::BlockNumber> unfinalizedNumberOf(
         crypto::HashType const& blockHash) const = 0;
 
     /// The block rows (ledger::getBlockData flags) of an unfinalized block, decoded from its
     /// own chain view — its header, transactions and receipts live in its window layer
     /// (D1 §9.1). Null when @p blockHash is not in the window.
+    /// Return a fresh block and receipts for each read: RPC stamps positions and consumes
+    /// receipt logs while rendering the result.
     virtual task::Task<protocol::Block::Ptr> unfinalizedBlock(
         crypto::HashType const& blockHash, int32_t blockFlag) = 0;
 
@@ -104,6 +109,7 @@ public:
     /// nullopt when the head chain does not carry it — a transaction that exists only on a
     /// side branch is NOT answered (eth_getTransactionByHash then returns null, as geth does
     /// for a non-canonical inclusion).
+    /// The receipt belongs to this read and may be mutated by the caller.
     virtual task::Task<std::optional<ChainTransaction>> transactionOnHeadChain(
         crypto::HashType const& txHash) = 0;
 

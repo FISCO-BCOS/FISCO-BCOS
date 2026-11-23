@@ -90,9 +90,24 @@ NodeService::Ptr FilterSystem::getNodeService(
     return nodeService;
 }
 
+namespace
+{
+// Polling filters have a height cursor. Use finalized blocks on OP so a replacement
+// at a previously observed height cannot disappear behind the cursor.
+task::Task<protocol::BlockNumber> pollingTip(NodeService& nodeService)
+{
+    if (auto const& reader = nodeService.opCanonicalReader())
+    {
+        co_return (co_await reader->finalized()).number;
+    }
+    co_return co_await ledger::getCurrentBlockNumber(*nodeService.ledger());
+}
+}  // namespace
+
 task::Task<std::string> FilterSystem::newBlockFilter(std::string_view groupId)
 {
-    auto latestBlockNumber = getLatestBlockNumber(groupId);
+    auto nodeService = getNodeService(groupId, "newBlockFilter");
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto filter = std::make_shared<Filter>(
         BlocksSubscription, 0, nullptr, false, latestBlockNumber + 1, groupId);
     auto id = insertFilter(filter);
@@ -103,7 +118,8 @@ task::Task<std::string> FilterSystem::newBlockFilter(std::string_view groupId)
 
 task::Task<std::string> FilterSystem::newPendingTxFilter(std::string_view groupId)
 {
-    auto latestBlockNumber = getLatestBlockNumber(groupId);
+    auto nodeService = getNodeService(groupId, "newPendingTxFilter");
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto filter = std::make_shared<Filter>(
         PendingTransactionsSubscription, 0, nullptr, false, latestBlockNumber + 1, groupId);
     auto id = insertFilter(filter);
@@ -121,7 +137,8 @@ task::Task<std::string> FilterSystem::newFilter(std::string_view groupId, Filter
                             << LOG_KV("toBlock", params->toBlock());
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "invalid block range params"));
     }
-    auto latestBlockNumber = getLatestBlockNumber(groupId);
+    auto nodeService = getNodeService(groupId, "newFilter");
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto filter = std::make_shared<Filter>(
         LogsSubscription, 0, params, false, latestBlockNumber + 1, groupId);
     auto id = insertFilter(filter);
@@ -170,9 +187,8 @@ task::Task<Json::Value> FilterSystem::getFilterChangeImpl(std::string_view group
 task::Task<Json::Value> FilterSystem::getBlockChangeImpl(
     std::string_view groupId, Filter::Ptr filter)
 {
-    // getLatestBlockNumber and canonicalBlockHashAt use the same node service
     auto nodeService = getNodeService(groupId, "getBlockChangeImpl");
-    auto latestBlockNumber = getLatestBlockNumber(*nodeService);
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto startBlockNumber = filter->startBlockNumber();
 
     if (latestBlockNumber < startBlockNumber)
@@ -192,7 +208,7 @@ task::Task<Json::Value> FilterSystem::getBlockChangeImpl(
     Json::Value jResult(Json::arrayValue);
     for (auto i = 0; i < processBlockNum; ++i)
     {
-        auto hash = co_await canonicalBlockHashAt(*nodeService, startBlockNumber + i);
+        auto hash = co_await ledger::getBlockHash(*nodeService->ledger(), startBlockNumber + i);
         jResult.append(hash.hexPrefixed());
     }
     co_return jResult;
@@ -201,9 +217,8 @@ task::Task<Json::Value> FilterSystem::getBlockChangeImpl(
 task::Task<Json::Value> FilterSystem::getPendingTxChangeImpl(
     std::string_view groupId, Filter::Ptr filter)
 {
-    // getLatestBlockNumber and canonicalBlockByNumber use the same node service
     auto nodeService = getNodeService(groupId, "getPendingTxChangeImpl");
-    auto latestBlockNumber = getLatestBlockNumber(*nodeService);
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto startBlockNumber = filter->startBlockNumber();
     if (latestBlockNumber < startBlockNumber)
     {  // Since the last query, no new blocks have been generated
@@ -223,8 +238,8 @@ task::Task<Json::Value> FilterSystem::getPendingTxChangeImpl(
     Json::Value jRes(Json::arrayValue);
     for (auto i = 0; i < processBlockNum; ++i)
     {
-        auto block = co_await canonicalBlockByNumber(
-            *nodeService, i + startBlockNumber, bcos::ledger::TRANSACTIONS_HASH);
+        auto block = co_await ledger::getBlockData(
+            *nodeService->ledger(), i + startBlockNumber, bcos::ledger::TRANSACTIONS_HASH);
         for (std::size_t index = 0; index < block->transactionsMetaDataSize(); ++index)
         {
             jRes.append(block->transactionHash(index).hexPrefixed());
@@ -235,9 +250,8 @@ task::Task<Json::Value> FilterSystem::getPendingTxChangeImpl(
 
 task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId, Filter::Ptr filter)
 {
-    // getLatestBlockNumber and getLogsInternal use the same node service
     auto nodeService = getNodeService(groupId, "getLogsImpl");
-    auto latestBlockNumber = getLatestBlockNumber(*nodeService);
+    auto latestBlockNumber = co_await pollingTip(*nodeService);
     auto startBlockNumber = filter->startBlockNumber();
     auto fromBlock = filter->params()->fromBlock();
     auto toBlock = filter->params()->toBlock();

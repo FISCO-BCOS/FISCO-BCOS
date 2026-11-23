@@ -21,9 +21,11 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-framework/engine/OpCanonicalReader.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/protocol/LogEntry.h>
+#include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EngineEndpoint.h>
@@ -33,6 +35,7 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <array>
 #include <future>
 #include <map>
 #include <optional>
@@ -45,19 +48,22 @@ namespace
 {
 /// A window of hand-built blocks: `headChain` maps the unfinalized heights of the head chain to
 /// their hash, `window` holds every unfinalized block (both branches) by hash, `headTxs` the
-/// transactions the head chain carries. No state views: the fake answers null readers, which
-/// the endpoints treat as "no MPT" (not under test here).
+/// transactions the head chain carries. Flat state can be supplied by hash when needed.
 struct FakeReader : engine::OpCanonicalReader
 {
+    explicit FakeReader(protocol::BlockFactory& factory) : blockFactory(factory) {}
+
+    protocol::BlockFactory& blockFactory;
     BlockRef finalizedRef;
     BlockRef headRef;
     std::optional<protocol::BlockNumber> safe;
     std::map<protocol::BlockNumber, h256> headChain;
     std::map<h256, protocol::Block::Ptr> window;
     std::map<h256, ChainTransaction> headTxs;
+    std::map<h256, std::shared_ptr<StateStorage>> flatStates;
     /// A hash the window still LISTS (unfinalizedNumberOf answers) but no longer HOLDS
     /// (unfinalizedBlock null): the finalize race between an endpoint's two lookups.
-    std::optional<h256> justFinalized;
+    std::optional<BlockRef> evicted;
 
     task::Task<BlockRef> finalized() override { co_return finalizedRef; }
     task::Task<BlockRef> head() override { co_return headRef; }
@@ -72,9 +78,9 @@ struct FakeReader : engine::OpCanonicalReader
     }
     std::optional<protocol::BlockNumber> unfinalizedNumberOf(h256 const& hash) const override
     {
-        if (justFinalized && *justFinalized == hash)
+        if (evicted && evicted->hash == hash)
         {
-            return finalizedRef.number;
+            return evicted->number;
         }
         auto it = window.find(hash);
         return it == window.end() ? std::nullopt :
@@ -83,20 +89,35 @@ struct FakeReader : engine::OpCanonicalReader
     task::Task<protocol::Block::Ptr> unfinalizedBlock(h256 const& hash, int32_t) override
     {
         auto it = window.find(hash);
-        co_return it == window.end() ? nullptr : it->second;
+        if (it == window.end())
+        {
+            co_return nullptr;
+        }
+        bytes encoded;
+        it->second->encode(encoded);
+        co_return blockFactory.createBlock(encoded, false, false);
     }
     task::Task<std::optional<ChainTransaction>> transactionOnHeadChain(h256 const& txHash) override
     {
         auto it = headTxs.find(txHash);
-        co_return it == headTxs.end() ? std::nullopt : std::optional(it->second);
+        if (it == headTxs.end())
+        {
+            co_return std::nullopt;
+        }
+        auto result = it->second;
+        bytes encoded;
+        result.receipt->encode(encoded);
+        result.receipt = blockFactory.receiptFactory()->createReceipt(encoded);
+        co_return result;
     }
     task::Task<std::shared_ptr<MPTNodeReader>> mptNodeReaderAt(h256 const&) override
     {
         co_return nullptr;
     }
-    task::Task<std::shared_ptr<StateStorage>> stateStorageAt(h256 const&) override
+    task::Task<std::shared_ptr<StateStorage>> stateStorageAt(h256 const& hash) override
     {
-        co_return nullptr;
+        auto it = flatStates.find(hash);
+        co_return it == flatStates.end() ? nullptr : it->second;
     }
 };
 
@@ -116,6 +137,10 @@ protocol::Transaction::Ptr makeReadPlaneTx(uint64_t nonce, h256 const& hash)
     web3.maxFeePerGas = 150;
     web3.maxPriorityFeePerGas = 20;
     web3.to.emplace(Address("0x1234567890123456789012345678901234567890"));
+    web3.signatureR.resize(32);
+    web3.signatureS.resize(32);
+    web3.signatureR.back() = 1;
+    web3.signatureS.back() = 1;
     auto tars = std::make_shared<bcostars::Transaction>(web3.takeToTarsTransaction());
     tars->extraTransactionHash.assign(hash.begin(), hash.end());
     auto tx = std::make_shared<ReadPlaneTransaction>([tars]() { return tars.get(); });
@@ -141,7 +166,7 @@ public:
         // head chain runs through sibling B.
         tip = m_ledger->blockNumber();
         tipHash = protocol::canonicalBlockHash(*m_ledger->ledgerData().at(tip)->blockHeader());
-        reader = std::make_shared<FakeReader>();
+        reader = std::make_shared<FakeReader>(*m_blockFactory);
         reader->finalizedRef = {tipHash, tip};
         a = windowBlock(0xa1);
         b = windowBlock(0xb1);
@@ -175,6 +200,14 @@ public:
             .transaction = head.tx, .receipt = head.receipt, .blockHash = head.hash};
     }
 
+    void finalize(WindowBlock const& head)
+    {
+        m_ledger->appendBuiltBlock(head.block);
+        reader->finalizedRef = {head.hash, tip + 1};
+        reader->window.clear();
+        reader->headChain.clear();
+    }
+
     /// One block at tip+1 with one transaction whose receipt carries one log; @p salt makes
     /// the header hash and the tx hash distinct per sibling.
     WindowBlock windowBlock(uint8_t salt)
@@ -194,7 +227,7 @@ public:
         header->setWithdrawalsRoot(h256(1U));
         header->setExcessBlobGas(0);
         header->setBlobGasUsed(0);
-        header->calculateHash(*cryptoSuite->hashImpl());
+        header->setRLPHash(protocol::canonicalBlockHash(*header));
         block->setBlockHeader(header);
         h256 const txHash(static_cast<unsigned>(salt));
         auto tx = makeReadPlaneTx(0, txHash);
@@ -409,6 +442,7 @@ BOOST_AUTO_TEST_CASE(RemainingReadsFollowTheHeadChain)
     auto const expectedGasPrice = toQuantity(
         u256(100) + u256(rpc::suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION)));
     BOOST_CHECK_EQUAL(call("eth_gasPrice")["result"].asString(), expectedGasPrice);
+    BOOST_CHECK_EQUAL(call("eth_blobBaseFee")["result"].asString(), "0x1");
     // eth_feeHistory with newest = latest reads the window block through the block source.
     auto fees =
         call("eth_feeHistory", params({"0x1", "latest", Json::Value(Json::arrayValue)}))["result"];
@@ -424,30 +458,8 @@ BOOST_AUTO_TEST_CASE(RemainingReadsFollowTheHeadChain)
         hashA.hexPrefixed());
 }
 
-// engine_getPayloadBodiesByRange/ByHash resolve through the same canonical-chain helpers: an
-// unfinalized head block answers its body, a window block by hash too. A plain (pre-Shanghai
-// shaped, transaction-less) block is used because a Canyon+ OP block's body is null on this
-// lane regardless (SYS_NUMBER_2_WITHDRAWALS is never written by the OP lane).
 BOOST_AUTO_TEST_CASE(PayloadBodiesFollowTheHeadChain)
 {
-    auto block = m_blockFactory->createBlock();
-    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-    header->setNumber(tip + 1);
-    header->setTimestamp(1'700'000'000'000ULL + 1000ULL * 0xc1);
-    header->setParentInfo(protocol::ParentInfo{.blockNumber = tip, .blockHash = tipHash});
-    header->setGasLimit(30'000'000);
-    header->calculateHash(*cryptoSuite->hashImpl());
-    block->setBlockHeader(header);
-    WindowBlock const c{.block = block,
-        .tx = nullptr,
-        .receipt = nullptr,
-        .hash = protocol::canonicalBlockHash(*header),
-        .txHash = {}};
-    reader->window[c.hash] = block;
-    reader->headRef = {c.hash, tip + 1};
-    reader->headChain = {{tip + 1, c.hash}};
-    reader->headTxs.clear();
-
     rpc::EngineEndpoint engine(nodeService);
     auto invoke = [&](auto method, Json::Value const& request) {
         Json::Value response;
@@ -455,51 +467,135 @@ BOOST_AUTO_TEST_CASE(PayloadBodiesFollowTheHeadChain)
         return response["result"];
     };
     auto const headTag = toQuantity(tip + 1);
-    auto byRange =
+    auto const byRange =
         invoke(&rpc::EngineEndpoint::getPayloadBodiesByRangeV1, params({headTag, "0x1"}));
     BOOST_REQUIRE(byRange.isArray());
     BOOST_REQUIRE_EQUAL(byRange.size(), 1U);
     BOOST_REQUIRE(byRange[0U].isObject());
-    BOOST_CHECK_EQUAL(byRange[0U]["transactions"].size(), 0U);
-    auto byHash = invoke(&rpc::EngineEndpoint::getPayloadBodiesByHashV1,
-        params({params({c.hash.hexPrefixed(), h256(0x77U).hexPrefixed()})}));
-    BOOST_REQUIRE_EQUAL(byHash.size(), 2U);
-    BOOST_CHECK(byHash[0U].isObject());
-    BOOST_CHECK(byHash[1U].isNull());
-    // Above the head: an empty array, as before.
+    BOOST_CHECK_EQUAL(byRange[0U]["transactions"].size(), 1U);
+    BOOST_CHECK(byRange[0U]["withdrawals"] == Json::Value(Json::arrayValue));
+    auto const byHash = invoke(&rpc::EngineEndpoint::getPayloadBodiesByHashV1,
+        params({params({hashA.hexPrefixed(), hashB.hexPrefixed(), h256(0x77U).hexPrefixed()})}));
+    BOOST_REQUIRE_EQUAL(byHash.size(), 3U);
+    BOOST_CHECK(byHash[0U]["withdrawals"] == Json::Value(Json::arrayValue));
+    BOOST_CHECK(byHash[1U] == byRange[0U]);
+    BOOST_CHECK(byHash[2U].isNull());
     BOOST_CHECK(invoke(
         &rpc::EngineEndpoint::getPayloadBodiesByRangeV1, params({toQuantity(tip + 2), "0x1"}))
             .empty());
 }
 
-// eth_newBlockFilter + eth_getFilterChanges: a block that becomes the head after the filter
-// was installed is reported with the canonical hash at its height.
-BOOST_AUTO_TEST_CASE(BlockFilterSeesTheNewHead)
+BOOST_AUTO_TEST_CASE(PollingFiltersReportFinalizedReplacement)
 {
-    // No head above the finalized tip yet: latest == finalized.
-    reader->headRef = reader->finalizedRef;
-    reader->headChain.clear();
-    auto const filterId = call("eth_newBlockFilter")["result"].asString();
-    BOOST_CHECK(call("eth_getFilterChanges", params({filterId}))["result"].empty());
-    setHead(b);
-    auto changes = call("eth_getFilterChanges", params({filterId}))["result"];
-    BOOST_REQUIRE(changes.isArray());
-    BOOST_REQUIRE_EQUAL(changes.size(), 1U);
-    BOOST_CHECK_EQUAL(changes[0U].asString(), hashB.hexPrefixed());
+    auto const blockId = call("eth_newBlockFilter")["result"].asString();
+    auto const pendingId = call("eth_newPendingTransactionFilter")["result"].asString();
+    Json::Value filter(Json::objectValue);
+    filter["fromBlock"] = "latest";
+    filter["toBlock"] = "latest";
+    auto const logId = call("eth_newFilter", params({filter}))["result"].asString();
+    auto changes = [&](std::string const& id) {
+        auto result = call("eth_getFilterChanges", params({id}))["result"];
+        BOOST_REQUIRE(result.isArray());
+        return result;
+    };
+    for (auto const& id : {blockId, pendingId, logId})
+    {
+        BOOST_CHECK(changes(id).empty());
+    }
+    setHead(a);
+    for (auto const& id : {blockId, pendingId, logId})
+    {
+        BOOST_CHECK(changes(id).empty());
+    }
+    finalize(a);
+    auto const blocks = changes(blockId);
+    auto const transactions = changes(pendingId);
+    auto const logs = changes(logId);
+    BOOST_REQUIRE_EQUAL(blocks.size(), 1U);
+    BOOST_REQUIRE_EQUAL(transactions.size(), 1U);
+    BOOST_REQUIRE_EQUAL(logs.size(), 1U);
+    BOOST_CHECK_EQUAL(blocks[0U].asString(), hashA.hexPrefixed());
+    BOOST_CHECK_EQUAL(transactions[0U].asString(), txA.hexPrefixed());
+    BOOST_CHECK_EQUAL(logs[0U]["blockHash"].asString(), hashA.hexPrefixed());
+    BOOST_CHECK(changes(blockId).empty());
 }
 
-// The finalize race on eth_getProof by hash: the window still lists the hash when the
-// endpoint resolves it but has handed the block to the ledger by the time the state read
-// runs. The read must fall through to the ledger + committed plane (here: no committed MPT
-// reader is wired, so -32603 "MPT not enabled"), never answer "Block not found".
+// The fake's missing committed MPT reader provides a distinct error after the correct
+// block has been found on disk.
 BOOST_AUTO_TEST_CASE(GetProofByHashSurvivesFinalizeRace)
 {
-    reader->justFinalized = tipHash;
-    auto resp = call("eth_getProof", params({"0x00000000000000000000000000000000000000b1",
-                                         Json::Value(Json::arrayValue), tipHash.hexPrefixed()}));
+    reader->evicted = engine::OpCanonicalReader::BlockRef{tipHash, tip};
+    auto const resp =
+        call("eth_getProof", params({"0x00000000000000000000000000000000000000b1",
+                                 Json::Value(Json::arrayValue), tipHash.hexPrefixed()}));
     BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_NE(resp["error"]["message"].asString(), "Block not found");
     BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), "MPT not enabled on this node");
+}
+
+BOOST_AUTO_TEST_CASE(GetProofByHashRejectsPrunedSibling)
+{
+    finalize(b);
+    reader->evicted = engine::OpCanonicalReader::BlockRef{hashA, tip + 1};
+    auto const resp =
+        call("eth_getProof", params({"0x00000000000000000000000000000000000000b1",
+                                 Json::Value(Json::arrayValue), hashA.hexPrefixed()}));
+    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), "Block not found");
+}
+
+BOOST_AUTO_TEST_CASE(NegativeLedgerBlockNumberReturnsNull)
+{
+    h256 const hash(0xffU);
+    m_ledger->indexBlockHash(hash, -1);
+    auto const resp = call("eth_getBlockTransactionCountByHash", params({hash.hexPrefixed()}));
+    BOOST_CHECK(!resp.isMember("error"));
+    BOOST_CHECK(resp["result"].isNull());
+}
+
+BOOST_AUTO_TEST_CASE(LatestFlatStateAndPendingNonceFollowHead)
+{
+    using FlatStorage = storage2::memory_storage::MemoryStorage<executor_v1::StateKey,
+        executor_v1::StateValue, storage2::memory_storage::ORDERED>;
+    Address const sender("0x00000000000000000000000000000000000000b1");
+    auto const table = ledger::account::ethLaneAccountTableName(sender);
+    auto setState = [&](h256 const& hash, std::string nonce, std::string balance) {
+        FlatStorage storage;
+        bcos::storage::Entry nonceEntry;
+        nonceEntry.set(std::move(nonce));
+        task::syncWait(storage2::writeOne(storage,
+            executor_v1::StateKey{table, ledger::ACCOUNT_TABLE_FIELDS::NONCE},
+            std::move(nonceEntry)));
+        bcos::storage::Entry balanceEntry;
+        balanceEntry.set(std::move(balance));
+        task::syncWait(storage2::writeOne(
+            storage, executor_v1::StateKey{table, "balance"}, std::move(balanceEntry)));
+        reader->flatStates[hash] =
+            storage2::makeOwningAnyStorage<executor_v1::StateKey, executor_v1::StateValue>(
+                std::move(storage));
+    };
+    setState(hashA, "1", "22");
+    setState(hashB, "2", "33");
+
+    bcos::storage::Entry finalizedNonce;
+    finalizedNonce.set(std::string("0"));
+    m_ledger->setStorageAt(
+        sender.hex(), std::string(ledger::ACCOUNT_TABLE_FIELDS::NONCE), std::move(finalizedNonce));
+    txpool::MemPoolImpl pool;
+    nodeService->setMemPool(pool);
+    auto const address = sender.hexPrefixed();
+    auto nonce = [&](char const* tag) {
+        return call("eth_getTransactionCount", params({address, tag}))["result"].asString();
+    };
+    BOOST_CHECK_EQUAL(nonce("pending"), "0x2");
+    BOOST_CHECK_EQUAL(nonce("latest"), "0x2");
+    BOOST_CHECK_EQUAL(
+        call("eth_getBalance", params({address, "latest"}))["result"].asString(), "0x21");
+    std::array transactions{makeReadPlaneTx(2, h256(0x82U)), makeReadPlaneTx(4, h256(0x84U))};
+    pool.add(transactions);
+    BOOST_CHECK_EQUAL(nonce("pending"), "0x3");  // stops at the gap before 4
+    setHead(a);
+    BOOST_CHECK_EQUAL(nonce("pending"), "0x1");  // nonce 2 is now queued
+    BOOST_CHECK_EQUAL(
+        call("eth_getBalance", params({address, "latest"}))["result"].asString(), "0x16");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

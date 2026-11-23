@@ -48,9 +48,4 @@ task::Task<protocol::Block::Ptr> canonicalBlockByNumber(
 task::Task<protocol::Block::Ptr> canonicalBlockByHash(
     NodeService& nodeService, crypto::HashType const& blockHash, int32_t blockFlag);
 
-/// The canonical hash at @p blockNumber: the ledger's SYS_NUMBER_2_HASH at or below the
-/// finalized tip, the head chain's block above it; throws (GetStorageError) when there is none.
-task::Task<crypto::HashType> canonicalBlockHashAt(
-    NodeService& nodeService, protocol::BlockNumber blockNumber);
-
 }  // namespace bcos::rpc
