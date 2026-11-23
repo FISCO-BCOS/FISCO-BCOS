@@ -454,6 +454,23 @@ RlpResult<NewBlockHashesMessage> decodeNewBlockHashes(bytesConstRef _data)
     return msg;
 }
 
+bcos::bytes encodeBlockRangeUpdate(BlockRangeUpdateMessage const& _msg)
+{
+    return rlpList(
+        {rlpItem(_msg.earliestBlock), rlpItem(_msg.latestBlock), rlpItem(_msg.latestBlockHash)});
+}
+
+RlpResult<BlockRangeUpdateMessage> decodeBlockRangeUpdate(bytesConstRef _data)
+{
+    BlockRangeUpdateMessage msg;
+    bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
+    RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
+    RLP_TRY(msg.earliestBlock, take<uint64_t>(items));
+    RLP_TRY(msg.latestBlock, take<uint64_t>(items));
+    RLP_TRY(msg.latestBlockHash, take<h256>(items));
+    return msg;
+}
+
 // ---------------------------------------------------------------------------
 // Transactions
 // ---------------------------------------------------------------------------

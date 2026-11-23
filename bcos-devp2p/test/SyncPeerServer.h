@@ -30,6 +30,7 @@
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <functional>
 #include <map>
 
 namespace bcos::devp2p::test
@@ -263,7 +264,8 @@ inline void reencodeOpHeader(sync::Block& _block)
 
 // Serve eth/68 requests over an established session until the peer disconnects
 // or an unexpected message arrives. Runs on the server thread.
-inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> const& _chain)
+inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> const& _chain,
+    std::function<void(rlpx::Session&)> _beforeReply = {})
 {
     std::map<bcos::h256, size_t> byHash;
     for (size_t i = 0; i < _chain.size(); ++i)
@@ -310,6 +312,10 @@ inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> cons
                     response.headers.push_back(_chain[static_cast<size_t>(idx)].headerRlp);
                 }
             }
+            if (_beforeReply)
+            {
+                _beforeReply(_session);
+            }
             _session.sendMessage(
                 rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::BlockHeaders)),
                     eth::encodeBlockHeaders(response)});
@@ -333,6 +339,10 @@ inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> cons
                     body.withdrawals = block.withdrawals;
                 }
                 response.bodies.push_back(std::move(body));
+            }
+            if (_beforeReply)
+            {
+                _beforeReply(_session);
             }
             _session.sendMessage(
                 rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::BlockBodies)),

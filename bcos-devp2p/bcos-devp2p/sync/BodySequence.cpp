@@ -53,7 +53,7 @@ std::vector<Block> BodySequence::requestBodies(
             unwrapOrThrow(_session.recvMessage(), "BodySequence: failed to decode a frame: ");
         if (response.id == rlpx::baseMsg::Ping)
         {
-            _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, {}});
+            _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, rlpx::encodePong()});
             continue;
         }
         if (response.id == rlpx::baseMsg::Pong)
@@ -70,6 +70,13 @@ std::vector<Block> BodySequence::requestBodies(
                     "BodySequence: peer disconnected: " +
                     (disc ? "reason=" + std::to_string(static_cast<int>(disc->reason)) :
                             "reason undecodable: " + disc.error().message));
+            }
+            if (response.id == eth::frameId(eth::msg::BlockRangeUpdate))
+            {
+                unwrapOrThrow(eth::decodeBlockRangeUpdate(
+                                  bytesConstRef(response.data.data(), response.data.size())),
+                    "BodySequence: malformed BlockRangeUpdate: ");
+                continue;
             }
             if (response.id == eth::frameId(eth::msg::NewBlockHashes) ||
                 response.id == eth::frameId(eth::msg::Transactions) ||

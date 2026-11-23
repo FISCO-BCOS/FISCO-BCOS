@@ -318,7 +318,8 @@ public:
     const std::string& ethereumBootnodesFile() const;
     // eth/68 transaction gossip ([ethereum] tx_gossip, default true): dedicated outbound
     // sessions that exchange pooled transactions with bootnode peers and admit what
-    // arrives into the engine mempool. Only meaningful in EL mode.
+    // arrives into the engine mempool. Uses a derived node identity so these sessions
+    // can coexist with block sync. Only meaningful in EL mode.
     bool ethereumTxGossipEnabled() const;
     // path to a file holding the 32-byte secp256k1 node private key (hex, optional
     // 0x prefix); empty => auto-generate a persistent key next to the FISCO node key

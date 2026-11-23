@@ -97,16 +97,8 @@ EstablishedSession exchangeHandshake(
     auto peerHello =
         unwrapOrThrow(decodeHello(bytesConstRef(helloMsg.data.data(), helloMsg.data.size())),
             "exchangeHandshake: failed to decode the Hello message: ");
-    // Negotiate the highest eth version the peer supports from {68, 69}.
-    uint8_t negotiatedEth = 0;
-    for (auto const& cap : peerHello.capabilities)
-    {
-        if (cap.name == "eth" && (cap.version == 68 || cap.version == 69))
-        {
-            negotiatedEth = std::max(negotiatedEth, cap.version);
-        }
-    }
-    if (negotiatedEth == 0)
+    auto negotiatedEth = eth::negotiateEthVersion(hello.capabilities, peerHello.capabilities);
+    if (!negotiatedEth)
     {
         throw std::runtime_error("exchangeHandshake: no common eth capability with peer");
     }
@@ -124,7 +116,7 @@ EstablishedSession exchangeHandshake(
         }
         BCOS_LOG(INFO) << LOG_BADGE("handshake") << LOG_KV("peerClient", peerHello.clientId)
                        << LOG_KV("peerCaps", peerCaps) << LOG_KV("ourCaps", ourCaps)
-                       << LOG_KV("eth", static_cast<int>(negotiatedEth));
+                       << LOG_KV("eth", static_cast<int>(*negotiatedEth));
     }
 
     // Both peers send Hello with version >= 5 → enable snappy on the session.
@@ -134,17 +126,17 @@ EstablishedSession exchangeHandshake(
 
     // --- eth Status exchange ---
     eth::StatusMessage status;
-    status.protocolVersion = negotiatedEth;
+    status.protocolVersion = *negotiatedEth;
     status.networkId = _config.networkId;
     status.genesisHash = _config.genesisHash;
     status.forkId = _config.forkId;
-    if (negotiatedEth >= 69)
+    if (*negotiatedEth >= 69)
     {
-        // EIP-7642: advertise our (genesis-only) block range.
         status.eip7642 = true;
-        status.earliestBlock = 0;
-        status.latestBlock = 0;
-        status.latestBlockHash = _config.genesisHash;
+        status.earliestBlock = _config.earliestBlock;
+        status.latestBlock = _config.latestBlock;
+        status.latestBlockHash =
+            _config.headHash != bcos::h256{} ? _config.headHash : _config.genesisHash;
     }
     else
     {
@@ -173,7 +165,7 @@ EstablishedSession exchangeHandshake(
     // from the peer-supplied field), and the embedded version must match it.
     auto peerStatus =
         unwrapOrThrow(eth::decodeStatus(bytesConstRef(statusMsg.data.data(), statusMsg.data.size()),
-                          negotiatedEth),
+                          *negotiatedEth),
             "exchangeHandshake: failed to decode the eth Status message: ");
 
     // The peer must be on our network (spec: disconnect on network-ID mismatch).

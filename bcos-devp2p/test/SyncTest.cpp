@@ -94,6 +94,80 @@ BOOST_AUTO_TEST_CASE(downloadChainFromFakePeer)
     BOOST_CHECK(serverDone);
 }
 
+BOOST_AUTO_TEST_CASE(pingPongAndBlockRangeUpdateDuringDownload)
+{
+    auto chain = devp2p::test::makeTestChain(2);
+    rlpx::EccKeyPair serverKey;
+    rlpx::EccKeyPair clientKey;
+    rlpx::PeerConfig serverConfig;
+    serverConfig.clientId = "fake-peer";
+    rlpx::RlpxServer server(serverKey, 0, serverConfig);
+
+    std::atomic<int> pings{0};
+    std::string callbackError;
+    std::thread serverThread([&] {
+        try
+        {
+            auto established = server.accept();
+            devp2p::test::serveRequests(established.session, chain, [&](rlpx::Session& session) {
+                try
+                {
+                    session.sendMessage(rlpx::Message{rlpx::baseMsg::Ping, rlpx::encodePing()});
+                    auto reply = devp2p::test::unwrapOrThrow(
+                        session.recvMessage(), "fake peer: failed to read Pong: ");
+                    if (reply.id != rlpx::baseMsg::Pong)
+                    {
+                        throw std::runtime_error("fake peer: expected Pong");
+                    }
+                    if (reply.data != rlpx::encodePong())
+                    {
+                        throw std::runtime_error("fake peer: Pong is not an RLP empty list");
+                    }
+                    ++pings;
+                    eth::BlockRangeUpdateMessage update;
+                    update.latestBlock = 1;
+                    update.latestBlockHash = chain.back().hash;
+                    session.sendMessage(rlpx::Message{
+                        static_cast<uint8_t>(eth::frameId(eth::msg::BlockRangeUpdate)),
+                        eth::encodeBlockRangeUpdate(update)});
+                }
+                catch (std::exception const& e)
+                {
+                    callbackError = e.what();
+                    throw;
+                }
+            });
+        }
+        catch (...)
+        {}
+    });
+
+    rlpx::PeerConfig clientConfig;
+    clientConfig.host = "127.0.0.1";
+    clientConfig.port = server.port();
+    clientConfig.peerPublicKey = serverKey.publicKey();
+    std::vector<sync::Block> downloaded;
+    std::string clientError;
+    try
+    {
+        rlpx::RlpxClient client(std::move(clientKey), clientConfig);
+        auto established = client.connect();
+        sync::BlockExchange exchange(0, h256{});
+        exchange.downloadRange(established.session, chain.size(),
+            [&](sync::Block const& block) { downloaded.push_back(block); });
+    }
+    catch (std::exception const& e)
+    {
+        clientError = e.what();
+    }
+    serverThread.join();
+
+    BOOST_CHECK(clientError.empty());
+    BOOST_CHECK(callbackError.empty());
+    BOOST_CHECK_EQUAL(pings.load(), 2);
+    BOOST_CHECK_EQUAL(downloaded.size(), chain.size());
+}
+
 // A peer that returns a broken parent chain must be rejected.
 BOOST_AUTO_TEST_CASE(brokenParentChainRejected)
 {

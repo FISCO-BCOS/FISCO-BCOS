@@ -23,8 +23,8 @@
  *
  *        These sessions are SEPARATE from the block-sync sessions (EthereumSyncInitializer's
  *        download rounds): the sync request/response loops stay byte-for-byte untouched, and
- *        a gossip peer failure never aborts a download. The cost is a second connection to a
- *        few bootnodes; geth treats them as ordinary peers.
+ *        a gossip peer failure never aborts a download. The second connection uses a stable,
+ *        derived node identity so geth does not reject it as a duplicate of the sync session.
  *
  *        Layering for tests: start()/pumpLoop() own the transport (RlpxClient sessions);
  *        handlePeerMessage()/announceLocalTransaction() are transport-free — a PeerState's
@@ -118,6 +118,15 @@ public:
 
     bool running() const { return m_running.load(); }
 
+    static devp2p::rlpx::EccKeyPair deriveGossipKey(devp2p::rlpx::EccKeyPair const& localKey)
+    {
+        static std::string const domain{"FISCO-BCOS/tx-gossip/v1"};
+        auto derived = devp2p::rlpx::keccak256(
+            bytesConstRef(localKey.privateKey().data(), localKey.privateKey().size()),
+            bytesConstRef(reinterpret_cast<bcos::byte const*>(domain.data()), domain.size()));
+        return devp2p::rlpx::EccKeyPair(std::move(derived));
+    }
+
     /// Spawn the peer pump threads (at most c_maxGossipPeers, one per bootnode slot,
     /// round-robin over the rest on failure). No-op when already running or the bootnode
     /// list is empty.
@@ -128,6 +137,7 @@ public:
         {
             return;
         }
+        localKey = deriveGossipKey(localKey);
         size_t const slots = std::min(c_maxGossipPeers, bootnodes.size());
         m_threads.reserve(slots);
         for (size_t slot = 0; slot < slots; ++slot)

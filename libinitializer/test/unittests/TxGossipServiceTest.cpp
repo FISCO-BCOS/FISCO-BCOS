@@ -406,5 +406,20 @@ BOOST_AUTO_TEST_CASE(rawCacheReannounceKeepsSingleEntry)
     BOOST_CHECK(reply->transactions.front() == envelope);
 }
 
+BOOST_AUTO_TEST_CASE(gossipIdentityIsDerivedAndDistinct)
+{
+    devp2p::rlpx::EccKeyPair primary(bcos::bytes(32, 1));
+    auto first = TxGossipService::deriveGossipKey(primary);
+    auto second = TxGossipService::deriveGossipKey(primary);
+    BOOST_CHECK(first.privateKey() != primary.privateKey());
+    BOOST_CHECK(first.publicKey() != primary.publicKey());
+    BOOST_CHECK(first.privateKey() == second.privateKey());
+    BOOST_CHECK(first.publicKey() == second.publicKey());
+
+    devp2p::rlpx::EccKeyPair otherPrimary(bcos::bytes(32, 2));
+    auto other = TxGossipService::deriveGossipKey(otherPrimary);
+    BOOST_CHECK(other.publicKey() != first.publicKey());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
