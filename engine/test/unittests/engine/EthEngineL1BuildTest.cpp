@@ -24,6 +24,7 @@
 
 #include "engine/bcos-engine/EthEngineService.h"
 #include "engine/test/unittests/engine/EthServiceStubs.h"
+#include <bcos-ledger/Ledger.h>
 
 #include "libinitializer/EthereumBlockHashLookup.h"
 #include "libinitializer/ExternalPayloadVerifier.h"
@@ -128,7 +129,8 @@ void el1bWriteCurrentNumber(RealGlobalStateBackendStorage& backend, int64_t numb
 /// The number-keyed header row the EL build lane reads the parent Ethereum header from
 /// (updateForkchoice -> getBlockData(HEADER) -> EthBlockHeader(...).data()).
 void el1bSeedParentHeaderRow(RealGlobalStateBackendStorage& backend,
-    bcos::protocol::BlockFactory& blockFactory, protocol::EthBlockHeaderData const& parent)
+    bcos::protocol::BlockFactory& blockFactory, protocol::EthBlockHeaderData const& parent,
+    h256 hash = c_genesisHash)
 {
     auto header = blockFactory.blockHeaderFactory()->createBlockHeader();
     header->setNumber(parent.number);
@@ -151,6 +153,7 @@ void el1bSeedParentHeaderRow(RealGlobalStateBackendStorage& backend,
         header->setExcessBlobGas(*parent.excessBlobGas);
     }
     header->setEthBlockVersion(protocol::EthBlockVersion::CANCUN);
+    header->setRLPHash(hash);
     bcos::bytes buffer;
     header->encode(buffer);
     storage::Entry entry;
@@ -175,9 +178,10 @@ struct EL1BNode
     bcos::protocol::BlockFactory::Ptr blockFactory = bcos::test::createBlockFactory(cryptoSuite);
     std::shared_ptr<executor_v1::eth::EthereumExecutor> executor;
     std::shared_ptr<EL1BVerifier> verifier;
-    std::shared_ptr<bcos::test::FakeLedger> fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+    std::shared_ptr<ledger::LedgerInterface> fakeLedger =
+        std::make_shared<bcos::test::FakeLedger>();
 
-    explicit EL1BNode(std::string name, int64_t reorgWindow = 0)
+    explicit EL1BNode(std::string name, bool reversible = false)
     {
         ioServicePool = std::make_shared<bcos::IOServicePool>(1, std::move(name));
         scheduler = std::make_unique<scheduler_v1::SchedulerSerialImpl>(ioServicePool);
@@ -188,7 +192,15 @@ struct EL1BNode
         executor =
             std::make_shared<executor_v1::eth::EthereumExecutor>(receiptFactory, std::move(lookup));
         verifier = std::make_shared<EL1BVerifier>(*scheduler, *executor, *blockFactory,
-            /*commitObserver=*/nullptr, reorgWindow);
+            /*commitObserver=*/nullptr, reversible);
+        if (reversible)
+        {
+            fakeLedger = std::make_shared<ledger::Ledger>(blockFactory,
+                std::make_shared<
+                    bcos::storage::LegacyStorageWrapper<RealGlobalStateBackendStorage>>(
+                    backendStorage),
+                1000);
+        }
     }
 
     /// Identical genesis on both nodes: executor config, funded accounts, the canonical
@@ -237,15 +249,11 @@ struct EL1BFixture
     {}
 };
 
-/// Reorg variant: BOTH nodes run the real seam over verifiers with a positive reorg
-/// window, so every commit (either lane) writes a rollback journal and a competing
-/// payload can rewind a self-built commit.
+/// Both nodes use reversible commits and the production ledger prewrite.
 struct EL1BReorgFixture
 {
-    static constexpr int64_t c_reorgWindow = 8;
-
-    EL1BNode nodeA{"reorgA", c_reorgWindow};
-    EL1BNode nodeB{"reorgB", c_reorgWindow};
+    EL1BNode nodeA{"reorgA", /*reversible=*/true};
+    EL1BNode nodeB{"reorgB", /*reversible=*/true};
     bcos::txpool::MemPoolImpl memPoolA{
         bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
     bcos::txpool::MemPoolImpl memPoolB{
@@ -475,7 +483,7 @@ struct EL1BFaultNode
     std::shared_ptr<EL1BVerifier> verifier;
     std::shared_ptr<bcos::test::FakeLedger> fakeLedger = std::make_shared<bcos::test::FakeLedger>();
 
-    explicit EL1BFaultNode(std::string name, int64_t reorgWindow = 0)
+    explicit EL1BFaultNode(std::string name, bool reversible = false)
     {
         ioServicePool = std::make_shared<bcos::IOServicePool>(1, std::move(name));
         scheduler = std::make_unique<scheduler_v1::SchedulerSerialImpl>(ioServicePool);
@@ -487,7 +495,7 @@ struct EL1BFaultNode
         executor =
             std::make_shared<executor_v1::eth::EthereumExecutor>(receiptFactory, std::move(lookup));
         verifier = std::make_shared<EL1BVerifier>(*scheduler, *executor, *blockFactory,
-            /*commitObserver=*/nullptr, reorgWindow);
+            /*commitObserver=*/nullptr, reversible);
     }
 
     /// Same seeding as EL1BNode::seedGenesis; the helpers take the base backend type,
@@ -515,26 +523,24 @@ struct EL1BFaultNode
 class El1bPersistingLedger : public bcos::test::FakeLedger
 {
 public:
-    using FakeLedger::FakeLedger;
+    explicit El1bPersistingLedger(protocol::BlockFactory& factory) : factory(factory) {}
+
+    protocol::BlockFactory& factory;
 
     std::atomic<unsigned> prewriteCount{0};
 
     task::Task<std::string> prewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        bcos::protocol::ConstTransactionsPtr txs, bcos::protocol::Block::ConstPtr block,
         bool writeTxsAndReceipts, std::optional<bcos::crypto::HashType> blockHashOverride,
         bool writeNonces) override
     {
         (void)writeTxsAndReceipts;
         (void)blockHashOverride;
-        (void)writeNonces;
-        if (block)
+        auto rows = ledger::buildPrewriteBlockRows(
+            block, txs, factory, block->blockHeader()->hash(), writeNonces);
+        for (auto& [key, row] : rows.rows)
         {
-            auto const header = block->blockHeader();
-            bcos::storage::Entry hash2NumberEntry;
-            hash2NumberEntry.set(std::to_string(header->number()));
-            storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER,
-                bcos::concepts::bytebuffer::toView(header->hash()), std::move(hash2NumberEntry),
-                [](auto&&) {});
+            co_await storage2::writeOne(*storage, key, std::move(row));
         }
         ++prewriteCount;
         co_return std::string{};
@@ -572,24 +578,21 @@ public:
     }
 };
 
-/// Node A over the fault backend with a positive reorg window: the self-built commit
-/// lane journals rollback rows and the fail-closed duplicate guard has a ledger row to
-/// answer from. Node B is the independent verifier. ledgerA is the failing-prewrite
-/// variant with its counter at 0 — a pure pass-through to El1bPersistingLedger until a
-/// test arms it (prewriteFaultRetryCommitsWithJournal), so every other test on this
-/// fixture behaves identically to a plain persisting ledger.
+/// Node A uses the fault backend and commits undo rows with self-built payloads. Node B is the
+/// independent verifier. ledgerA is the failing-prewrite variant with its counter at 0 — a pure
+/// pass-through to El1bPersistingLedger until a test arms it
+/// (prewriteFaultRetryCommitsWithJournal), so every other test on this fixture behaves identically
+/// to a plain persisting ledger.
 struct EL1BFaultFixture
 {
-    static constexpr int64_t c_reorgWindow = 8;
-
-    EL1BFaultNode nodeA{"faultA", c_reorgWindow};
-    EL1BFaultNode nodeB{"faultB", c_reorgWindow};
+    EL1BFaultNode nodeA{"faultA", /*reversible=*/true};
+    EL1BFaultNode nodeB{"faultB", /*reversible=*/true};
     bcos::txpool::MemPoolImpl memPool{
         bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
     StubExecutor stubExecutor;
     StubScheduler stubScheduler;
     std::shared_ptr<El1bFailingPrewriteLedger> ledgerA =
-        std::make_shared<El1bFailingPrewriteLedger>();
+        std::make_shared<El1bFailingPrewriteLedger>(*nodeA.blockFactory);
     std::shared_ptr<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>
         externalVerifierA;
     EthEngineService<bcos::txpool::MemPoolImpl, FaultyGlobalStateStorage, StubExecutor,
@@ -1151,6 +1154,7 @@ BOOST_FIXTURE_TEST_CASE(selfBuiltCommitJournalsForShallowReorg, EL1BReorgFixture
     {
         writeNumberToHash(node->backendStorage, 0, genesisHash);
         writeHashToNumber(node->backendStorage, genesisHash, 0);
+        el1bSeedParentHeaderRow(node->backendStorage, *node->blockFactory, parent, genesisHash);
     }
 
     ForkchoiceState state{genesisHash, h256{}, h256{}};
@@ -1170,26 +1174,9 @@ BOOST_FIXTURE_TEST_CASE(selfBuiltCommitJournalsForShallowReorg, EL1BReorgFixture
     BOOST_CHECK(committedA.status == PayloadValidationStatus::Valid);
     BOOST_CHECK_EQUAL(
         task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)), u256(2000000000));
-    // FakeLedger::prewriteBlock is a no-op: write the ledger metadata rows the real
-    // Ledger::prewriteBlock would have written (the established pattern of
-    // TestEthereumChainRollback / TestMPTPrunerSyncWiring).
-    el1bWriteCurrentNumber(nodeA.backendStorage, 1);
-    writeNumberToHash(nodeA.backendStorage, 1, requestA.executionPayload.blockHash);
-    writeHashToNumber(nodeA.backendStorage, requestA.executionPayload.blockHash, 1);
-    // F1: the SELF-BUILT commit wrote the rollback journal for block 1 — the row the
-    // shallow reorg below cannot serve without.
     auto journalEntry = task::syncWait(storage2::readOne(nodeA.backendStorage,
         executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, std::string("1")}));
-    BOOST_REQUIRE(journalEntry.has_value());
-    {
-        auto const value = journalEntry->get();
-        auto journal = scheduler_v1::decodeRollbackJournal(
-            bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(value.data()), value.size()));
-        // The block dirtied the recipient's account rows (plus the two ledger counters
-        // the capture appends unconditionally).
-        BOOST_CHECK_GE(journal.entries.size(), 3);
-    }
-
+    BOOST_REQUIRE(journalEntry);
     // Node B: build the COMPETING block B' at the same height (5-gwei credit).
     auto attributesB = makePayloadAttributesV3(c_blockTimestampMs);
     attributesB.withdrawals = std::vector<WithdrawalV1>{
@@ -1314,11 +1301,57 @@ BOOST_FIXTURE_TEST_CASE(reorgRollbackRefusedAnswersSyncing, EL1BReorgFixture)
     BOOST_CHECK_EQUAL(*canonical, requestA.executionPayload.blockHash);
 }
 
-// R1 regression (commit lane, reorgWindow > 0): a storage fault INSIDE the self-built
-// commit's rollback-journal capture must not leave a header-only artifact behind — the
-// catch hands the executed view back to the artifact before the exception escapes, so
-// the CL's retry re-runs take-out + capture from the intact artifact and commits the
-// FULL block: state layer, ledger rows, and the journal itself.
+BOOST_FIXTURE_TEST_CASE(finalizedAndSafeSurviveServiceReconstruction, EL1BFaultFixture)
+{
+    auto request = el1bBuildWithdrawalPayload(*this, bcos::Address{});
+    auto const hash = request.executionPayload.blockHash;
+    BOOST_REQUIRE(
+        task::syncWait(serviceA.newPayload(request, 3)).status == PayloadValidationStatus::Valid);
+    ForkchoiceState finalized{hash, hash, hash};
+    BOOST_REQUIRE(
+        task::syncWait(serviceA.updateForkchoice(finalized, nullptr, 3)).payloadStatus.status ==
+        PayloadValidationStatus::Valid);
+
+    FaultyGlobalStateStorage restartedStorage(nodeA.checkpointBackend);
+    auto verifier = std::make_shared<EL1BVerifier>(
+        *nodeA.scheduler, *nodeA.executor, *nodeA.blockFactory, nullptr, /*reversible=*/true);
+    auto externalVerifier =
+        std::make_shared<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>(
+            verifier, ledgerA, nodeA.blockFactory, el1bCancunForks(), 1, 0);
+    decltype(serviceA) restarted(memPool, restartedStorage, stubExecutor, stubScheduler,
+        nodeA.blockFactory, ledgerA, static_cast<std::uint32_t>(ApiVersion::V4), nullptr, nullptr,
+        externalVerifier);
+    BOOST_CHECK(restarted.getSafeBlockNumber() == 1);
+    BOOST_CHECK(restarted.getFinalizedBlockNumber() == 1);
+    ForkchoiceState rewind{c_genesisHash, {}, {}};
+    BOOST_CHECK_THROW(
+        task::syncWait(restarted.updateForkchoice(rewind, nullptr, 3)), InvalidForkchoiceState);
+    BOOST_CHECK(
+        !task::syncWait(storage2::readOne(nodeA.backendStorage, scheduler_v1::journalKey(1))));
+
+    // Produce a different block at the finalized height with a second engine.
+    nodeB.seedGenesis(el1bParentHeader(0, 0, 0), {});
+    auto secondaryVerifier =
+        std::make_shared<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>(
+            nodeB.verifier, nodeB.fakeLedger, nodeB.blockFactory, el1bCancunForks(), 1, 0);
+    decltype(serviceA) secondary(memPool, nodeB.storage, stubExecutor, stubScheduler,
+        nodeB.blockFactory, nodeB.fakeLedger, static_cast<std::uint32_t>(ApiVersion::V4), nullptr,
+        nullptr, secondaryVerifier);
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs + 1000);
+    auto fcu = task::syncWait(secondary.updateForkchoice(rewind, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId);
+    auto other = task::syncWait(secondary.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(other);
+    NewPayloadRequest sibling;
+    sibling.executionPayload = other->executionPayload;
+    sibling.parentBeaconBlockRoot = other->parentBeaconBlockRoot;
+    auto status = task::syncWait(restarted.newPayload(sibling, 3));
+    BOOST_CHECK(status.status == PayloadValidationStatus::Invalid);
+    BOOST_CHECK(status.validationError == "Payload would replace a finalized block");
+    BOOST_CHECK(restarted.getFinalizedBlockNumber() == 1);
+}
+
+// A fault reading the preimages leaves the executed view available for retry.
 BOOST_FIXTURE_TEST_CASE(captureFaultRetryCommitsWithStateAndJournal, EL1BFaultFixture)
 {
     auto const recipient = el1bEvmcAddress(0x60);
@@ -1332,14 +1365,14 @@ BOOST_FIXTURE_TEST_CASE(captureFaultRetryCommitsWithStateAndJournal, EL1BFaultFi
     nodeA.backendStorage.accountReadThrowRemaining->store(100);
     BOOST_CHECK_THROW(task::syncWait(serviceA.newPayload(request, 3)), std::runtime_error);
     nodeA.backendStorage.accountReadThrowRemaining->store(0);
-    // Nothing landed: no state, no ledger row (the prewrite never ran).
+    // The staged ledger rows and state remain absent from the backend.
     BOOST_CHECK_EQUAL(task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(0));
-    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 0);
+    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 1);
 
     // The CL's retry commits the full block from the restored artifact.
     auto committed = task::syncWait(serviceA.newPayload(request, 3));
     BOOST_CHECK(committed.status == PayloadValidationStatus::Valid);
-    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 1);
+    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 2);
     BOOST_CHECK_EQUAL(
         task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(2000000000));
     auto journalEntry = task::syncWait(storage2::readOne(nodeA.backendStorage,
@@ -1347,12 +1380,7 @@ BOOST_FIXTURE_TEST_CASE(captureFaultRetryCommitsWithStateAndJournal, EL1BFaultFi
     BOOST_CHECK(journalEntry.has_value());
 }
 
-// Round-4 F1 regression (commit lane, reorgWindow > 0): a fault AFTER pushView — here
-// the ledger prewrite — consumes the executed view, so the CL's retry cannot recapture
-// the rollback journal (captureRollbackJournal iterates the view's dirty rows). The
-// journal is stashed in the artifact before pushView, and the retry must commit the
-// block WITH its SYS_ROLLBACK_JOURNAL row: a journal-less committed block would refuse
-// every later reorg reaching it (rollbackCommittedChain) and force a full resync.
+// A failed ledger prewrite leaves the executed view available for retry.
 BOOST_FIXTURE_TEST_CASE(prewriteFaultRetryCommitsWithJournal, EL1BFaultFixture)
 {
     auto const recipient = el1bEvmcAddress(0x65);
@@ -1360,10 +1388,6 @@ BOOST_FIXTURE_TEST_CASE(prewriteFaultRetryCommitsWithJournal, EL1BFaultFixture)
         bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
     auto request = el1bBuildWithdrawalPayload(*this, recipientAddress);
 
-    // First attempt: the capture runs (reorgWindow > 0) and the journal is stashed in
-    // the artifact; the injected prewrite failure then throws out of the commit
-    // section, AFTER pushView consumed the view. Nothing is durable yet: no state, no
-    // prewrite, no journal row.
     ledgerA->prewriteFailRemaining->store(1);
     BOOST_CHECK_THROW(task::syncWait(serviceA.newPayload(request, 3)), bcos::Error);
     BOOST_CHECK_EQUAL(task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(0));
@@ -1372,9 +1396,6 @@ BOOST_FIXTURE_TEST_CASE(prewriteFaultRetryCommitsWithJournal, EL1BFaultFixture)
         executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, std::string("1")}));
     BOOST_CHECK(!journalBefore.has_value());
 
-    // The CL's retry: the view is gone (its layer is queued from the first attempt's
-    // pushView), so the journal comes from the artifact — the block must land WITH its
-    // state and its journal row.
     auto committed = task::syncWait(serviceA.newPayload(request, 3));
     BOOST_CHECK(committed.status == PayloadValidationStatus::Valid);
     BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 1);
@@ -1385,12 +1406,7 @@ BOOST_FIXTURE_TEST_CASE(prewriteFaultRetryCommitsWithJournal, EL1BFaultFixture)
     BOOST_CHECK(journalEntry.has_value());
 }
 
-// R1 regression (commit lane, reorgWindow > 0): a duplicate newPayload racing an
-// in-flight commit must NEVER see a header-only artifact. T1 commits but parks inside
-// the journal capture (holding m_commitMutex, the artifact's view already taken out);
-// T2's duplicate must BLOCK on m_commitMutex — not grab the header-only artifact and
-// commit the block without its state layer. T1's capture then fails once, the catch
-// restores the view, and T2 commits the full block exactly once.
+// Concurrent submissions serialize around preimage capture and publish one block.
 BOOST_FIXTURE_TEST_CASE(concurrentDuplicateNewPayloadCommitsStateOnce, EL1BFaultFixture)
 {
     auto const recipient = el1bEvmcAddress(0x61);
@@ -1420,9 +1436,7 @@ BOOST_FIXTURE_TEST_CASE(concurrentDuplicateNewPayloadCommitsStateOnce, EL1BFault
         std::this_thread::yield();
     }
 
-    // T2: the CL's duplicate submission. It must block on m_commitMutex for as long as
-    // T1 is parked inside the capture — pre-fix it would have taken the header-only
-    // artifact and committed without the state layer.
+    // The duplicate must wait while T1 is parked inside preimage capture.
     std::atomic<bool> t2Done{false};
     auto t2Status = PayloadValidationStatus::Invalid;
     std::thread t2([&] {
@@ -1433,9 +1447,7 @@ BOOST_FIXTURE_TEST_CASE(concurrentDuplicateNewPayloadCommitsStateOnce, EL1BFault
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     BOOST_CHECK(!t2Done.load(std::memory_order_acquire));
 
-    // Fail T1's capture exactly once (the R1 catch restores the view into the
-    // artifact), then let everything through: T2 re-runs take-out + capture on the
-    // intact artifact and commits.
+    // T1 fails before the merge. T2 stages the same block from the retained view.
     nodeA.backendStorage.accountReadThrowRemaining->store(1);
     nodeA.backendStorage.accountReadGateOpen->store(true);
     nodeA.backendStorage.accountReadGate->store(false);
@@ -1444,8 +1456,8 @@ BOOST_FIXTURE_TEST_CASE(concurrentDuplicateNewPayloadCommitsStateOnce, EL1BFault
     t2.join();
     BOOST_CHECK(t2Status == PayloadValidationStatus::Valid);
 
-    // Exactly one commit happened, with the state layer and the journal.
-    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 1);
+    // Two prewrites were staged. The successful attempt published state and undo rows.
+    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 2);
     BOOST_CHECK_EQUAL(
         task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(2000000000));
     auto journalEntry = task::syncWait(storage2::readOne(nodeA.backendStorage,
@@ -1568,6 +1580,11 @@ BOOST_FIXTURE_TEST_CASE(verifyLaneStorageFaultThrowsInsteadOfInvalid, EL1BFaultF
     auto converted = engine::detail::executionPayloadToEthBlock(request);
     auto* external = std::get_if<engine_common::ExternalPayloadBlock>(&converted);
     BOOST_REQUIRE(external != nullptr);
+    auto const parentHash = protocol::ethHeaderHash(parent);
+    external->ethHeader.parentInfo.blockHash = parentHash;
+    writeNumberToHash(nodeB.backendStorage, 0, parentHash);
+    el1bSeedParentHeaderRow(nodeB.backendStorage, *nodeB.blockFactory, parent, parentHash);
+
 
     auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
     EL1BVerifier::TransactionDecoder decoder =

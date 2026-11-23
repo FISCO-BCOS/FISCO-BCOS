@@ -309,13 +309,18 @@ public:
         // newest root still referencing it, deadline = s+1+N. The oldest in-window root head−N
         // MUST be walked too: its unique nodes carry the future deadline head+1 in steady
         // state — skipping them would let Phase 3 misclassify them as garbage.
-        auto const windowStart =
-            std::max<bcos::protocol::BlockNumber>(*firstMptBlock, currentBlock - m_pruneWindow);
+        auto const windowStart = std::max(*firstMptBlock,
+            std::min(currentBlock - m_pruneWindow, m_finalizedBlock.value_or(currentBlock)));
         for (auto block = currentBlock - 1; block >= windowStart; --block)
         {
             auto const root = co_await stateRootAt(block);
             if (!root)
             {
+                if (m_finalizedBlock && block >= *m_finalizedBlock)
+                {
+                    throw std::runtime_error(
+                        "Missing rollbackable state header at " + std::to_string(block));
+                }
                 // Older HEADERS unavailable (snapshot restore / pruned block data — NOT
                 // pruning, which only ever touches "/mpt/" node rows): nothing more to walk.
                 // Log loud like the pruned-root branch below — the effective window silently
@@ -334,6 +339,11 @@ public:
             if (*root != emptyRootHash() &&
                 !co_await bcos::storage2::readOne(*m_backend, bcos::ledger::mptNodeStateKey(*root)))
             {
+                if (m_finalizedBlock && block >= *m_finalizedBlock)
+                {
+                    throw std::runtime_error(
+                        "Missing rollbackable state root at " + std::to_string(block));
+                }
                 MPT_PRUNER_LOG(INFO)
                     << "MPT pruning: in-window state root already pruned by a previous smaller "
                        "window — stopping the rebuild walk at the first surviving root"
@@ -537,6 +547,11 @@ public:
     {
         PruneRowBatch out;
         // Fresh overlay per prepare; entries it does not touch read through to the base tables.
+        if (m_rebuildRequired)
+        {
+            throw std::runtime_error("MPT pruning requires a successful rebuild after rollback");
+        }
+
         // A previous uncommitted overlay (a failed commit whose retry this is) is DISCARDED —
         // the retry re-derives everything from the pre-block state.
         m_stagedCounts.clear();
@@ -573,7 +588,9 @@ public:
                     "the observer's needsRefCountDeltas wiring"));
         }
 
-        auto const horizon = static_cast<uint64_t>(blockNumber);
+        auto const horizon = std::min(static_cast<uint64_t>(blockNumber),
+            static_cast<uint64_t>(m_finalizedBlock.value_or(blockNumber)) +
+                static_cast<uint64_t>(m_pruneWindow));
 
         // Seed the overlay with a copy of every base entry the block can touch: the movements'
         // hashes, plus every hash sitting in an expired queue bucket (the consumption re-check
@@ -731,26 +748,32 @@ public:
     /// The pruner counts references from the delta — the build must maintain the tally.
     bool needsRefCountDeltas() const noexcept override { return true; }
 
+    void setFinalizedBlock(bcos::protocol::BlockNumber number) override
+    {
+        m_finalizedBlock = number;
+    }
+
     /// EL-mode shallow-reorg hook (EthereumChainRollback.h): after a rollback to @p newHead the
     /// in-memory counts/queue no longer describe the chain — blocks above newHead armed or
     /// consumed schedules that must be re-derived. Nothing was persisted, so the exact fix is
     /// the same rebuild every startup runs: discard every table (including any uncommitted
     /// staged overlay) and re-walk the post-rollback roots. Costs a full head-trie walk per
     /// reorg — the accepted trade-off for exact self-healing, and only paid when pruning is
-    /// enabled (the default Noop observer keeps the hook a no-op). The startup window
-    /// invariant (mpt_prune_window >= reorg_window, enforced by NodeConfig) guarantees every
-    /// root in [newHead - N, newHead] is still fully resolvable on disk. The garbage sweep is
+    /// enabled (the default Noop observer keeps the hook a no-op). The finalized
+    /// bound preserves every rollbackable root. The garbage sweep is
     /// NOT re-run: a reorg deletes no node rows itself, and the next boot's sweep policy
     /// covers whatever the rollback made unreachable.
     bcos::task::Task<void> coOnRollback(
         bcos::protocol::BlockNumber newHead, StateRootLookup stateRootAt) override
     {
+        m_rebuildRequired = true;
         m_stagedCounts.clear();
         m_stagedDeadlineErases.clear();
         m_stagedDeadlineInserts.clear();
         m_counts.clear();
         m_pending.clear();
         co_await init(newHead, m_executorVersion, std::move(stateRootAt), /*sweepGarbage=*/false);
+        m_rebuildRequired = false;
     }
 
     /// After the block's WriteBatch: apply the staged overlay to the base tables and advance
@@ -1160,6 +1183,8 @@ private:
     }
 
     Backend* m_backend;
+    std::optional<bcos::protocol::BlockNumber> m_finalizedBlock;
+    bool m_rebuildRequired = false;
     int64_t m_pruneWindow;
     // The chain's executor_version, captured by init and replayed by coOnRollback's rebuild
     // (the lane — legacy vs Ethereum — decides firstMptBlock; it is genesis-fixed, so the

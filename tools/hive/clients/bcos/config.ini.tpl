@@ -22,11 +22,6 @@
     node_key_file=./node.rlpx.key
     max_batch_size=192
     tx_gossip=true
-    ; rollback-journal depth for the devp2p/engine sync lane's shallow reorgs.
-    ; NOTE: --import-blocks is strictly linear (a block that does not extend
-    ; the import head is skipped); this window does not make side-chain
-    ; imports possible.
-    reorg_window=256
 
 [engine_rpc]
     ; always served on executor.version=2; bcos.sh writes the simulator's

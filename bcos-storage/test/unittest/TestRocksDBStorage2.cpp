@@ -1,4 +1,5 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
@@ -72,6 +73,44 @@ BOOST_AUTO_TEST_CASE(kvResolver)
 
     StateKey key("test_table!!!"sv, "key100"sv);
     BOOST_CHECK(key == decodedKey);
+}
+
+BOOST_AUTO_TEST_CASE(failedDiskMergeDoesNotPublishToCache)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        using namespace storage2::memory_storage;
+        using Mutable = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
+        using Cache = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LRU | CONCURRENT),
+            std::hash<StateKey>>;
+        StateKey const key{"table"sv, "key"sv};
+        TestCheckpointStorage::Storage backend(*originRocksDB, {}, {});
+        co_await storage2::writeOne(backend, key, storage::Entry{"committed"});
+
+        rocksdb::DB* readOnly = nullptr;
+        auto status = rocksdb::DB::OpenForReadOnly(rocksdb::Options{}, path, &readOnly);
+        BOOST_REQUIRE_MESSAGE(status.ok(), status.ToString());
+        std::unique_ptr<rocksdb::DB> db(readOnly);
+        struct ReadOnlyCheckpoint : TestCheckpointStorage
+        {
+            using TestCheckpointStorage::open;
+            rocksdb::DB& db;
+            ReadOnlyCheckpoint(std::string const& path, rocksdb::DB& db)
+              : TestCheckpointStorage(path + "/checkpoints"), db(db)
+            {}
+            Storage open() { return Storage(db, {}, {}); }
+        } checkpoint(path, *db);
+        Cache cache;
+        storage2::MultiLayerStorage<Mutable, Cache, ReadOnlyCheckpoint> storage(checkpoint, cache);
+        auto before = storage.forkCommitted();
+        BOOST_REQUIRE(co_await storage2::readOne(before, key));
+        Mutable batch;
+        co_await storage2::writeOne(batch, key, storage::Entry{"uncommitted"});
+        BOOST_CHECK_THROW(co_await storage.mergeToBackends(batch), RocksDBException);
+        auto after = storage.forkCommitted();
+        auto entry = co_await storage2::readOne(after, key);
+        BOOST_REQUIRE(entry);
+        BOOST_CHECK_EQUAL(entry->get(), "committed");
+    }());
 }
 
 BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)

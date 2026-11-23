@@ -122,7 +122,8 @@ struct EncodedBlockTransaction
 /// (Ledger.cpp) and the storage2 prewriteBlockToBuffer path below so the dedup/encode
 /// decision lives in exactly one place.
 inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
-    bcos::protocol::Block::ConstPtr block, bcos::protocol::ConstTransactionsPtr blockTxs)
+    bcos::protocol::Block::ConstPtr block, bcos::protocol::ConstTransactionsPtr blockTxs,
+    bool reversible = false)
 {
     // An external tx list is iterated by its own size (the historical needStoreUnsavedTxs
     // semantics): indexing it by the block's tx count would overrun a shorter list and
@@ -146,7 +147,7 @@ inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
             anyTx = inlineTxs[i];
             tx = anyTx->get();
         }
-        if (blockTxs && tx->storeToBackend())
+        if (!reversible && blockTxs && tx->storeToBackend())
         {
             continue;
         }
@@ -156,8 +157,8 @@ inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
         // Only externally owned transactions may be marked persisted after the write;
         // for inline transactions tx points into the per-iteration anyTx holder and
         // must not escape the loop.
-        out.push_back(
-            EncodedBlockTransaction{tx->hash(), std::move(encoded), blockTxs ? tx : nullptr});
+        out.push_back(EncodedBlockTransaction{
+            tx->hash(), std::move(encoded), blockTxs && !reversible ? tx : nullptr});
     }
     return out;
 }
@@ -192,7 +193,8 @@ PrewriteBlockRows buildPrewriteBlockRows(protocol::Block::ConstPtr block,
 task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     LedgerInterface& ledger, bcos::protocol::ConstTransactionsPtr blockTxs,
     bcos::protocol::Block::ConstPtr block, auto& storage,
-    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt, bool writeNonces = true)
+    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt, bool writeNonces = true,
+    bool reversible = false)
 {
     if (!block)
     {
@@ -233,7 +235,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     // SYS_HASH_2_TX — encoded transactions keyed by tx hash, deduped by the
     // storeToBackend flag (same shared logic as storeTransactionsAndReceipts /
     // preStoreBlockTxs); txs already persisted are skipped.
-    for (auto& pending : encodeUnsavedBlockTransactions(block, blockTxs))
+    for (auto& pending : encodeUnsavedBlockTransactions(block, blockTxs, reversible))
     {
         storage::Entry txEntry;
         txEntry.set(std::move(pending.encoded));
@@ -244,6 +246,24 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
         if (pending.tx)
         {
             pending.tx->setStoreToBackend(true);
+        }
+    }
+}
+
+/// Legacy prewrite bases cumulative counters on the durable tip. Relocate its increments
+/// to the ancestor's counters before an atomic suffix replacement.
+task::Task<void> rebaseBlockTransactionCounts(
+    auto& ledgerRows, TransactionCount tip, TransactionCount ancestor)
+{
+    for (auto [key, offset] :
+        {std::pair{SYS_KEY_TOTAL_TRANSACTION_COUNT, ancestor.total - tip.total},
+            std::pair{SYS_KEY_TOTAL_FAILED_TRANSACTION, ancestor.failed - tip.failed}})
+    {
+        executor_v1::StateKey stateKey{SYS_CURRENT_STATE, key};
+        if (auto entry = co_await storage2::readOne(ledgerRows, stateKey))
+        {
+            entry->set(std::to_string(boost::lexical_cast<int64_t>(entry->get()) + offset));
+            co_await storage2::writeOne(ledgerRows, std::move(stateKey), std::move(*entry));
         }
     }
 }

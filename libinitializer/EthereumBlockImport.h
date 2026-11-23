@@ -136,7 +136,7 @@ public:
         auto verifierHolder = m_sharedVerifier ? m_sharedVerifier :
                                                  std::make_shared<Verifier>(*m_scheduler,
                                                      *m_executor, *m_blockFactory, m_commitObserver,
-                                                     m_nodeConfig->ethereumReorgWindow());
+                                                     /*reversible=*/true);
         Verifier& verifier = *verifierHolder;
         auto const forks = EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig);
         auto const chainId = m_nodeConfig->ethereumChainId();

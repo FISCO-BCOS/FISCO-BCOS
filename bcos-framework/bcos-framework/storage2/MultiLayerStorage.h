@@ -646,25 +646,23 @@ private:
     /// mergeBackStorage/mergeToBackends hold m_mergeMutex around the call.
     task::Task<void> mergeIntoBackends(auto&... storages)
     {
-        if constexpr (withCacheStorage)
-        {
-            tbb::parallel_invoke(
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                        ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-                    task::tbb::syncWait(storage2::merge(m_latestBackend, storages...));
-                },
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
-                        ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
-                    task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), storages...));
-                });
-        }
-        else
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                 ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
             co_await storage2::merge(m_latestBackend, storages...);
+        }
+        if constexpr (withCacheStorage)
+        {
+            try
+            {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                    ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
+                co_await storage2::merge(m_cacheStorage.get(), storages...);
+            }
+            catch (...)
+            {
+                m_cacheStorage.get().clear();
+            }
         }
         co_return;
     }
@@ -701,12 +699,7 @@ public:
         co_await mergeIntoBackends(fromStorage...);
     }
 
-    /// Cache-layer read (nullopt when this composition has no cache layer — a caller
-    /// cannot distinguish that from "key absent"; the intended consumer, the engine's
-    /// canonicalize undo journal, is a follow-up (OpScheduler.h marks it so) and will
-    /// pair this with writeCacheLayer: mergeToBackends merges into backend AND cache,
-    /// so a failed batch must restore BOTH or the cache keeps half-applied canonical
-    /// state that fork()/forkCommitted() read first).
+    /// Read a cache-layer row if a cache is configured.
     task::Task<std::optional<Value>> readCacheLayer(Key key)
     {
         if constexpr (withCacheStorage)

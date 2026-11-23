@@ -73,8 +73,9 @@ public:
         lastBlock = block;
         co_return result;
     }
-    task::Task<engine_common::ExternalRollbackResult> rollbackToCommitted(
-        RealGlobalStateStorage&, bcos::protocol::BlockNumber targetNumber) override
+    task::Task<engine_common::ExternalRollbackResult> rollbackToCommitted(RealGlobalStateStorage&,
+        bcos::protocol::BlockNumber targetNumber,
+        std::optional<ledger::PersistedEngineMeta>) override
     {
         ++rollbackCalls;
         lastRollbackTarget = targetNumber;

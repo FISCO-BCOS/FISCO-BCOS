@@ -501,11 +501,7 @@ BOOST_AUTO_TEST_CASE(ethereumMaxBatchSizeBounds)
     }
 }
 
-// [ethereum] reorg_window bounds the EL shallow-reorg depth (EthereumChainRollback.h);
-// pairing with storage.mpt_prune_window is enforced by validateELModeInvariants: a
-// rollback target's trie nodes must still be on disk, so pruning (when enabled) must
-// retain at least as many blocks as a reorg may rewind.
-BOOST_AUTO_TEST_CASE(elReorgWindowVsMptPruneWindow)
+BOOST_AUTO_TEST_CASE(ethLaneDeadReorgWindowAndSingleDatabase)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     const std::string node =
@@ -533,50 +529,17 @@ BOOST_AUTO_TEST_CASE(elReorgWindowVsMptPruneWindow)
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
     };
 
-    // Default: reorg_window=256, pruning disabled (-1) — always safe.
-    {
-        NodeConfig cfg(keyFactory);
-        loadBoth(cfg, "[ethereum]\n");
-        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
-        BOOST_CHECK_EQUAL(cfg.ethereumReorgWindow(), 256);
-    }
-    // Pruning window larger than / equal to the reorg window: accepted.
-    for (auto const* ini : {"[ethereum]\n[storage]\nmpt_prune_window=300\n",
-             "[ethereum]\nreorg_window=100\n[storage]\nmpt_prune_window=100\n"})
-    {
-        NodeConfig cfg(keyFactory);
-        loadBoth(cfg, ini);
-        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
-    }
-    // Pruning enabled below the reorg window: rejected — an in-window rollback target
-    // would have its trie nodes pruned already.
-    {
-        NodeConfig cfg(keyFactory);
-        loadBoth(cfg, "[ethereum]\n[storage]\nmpt_prune_window=100\n");
-        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "must be -1 (disabled) or >= ethereum.reorg_window");
-        });
-    }
-    // Rollback disabled (reorg_window=0): no rewind can happen, so a small pruning
-    // window is fine.
-    {
-        NodeConfig cfg(keyFactory);
-        loadBoth(cfg, "[ethereum]\nreorg_window=0\n[storage]\nmpt_prune_window=100\n");
-        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
-    }
-    // reorg_window itself: negative or absurdly large is a load-time error.
-    {
-        NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(cfg.loadConfigFromString("[ethereum]\nreorg_window=-1\n"),
-            InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "ethereum.reorg_window must be"); });
-    }
-    {
-        NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(cfg.loadConfigFromString("[ethereum]\nreorg_window=100001\n"),
-            InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "ethereum.reorg_window must be"); });
-    }
+    NodeConfig cfg(keyFactory);
+    loadBoth(cfg, "[ethereum]\nreorg_window=-1\n[storage]\nmpt_prune_window=1\n");
+    BOOST_CHECK_NO_THROW(cfg.validateELModeInvariants());
+    auto const deadKeys = cfg.deadKeys();
+    BOOST_CHECK(
+        std::ranges::find(deadKeys, "config.ini [ethereum] reorg_window") != deadKeys.end());
+
+    loadBoth(cfg, "[storage]\nenable_separate_block_state=true\n");
+    BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
+        return errinfoContains(e, "storage.enable_separate_block_state must be false");
+    });
 }
 
 // The challenger data plane (debug_dbGet, gated by enable_debug_api on EITHER listener) reads

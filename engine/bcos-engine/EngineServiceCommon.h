@@ -29,6 +29,7 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
+#include <bcos-ledger/EngineMeta.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/EthereumBlockRoots.h>
 #include <bcos-ledger/mpt/MPTDeltaLayer.h>
@@ -150,6 +151,7 @@ enum class ExternalPayloadOutcome : std::uint8_t
     Valid,
     Invalid,
     StaleOrOutOfOrder,
+    FinalizedConflict,
 };
 
 struct ExternalPayloadResult
@@ -158,9 +160,7 @@ struct ExternalPayloadResult
     std::string error;
 };
 
-/// Outcome of a chain-rewind request (EL shallow reorg, Phase 3): rolledBack=false carries
-/// the refusal reason (target beyond the reorg window, or a journal row missing) — the
-/// caller turns it into a resync, never a retry.
+/// A failed rewind carries the local preflight diagnostic.
 struct ExternalRollbackResult
 {
     bool rolledBack = false;
@@ -233,10 +233,11 @@ public:
     virtual ~IExternalPayloadVerifier() = default;
     virtual task::Task<ExternalPayloadResult> verifyAndCommit(
         GlobalStateStorageType& storage, ExternalPayloadBlock const& block) = 0;
-    /// Rewind the committed chain to @p targetNumber (EL shallow reorg). Runs under the
-    /// verifier's commit mutex, serialized against both commit lanes.
-    virtual task::Task<ExternalRollbackResult> rollbackToCommitted(
-        GlobalStateStorageType& storage, bcos::protocol::BlockNumber targetNumber) = 0;
+    // When present, FCU and self-built commits take the verifier's commit mutex.
+    virtual std::mutex* reversibleCommitMutex() { return nullptr; }
+    virtual task::Task<ExternalRollbackResult> rollbackToCommitted(GlobalStateStorageType& storage,
+        bcos::protocol::BlockNumber targetNumber,
+        std::optional<ledger::PersistedEngineMeta> forkchoice) = 0;
     /// Phase 4 (EL block building): derive the next block's fee-market context (base
     /// fee, excess blob gas, header fork era) from the committed parent header at the
     /// new block's timestamp (SECONDS, the Ethereum wire unit).
@@ -256,12 +257,6 @@ public:
     /// executeEthereumBlock implementation verifyAndCommit verifies with.
     virtual task::Task<ExternalBuildResult> buildL1Block(
         typename GlobalStateStorageType::ViewType& view, ExternalBuildBlock const& block) = 0;
-    /// The shallow-reorg window the shared verifier commits with (0 = rollback
-    /// journaling disabled). The self-built newPayload commit lane reads this to write
-    /// the SAME rollback journal for blocks it commits, so a reorg can rewind blocks
-    /// committed through either lane. Default 0 keeps stubs (and any wiring without a
-    /// reorg window) behavior-identical.
-    virtual int64_t reorgWindow() const { return 0; }
 };
 }  // namespace engine_common
 

@@ -581,7 +581,7 @@ public:
     EthereumBlockVerifier(Scheduler& scheduler, Executor& executor,
         protocol::BlockFactory& blockFactory,
         std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr,
-        int64_t reorgWindow = 0)
+        bool reversible = false)
       : m_scheduler(scheduler),
         m_executor(executor),
         m_blockFactory(blockFactory),
@@ -589,15 +589,10 @@ public:
         // commit path then pays nothing beyond carrying the delta.
         m_commitObserver(commitObserver ? std::move(commitObserver) :
                                           std::make_shared<ledger::mpt::NoopCommitObserver>()),
-        m_reorgWindow(reorgWindow)
+        m_reversible(reversible)
     {}
 
-    /// The shallow-reorg window this verifier commits with (0 = rollback journaling
-    /// disabled). Exposed so the Engine API self-built commit lane — which commits
-    /// through EthEngineService, not through this class — writes the SAME rollback
-    /// journal for its blocks (EthereumChainRollback.h), keeping every block in the
-    /// window rewindable no matter which lane committed it.
-    [[nodiscard]] int64_t reorgWindow() const { return m_reorgWindow; }
+    std::mutex* reversibleCommitMutex() { return m_reversible ? &m_commitMutex : nullptr; }
 
     /// MPT state root over the executed view's Ethereum world state, built incrementally
     /// from the parent block's state root. Forwards to the shared implementation
@@ -1043,12 +1038,9 @@ public:
     /// transactions, verify the deterministic roots + state root against the header,
     /// and on success commit block/state/ledger rows atomically.
     ///
-    /// Height guard (step 1a below): the block number MUST equal the current ledger
-    /// head + 1, read through the freshly forked view from the SYS_KEY_CURRENT_NUMBER
-    /// row before any execution. A stale replay (number <= head) or a gap
-    /// (number > head + 1) throws std::runtime_error instead of executing.
+    /// A reversible commit may replace a suffix above finalized. Verify the replacement
+    /// over its parent's undo overlay before applying the rewind.
     ///
-    /// @tparam GlobalStateStorage MultiLayerStorage-like: fork()/pushView()/mergeBackStorage()
     /// @param rawUncles raw uncle-header RLP elements (PoW blocks only; empty on PoS)
     /// @param mergeBlock first PoS (merge) block number; blocks below it are PoW and
     ///        receive coinbase/uncle rewards, blocks at or above it pay none
@@ -1079,6 +1071,11 @@ public:
         // serializing the commit section's [prepare -> merge -> onCommit] triple.)
         std::unique_lock commitLock(m_commitMutex);
 
+        if (m_reversible && protocol::ethHeaderHash(parentHeader) != ethHeader.parentInfo.blockHash)
+        {
+            throw StaleOrOutOfOrderBlock{
+                "Supplied parent header does not match the committed parent"};
+        }
         // 1b. Parent-relative consensus validation (EIP-1559 base fee, EIP-4844/7918
         //     excess blob gas, gas-limit bound and minimum, strictly increasing
         //     timestamp, gasUsed <= gasLimit, blobGasUsed cap, fork-gated field
@@ -1090,9 +1087,8 @@ public:
         //     every header before import, so for it this recheck is an identity; the
         //     Engine API newPayload lane had NO such check — a CL-pushed header could
         //     carry a baseFee/blobGas/gasLimit the network lane would have rejected.
-        //     Runs BEFORE the height guard: the check is stateless (header vs parent
-        //     header only), cheap, and must fire before the guard's shallow-reorg
-        //     branch can rewind committed state for a block that is invalid anyway.
+        //     The check compares the supplied headers. The chain checks below bind the
+        //     parent to committed storage before execution.
         protocol::PoSChainConfig const posChainConfig{.chainId = chainId,
             .londonTime = forkSchedule.londonTime,
             .shanghaiTime = forkSchedule.shanghaiTime,
@@ -1108,74 +1104,51 @@ public:
             co_return co_await fail("EthereumBlockVerifier: " + headerCheck.error);
         }
 
-        // 1. Fork the execution view, then the height guard.
-        auto view = globalStateStorage.fork();
-        view.newMutable();
-
-        // 1a. Height guard: the block must be the DIRECT child of the ledger head
-        //     this call commits on top of; a replay or gap throws before any
-        //     execution or commit. Without it, a replayed block (number <= head)
-        //     executes against a NEWER state fork — and a state-neutral empty
-        //     block could verify and be RE-COMMITTED, since the commit's
-        //     prewriteBlockToBuffer unconditionally writes SYS_KEY_CURRENT_NUMBER
-        //     = N, rewinding the ledger head into a permanent stall — while a gap
-        //     (number > head + 1) breaks the incremental MPT build, which needs
-        //     the parent block's trie nodes from the immediately-preceding
-        //     commit. The head (the SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER
-        //     row the commit maintains) is read through the freshly forked view
-        //     with the tag-based ledger::getCurrentBlockNumber(view, fromStorage)
-        //     overload — the one designed for views (BaselineScheduler reads the
-        //     head the same way) — so the guard cannot disagree with the commit
-        //     target. A missing row reads as -1 (empty chain), keeping the
-        //     first-sync-from-genesis path (head 0 -> block 1) intact. The view
-        //     is purely local until step 8's pushView, so throwing discards it
-        //     with zero state pollution. Before throwing, a stale block whose
-        //     parent IS the canonical block at number-1 gets ONE shallow-reorg
-        //     retry (window permitting): roll back to number-1 and re-fork — see
-        //     the retry block below. Throwing (rather than an invalid
-        //     result) matches the caller contract: a wrong-height block reaching
-        //     this point is a sync-loop bug, not a peer-supplied invalid block —
-        //     hence the typed StaleOrOutOfOrderBlock, so the caller classifies it
-        //     as a deterministic failure rather than a transient one.
-        auto currentNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-        if (ethHeader.number != currentNumber + 1)
+        auto committed = globalStateStorage.forkCommitted();
+        auto currentNumber = co_await ledger::getCurrentBlockNumber(committed, ledger::fromStorage);
+        std::optional<ledger::PersistedEngineMeta> meta;
+        std::optional<ledger::BlockAnchor> rollbackAncestor;
+        if (m_reversible)
         {
-            // Shallow-reorg retry (Phase 3, EthereumChainRollback.h): a block at or below the
-            // head is stale ONLY when it does not extend the canonical chain — when its parent
-            // IS the canonical block at number-1, this is a sibling fork arriving through
-            // devp2p/engine (a reorg of depth head-(number-1)). Within the reorg window, roll
-            // the committed chain back to number-1 and re-run the height guard ONCE; outside
-            // it (window disabled, too deep, journal missing, or the parent is NOT canonical —
-            // a side-branch block we cannot place) fall through to the original throw.
-            bool retryReady = false;
-            if (m_reorgWindow > 0 && ethHeader.number > 0 && ethHeader.number <= currentNumber)
+            meta = co_await ledger::loadEngineMeta(committed);
+            if (ethHeader.number <= currentNumber)
             {
-                auto const rollbackDepth = currentNumber - ethHeader.number + 1;
-                if (rollbackDepth <= m_reorgWindow)
+                auto canonical =
+                    co_await ledger::getBlockHash(committed, ethHeader.number, ledger::fromStorage);
+                if (canonical && *canonical == protocol::ethHeaderHash(ethHeader))
                 {
-                    auto const canonicalParentHash = co_await ledger::getBlockHash(
-                        view, ethHeader.number - 1, ledger::fromStorage);
-                    if (canonicalParentHash &&
-                        *canonicalParentHash == bcos::protocol::ethHeaderHash(parentHeader))
-                    {
-                        co_await rollbackChainLocked(globalStateStorage, ethHeader.number - 1);
-                        // Re-fork: the rolled-back state must be the view's backend.
-                        view = globalStateStorage.fork();
-                        view.newMutable();
-                        currentNumber =
-                            co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-                        retryReady = (ethHeader.number == currentNumber + 1);
-                    }
+                    result.valid = true;
+                    result.stateRoot = ethHeader.stateRoot;
+                    co_return result;
+                }
+                if (ethHeader.number <= meta->finalizedNumber())
+                {
+                    throw FinalizedRollbackRefused("Payload would replace a finalized block");
+                }
+                auto canonicalParent = co_await ledger::getBlockHash(
+                    committed, ethHeader.number - 1, ledger::fromStorage);
+                if (canonicalParent && *canonicalParent == ethHeader.parentInfo.blockHash)
+                {
+                    rollbackAncestor = ledger::BlockAnchor{ethHeader.number - 1, *canonicalParent};
                 }
             }
-            if (!retryReady)
-            {
-                BOOST_THROW_EXCEPTION(StaleOrOutOfOrderBlock{
-                    "EthereumBlockVerifier: block number " + std::to_string(ethHeader.number) +
-                    " is not the ledger head + 1 (head " + std::to_string(currentNumber) +
-                    "): refusing to execute a stale (already committed) or out-of-order block"});
-            }
         }
+        if (!rollbackAncestor && ethHeader.number != currentNumber + 1)
+        {
+            throw StaleOrOutOfOrderBlock{
+                "EthereumBlockVerifier: block number " + std::to_string(ethHeader.number) +
+                " is not the ledger head + 1 (head " + std::to_string(currentNumber) + ")"};
+        }
+        if (!rollbackAncestor && meta && meta->diskTip.hash != ethHeader.parentInfo.blockHash)
+        {
+            throw StaleOrOutOfOrderBlock{
+                "EthereumBlockVerifier: parent hash does not match the committed tip"};
+        }
+
+        auto view = rollbackAncestor ? co_await forkRollbackView(globalStateStorage,
+                                           *rollbackAncestor, *meta, m_blockFactory.get()) :
+                                       globalStateStorage.fork();
+        view.newMutable();
 
         // 2-6. Execute the block over the forked view: the SHARED implementation
         //      (executeEthereumBlock) that the EL block builder (Engine API
@@ -1209,36 +1182,15 @@ public:
             co_return co_await fail(std::move(*error));
         }
 
-        // 7a. Rollback journal (Phase 3 shallow reorg, EthereumChainRollback.h): capture the
-        //     pre-block values of every flat-state row this block dirtied, so a later reorg
-        //     can rewind to any block inside the reorg window. Captured only AFTER the block
-        //     verified (a rejected block must leave no journal) and BEFORE pushView moves the
-        //     mutable layer away; pre-block values read from the committed plane. Disabled
-        //     (window 0) by default — zero cost beyond the branch.
-        std::optional<RollbackJournal> rollbackJournal;
-        if (m_reorgWindow > 0)
+        std::optional<ledger::TransactionCount> tipCounts;
+        if (rollbackAncestor)
         {
-            auto committed = globalStateStorage.forkCommitted();
-            rollbackJournal = co_await captureRollbackJournal(view, committed);
+            tipCounts = co_await ledger::getTransactionCount(committed, ledger::fromStorage);
+            committed.m_immutableStorages.push_front(view.m_immutableStorages.front());
+            rewindEngineMeta(*meta, *rollbackAncestor);
         }
 
-        // 8. Commit: FIB-104 pattern — push the executed view, then merge the ledger
-        //    prewrite buffer atomically. If anything after the push throws, roll the
-        //    pushed view back (popFrontStorage) so a dirty layer never stays on the
-        //    storage stack to pollute later sync rounds — the same rollback pattern
-        //    BaselineScheduler::coExecuteBlock uses around pushView.
-        //
-        //    MPT pruning (CommitObserver.h): the observer's pre-commit hook turns the
-        //    block's node delta into the deletion keys of expired "/mpt/" node rows,
-        //    applied to prewriteStorage so the deletions land in the SAME WriteBatch as
-        //    the block data; onCommit fires only after the batch has landed. The
-        //    [prepare -> merge -> onCommit] triple runs under m_commitMutex, held from
-        //    this function's entry (BaselineSchedulerMPTHelpers.h's serialization
-        //    contract). A commit
-        //    that fails before onCommit is retried by the sync loop and simply re-runs
-        //    the hook — the pruner's staged overlay is discarded and re-derived.
-        globalStateStorage.pushView(std::move(view));
-        try
+        // Stage ledger rows and pruning alongside the executed state in a single merge.
         {
             typename GlobalStateStorage::MutableStorage prewriteStorage;
             auto block = m_blockFactory.get().createBlock();
@@ -1267,7 +1219,8 @@ public:
                     return protocol::Transaction::ConstPtr(transaction);
                 }) |
                 ::ranges::to<std::vector>());
-            co_await ledger::prewriteBlockToBuffer(ledger, blockTxs, block, prewriteStorage);
+            co_await ledger::prewriteBlockToBuffer(
+                ledger, blockTxs, block, prewriteStorage, std::nullopt, true, m_reversible);
             // EIP-4895 withdrawals sidecar (Shanghai+): the Block structure carries no
             // withdrawals, so persist the raw per-item RLP as one number-keyed row (the
             // RLP LIST of the items) for engine_getPayloadBodies* to serve. Written
@@ -1296,35 +1249,41 @@ public:
                         ledger::SYS_NUMBER_2_WITHDRAWALS, std::to_string(ethHeader.number)},
                     std::move(withdrawalsEntry));
             }
-            if (rollbackJournal)
+            if (tipCounts)
             {
-                // Same WriteBatch as the block data: a committed block ALWAYS has its journal.
-                co_await writeRollbackJournalRows(
-                    prewriteStorage, ethHeader.number, *rollbackJournal, m_reorgWindow);
+                auto ancestorCounts =
+                    co_await ledger::getTransactionCount(committed, ledger::fromStorage);
+                co_await ledger::rebaseBlockTransactionCounts(
+                    prewriteStorage, *tipCounts, ancestorCounts);
             }
-            if (mptDelta)
+            if (meta)
+            {
+                co_await stageReversibleBlock(committed, mutableStorage(view), prewriteStorage,
+                    *meta, ledger::BlockAnchor{ethHeader.number, blockHeader->hash()},
+                    ethHeader.parentInfo.blockHash, parentHeader.stateRoot);
+            }
+            if (mptDelta && !rollbackAncestor)
             {
                 // The deletions of expired node rows land in the SAME WriteBatch as the
                 // block data (crash-atomicity contract, CommitObserver.h).
                 co_await prepareMPTPruneRows(
                     *m_commitObserver, ethHeader.number, *mptDelta, prewriteStorage);
             }
-            co_await globalStateStorage.mergeBackStorage(prewriteStorage);
+            if (rollbackAncestor)
+            {
+                co_await globalStateStorage.mergeToBackends(
+                    *view.m_immutableStorages.front(), mutableStorage(view), prewriteStorage);
+            }
+            else
+            {
+                co_await globalStateStorage.mergeToBackends(mutableStorage(view), prewriteStorage);
+            }
         }
-        catch (...)
+        if (rollbackAncestor)
         {
-            globalStateStorage.popFrontStorage();
-            throw;
+            co_await resyncCommitObserver(globalStateStorage, ethHeader.number);
         }
-        // CommitObserver timing contract: AFTER the block's WriteBatch landed. Deliberately
-        // OUTSIDE the rollback try/catch (matching BaselineScheduler-tpp.h and
-        // EngineServiceImpl.h): by now mergeBackStorage has landed and popped this block's
-        // layer, so if an observer ever violated the no-throw contract, the catch above
-        // would pop a deque that no longer holds this block and the resulting
-        // NotExistsImmutableStorageError would mask the observer's own diagnostic for a
-        // block that is in fact committed. onCommit must not throw (Noop and MPTPruner
-        // don't); a violation propagates untouched.
-        if (mptDelta)
+        else if (mptDelta)
         {
             m_commitObserver->onCommit(ethHeader.number, *mptDelta);
         }
@@ -1333,16 +1292,14 @@ public:
         co_return std::move(result);
     }
 
-    /// Roll the committed chain back to @p targetNumber (EL shallow reorg, Phase 3 —
-    /// EthereumChainRollback.h), restoring flat state, counters and the ledger head and
-    /// deleting the rolled-back blocks' number-keyed rows, then re-sync the commit observer
-    /// (the MPT pruner rebuilds its counts from the new head). Serialized against
-    /// verifyAndCommit on m_commitMutex. @throws RollbackRefused when the target is beyond
-    /// the reorg window or a journal row is missing — the caller turns that into a resync.
     template <class GlobalStateStorage>
     task::Task<RollbackResult> rollbackChain(
         GlobalStateStorage& globalStateStorage, protocol::BlockNumber targetNumber)
     {
+        if (!m_reversible)
+        {
+            throw RollbackRefused("Reversible commits are disabled");
+        }
         std::unique_lock commitLock(m_commitMutex);
         co_return co_await rollbackChainLocked(globalStateStorage, targetNumber);
     }
@@ -1475,15 +1432,39 @@ public:
         return std::nullopt;
     }
 
-private:
-    /// m_commitMutex must already be held (verifyAndCommit's stale-reorg retry and the public
-    /// rollbackChain both are): the rollback body plus the observer re-sync.
+    // The Engine FCU caller holds reversibleCommitMutex across resolution and this write.
     template <class GlobalStateStorage>
-    task::Task<RollbackResult> rollbackChainLocked(
-        GlobalStateStorage& globalStateStorage, protocol::BlockNumber targetNumber)
+    task::Task<RollbackResult> rollbackChainLocked(GlobalStateStorage& globalStateStorage,
+        protocol::BlockNumber targetNumber,
+        std::optional<ledger::PersistedEngineMeta> forkchoice = std::nullopt)
     {
-        auto result =
-            co_await rollbackCommittedChain(globalStateStorage, targetNumber, m_reorgWindow);
+        auto committed = globalStateStorage.forkCommitted();
+        auto const before = co_await ledger::loadEngineMeta(committed);
+        if (targetNumber < before.finalizedNumber() || targetNumber >= before.diskTip.number)
+        {
+            throw RollbackRefused("Rollback target must be between finalized and the disk tip");
+        }
+        auto hash = co_await ledger::getBlockHash(committed, targetNumber, ledger::fromStorage);
+        if (!hash)
+        {
+            throw RollbackRefused("Rollback target hash is missing");
+        }
+        ledger::BlockAnchor ancestor{targetNumber, *hash};
+        using MutableStorage = typename GlobalStateStorage::MutableStorage;
+        auto batch = co_await buildRollbackBatch<MutableStorage>(
+            committed, ancestor, before, m_blockFactory.get());
+        auto after = forkchoice.value_or(before);
+        rewindEngineMeta(after, ancestor);
+        co_await stageFinalization(batch, before, after);
+        co_await globalStateStorage.mergeToBackends(batch);
+        m_commitObserver->setFinalizedBlock(after.finalizedNumber());
+        co_await resyncCommitObserver(globalStateStorage, ancestor.number);
+        co_return RollbackResult{before.diskTip.number, targetNumber};
+    }
+
+private:
+    task::Task<void> resyncCommitObserver(auto& globalStateStorage, protocol::BlockNumber tip)
+    {
         // Re-sync the observer's chain-derived in-memory state AFTER the rollback batch
         // landed (MPTPruner re-walks the post-rollback roots; Noop ignores the hook). The
         // lookup only ever resolves blocks <= newHead, whose header rows the rollback keeps.
@@ -1499,18 +1480,14 @@ private:
             }
             co_return std::make_optional(block->blockHeader()->stateRoot());
         };
-        co_await m_commitObserver->coOnRollback(result.newHead, std::move(stateRootAt));
-        co_return result;
+        co_await m_commitObserver->coOnRollback(tip, std::move(stateRootAt));
     }
 
     std::reference_wrapper<Scheduler> m_scheduler;
     std::reference_wrapper<Executor> m_executor;
     std::reference_wrapper<protocol::BlockFactory> m_blockFactory;
     std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
-    // EL shallow-reorg window (EthereumChainRollback.h): 0 disables journaling and the
-    // stale-reorg retry entirely (the default, keeping pre-Phase-3 behavior and cost);
-    // N > 0 journals every commit and allows rewinds of up to N committed blocks.
-    int64_t m_reorgWindow = 0;
+    bool m_reversible;
     // Serializes verifyAndCommit from the height guard to the commit's onCommit against
     // every other call on this instance: the devp2p sync loop and the Engine API
     // external-payload lane share one verifier (and could otherwise both pass the head+1

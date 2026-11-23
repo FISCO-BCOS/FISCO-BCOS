@@ -137,17 +137,6 @@ struct EthPayloadArtifacts
     /// pruning) when newPayload commits the block. Kept until the durable write succeeds,
     /// same rule as header/receipts, so a failed attempt's retry re-reads it.
     std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
-    /// The block's rollback journal, captured BEFORE pushView in newPayload's commit
-    /// section and stashed here immediately: a commit attempt that throws after pushView
-    /// has consumed the view cannot recapture on the CL's retry (captureRollbackJournal
-    /// iterates the view's dirty rows), so the retry reads the journal from the artifact
-    /// and still writes the journal rows with the block — a journal-less committed block
-    /// would refuse every later reorg reaching it. Held by shared_ptr (same convention as
-    /// mptDelta above): the stash and the exception-rollback artifacts-map snapshots then
-    /// copy a refcount instead of the block's whole dirty-row set, and the stash — running
-    /// between the capture's catch and pushView with the view still in hand — is nothrow,
-    /// so it cannot recreate the header-only-without-journal artifact it guards against.
-    std::shared_ptr<const scheduler_v1::RollbackJournal> rollbackJournal = nullptr;
 };
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -233,11 +222,19 @@ public:
 
     std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
     {
+        if (auto meta = persistedEngineMeta())
+        {
+            return meta->safe ? std::optional(meta->safe->number) : std::nullopt;
+        }
         return m_tracker.safeBlockNumber();
     }
 
     std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
     {
+        if (auto meta = persistedEngineMeta())
+        {
+            return meta->finalized ? std::optional(meta->finalized->number) : std::nullopt;
+        }
         return m_tracker.finalizedBlockNumber();
     }
 
@@ -248,6 +245,23 @@ public:
     }
 
 private:
+    std::mutex* reversibleCommitMutex() const
+    {
+        return m_externalPayloadVerifier ? m_externalPayloadVerifier->reversibleCommitMutex() :
+                                           nullptr;
+    }
+
+    std::optional<ledger::PersistedEngineMeta> persistedEngineMeta() const
+    {
+        if constexpr (requires { m_globalStateStorage.latestBackend(); })
+        {
+            if (reversibleCommitMutex())
+            {
+                return task::syncWait(ledger::readEngineMeta(m_globalStateStorage.latestBackend()));
+            }
+        }
+        return std::nullopt;
+    }
     struct BuildPayloadResult
     {
         ExecutionPayload executionPayload;

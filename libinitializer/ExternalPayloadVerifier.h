@@ -94,30 +94,39 @@ public:
             co_return ExternalPayloadResult{
                 .outcome = ExternalPayloadOutcome::StaleOrOutOfOrder, .error = {}};
         }
+        catch (scheduler_v1::FinalizedRollbackRefused const& error)
+        {
+            co_return ExternalPayloadResult{
+                .outcome = ExternalPayloadOutcome::FinalizedConflict, .error = error.what()};
+        }
         catch (scheduler_v1::RollbackRefused const& e)
         {
-            // The shallow-reorg retry inside verifyAndCommit could not rewind (window
-            // disabled, depth beyond it, or the journal pruned). Same caller contract as
-            // the head+1 race: SYNCING, so the CL re-syncs instead of the exception
-            // escaping as a generic -32603 RPC error.
             co_return ExternalPayloadResult{
                 .outcome = ExternalPayloadOutcome::StaleOrOutOfOrder, .error = e.what()};
         }
     }
 
+    std::mutex* reversibleCommitMutex() override { return m_verifier->reversibleCommitMutex(); }
+
     task::Task<engine::engine_common::ExternalRollbackResult> rollbackToCommitted(
-        GlobalStateStorage& storage, bcos::protocol::BlockNumber targetNumber) override
+        GlobalStateStorage& storage, bcos::protocol::BlockNumber targetNumber,
+        std::optional<ledger::PersistedEngineMeta> forkchoice) override
     {
         using engine::engine_common::ExternalRollbackResult;
         try
         {
-            co_await m_verifier->rollbackChain(storage, targetNumber);
+            if (forkchoice)
+            {
+                co_await m_verifier->rollbackChainLocked(storage, targetNumber, forkchoice);
+            }
+            else
+            {
+                co_await m_verifier->rollbackChain(storage, targetNumber);
+            }
             co_return ExternalRollbackResult{.rolledBack = true, .error = {}};
         }
         catch (scheduler_v1::RollbackRefused const& e)
         {
-            // Beyond the reorg window or a journal row missing: the caller answers SYNCING
-            // so the CL backfills from the network instead of retrying a hopeless rewind.
             co_return ExternalRollbackResult{.rolledBack = false, .error = e.what()};
         }
     }
@@ -197,7 +206,6 @@ public:
     /// The engine's self-built newPayload commit lane writes the rollback journal for
     /// its blocks when this is positive — same value the verifier's own commit path
     /// journals with (single source: the shared verifier instance).
-    int64_t reorgWindow() const override { return m_verifier->reorgWindow(); }
 
 private:
     std::shared_ptr<Verifier> m_verifier;

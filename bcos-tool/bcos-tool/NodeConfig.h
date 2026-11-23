@@ -354,12 +354,6 @@ public:
     // config.ini), consumed by the Prague+ requestsHash cross-check in
     // EthereumBlockVerifier. Defaults to the Ethereum mainnet deposit contract.
     bcos::Address const& ethereumDepositContractAddress() const;
-    // EL shallow-reorg window ([ethereum] reorg_window in config.ini): how many committed
-    // blocks a reorg may rewind. Every commit journals its pre-block flat-state values
-    // (EthereumChainRollback.h) so the chain can roll back up to this depth. Requires
-    // storage.mpt_prune_window to be -1 or >= this value (validated in
-    // validateELModeInvariants). Default 256.
-    std::int64_t ethereumReorgWindow() const;
     // EL-mode engine mempool sizing ([ethereum] mempool_capacity /
     // mempool_tx_lifetime_minutes in config.ini): how many transactions the in-process
     // pool holds and how many minutes one lives before expiry. Defaults 5120 / 30.
@@ -700,8 +694,6 @@ private:
     uint32_t m_ethereumMaxBatchSize = 192;
     uint64_t m_ethereumMergeBlock = 0;
     std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
-    // [ethereum] reorg_window: EL shallow-reorg depth bound (see ethereumReorgWindow()).
-    std::int64_t m_ethereumReorgWindow = 256;
     // [ethereum] mempool_capacity / mempool_tx_lifetime_minutes: engine mempool sizing
     // (EL mode only; see ethereumMempoolCapacity()).
     size_t m_ethereumMempoolCapacity = 5120;

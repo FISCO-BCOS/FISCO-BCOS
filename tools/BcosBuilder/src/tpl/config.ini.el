@@ -47,11 +47,6 @@
     node_key_file=
     ; max blocks requested per batch
     max_batch_size=192
-    ; shallow-reorg window: how many committed blocks a reorg may rewind. Every commit
-    ; journals its pre-block flat-state values, so the knob trades per-commit journal
-    ; cost for reorg depth. 0 disables journaling/rollback entirely. Must be <=
-    ; storage.mpt_prune_window unless the latter is -1 (unbounded).
-    ; reorg_window=256
     ; engine mempool sizing (EL mode only): capacity in transactions, per-transaction
     ; lifetime in minutes before expiry
     ; mempool_capacity=5120
