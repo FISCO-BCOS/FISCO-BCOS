@@ -26,4 +26,5 @@ target_include_directories(test-transaction-scheduler PRIVATE
 	"${CMAKE_CURRENT_SOURCE_DIR}/../../libinitializer"
 )
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("TestTransactionCallTrace.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 config_test_cases("" "${SOURCES}" "test-transaction-scheduler" "" "")

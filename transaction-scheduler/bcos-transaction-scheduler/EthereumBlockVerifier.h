@@ -346,13 +346,13 @@ inline protocol::BlockHeader::Ptr makeExecutionBlockHeader(
 }
 
 /// Overlay the per-block Ethereum EVM context (base fee, blob gas, prevRandao,
-/// difficulty, chain id, revision) onto a LedgerConfig fetched from storage via
-/// ledger::getLedgerConfig. The overlay wins over the system-config values.
+/// difficulty, revision) onto a LedgerConfig fetched from storage via
+/// ledger::getLedgerConfig. Preserve its chain id from the existing chain configuration.
 /// Returns the Constantinople-only refusal when that gap is active, before any
 /// revision is installed. nullopt means the overlay was applied.
 inline std::optional<std::string> fillExecutionLedgerConfig(
     protocol::EthBlockHeaderData const& ethHeader, ledger::LedgerConfig& config,
-    EvmcForkTimestamps const& schedule, uint64_t chainId)
+    EvmcForkTimestamps const& schedule)
 {
     auto const revision =
         evmcRevisionForTimestamp(schedule, ethHeader.timestamp, ethHeader.difficulty);
@@ -408,6 +408,18 @@ inline std::optional<std::string> fillExecutionLedgerConfig(
             .bpo2Time = schedule.bpo2Time},
         static_cast<uint64_t>(ethHeader.timestamp)));
 
+    return std::nullopt;
+}
+
+/// Block-import callers supply their configured chain id explicitly.
+inline std::optional<std::string> fillExecutionLedgerConfig(
+    protocol::EthBlockHeaderData const& ethHeader, ledger::LedgerConfig& config,
+    EvmcForkTimestamps const& schedule, uint64_t chainId)
+{
+    if (auto error = fillExecutionLedgerConfig(ethHeader, config, schedule))
+    {
+        return error;
+    }
     // chain id -> big-endian evmc_uint256be.
     evmc_uint256be cid{};
     bcos::bytes chainIdBytes(kChainIdBytes, 0);

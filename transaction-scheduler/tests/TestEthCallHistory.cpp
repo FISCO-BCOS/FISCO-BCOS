@@ -43,6 +43,7 @@
 #include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-transaction-executor/vm/HostContext.h"
 #include "bcos-transaction-scheduler/HistoricalCallStorage.h"
+#include "ethereum-executor/EthereumState.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <map>
@@ -452,6 +453,44 @@ BOOST_AUTO_TEST_CASE(historicalViewReadYourWrites)
         task::syncWait(storage2::readOne(historicalBackend, StateKeyView{table, hcSlotRowKey()}));
     BOOST_REQUIRE(backendValue);
     BOOST_CHECK(backendValue->get() == hcRawValue(0x01));
+}
+
+BOOST_AUTO_TEST_CASE(ethereumHistoricalStorageUsesParentTrieAndClearsUnvisitedSlots)
+{
+    auto headers = runCanonicalChain();
+    auto latestView = multiLayerStorage.fork();
+    HCHistoricalBackend backend(
+        latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex, true);
+    HCHistoricalView replay(std::addressof(backend));
+    replay.newMutable();
+    auto const table = ledger::account::hexAccountTableName(hcAddress());
+    BOOST_CHECK(task::syncWait(backend.historicalHasStorage(table)));
+    // Account ranges must not inspect flat rows from a newer canonical state.
+    auto iterator = task::syncWait(backend.range(storage2::RANGE_SEEK, StateKey{table, {}}));
+    BOOST_CHECK(!task::syncWait(iterator.next()));
+    task::syncWait([&]() -> task::Task<void> {
+        // An additional replay slot must be deleted along with unvisited parent slots.
+        auto overlayKey = hcSlot();
+        overlayKey.data()[31] = 2;
+        auto account = eth::ethViewAccount(replay, hcEvmcAddress());
+        co_await account.setStorage(ledger::account::toEvmcBytes32(overlayKey), hcEvmcValue(99));
+        co_await eth::clearAccountStorage(replay, account);
+        auto oldSlot = co_await account.storage(ledger::account::toEvmcBytes32(hcSlot()));
+        auto overlaySlot = co_await account.storage(ledger::account::toEvmcBytes32(overlayKey));
+        BOOST_CHECK(toBytes(oldSlot) == toBytes(evmc_bytes32{}));
+        BOOST_CHECK(toBytes(overlaySlot) == toBytes(evmc_bytes32{}));
+        auto hasStorage = co_await backend.historicalHasStorage(table);
+        BOOST_CHECK(!hasStorage);
+        // A recreated account can write new slots through the same mutable overlay.
+        co_await account.setNonce("1");
+        co_await account.setStorage(ledger::account::toEvmcBytes32(hcSlot()), hcEvmcValue(7));
+        auto recreated = co_await account.storage(ledger::account::toEvmcBytes32(hcSlot()));
+        BOOST_CHECK(toBytes(recreated) == toBytes(hcEvmcValue(7)));
+    }());
+    auto latestSlot =
+        task::syncWait(storage2::readOne(latestView, StateKeyView{table, hcSlotRowKey()}));
+    BOOST_REQUIRE(latestSlot);
+    BOOST_CHECK(latestSlot->get() == hcRawValue(2));
 }
 
 // Scheduler-level: callAtBlock(N) executes against block N's state — each height serves its

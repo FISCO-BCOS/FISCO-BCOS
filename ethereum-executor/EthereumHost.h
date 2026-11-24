@@ -11,6 +11,7 @@
 /// EIP-7702 delegation resolution, CREATE/CREATE2 address derivation, precompiles.
 
 #pragma once
+#include "EthereumCallTracer.h"
 
 #include "EVMPrecompiles.h"
 #include "EVMSupport.h"
@@ -235,12 +236,13 @@ class EthereumHost : public evmc::Host
     // constructed per transaction inside runTransaction / executeSystemCall,
     // and the policy comes from the caller's scope).
     Policy const& m_policy;
+    EthereumCallTracer* m_tracer = nullptr;
 
 public:
     EthereumHost(evmc_revision rev, evmc::VM& vm, EthereumState<Storage>& state,
         EthBlockInfo const& block, BlockHashLookup blockHashLookup,
         std::optional<EthTxContext> txContext, EthCallParams const& callParams, uint64_t chainId,
-        Policy const& policy)
+        Policy const& policy, EthereumCallTracer* tracer = nullptr)
       : m_rev{rev},
         m_vm{vm},
         m_state{state},
@@ -249,7 +251,8 @@ public:
         m_txContext{std::move(txContext)},
         m_callParams{callParams},
         m_chainId{chainId},
-        m_policy{policy}
+        m_policy{policy},
+        m_tracer{tracer}
     {}
 
     [[nodiscard]] std::vector<evm::Log>&& take_logs() noexcept { return std::move(m_logs); }
@@ -459,6 +462,8 @@ bool EthereumHost<Storage, Policy>::selfdestruct(
         m_state.journal_create(beneficiary, false);
     auto& acc = m_state.get(addr);
     const auto balance = acc.balance;
+    if (m_tracer)
+        m_tracer->selfdestruct(addr, beneficiary, evm::toEvmcBE<evmc::uint256be>(balance));
     auto& beneficiary_acc = m_state.touch(beneficiary);
 
     m_state.journal_balance_change(beneficiary, beneficiary_acc.balance);
@@ -545,7 +550,11 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
     if (!new_acc_exists)
         new_acc = &m_state.insert(msg.recipient);
     else if (eth_host_detail::is_create_collision(*new_acc))
+    {
+        if (m_tracer)
+            m_tracer->setError("contract address collision");
         return evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
+    }  // TODO: Add EVMC errors for creation failures.
     m_state.journal_create(msg.recipient, new_acc_exists);
 
     assert(new_acc != nullptr);
@@ -576,15 +585,24 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
     assert(gas_left >= 0);
 
     const bytes_view code{result.output_data, result.output_size};
+    if (m_tracer)
+        m_tracer->creationOutput(result.output_data, result.output_size);
 
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > evmone::MAX_CODE_SIZE)
+    {
+        if (m_tracer)
+            m_tracer->setError("max code size exceeded: code size " + std::to_string(code.size()) +
+                               " limit " + std::to_string(evmone::MAX_CODE_SIZE));
         return evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
+    }
 
     // Code deployment cost.
     const auto cost = std::ssize(code) * 200;
     gas_left -= cost;
     if (gas_left < 0)
     {
+        if (m_tracer && m_rev != EVMC_FRONTIER)
+            m_tracer->setError("contract creation code storage out of gas");
         return (m_rev == EVMC_FRONTIER) ?
                    // evmc ABI 19: Result lost the created-address ctor; the caller reads
                    // msg.recipient (set by prepare_message / evmone for nested creates).
@@ -597,7 +615,11 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
     {
         // EIP-3541: Reject new contract code starting with the 0xEF byte.
         if (m_rev >= EVMC_LONDON && code[0] == 0xEF)
+        {
+            if (m_tracer)
+                m_tracer->setError("invalid code: must not begin with 0xef");
             return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE, 0, 0, {.left = msg.state_gas}};
+        }
 
         new_acc->code_hash = evm::keccak256(code);
         new_acc->code = code;
@@ -647,7 +669,19 @@ evmc::Result EthereumHost<Storage, Policy>::execute_message(const evmc_message& 
 
     // Calls to precompile address via EIP-7702 delegation execute empty code instead of precompile.
     if ((msg.flags & EVMC_DELEGATED) == 0 && m_policy.isPrecompile(m_rev, msg.code_address))
-        return m_policy.callPrecompile(m_rev, msg);
+    {
+        if constexpr (requires(
+                          std::string_view* error) { m_policy.callPrecompile(m_rev, msg, error); })
+        {
+            std::string_view error;
+            auto result = m_policy.callPrecompile(m_rev, msg, &error);
+            if (m_tracer && !error.empty())
+                m_tracer->setError(error);
+            return result;
+        }
+        else
+            return m_policy.callPrecompile(m_rev, msg);
+    }
 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
     const auto code = m_state.get_code(msg.code_address);
@@ -662,12 +696,25 @@ evmc::Result EthereumHost<Storage, Policy>::call(const evmc_message& orig_msg) n
 {
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
-        return evmc::Result{EVMC_FAILURE, orig_msg.gas, 0, {.left = orig_msg.state_gas}};
+    {
+        auto result = evmc::Result{EVMC_FAILURE, orig_msg.gas, 0, {.left = orig_msg.state_gas}};
+        if (m_tracer)
+        {
+            m_tracer->enter(orig_msg);
+            m_tracer->setError("nonce uint64 overflow");
+            m_tracer->exit(orig_msg, result.raw());
+        }
+        return result;
+    }  // Light exception.
 
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();
 
+    if (m_tracer)
+        m_tracer->enter(*msg);
     auto result = execute_message(*msg);
+    if (m_tracer)
+        m_tracer->exit(*msg, result.raw());
 
     if (result.status_code != EVMC_SUCCESS)
     {

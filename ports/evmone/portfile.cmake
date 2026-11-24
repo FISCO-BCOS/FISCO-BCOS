@@ -22,7 +22,16 @@ vcpkg_from_github(
     REF v0.24.0
     SHA512 83351c486c0638e8cae7fb826c9341ccadc1362d46346a331451695b53a79366e8354843bed431afddd0102221c48644d38385330f1198b5705bb2e8c60c6d53
     HEAD_REF master
-    PATCHES fisco-sm3.patch
+    PATCHES fisco-sm3.patch trace-cancellation.patch
+)
+
+# evmone's blst ExternalProject otherwise downloads outside vcpkg's verified
+# cache, including on every patch-induced build-tree reset. Seed its exact
+# upstream archive after configure (which recreates the build directories).
+vcpkg_download_distfile(BLST_ARCHIVE
+    URLS "https://github.com/supranational/blst/archive/refs/tags/v0.3.17.tar.gz"
+    FILENAME "blst-v0.3.17.tar.gz"
+    SHA512 e7c930284e2473b511fce3037cbcc704d38986ee1622a6de387e8bde9cc54179f6eb0e3fb1a675eccfaf106c0b42ad6879367f98d6c4f54a7549bbcaa300cda5
 )
 
 vcpkg_cmake_configure(
@@ -34,6 +43,11 @@ vcpkg_cmake_configure(
         -DEVMONE_TOOLS=OFF
         -DHUNTER_ENABLED=OFF
 )
+foreach(BLST_CONFIG dbg rel)
+    set(BLST_DOWNLOAD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-${BLST_CONFIG}/deps/src")
+    file(MAKE_DIRECTORY "${BLST_DOWNLOAD_DIR}")
+    file(COPY_FILE "${BLST_ARCHIVE}" "${BLST_DOWNLOAD_DIR}/v0.3.17.tar.gz" ONLY_IF_DIFFERENT)
+endforeach()
 vcpkg_cmake_install()
 
 # Remove evmone's auto-generated cmake config (it lacks the imported target definition

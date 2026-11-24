@@ -50,6 +50,8 @@ public:
 
     Rollbackable(Storage& storage) : m_storage(storage) {}
 
+    Storage& underlyingStorage() { return m_storage.get(); }
+
     /// Current savepoint — the number of recorded writes so far.
     Savepoint current() { return static_cast<Savepoint>(m_records.size()); }
 

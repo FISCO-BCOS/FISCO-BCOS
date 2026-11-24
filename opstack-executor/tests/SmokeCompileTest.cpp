@@ -59,7 +59,8 @@ bcos::executor_v1::eth::runTransaction<MutableStorage, bcos::executor_v1::opstac
     bcos::protocol::Transaction const&, evmc_revision, evmc::VM&,
     bcos::executor_v1::eth::EthTxProperties const&, uint64_t,
     bcos::executor_v1::eth::EthCallParams const&, bcos::protocol::TransactionReceiptFactory const&,
-    int64_t, bcos::executor_v1::opstack::OpPolicy const&);
+    int64_t, bcos::executor_v1::opstack::OpPolicy const&,
+    bcos::executor_v1::eth::EthereumCallTracer*);
 
 template bcos::task::Task<bcos::executor_v1::opstack::OpFeeParams>
 bcos::executor_v1::opstack::loadOpFeeParamsAsync<MutableStorage>(MutableStorage&);

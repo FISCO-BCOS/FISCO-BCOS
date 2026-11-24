@@ -365,7 +365,7 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     EthBlockInfo const& block, BlockHashLookup blockHashLookup, protocol::Transaction const& tx,
     evmc_revision rev, evmc::VM& vm, EthTxProperties const& txProps, uint64_t chainId,
     EthCallParams const& callParams, protocol::TransactionReceiptFactory const& rf,
-    int64_t blockNumber, Policy const& policy = Policy{})
+    int64_t blockNumber, Policy const& policy = Policy{}, EthereumCallTracer* tracer = nullptr)
 {
     const auto gasLimit = effectiveGasLimit(tx, callParams);
     const auto sender = ethSender(tx);
@@ -373,7 +373,12 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
 
     auto& sender_acc = state.get_or_insert(sender);
     assert(sender_acc.nonce < EthAccount::NonceMax);  // Required for valid tx.
-    ++sender_acc.nonce;                               // Bump sender nonce.
+    // A top-level CREATE derives its address from the nonce the transaction was validated
+    // against, i.e. the account nonce BEFORE this bump (prepare_message's
+    // `sender_acc.nonce - 1`). Capture it here and hand it to the policy's buildReceipt, which
+    // reports the address evmone created the account at.
+    const auto senderNonce = sender_acc.nonce;
+    ++sender_acc.nonce;  // Bump sender nonce.
 
     // The NODE's chain id, never tx.chain_id: validate_transaction does not
     // check that field, so passing it would make EIP-7702 step 1 compare sender
@@ -390,7 +395,7 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
         policy.withholdUpfront(sender_acc, tx, block, rev, gasLimit, effective_gas_price);
 
     EthereumHost<Storage, Policy> host{rev, vm, state, block, std::move(blockHashLookup),
-        ethTxContextOf(tx, callParams), callParams, chainId, policy};
+        ethTxContextOf(tx, callParams), callParams, chainId, policy, tracer};
 
     sender_acc.access_status = EVMC_ACCESS_WARM;  // Tx sender is always warm.
     if (to.has_value())
@@ -440,7 +445,23 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
 
     // Dry runs (eth_call / eth_estimateGas) are the only callers that need the return data in
     // the receipt; they discard it, while a mined transaction's receipt would grow for nothing.
-    auto receipt = policy.buildReceipt(host, result, gas_used, rf, blockNumber, callParams.free);
+    //
+    // A creation transaction records the to-be-created address in its receipt (op-geth
+    // state_processor.go MakeReceipt: CreateAddress(from, pre-execution nonce)). Which address
+    // that is -- and how it is formatted -- is the policy's call, so hand it the two inputs and
+    // let it derive: the eth lane has no snapshot of its own and formats inline, while the OP
+    // policy substitutes the validate-time snapshot it already holds (and ignores these).
+    auto receipt = policy.buildReceipt(host, result, gas_used, rf, blockNumber, callParams.free,
+        /*isCreate=*/!to.has_value(), sender, senderNonce);
+    if (tracer)
+    {
+        tracer->check();
+        if (auto root = tracer->result())
+        {
+            root->gas = EthereumCallTracer::quantity(static_cast<uint64_t>(gasLimit));
+            root->gasUsed = EthereumCallTracer::quantity(static_cast<uint64_t>(gas_used));
+        }
+    }
 
     co_await state.applyToStorage(rev);
     co_return receipt;

@@ -5,6 +5,7 @@
 #include "bcos-rpc/filter/LogMatcher.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include "bcos-rpc/groupmgr/NodeService.h"
+#include "bcos-rpc/web3jsonrpc/utils/CanonicalReads.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BucketMap.h"
@@ -64,7 +65,7 @@ public:
 
     FilterSystem(boost::asio::io_context& _ioService, GroupManager::Ptr groupManager,
         std::string groupId, FilterRequestFactory::Ptr factory, int filterTimeout,
-        int maxBlockProcessPerReq);
+        int maxBlockProcessPerReq, int maxBlockRange);
     virtual ~FilterSystem() { m_cleanUpTimer->stop(); }
 
     // jsonrpc
@@ -115,8 +116,7 @@ public:
 public:
     int64_t getLatestBlockNumber(std::string_view groupId)
     {
-        auto ledger = getNodeService(groupId, "getCurrentBlockNumber")->ledger();
-        return getLatestBlockNumber(*ledger);
+        return getLatestBlockNumber(*getNodeService(groupId, "getCurrentBlockNumber"));
     }
     int64_t getLatestBlockNumber() { return getLatestBlockNumber(m_group); }
 
@@ -143,8 +143,17 @@ protected:
     task::Task<Json::Value> getFilterLogsImpl(std::string_view groupId, u256 filterID);
     task::Task<Json::Value> getLogsImpl(
         std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange);
+    // @param enforceLogCountCap reject a result larger than MAX_RETURNED_LOGS_PER_QUERY. Set by
+    //        the one-shot callers, which have no cursor and cannot resume past the overflow; the
+    //        streaming path (getLogChangeImpl) leaves it off, because it pages by block and a
+    //        rejected poll would be retried forever against the same blocks.
     task::Task<Json::Value> getLogsInternal(
-        bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params);
+        NodeService& nodeService, FilterRequest::Ptr params, bool enforceLogCountCap = false);
+
+    /// Throw when a one-shot match stopped on the response ceiling. Shared by the blockHash and
+    /// the range branches so the ceiling cannot depend on the request selector.
+    void requireWithinLogBudget(
+        LogMatcher::BlockMatchOutcome const& outcome, int64_t fromBlock, int64_t toBlock);
 
     virtual int32_t InvalidParamsCode() = 0;
     uint64_t insertFilter(Filter::Ptr filter);
@@ -158,19 +167,30 @@ protected:
         }
         return accessor.value();
     }
-    static int64_t getLatestBlockNumber(bcos::ledger::LedgerInterface& _ledger)
+    /// `latest` as the endpoints see it: the ledger's current number, or on the OP Engine lane
+    /// the tracker head (rpc::canonicalLatestNumber) — every block read below routes the same
+    /// way, so a filter never names a height it cannot then read.
+    static int64_t getLatestBlockNumber(NodeService& _nodeService)
     {
         int64_t latest = 0;
-        task::wait([](bcos::ledger::LedgerInterface& ledger, int64_t& ret) -> task::Task<void> {
-            ret = co_await ledger::getCurrentBlockNumber(ledger);
-        }(_ledger, latest));
+        task::wait([](NodeService& nodeService, int64_t& ret) -> task::Task<void> {
+            ret = co_await canonicalLatestNumber(nodeService);
+        }(_nodeService, latest));
         return latest;
     }
 
     using FilterMap = BucketMap<filter::KeyType, Filter::Ptr, std::hash<filter::KeyType>>;
 
     uint64_t m_filterTimeout = FILTER_DEFAULT_EXPIRATION_TIME;
+    // Paging step for the streaming filter paths (getBlockChangeImpl / getPendingTxChangeImpl /
+    // getLogChangeImpl). Each poll advances the cursor by this many blocks.
     int64_t m_maxBlockProcessPerReq = 10;
+    // Range cap for the one-shot paths (eth_getLogs / eth_getFilterLogs / legacy getLogs), which
+    // have no cursor and therefore reject a wider request instead of paging it. Kept modest on
+    // purpose: the cost of a one-shot query is the sum of the receipts of every block in the
+    // range, and block size is gas-limited only (the 1000-transaction cap is gone), so the range
+    // length has to carry the budget rather than assume a small number of transactions per block.
+    int64_t m_maxBlockRange = 1000;
     GroupManager::Ptr m_groupManager;
     std::string m_group;
     LogMatcher::Ptr m_matcher;

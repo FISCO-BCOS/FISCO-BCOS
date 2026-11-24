@@ -83,6 +83,8 @@ public:
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
 
     /// eth_call pinned at a block height: forward to the selected scheduler.
+    void traceTransaction(crypto::HashType const& hash, scheduler::TraceOptions options,
+        std::function<void(Error::Ptr, std::shared_ptr<scheduler::CallTrace>)> callback) override;
     void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
 
@@ -92,6 +94,13 @@ public:
     void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>
             callback) override;
+
+    /// Unfinalized-window pair (SchedulerInterface): forwarded so the OP engine reaching
+    /// OpScheduler through this wrapper gets the real window, not the empty defaults.
+    std::optional<UnfinalizedBlock> unfinalizedBlock(
+        bcos::crypto::HashType const& blockHash) const override;
+    void finalizeUpTo(
+        bcos::crypto::HashType const& blockHash, std::function<void(Error::Ptr)> callback) override;
 
     void reset([[maybe_unused]] std::function<void(Error::Ptr)> callback) override;
 

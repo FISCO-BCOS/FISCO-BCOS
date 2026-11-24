@@ -93,6 +93,9 @@ public:
         /// the serial scheduler runs each chunk's execute() strictly in order, the same
         /// discipline OpEthExecutor's blockGasLeft relies on.
         mutable int64_t blobGasLeft = -1;
+        EthereumCallTracer* tracer = nullptr;
+        evmc::VM* traceVM = nullptr;
+        BlockHashLookup traceBlockHashLookup;
     };
 
     /// @param blockHashLookup Optional BLOCKHASH provider used for BLOCKHASH
@@ -204,7 +207,8 @@ public:
     //                         stateless.
     // The EVM is not in that list because it is not shared at all: execute()
     // constructs a VM for the transaction it is about to run, exactly as
-    // bcos-executor does, so no two threads can reach one instance.
+    // bcos-executor does, so no two threads can reach one instance. Trace requests
+    // supply their own VM and reuse it sequentially while replaying the block prefix.
     template <class Storage>
     struct ExecuteContext
     {
@@ -446,9 +450,11 @@ public:
                     // reach it, and the cost is one allocation per transaction.
                     evmc::VM vm{evmc_create_evmone()};
                     m_receipt = co_await runTransaction(state, m_blockInfo,
-                        executor.get().m_blockHashLookup, transaction.get(), m_rev, vm, *props,
-                        nodeChainId(), m_callParams, executor.get().m_receiptFactory,
-                        blockHeader.get().number());
+                        m_ctx && m_ctx->traceBlockHashLookup ? m_ctx->traceBlockHashLookup :
+                                                               executor.get().m_blockHashLookup,
+                        transaction.get(), m_rev, m_ctx && m_ctx->traceVM ? *m_ctx->traceVM : vm,
+                        *props, nodeChainId(), m_callParams, executor.get().m_receiptFactory,
+                        blockHeader.get().number(), EthL1Policy{}, m_ctx ? m_ctx->tracer : nullptr);
                 }
                 else
                 {

@@ -143,6 +143,31 @@ struct ReadAccount
 };
 }  // namespace eth_state_detail
 
+/// Read the rooted storage-presence hint through journaling and layered views.
+template <class Storage>
+task::Task<bool> historicalAccountHasStorage(Storage& storage, std::string_view table)
+{
+    if constexpr (requires { storage.historicalHasStorage(table); })
+        co_return co_await storage.historicalHasStorage(table);
+    else if constexpr (requires { storage.underlyingStorage(); })
+        co_return co_await historicalAccountHasStorage(storage.underlyingStorage(), table);
+    else if constexpr (requires { backendStorage(storage); })
+        co_return co_await historicalAccountHasStorage(backendStorage(storage), table);
+    else
+        co_return false;
+}
+
+template <class Storage>
+void clearHistoricalAccount(Storage& storage, std::string_view table)
+{
+    if constexpr (requires { storage.clearHistoricalAccount(table); })
+        storage.clearHistoricalAccount(table);
+    else if constexpr (requires { storage.underlyingStorage(); })
+        clearHistoricalAccount(storage.underlyingStorage(), table);
+    else if constexpr (requires { backendStorage(storage); })
+        clearHistoricalAccount(backendStorage(storage), table);
+}
+
 /// Remove ALL storage rows of an account — the storage slots AND the three core
 /// Ethereum fields (nonce/balance/codeHash).
 /// Used when an account self-destructs: its full state (including storage) must
@@ -163,7 +188,13 @@ task::Task<void> clearAccountStorage(
     using namespace bcos::ledger::account;
     auto tableName = co_await acc.path();
 
+    clearHistoricalAccount(storage, tableName);
     std::vector<executor_v1::StateKey> keysToRemove;
+    // Rooted backends do not enumerate their hashed account rows. Always tombstone
+    // the core fields as well as every slot written into the replay overlay.
+    keysToRemove.emplace_back(tableName, ACCOUNT_TABLE_FIELDS::NONCE);
+    keysToRemove.emplace_back(tableName, ACCOUNT_TABLE_FIELDS::BALANCE);
+    keysToRemove.emplace_back(tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH);
     auto it = co_await storage2::range(
         storage, storage2::RANGE_SEEK, executor_v1::StateKey{tableName, std::string_view{}});
     while (auto kv = co_await it.next())
@@ -361,6 +392,12 @@ class EthereumState
         auto& storage = m_storage;
         auto tableName = co_await evmAccount.path();
 
+        // A parent trie with storage is sufficient for CREATE collision detection:
+        // an account able to SSTORE has code or a bumped nonce, which independently
+        // collides. Whole-account deletion masks the rooted storage through
+        // clearHistoricalAccount; recreated accounts use the mutable range below.
+        if (co_await historicalAccountHasStorage(storage, tableName))
+            co_return true;
         bool hasStorage = false;
         auto it = co_await storage2::range(
             storage, storage2::RANGE_SEEK, executor_v1::StateKey{tableName, std::string_view{}});
