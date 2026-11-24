@@ -492,6 +492,8 @@ BOOST_AUTO_TEST_CASE(mpt_reader_survives_multi_block_finalize)
     ReadPlaneFixture t;
     auto c = setupB1B2a(t.f);
     auto s = deriveB2b(t.f, c);
+    auto captured = bcos::task::syncWait(t.reader->captureWindowView(c.h2a));
+    BOOST_REQUIRE(captured.has_value());
     auto b3b = t.f.build(t.f.fc(s.h2b, c.h1, c.h1), 3, 1);
     auto h3b = t.f.hashOf(b3b);
     BOOST_REQUIRE(t.f.np(b3b).status == PayloadValidationStatus::Valid);
@@ -505,11 +507,59 @@ BOOST_AUTO_TEST_CASE(mpt_reader_survives_multi_block_finalize)
         bcos::task::syncWait(bcos::storage2::readOne(*mpt2b, s.b2b.executionPayload.stateRoot));
     BOOST_REQUIRE(rootNode.has_value());
     BOOST_CHECK(!rootNode->empty());
-    // Pruned sibling and unknown hashes stay null; flat stateStorageAt does not serve historical
-    // finalized heights below the tip.
+    // A request that already captured the sibling can decode its original header and trie
+    // after pruning. A new request can no longer select it.
+    auto block =
+        bcos::task::syncWait(captured->window->block(captured->number, bcos::ledger::HEADER));
+    BOOST_REQUIRE(block);
+    BOOST_CHECK_EQUAL(bcos::protocol::canonicalBlockHash(*block->blockHeader()).hex(), c.h2a.hex());
+    auto mpt2a = captured->window->takeMptNodeReader();
+    captured.reset();
+    BOOST_REQUIRE(mpt2a);
+    BOOST_CHECK(
+        bcos::task::syncWait(bcos::storage2::readOne(*mpt2a, block->blockHeader()->stateRoot()))
+            .has_value());
+    BOOST_CHECK(!bcos::task::syncWait(t.reader->captureWindowView(c.h2a)).has_value());
+
+    // Flat stateStorageAt does not serve historical finalized heights below the tip.
     BOOST_CHECK(bcos::task::syncWait(t.reader->mptNodeReaderAt(c.h2a)) == nullptr);
     BOOST_CHECK(bcos::task::syncWait(t.reader->stateStorageAt(s.h2b)) == nullptr);
     BOOST_CHECK(bcos::task::syncWait(t.reader->stateStorageAt(h3b)) != nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(captured_head_keeps_receipts_at_their_own_height)
+{
+    ReadPlaneFixture t;
+    auto c = setupB1B2a(t.f);
+    auto attributes = ReorgFixture::attrs(3, 10);
+    attributes.transactions->back() =
+        bcos::toHexStringWithPrefix(c.b2a.executionPayload.transactions.back().raw);
+    auto const built = t.f.fcu(t.f.fc(c.h2a, c.h1, c.h1), &attributes);
+    BOOST_REQUIRE(built.payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(built.payloadId.has_value());
+    auto const payload = bcos::task::syncWait(t.f.service->getPayload(*built.payloadId, 4));
+    BOOST_REQUIRE(payload);
+    auto const b3a = bcos::engine::NewPayloadRequest{.executionPayload = payload->executionPayload,
+        .expectedBlobVersionedHashes = {},
+        .parentBeaconBlockRoot = payload->parentBeaconBlockRoot,
+        .executionRequests = std::vector<bcos::bytes>{}};
+    auto const h3a = t.f.hashOf(b3a);
+    BOOST_REQUIRE(t.f.np(b3a).status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(
+        t.f.fcu(t.f.fc(h3a, c.h1, c.h1)).payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE_EQUAL(t.f.mintTxHash(b3a).hex(), t.f.mintTxHash(c.b2a).hex());
+
+    auto view = bcos::task::syncWait(t.reader->captureHeadView());
+    BOOST_REQUIRE(view.window);
+    constexpr auto flags =
+        bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS | bcos::ledger::RECEIPTS;
+    for (auto height : {2, 3})
+    {
+        auto block = bcos::task::syncWait(view.window->block(height, flags));
+        BOOST_REQUIRE(block);
+        BOOST_REQUIRE_EQUAL(block->receipts().size(), 2U);
+        BOOST_CHECK_EQUAL(block->receipts()[1U]->blockNumber(), height);
+    }
 }
 
 // If finalization advances on disk without updating the tracker (e.g. a mid-chain merge error

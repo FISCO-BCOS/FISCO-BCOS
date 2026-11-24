@@ -244,12 +244,13 @@ struct ReorgFixture
     {
         service.reset();
         opDelegate = std::make_shared<Delegate>(receiptFactory, hashImpl, kChainId, forkSchedule,
-            blockFactory, multiLayerStorage, ledger, ioServicePool);
+            blockFactory, multiLayerStorage, ledger, ioServicePool, unfinalizedWindow);
         opDelegate->setBlockNumberNotifier(
             [this](bcos::protocol::BlockNumber n) { finalizeNotifications.push_back(n); });
         service = std::make_unique<OpEngine>(memPool, multiLayerStorage, seam, blockFactory,
             opDelegate, nullptr,
             /*allowSynthesizedL1Attributes=*/false, unfinalizedWindow);
+        opDelegate->setCanonicalHeadProvider([this] { return trackedHead(); });
     }
     void restart() { start(); }
 

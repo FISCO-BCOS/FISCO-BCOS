@@ -43,6 +43,21 @@ task::Task<protocol::BlockNumber> bcos::rpc::canonicalLatestNumber(NodeService& 
     co_return co_await ledger::getCurrentBlockNumber(*nodeService.ledger());
 }
 
+task::Task<protocol::Block::Ptr> bcos::rpc::blockInView(NodeService& nodeService,
+    engine::OpCanonicalReader::HeadReadView const& view, protocol::BlockNumber blockNumber,
+    int32_t blockFlag)
+{
+    if (blockNumber > view.head)
+    {
+        throwNotOnCanonicalChain(blockNumber);
+    }
+    if (blockNumber > view.finalized)
+    {
+        return view.window->block(blockNumber, blockFlag);
+    }
+    return ledger::getBlockData(*nodeService.ledger(), blockNumber, blockFlag);
+}
+
 task::Task<protocol::Block::Ptr> bcos::rpc::canonicalBlockByNumber(
     NodeService& nodeService, protocol::BlockNumber blockNumber, int32_t blockFlag)
 {

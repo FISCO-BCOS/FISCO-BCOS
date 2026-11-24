@@ -36,6 +36,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <array>
+#include <functional>
 #include <future>
 #include <map>
 #include <optional>
@@ -46,12 +47,45 @@ namespace bcos::test
 {
 namespace
 {
+protocol::Block::Ptr copyBlock(protocol::BlockFactory& factory, protocol::Block const& block)
+{
+    bytes encoded;
+    block.encode(encoded);
+    return factory.createBlock(encoded, false, false);
+}
+
 /// A window of hand-built blocks: `headChain` maps the unfinalized heights of the head chain to
 /// their hash, `window` holds every unfinalized block (both branches) by hash, `headTxs` the
 /// transactions the head chain carries. Flat state can be supplied by hash when needed.
 struct FakeReader : engine::OpCanonicalReader
 {
     explicit FakeReader(protocol::BlockFactory& factory) : blockFactory(factory) {}
+
+    struct ReadView : WindowReadView
+    {
+        explicit ReadView(FakeReader& reader) : reader(reader) {}
+
+        task::Task<protocol::Block::Ptr> block(protocol::BlockNumber number, int32_t) override
+        {
+            reader.notifyWindowRead(number);
+            co_return copyBlock(reader.blockFactory, *blocks.at(number));
+        }
+        task::Task<std::optional<protocol::BlockNumber>> blockNumber(h256 hash) override
+        {
+            for (auto const& [number, block] : blocks)
+            {
+                if (protocol::canonicalBlockHash(*block->blockHeader()) == hash)
+                {
+                    co_return number;
+                }
+            }
+            co_return std::nullopt;
+        }
+        std::shared_ptr<MPTNodeReader> takeMptNodeReader() override { return nullptr; }
+
+        FakeReader& reader;
+        std::map<protocol::BlockNumber, protocol::Block::Ptr> blocks;
+    };
 
     protocol::BlockFactory& blockFactory;
     BlockRef finalizedRef;
@@ -61,6 +95,7 @@ struct FakeReader : engine::OpCanonicalReader
     std::map<h256, protocol::Block::Ptr> window;
     std::map<h256, ChainTransaction> headTxs;
     std::map<h256, std::shared_ptr<StateStorage>> flatStates;
+    std::function<void(protocol::BlockNumber)> onWindowRead;
     /// A hash the window still LISTS (unfinalizedNumberOf answers) but no longer HOLDS
     /// (unfinalizedBlock null): the finalize race between an endpoint's two lookups.
     std::optional<BlockRef> evicted;
@@ -70,6 +105,35 @@ struct FakeReader : engine::OpCanonicalReader
     task::Task<protocol::BlockNumber> safeNumber() override
     {
         co_return safe.value_or(finalizedRef.number);
+    }
+    task::Task<HeadReadView> captureHeadView() override
+    {
+        HeadReadView result{.head = headRef.number,
+            .safe = safe.value_or(finalizedRef.number),
+            .finalized = finalizedRef.number,
+            .window = nullptr};
+        if (result.head > result.finalized)
+        {
+            auto view = std::make_unique<ReadView>(*this);
+            for (auto const& [number, hash] : headChain)
+            {
+                view->blocks.emplace(number, window.at(hash));
+            }
+            result.window = std::move(view);
+        }
+        co_return result;
+    }
+    task::Task<std::optional<WindowBlockView>> captureWindowView(h256 const& hash) override
+    {
+        auto it = window.find(hash);
+        if (it == window.end())
+        {
+            co_return std::nullopt;
+        }
+        auto view = std::make_unique<ReadView>(*this);
+        auto const number = it->second->blockHeader()->number();
+        view->blocks.emplace(number, it->second);
+        co_return WindowBlockView{.number = number, .window = std::move(view)};
     }
     task::Task<std::optional<h256>> canonicalHashAt(protocol::BlockNumber number) override
     {
@@ -93,9 +157,9 @@ struct FakeReader : engine::OpCanonicalReader
         {
             co_return nullptr;
         }
-        bytes encoded;
-        it->second->encode(encoded);
-        co_return blockFactory.createBlock(encoded, false, false);
+        auto block = it->second;
+        notifyWindowRead(block->blockHeader()->number());
+        co_return copyBlock(blockFactory, *block);
     }
     task::Task<std::optional<ChainTransaction>> transactionOnHeadChain(h256 const& txHash) override
     {
@@ -118,6 +182,14 @@ struct FakeReader : engine::OpCanonicalReader
     {
         auto it = flatStates.find(hash);
         co_return it == flatStates.end() ? nullptr : it->second;
+    }
+
+    void notifyWindowRead(protocol::BlockNumber number)
+    {
+        if (onWindowRead)
+        {
+            onWindowRead(number);
+        }
     }
 };
 
@@ -210,20 +282,24 @@ public:
 
     /// One block at tip+1 with one transaction whose receipt carries one log; @p salt makes
     /// the header hash and the tx hash distinct per sibling.
-    WindowBlock windowBlock(uint8_t salt)
+    WindowBlock windowBlock(uint8_t salt, uint64_t baseFee = 100,
+        std::optional<engine::OpCanonicalReader::BlockRef> parent = std::nullopt)
     {
+        auto const parentRef = parent.value_or(engine::OpCanonicalReader::BlockRef{tipHash, tip});
+        auto const number = parentRef.number + 1;
         auto block = m_blockFactory->createBlock();
         auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-        header->setNumber(tip + 1);
+        header->setNumber(number);
         // Whole seconds: the OP (Eth-shaped) header hash rejects a sub-second timestamp.
         header->setTimestamp(1'700'000'000'000ULL + 1000ULL * salt);
-        header->setParentInfo(protocol::ParentInfo{.blockNumber = tip, .blockHash = tipHash});
+        header->setParentInfo(
+            protocol::ParentInfo{.blockNumber = parentRef.number, .blockHash = parentRef.hash});
         header->setGasLimit(30'000'000);
         header->setGasUsed(21'000);
-        // OP shape (isOpEthereumBlock): Holocene extraData 250/6, base fee 100, withdrawals
+        // OP shape (isOpEthereumBlock): Holocene extraData 250/6, base fee, withdrawals
         // root; the salt keeps the sibling hashes apart through the timestamp.
         header->setExtraData(bytes{0x00, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06});
-        header->setBaseFee(100);
+        header->setBaseFee(baseFee);
         header->setWithdrawalsRoot(h256(1U));
         header->setExcessBlobGas(0);
         header->setBlobGasUsed(0);
@@ -236,7 +312,7 @@ public:
         // log with fewer topics than positions never matches (LogMatcher::matches).
         logs.emplace_back(bytes(20, salt), h256s{h256(1U), h256(2U), h256(3U), h256(4U)}, bytes{});
         auto receipt =
-            m_blockFactory->receiptFactory()->createReceipt(21'000, "", logs, 0, {}, tip + 1);
+            m_blockFactory->receiptFactory()->createReceipt(21'000, "", logs, 0, {}, number);
         receipt->setTransactionIndex(0);
         block->appendTransaction(tx);
         block->appendReceipt(receipt);
@@ -421,6 +497,54 @@ BOOST_AUTO_TEST_CASE(LogsOverTheWindow)
     BOOST_CHECK_EQUAL(logs[0U]["blockHash"].asString(), hashB.hexPrefixed());
 }
 
+BOOST_AUTO_TEST_CASE(LogRangesKeepTheirCapturedBranchDuringReorg)
+{
+    auto const first = tip + 1;
+    auto const second = tip + 2;
+    auto a2 = windowBlock(0xa2, 100, engine::OpCanonicalReader::BlockRef{hashA, first});
+    auto b2 = windowBlock(0xb2, 100, engine::OpCanonicalReader::BlockRef{hashB, first});
+    reader->window[a2.hash] = a2.block;
+    reader->window[b2.hash] = b2.block;
+    reader->headRef = {b2.hash, second};
+    reader->headChain.emplace(second, b2.hash);
+    reader->safe = first;
+
+    Json::Value filter(Json::objectValue);
+    filter["fromBlock"] = "safe";
+    filter["toBlock"] = "latest";
+    auto const id = call("eth_newFilter", params({filter}))["result"].asString();
+    BOOST_REQUIRE(!id.empty());
+    auto checkLogs = [&](Json::Value const& logs, h256 const& firstHash, h256 const& secondHash) {
+        BOOST_REQUIRE_EQUAL(logs.size(), 2U);
+        BOOST_CHECK_EQUAL(logs[0U]["blockHash"].asString(), firstHash.hexPrefixed());
+        BOOST_CHECK_EQUAL(logs[1U]["blockHash"].asString(), secondHash.hexPrefixed());
+    };
+
+    for (auto const* method : {"eth_getLogs", "eth_getFilterLogs"})
+    {
+        reader->headRef = {b2.hash, second};
+        reader->headChain = {{first, hashB}, {second, b2.hash}};
+        reader->window[b2.hash] = b2.block;
+        bool switched = false;
+        reader->onWindowRead = [&](protocol::BlockNumber number) {
+            if (!switched && number == first)
+            {
+                switched = true;
+                reader->headRef = {a2.hash, second};
+                reader->headChain = {{first, hashA}, {second, a2.hash}};
+                reader->window.erase(b2.hash);
+            }
+        };
+        auto const arguments =
+            std::string_view(method) == "eth_getLogs" ? params({filter}) : params({id});
+        auto const response = call(method, arguments);
+        reader->onWindowRead = {};
+        BOOST_REQUIRE(switched);
+        checkLogs(response["result"], hashB, b2.hash);
+        checkLogs(call(method, arguments)["result"], hashA, a2.hash);
+    }
+}
+
 // The remaining rerouted reads, each against the head chain's window block: by-number index
 // lookups, block tx count, the head base fee behind eth_gasPrice, eth_feeHistory's block
 // source, and block filters.
@@ -458,6 +582,35 @@ BOOST_AUTO_TEST_CASE(RemainingReadsFollowTheHeadChain)
         hashA.hexPrefixed());
 }
 
+BOOST_AUTO_TEST_CASE(FeeHistoryKeepsItsCapturedBranchDuringReorg)
+{
+    auto const first = tip + 1;
+    auto const second = tip + 2;
+    auto a2 = windowBlock(0xa2, 112, engine::OpCanonicalReader::BlockRef{hashA, first});
+    auto b2 = windowBlock(0xb2, 122, engine::OpCanonicalReader::BlockRef{hashB, first});
+    reader->window[a2.hash] = a2.block;
+    reader->window[b2.hash] = b2.block;
+    reader->headRef = {b2.hash, second};
+    reader->headChain.emplace(second, b2.hash);
+    bool switched = false;
+    reader->onWindowRead = [&](protocol::BlockNumber number) {
+        if (!switched && number == first)
+        {
+            switched = true;
+            reader->headRef = {a2.hash, second};
+            reader->headChain = {{first, hashA}, {second, a2.hash}};
+            reader->window.erase(b2.hash);
+        }
+    };
+    auto const result = call("eth_feeHistory", params({"0x2", "latest"}))["result"];
+    BOOST_REQUIRE(switched);
+    BOOST_REQUIRE_EQUAL(result["baseFeePerGas"].size(), 3U);
+    BOOST_CHECK_EQUAL(result["baseFeePerGas"][1U].asString(), toQuantity(122));
+    auto const nextResult = call("eth_feeHistory", params({"0x2", "latest"}))["result"];
+    BOOST_REQUIRE_EQUAL(nextResult["baseFeePerGas"].size(), 3U);
+    BOOST_CHECK_EQUAL(nextResult["baseFeePerGas"][1U].asString(), toQuantity(112));
+}
+
 BOOST_AUTO_TEST_CASE(PayloadBodiesFollowTheHeadChain)
 {
     rpc::EngineEndpoint engine(nodeService);
@@ -483,6 +636,48 @@ BOOST_AUTO_TEST_CASE(PayloadBodiesFollowTheHeadChain)
     BOOST_CHECK(invoke(
         &rpc::EngineEndpoint::getPayloadBodiesByRangeV1, params({toQuantity(tip + 2), "0x1"}))
             .empty());
+}
+
+BOOST_AUTO_TEST_CASE(PayloadBodiesRangeKeepsItsCapturedBranchDuringReorg)
+{
+    auto const first = tip + 1;
+    auto const second = tip + 2;
+    auto a2 = windowBlock(0xa2, 112, engine::OpCanonicalReader::BlockRef{hashA, first});
+    auto b2 = windowBlock(0xb2, 122, engine::OpCanonicalReader::BlockRef{hashB, first});
+    a.block->setTransaction(0, makeReadPlaneTx(1, a.txHash));
+    a2.block->setTransaction(0, makeReadPlaneTx(2, a2.txHash));
+    reader->window[a2.hash] = a2.block;
+    reader->window[b2.hash] = b2.block;
+    reader->headRef = {b2.hash, second};
+    reader->headChain.emplace(second, b2.hash);
+
+    rpc::EngineEndpoint endpoint(nodeService);
+    auto fetchRange = [&] {
+        Json::Value response;
+        task::syncWait(
+            endpoint.getPayloadBodiesByRangeV1(params({toQuantity(first), "0x2"}), response));
+        return response["result"];
+    };
+    auto const before = fetchRange();
+    BOOST_REQUIRE_EQUAL(before.size(), 2U);
+    bool switched = false;
+    reader->onWindowRead = [&](protocol::BlockNumber number) {
+        if (!switched && number == first)
+        {
+            switched = true;
+            reader->headRef = {a2.hash, second};
+            reader->headChain = {{first, hashA}, {second, a2.hash}};
+            reader->window.erase(b2.hash);
+        }
+    };
+
+    auto const during = fetchRange();
+    BOOST_REQUIRE(switched);
+    BOOST_CHECK(during == before);
+    auto const after = fetchRange();
+    BOOST_REQUIRE_EQUAL(after.size(), 2U);
+    BOOST_CHECK(after[0U] != before[0U]);
+    BOOST_CHECK(after[1U] != before[1U]);
 }
 
 BOOST_AUTO_TEST_CASE(PollingFiltersReportFinalizedReplacement)
@@ -520,11 +715,29 @@ BOOST_AUTO_TEST_CASE(PollingFiltersReportFinalizedReplacement)
     BOOST_CHECK(changes(blockId).empty());
 }
 
+BOOST_AUTO_TEST_CASE(FailedLogPollKeepsItsCursor)
+{
+    Json::Value filter(Json::objectValue);
+    auto const id = call("eth_newFilter", params({filter}))["result"].asString();
+    BOOST_REQUIRE(!id.empty());
+
+    // Announce a finalized height before its test ledger row is available to inject a read error.
+    reader->finalizedRef = {hashA, tip + 1};
+    BOOST_CHECK(call("eth_getFilterChanges", params({id})).isMember("error"));
+
+    finalize(a);
+    auto const logs = call("eth_getFilterChanges", params({id}))["result"];
+    BOOST_REQUIRE_EQUAL(logs.size(), 1U);
+    BOOST_CHECK_EQUAL(logs[0U]["blockHash"].asString(), hashA.hexPrefixed());
+    BOOST_CHECK(call("eth_getFilterChanges", params({id}))["result"].empty());
+}
+
 // The fake's missing committed MPT reader provides a distinct error after the correct
 // block has been found on disk.
 BOOST_AUTO_TEST_CASE(GetProofByHashSurvivesFinalizeRace)
 {
     reader->evicted = engine::OpCanonicalReader::BlockRef{tipHash, tip};
+    m_ledger->indexBlockHash(tipHash, tip);
     auto const resp =
         call("eth_getProof", params({"0x00000000000000000000000000000000000000b1",
                                  Json::Value(Json::arrayValue), tipHash.hexPrefixed()}));

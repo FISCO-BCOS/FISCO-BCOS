@@ -1762,10 +1762,8 @@ BOOST_AUTO_TEST_CASE(op_newpayload_honest_retry_does_not_recommit)
     BOOST_CHECK_EQUAL(delegate->commitCalls, 1);  // ledger-known idempotency, no re-commit
 }
 
-/// A transient commit failure must not strand the payload: the first newPayload THROWS,
-/// the retained artifacts survive, and the retry re-attempts the commit and completes it.
-/// The fault is the dropped-pending tag (bcos::engine::OpPendingDropped), the only one
-/// that may fall through to execute+commit; any other commit error is reported immediately.
+/// When both the built and re-executed stages are dropped, newPayload returns SYNCING.
+/// The retained artifacts let a later retry complete admission.
 BOOST_AUTO_TEST_CASE(op_newpayload_retry_after_failed_commit_recommits)
 {
     auto delegate = std::make_shared<RecordingScheduler>();
@@ -1795,9 +1793,10 @@ BOOST_AUTO_TEST_CASE(op_newpayload_retry_after_failed_commit_recommits)
     request.executionPayload = payload->executionPayload;
     request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
     request.expectedBlobVersionedHashes = {};
-    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
-        bcos::engine::OpExecutionInternalError);
-    // Fast-path commit fails, then execute+commit also fails (failCommit stays on).
+    auto first = bcos::task::syncWait(pair.service.newPayload(request, 4));
+    BOOST_CHECK(first.status == bcos::engine::PayloadValidationStatus::Syncing);
+    BOOST_CHECK(!first.latestValidHash.has_value());
+    // Both the fast path and the re-executed stage are dropped.
     BOOST_CHECK_EQUAL(delegate->commitCalls, 2);
 
     delegate->failCommit = false;
@@ -1886,15 +1885,9 @@ BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal
         bcos::engine::OpExecutionInternalError);
 }
 
-/// mapDelegateError's routing is the load-bearing half of the delegate-concurrency
-/// rationale: a commitBlock whose pending was dropped by a concurrent reset
-/// carries the bcos::engine::OpPendingDropped tag ("Unexpected empty results!", OpScheduler.h) —
-/// that must surface as -32603 (OpExecutionInternalError), NEVER as a consensus INVALID for
-/// a valid payload. OpConsensusRejected is the ONLY code the service may answer INVALID for;
-/// pin both routes so a future change to either side cannot silently flip them. The
-/// dropped-pending case is also the only one allowed to fall through to execute+commit, and
-/// UnknownError — the catch-all bucket classifyException fills for unclassified commit
-/// faults — must NOT, or a real fault takes that path.
+/// Pin the routing of real commit failures, consensus rejection, and retryable stage loss.
+/// Only the OpPendingDropped tag permits re-executing a locally built payload. If a newly
+/// executed stage is also dropped, op-node can resubmit after SYNCING.
 BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
 {
     auto makeRequest = [](OpServicePair& pair, RecordingScheduler& delegate) {
@@ -1939,7 +1932,7 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
         BOOST_CHECK_EQUAL(delegate->executeCalls, executesAfterBuild);
     }
 
-    // The dropped-pending shape: same answer, but reached through execute+commit.
+    // Re-execute a lost local build once. If that stage is lost too, ask op-node to retry.
     {
         auto delegate = std::make_shared<RecordingScheduler>();
         delegate->failFirst = false;
@@ -1949,8 +1942,9 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
         delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
         auto request = makeRequest(pair, *delegate);
         int const executesAfterBuild = delegate->executeCalls;
-        BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
-            bcos::engine::OpExecutionInternalError);
+        auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
+        BOOST_CHECK(status.status == bcos::engine::PayloadValidationStatus::Syncing);
+        BOOST_CHECK(!status.latestValidHash.has_value());
         BOOST_CHECK_EQUAL(delegate->commitCalls, 2);  // fast path, then the re-execute
         BOOST_CHECK_GT(delegate->executeCalls, executesAfterBuild);  // it did re-execute
     }
@@ -1968,6 +1962,23 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
         auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
         BOOST_REQUIRE_EQUAL(static_cast<int>(status.status),
             static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    }
+
+    // Window pressure is retryable and must not trigger immediate re-execution.
+    {
+        auto delegate = std::make_shared<RecordingScheduler>();
+        delegate->failFirst = false;
+        delegate->failCommit = true;
+        delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::OpWindowFull);
+        OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+        delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+        auto request = makeRequest(pair, *delegate);
+        int const executesAfterBuild = delegate->executeCalls;
+        auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
+        BOOST_CHECK(status.status == bcos::engine::PayloadValidationStatus::Syncing);
+        BOOST_CHECK(!status.latestValidHash.has_value());
+        BOOST_CHECK_EQUAL(delegate->commitCalls, 1);
+        BOOST_CHECK_EQUAL(delegate->executeCalls, executesAfterBuild);
     }
 }
 

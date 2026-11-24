@@ -311,6 +311,59 @@ BOOST_AUTO_TEST_CASE(window_depth_backpressure)
     BOOST_CHECK_EQUAL(f.balanceAt(h3), bcos::u256(12));
 }
 
+BOOST_AUTO_TEST_CASE(window_capacity_evicts_only_unused_side_leaves)
+{
+    ReorgFixture f(/*window=*/2);
+    auto const g = f.genesisHash;
+    auto buildAndAdmit = [&](bcos::h256 const& parent, int64_t number, uint64_t mint) {
+        auto payload = f.build(f.fc(parent, g, g), number, mint);
+        BOOST_REQUIRE(f.np(payload).status == PayloadValidationStatus::Valid);
+        return payload;
+    };
+
+    auto const a1 = buildAndAdmit(g, 1, 10);
+    auto const ha1 = f.hashOf(a1);
+    auto const ha2 = f.hashOf(buildAndAdmit(ha1, 2, 1));
+    auto const b1 = buildAndAdmit(g, 1, 11);
+    auto const hb1 = f.hashOf(b1);
+    auto const b2 = buildAndAdmit(hb1, 2, 2);
+    auto const hb2 = f.hashOf(b2);
+    BOOST_REQUIRE_EQUAL(f.opDelegate->windowSize(), 4U);
+
+    auto const c1 = f.build(f.fc(g, g, g), 1, 12);
+    auto const hc1 = f.hashOf(c1);
+    BOOST_REQUIRE(f.fcu(f.fc(ha2, g, g)).payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(f.np(c1).status == PayloadValidationStatus::Valid);
+    BOOST_CHECK_EQUAL(f.opDelegate->windowSize(), 4U);
+    BOOST_CHECK(f.inWindow(ha1));
+    BOOST_CHECK(f.inWindow(ha2));
+    BOOST_CHECK(f.inWindow(hb1));   // B1 has a child when C1 arrives.
+    BOOST_CHECK(!f.inWindow(hb2));  // B2 is the sole side leaf eligible for eviction.
+    BOOST_CHECK(f.inWindow(hc1));
+
+    auto const c2 = f.build(f.fc(hc1, g, g), 2, 2);
+    auto const hc2 = f.hashOf(c2);
+    auto const repeatedTx = f.mintTxHash(b2);
+    BOOST_REQUIRE_EQUAL(f.mintTxHash(c2).hex(), repeatedTx.hex());
+    BOOST_REQUIRE(f.fcu(f.fc(ha2, g, g)).payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(f.np(c2).status == PayloadValidationStatus::Valid);
+    BOOST_CHECK_EQUAL(f.opDelegate->windowSize(), 4U);
+    BOOST_CHECK(!f.inWindow(hb1));
+    BOOST_CHECK(f.inWindow(hc1));  // Protect the incoming block's parent, also a side leaf.
+    BOOST_CHECK(f.inWindow(hc2));
+    BOOST_CHECK_EQUAL(f.onChainAt(ha2, 1).value_or(bcos::h256{}).hex(), ha1.hex());
+    BOOST_CHECK_EQUAL(f.onChainAt(hc2, 1).value_or(bcos::h256{}).hex(), hc1.hex());
+    BOOST_CHECK(!f.backendHasTx(repeatedTx));
+
+    // Reorg to the retained alternate chain and finalize it. The transaction shared with the
+    // evicted sibling has its own durable row once this branch wins.
+    BOOST_REQUIRE(
+        f.fcu(f.fc(hc2, hc2, hc2)).payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK_EQUAL(f.backendNumber(), 2);
+    BOOST_CHECK_EQUAL(f.opDelegate->windowSize(), 0U);
+    BOOST_CHECK(f.backendHasTx(repeatedTx));
+}
+
 // FCU atomicity & concurrency:
 // (a) A failed finalizeUpTo must not leave the tracker pointing at the failed FCU's head/safe/
 //     finalized.

@@ -219,6 +219,13 @@ std::optional<TrackedHeadBlock> EngineTracker::trackedHead() const
     return m_trackedHead;
 }
 
+std::pair<std::optional<TrackedHeadBlock>, std::optional<bcos::protocol::BlockNumber>>
+EngineTracker::headAndSafe() const
+{
+    std::shared_lock lock(m_mutex);
+    return {m_trackedHead, m_safe};
+}
+
 std::optional<bcos::protocol::BlockNumber> EngineTracker::safeBlockNumber() const
 {
     std::shared_lock lock(m_mutex);

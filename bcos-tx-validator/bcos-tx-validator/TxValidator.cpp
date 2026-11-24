@@ -28,7 +28,6 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rlp-protocol/Web3TxEnvelope.h"
-#include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include "bcos-tx-validator/Normalize.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/LogStream.h"
@@ -179,10 +178,10 @@ void TxValidator::setScheduler(std::weak_ptr<scheduler::SchedulerInterface> sche
     m_scheduler = std::move(scheduler);
 }
 
-void TxValidator::setRollupCostFn(RollupCostFn rollupCost)
+void TxValidator::setAdmissionChainStateFn(AdmissionChainStateFn chainState)
 {
     WriteGuard guard(x_lateBound);
-    m_rollupCost = std::make_shared<const RollupCostFn>(std::move(rollupCost));
+    m_chainState = std::make_shared<const AdmissionChainStateFn>(std::move(chainState));
 }
 
 void TxValidator::setPendingCostFn(PendingCostFn pendingCost)
@@ -209,9 +208,8 @@ struct Envelope
 /// The chain as of one snapshot, taken once per verify() before the state stage: every check in
 /// one pass judges against a single block's configuration even if a commit lands mid-pass.
 ///
-/// Everything here is derived from the LedgerConfigState snapshot; the stage performs no ledger
-/// read of its own. getLedgerConfig already fills the chain id and the base fee from the same
-/// SYS_CONFIG rows an earlier version fetched again, per transaction, through getSystemConfig.
+/// Derived from the selected OP head's configuration or the node's LedgerConfigState snapshot.
+/// The checks perform no ledger reads of their own.
 struct ChainView
 {
     /// const: LedgerConfigState hands out a snapshot nobody may mutate.
@@ -248,8 +246,7 @@ struct StateInputs
     TxKind kind;
     ChainView const& chain;
     std::optional<AccountState> const& sender;
-    /// Asked of the bound RollupCostFn exactly when the set contains Check::L1Cost. nullopt =
-    /// no rollup cost on this chain (nothing bound, or the callable declined): it stands down.
+    /// The OP head view supplies this when the set contains Check::L1Cost.
     std::optional<u512> const& rollupCost;
     /// What the sender's pooled transactions already commit it to (PendingCostFn, minus the
     /// slot this transaction replaces); 0 when nothing is bound. Balance and L1Cost charge the
@@ -560,9 +557,8 @@ static_assert(detail::indexOf(c_stateOrder, Check::NonceNotMax) <
 TransactionStatus checkWeb3NonceWindow(StateInputs const& in)
 {
     // Lower bound and queue depth are one check: they share a single account-nonce read. The
-    // rule itself is Web3NonceChecker's, and the pool's re-checks of pooled transactions run the
-    // same function over the same cached read (committedNonceStatus -> checkWeb3Nonce), so
-    // admission and re-check cannot disagree about a nonce.
+    // rule itself is Web3NonceChecker's. On OP the nonce comes from the selected canonical
+    // block's state root; the other lanes read the committed nonce through the checker.
     //
     // No length gate on the nonce string here, unlike checkWeb3Nonce's FIB-57 cap: every check
     // runs after normalize(), which wrote this string from the envelope's uint64 nonce
@@ -833,16 +829,14 @@ u256 parseBalance(std::string_view raw)
 /// Per-field, keyed on @p checks, for the same reason verify() reads the account only for
 /// c_accountStateDependent: deriving a value nothing in the set will read is work at best and a
 /// failure at worst. tx_gas_price is the "at worst" -- see c_baseFeeDependent.
-ChainView readChainView(ledger::LedgerConfigState const& configState, Check checks,
-    ledger::EvmcRevisionSchedule const& revisionSchedule)
+ChainView readChainView(std::shared_ptr<const ledger::LedgerConfig> config, Check checks,
+    ledger::EvmcRevisionSchedule const& revisionSchedule, std::optional<evmc_revision> opRevision)
 {
     ChainView view;
-    view.config = configState.get();
+    view.config = std::move(config);
     if (!view.config)
     {
-        // LedgerConfigState never publishes null, so reaching here means the holder was
-        // corrupted.
-        BOOST_THROW_EXCEPTION(std::runtime_error("admission: ledger config state returned null"));
+        BOOST_THROW_EXCEPTION(std::runtime_error("admission: chain view has no ledger config"));
     }
     if ((checks & c_revisionDependent) != Check::None)
     {
@@ -853,10 +847,17 @@ ChainView readChainView(ledger::LedgerConfigState const& configState, Check chec
         // (a devp2p-synced pre-merge head is PoW, difficulty > 0), and no admission rule
         // tells those two apart: every revision gate here is <= LONDON or >= SHANGHAI. So 0
         // is exact for the PoS blocks the builder seals and harmless on a PoW head.
-        view.revision =
-            revisionSchedule ?
-                std::optional<evmc_revision>(revisionSchedule(view.config->timestamp() / 1000, 0)) :
-                view.config->evmcRevisionForBlock(view.config->blockNumber() + 1);
+        if (opRevision)
+        {
+            view.revision = opRevision;
+        }
+        else
+        {
+            view.revision = revisionSchedule ?
+                                std::optional<evmc_revision>(
+                                    revisionSchedule(view.config->timestamp() / 1000, 0)) :
+                                view.config->evmcRevisionForBlock(view.config->blockNumber() + 1);
+        }
     }
     if ((checks & c_baseFeeDependent) != Check::None)
     {
@@ -957,25 +958,6 @@ task::Task<std::optional<AccountState>> TxValidator::readAccountState(std::strin
     co_return state;
 }
 
-task::Task<std::optional<u512>> TxValidator::readRollupCost(
-    protocol::Transaction const& tx, ledger::LedgerConfig const& head)
-{
-    std::shared_ptr<const RollupCostFn> rollupCost;
-    {
-        ReadGuard guard(x_lateBound);
-        rollupCost = m_rollupCost;
-    }
-    if (!rollupCost)
-    {
-        co_return std::nullopt;
-    }
-    // The wire form: extraTransactionBytes is the signing payload, and the L1 fee covers the
-    // signature too.
-    auto const envelope = bcostars::protocol::reassembleWeb3RawTransaction(
-        tx.extraTransactionBytes(), tx.signatureData());
-    co_return co_await (*rollupCost)(ref(envelope), static_cast<uint64_t>(tx.gasLimit()), head);
-}
-
 task::Task<TransactionStatus> TxValidator::verify(
     Transaction& tx, AdmissionContext context, SignaturePolicy policy)
 {
@@ -1026,16 +1008,27 @@ task::Task<TransactionStatus> TxValidator::verify(
     // extra member keys on the sender address without reading anything.
     if ((checks & c_stateStage) != Check::None)
     {
-        auto const chain = readChainView(*m_ledgerConfigState, checks, m_evmcRevisionSchedule);
-        std::optional<AccountState> sender;
-        if ((checks & c_accountStateDependent) != Check::None)
+        std::shared_ptr<const AdmissionChainStateFn> chainState;
+        if (kind != TxKind::Bcos)
         {
-            sender = co_await readAccountState(tx.sender());
+            ReadGuard guard(x_lateBound);
+            chainState = m_chainState;
         }
-        std::optional<u512> rollupCost;
-        if ((checks & c_rollupCostDependent) != Check::None)
+
+        AdmissionChainState state;
+        if (chainState)
         {
-            rollupCost = co_await readRollupCost(tx, *chain.config);
+            state = co_await (*chainState)(tx, checks);
+        }
+        else
+        {
+            state.config = m_ledgerConfigState->get();
+        }
+        auto const chain =
+            readChainView(std::move(state.config), checks, m_evmcRevisionSchedule, state.revision);
+        if (!chainState && (checks & c_accountStateDependent) != Check::None)
+        {
+            state.sender = co_await readAccountState(tx.sender());
         }
         u512 pendingCost = 0;
         if ((checks & (Check::Balance | Check::L1Cost)) != Check::None)
@@ -1053,8 +1046,8 @@ task::Task<TransactionStatus> TxValidator::verify(
         const StateInputs inputs{.tx = tx,
             .kind = kind,
             .chain = chain,
-            .sender = sender,
-            .rollupCost = rollupCost,
+            .sender = state.sender,
+            .rollupCost = state.rollupCost,
             .pendingCost = pendingCost};
         if (auto status = runStage(c_stateRegistry, checks, inputs);
             status != TransactionStatus::None)

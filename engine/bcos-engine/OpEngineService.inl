@@ -127,12 +127,12 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
     bool didFinalize = false;
     while (true)
     {
-        auto const epochBefore = m_fcuFinalizeEpoch.load(std::memory_order_acquire);
-        // Odd epoch means a finalizeUpTo is currently in flight; wait for m_fcuMutex to
-        // release instead of spinning or surfacing a transient resolution failure.
-        auto finalizedConcurrently = [&]() {
+        auto const epochBefore = m_windowEpoch.load(std::memory_order_acquire);
+        // Odd epoch means admission or finalization is in flight. Wait for the mutation
+        // before retrying a lookup that could have lost a window block.
+        auto windowChangedConcurrently = [&]() {
             if ((epochBefore & 1U) == 0U &&
-                m_fcuFinalizeEpoch.load(std::memory_order_acquire) == epochBefore)
+                m_windowEpoch.load(std::memory_order_acquire) == epochBefore)
             {
                 return false;
             }
@@ -147,7 +147,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         head = co_await resolveBlock(forkchoiceState.headBlockHash);
         if (!head.has_value())
         {
-            if (finalizedConcurrently())
+            if (windowChangedConcurrently())
             {
                 continue;
             }
@@ -183,7 +183,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         }
         if ((safeSet && !safe.has_value()) || (finalizedSet && !finalized.has_value()))
         {
-            if (finalizedConcurrently())
+            if (windowChangedConcurrently())
             {
                 continue;
             }
@@ -194,7 +194,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         bool const finalizedCanonical = !finalizedSet || co_await isOnChainOf(*head, *finalized);
         // A concurrent same-chain finalization can move safe/finalized out of the window between
         // resolveBlock and isOnChainOf; re-resolve cleanly instead of throwing a spurious -38002.
-        if ((!safeCanonical || !finalizedCanonical) && finalizedConcurrently())
+        if ((!safeCanonical || !finalizedCanonical) && windowChangedConcurrently())
         {
             continue;
         }
@@ -218,7 +218,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         if ((safe && !safe->inWindow && safe->number < finalizedTip) ||
             (finalized && !finalized->inWindow && finalized->number < finalizedTip))
         {
-            if (finalizedConcurrently())
+            if (windowChangedConcurrently())
             {
                 continue;
             }
@@ -228,8 +228,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         }
 
         // Serialize the synchronous finalize + tracker commit step (never held across co_await).
-        // If another FCU invoked finalizeUpTo while this call resolved its inputs, re-resolve
-        // against the updated finality boundary instead of committing a pruned or stale head.
+        // If admission or finalization changed the window during resolution, re-resolve
+        // against the updated branch set instead of committing a pruned or stale head.
         ForkchoiceApplyResult outcome = ForkchoiceApplyResult::Applied;
         {
             std::unique_lock fcuLock(m_fcuMutex);
@@ -237,7 +237,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
                 return blk && blk->inWindow && m_delegate &&
                        !m_delegate->unfinalizedBlock(blk->hash).has_value();
             };
-            if (m_fcuFinalizeEpoch.load(std::memory_order_acquire) != epochBefore ||
+            if (m_windowEpoch.load(std::memory_order_acquire) != epochBefore ||
                 windowMissing(head) || windowMissing(safe) || windowMissing(finalized))
             {
                 continue;
@@ -249,15 +249,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
                 requireDelegate();
                 // Odd on entry, even on exit (including partial mid-chain failure) so concurrent
                 // FCUs that started before or during finalizeUpTo re-resolve cleanly.
-                struct EpochGuard
-                {
-                    std::atomic<std::uint64_t>& epoch;
-                    EpochGuard(std::atomic<std::uint64_t>& e) : epoch(e)
-                    {
-                        epoch.fetch_add(1, std::memory_order_acq_rel);
-                    }
-                    ~EpochGuard() { epoch.fetch_add(1, std::memory_order_release); }
-                } epochGuard{m_fcuFinalizeEpoch};
+                WindowMutationGuard epochGuard{m_windowEpoch};
                 bcos::Error::Ptr finalizeError;
                 m_delegate->finalizeUpTo(finalized->hash,
                     [&](bcos::Error::Ptr error) { finalizeError = std::move(error); });
@@ -889,14 +881,14 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     // Window depth (D1 §12.4, [engine_rpc] unfinalized_window): the block would sit more
     // than the configured distance above the finalized tip. Backpressure, not a rejection —
     // SYNCING makes op-node retry once its finalized signal catches up; nothing is lost.
-    // Applies to built-here payloads too (their staged block simply waits). Loud every 256
-    // blocks over so a stalled batcher/finality is visible in the log.
+    // Applies to built-here payloads too (their staged block simply waits). Throttle repeated
+    // warnings by time, including retries of the same payload at an unchanged depth.
     auto const finalizedTip = co_await finalizedTipNumber();
     if (auto const over =
             static_cast<int64_t>(payload.blockNumber) - finalizedTip - m_unfinalizedWindow;
         over > 0)
     {
-        if (over % 256 == 1)
+        if (shouldLogWindowPressure())
         {
             BCOS_LOG(WARNING) << LOG_BADGE("OpEngineService")
                               << LOG_DESC(
@@ -923,18 +915,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
         if (builtHeader)
         {
             requireDelegate();
-            bcos::Error::Ptr commitError;
-            // The callback's LedgerConfig is deliberately dropped rather than published into
-            // the admission holder: the delegate is an OpScheduler, whose
-            // loadCommitLedgerConfig carries only number + timestamp -- chainId nullopt and
-            // features empty -- and TxValidator reads chainId from the holder, so publishing it
-            // fail-closes EIP-155 admission from the first committed block on. The holder is
-            // republished from the ledger after every FINALIZE instead; see
-            // OpLedgerConfigRepublish.h.
-            m_delegate->commitBlock(builtHeader,
-                [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr /*ledgerConfig*/) {
-                    commitError = std::move(error);
-                });
+            // admitBlock discards the delegate's partial LedgerConfig (number and timestamp).
+            // OP transaction admission reads the canonical view through its admission callback.
+            // The shared finalized config is republished from the ledger after finalization.
+            auto commitError = admitBlock(builtHeader);
             if (!commitError)
             {
                 co_return makeStatus(
@@ -945,7 +929,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             // ("Unexpected empty results!" — a reset for a later build ran in between), and
             // answering -32603 on every retry of a still-valid payload would wedge the CL.
             // Every other admit failure is a real error and keeps its documented routing
-            // (INVALID for OpConsensusRejected, internal error otherwise) — falling through
+            // (including SYNCING for temporary window pressure) — falling through
             // on one would hide storage faults. Keyed on the tag, not on
             // SchedulerError::UnknownError: classifyException's catch-all maps every
             // unclassified fault to that code, so a code test cannot separate a dropped
@@ -963,8 +947,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
         }
     }
 
-    // Parent: a window block or a ledger block. Unknown → SYNCING (Engine API; on this lane
-    // only after a restart, D1 §11.1). A ledger parent strictly below the finalized tip means
+    // Parent: a window block or a ledger block. It may be unknown after restart or eviction;
+    // answer SYNCING so the rollup node can retry. A ledger parent below the finalized tip means
     // the payload itself sits at or below finalized with an unknown hash: an L1 reorg deeper
     // than finality, outside D7 — SYNCING too (D1 §12.3 row 2), never INVALID.
     auto parent = co_await resolveBlock(payload.parentHash);
@@ -1052,6 +1036,12 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
         });
     if (executeError)
     {
+        // The parent can be evicted by another admission after the Engine API lookup.
+        if (executeError->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber &&
+            parent->inWindow && !m_delegate->unfinalizedBlock(parent->hash))
+        {
+            co_return makeStatus(PayloadValidationStatus::Syncing);
+        }
         co_return mapDelegateError(*executeError, latestValidHash);
     }
     if (!executedHeader || !executedHeader->withdrawalsRoot().has_value())
@@ -1068,15 +1058,12 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             std::string("withdrawalsRoot does not match the executed header"));
     }
 
-    bcos::Error::Ptr commitError;
-    // Not published: see the built-staged admit above (the delegate's LedgerConfig is the
-    // number+timestamp stub; the holder is republished from the ledger on finalize).
-    m_delegate->commitBlock(executedHeader,
-        [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr /*ledgerConfig*/) {
-            commitError = std::move(error);
-        });
-    if (commitError)
+    if (auto commitError = admitBlock(std::move(executedHeader)))
     {
+        if (boost::get_error_info<bcos::engine::OpPendingDropped>(*commitError))
+        {
+            co_return makeStatus(PayloadValidationStatus::Syncing);
+        }
         co_return mapDelegateError(*commitError, latestValidHash);
     }
     co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);

@@ -51,6 +51,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -220,6 +221,8 @@ public:
     /// (D1 §10.2). Empty until the first forkchoiceUpdated after start.
     std::optional<TrackedHeadBlock> trackedHead() const { return m_tracker.trackedHead(); }
 
+    auto trackedHeadAndSafe() const { return m_tracker.headAndSafe(); }
+
     /// The execution-stamped header of an UNFINALIZED block (window entry of the delegate),
     /// null once finalized or when unknown. Replaces the former lastExecutedHeader(): the
     /// header of a newPayload'ed block is now read from its window entry, keyed by the CL
@@ -282,11 +285,20 @@ private:
         return engine_common::makeStatus(status, latestValidHash, validationError);
     }
 
-    static PayloadStatus mapDelegateError(
-        bcos::Error const& error, std::optional<h256> latestValidHash)
+    PayloadStatus mapDelegateError(bcos::Error const& error, std::optional<h256> latestValidHash)
     {
-        if (static_cast<bcos::scheduler::SchedulerError>(error.errorCode()) ==
-            bcos::scheduler::SchedulerError::OpConsensusRejected)
+        auto const code = static_cast<bcos::scheduler::SchedulerError>(error.errorCode());
+        if (code == bcos::scheduler::SchedulerError::OpWindowFull)
+        {
+            if (shouldLogWindowPressure())
+            {
+                BCOS_LOG(WARNING) << LOG_BADGE("OpEngineService")
+                                  << LOG_DESC("OP window capacity reached; answering SYNCING")
+                                  << LOG_KV("reason", error.errorMessage());
+            }
+            return makeStatus(PayloadValidationStatus::Syncing);
+        }
+        if (code == bcos::scheduler::SchedulerError::OpConsensusRejected)
         {
             return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                 std::string("OP block execution rejected the payload: ") + error.errorMessage());
@@ -295,6 +307,41 @@ private:
             OpExecutionInternalError{} << bcos::errinfo_comment{
                 std::string("OP block execution failed (SchedulerError ") +
                 std::to_string(error.errorCode()) + "): " + error.errorMessage()});
+    }
+
+    using WindowClock = std::chrono::steady_clock;
+
+    bool shouldLogWindowPressure()
+    {
+        auto const now = WindowClock::now();
+        auto next = m_nextWindowWarning.load(std::memory_order_relaxed);
+        return now >= next && m_nextWindowWarning.compare_exchange_strong(
+                                  next, now + std::chrono::seconds(30), std::memory_order_relaxed);
+    }
+
+    struct WindowMutationGuard
+    {
+        std::atomic<std::uint64_t>& m_epoch;
+
+        explicit WindowMutationGuard(std::atomic<std::uint64_t>& epoch) : m_epoch(epoch)
+        {
+            m_epoch.fetch_add(1, std::memory_order_acq_rel);
+        }
+        ~WindowMutationGuard() { m_epoch.fetch_add(1, std::memory_order_release); }
+    };
+
+    bcos::Error::Ptr admitBlock(bcos::protocol::BlockHeader::Ptr header)
+    {
+        // Admission can evict a side branch. Serialize with forkchoice's membership check
+        // and tracker update so an FCU cannot select a block that just left the window.
+        std::scoped_lock lock(m_fcuMutex);
+        WindowMutationGuard guard{m_windowEpoch};
+        bcos::Error::Ptr error;
+        m_delegate->commitBlock(
+            std::move(header), [&](bcos::Error::Ptr result, bcos::ledger::LedgerConfig::Ptr) {
+                error = std::move(result);
+            });
+        return error;
     }
 
     /// FCU method-version window for the OP lane: V1-V3 exactly (Isthmus/Jovian —
@@ -368,17 +415,17 @@ private:
     /// via task::syncWait, so a sequence's calls are ordered within the calling thread.
     /// OpScheduler::reset drops the STAGED (executed, not yet admitted) blocks and the probe
     /// but never the window; a reset landing between another caller's executeBlock and
-    /// commitBlock makes that commitBlock fail CLOSED ("Unexpected empty results!" with the
-    /// OpPendingDropped tag). A dropped local build is re-executed by newPayload. If the
-    /// freshly executed slot is dropped before admission, the RPC returns an internal error
-    /// and op-node retries.
+    /// commitBlock can drop the stage, as can window or stage eviction. The OpPendingDropped
+    /// tag makes newPayload re-execute a dropped local build or answer SYNCING when a stage
+    /// disappears after that request's own execution.
     /// newPayload run-ahead bound over the finalized tip (blocks); beyond it newPayload
     /// answers SYNCING (backpressure: op-node retries, nothing is lost).
     int64_t m_unfinalizedWindow;
-    /// Serializes the synchronous finalize + tracker commit step of updateForkchoice (never
-    /// held across a co_await) so concurrent FCUs cannot apply a pruned or stale head.
+    std::atomic<WindowClock::time_point> m_nextWindowWarning{WindowClock::time_point::min()};
+    /// Serializes admission and the synchronous finalize + tracker commit step of
+    /// updateForkchoice. Never held across a co_await in the engine.
     std::mutex m_fcuMutex;
-    std::atomic<std::uint64_t> m_fcuFinalizeEpoch{0};
+    std::atomic<std::uint64_t> m_windowEpoch{0};
     /// See setChainViewProvider. Set once at wiring, before any request is served.
     ChainViewProvider m_chainViewProvider;
 };

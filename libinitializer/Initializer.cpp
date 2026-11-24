@@ -35,6 +35,7 @@
 #include "KeyPageStorageResolver.h"
 #include "LedgerInitializer.h"
 #include "MemPoolInitializer.h"
+#include "OpAdmissionState.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
@@ -56,7 +57,6 @@
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
-#include "opstack-executor/OpAdmissionRollupCost.h"
 #include <TxPool.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hasher/AnyHasher.h>
@@ -723,7 +723,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, *opForkSchedule,
                 m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
                 // Ledger on OpScheduler; engine keeps ledger=nullptr.
-                m_ledger, m_ioServicePool);
+                m_ledger, m_ioServicePool, m_nodeConfig->opUnfinalizedWindow());
         // The Engine API service is the block producer only under the Engine driver. Under
         // [debug] follow_devp2p blocks arrive over devp2p and commit through
         // OpBlockVerifier (OpStackSyncInitializer), so no EngineService — and no DA-caps /
@@ -779,7 +779,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 [](bcos::protocol::BlockNumber number, bcos::Error::Ptr error) {
                     INITIALIZER_LOG(ERROR)
                         << LOG_DESC(
-                               "republish ledger config after OP commit failed; admission keeps "
+                               "republish ledger config after OP commit failed; keeping "
                                "the previous snapshot")
                         << LOG_KV("number", number) << LOG_KV("error", error->errorMessage());
                 });
@@ -1093,13 +1093,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // (sender, nonce) with MemPoolImpl::tryAdd.
     //
     // No pool nonce checker: those two checks are the BCOS transaction's replay protection,
-    // and these modes carry Web3 transactions only. The Web3 nonce checker IS needed -- the
-    // account nonce comes through its cache -- but nothing here calls updateNonceCache,
+    // and these modes carry Web3 transactions only. The Web3 nonce checker supplies the
+    // non-OP committed nonce cache. Nothing here calls updateNonceCache,
     // which is the txpool's commit-time hook, so that cache is only ever raised by its own
     // storage misses. The effect is a lower bound that can lag behind the chain: a
     // transaction reusing an already-executed nonce is admitted here and refused at
     // execution. That is where it was refused before this validator was wired, when the
-    // path checked no nonce at all.
+    // path checked no nonce at all. OP admission reads the nonce from its selected head view.
     if (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce || m_nodeConfig->servesEngineApi())
     {
         auto web3NonceChecker = std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger);
@@ -1127,16 +1127,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 std::string_view sender, std::string_view nonce, bcos::protocol::CostBasis basis) {
                 return memPoolInitializer->memPool().pendingCost(sender, nonce, basis);
             });
-        // OP lane: the balance also covers the rollup cost (Check::L1Cost). Only this validator
-        // gets the callable: the txpool's cannot serve an OP chain (the OP gate above refuses
-        // every driver but Engine and DebugFollowDevp2p) and the follow driver builds no
-        // mempool validator. The fork schedule was required when the OP scheduler was built.
+        // OP: one selected head supplies the account, chain config and the rollup fee.
         if (m_executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION)
         {
-            m_memPoolValidator->setRollupCostFn(
-                bcos::executor_v1::opstack::makeOpAdmissionRollupCost(
-                    m_globalStateStorageInitializer, *m_nodeConfig->opForkSchedule(),
-                    m_protocolInitializer->blockFactory()));
+            using OpDelegate = bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>;
+            m_memPoolValidator->setAdmissionChainStateFn(makeOpAdmissionChainState(
+                std::weak_ptr{std::static_pointer_cast<OpDelegate>(m_opScheduler)},
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
+                *m_nodeConfig->opForkSchedule()));
         }
     }
 

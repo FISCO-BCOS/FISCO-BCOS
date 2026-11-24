@@ -12,9 +12,9 @@
 
 namespace bcos::engine
 {
-/// Keeps the admission holder (LedgerConfigState) current on the OP lane. OpScheduler fires
-/// the notifier built here after every durable commit, and transaction admission (TxValidator)
-/// reads chainId/features/executorVersion from that holder and nowhere else.
+/// Keeps the node-wide finalized LedgerConfigState current on the OP lane. OpScheduler fires
+/// this notifier after every durable commit. OP Web3 admission resolves its own canonical head
+/// and reads its configuration from that branch, including while the block remains in memory.
 ///
 /// Two things here are load-bearing; both are pinned by
 /// engine/test/unittests/engine/OpLedgerConfigRepublishTest.cpp.

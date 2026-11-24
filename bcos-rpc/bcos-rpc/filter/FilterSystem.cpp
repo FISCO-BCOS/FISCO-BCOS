@@ -2,6 +2,7 @@
 #include "bcos-rpc/jsonrpc/Common.h"
 #include <bcos-framework/protocol/ReceiptBlockPosition.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <optional>
 #include <utility>
 
 #define CPU_CORES (std::thread::hardware_concurrency() + 1)
@@ -252,7 +253,6 @@ task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId,
 {
     auto nodeService = getNodeService(groupId, "getLogsImpl");
     auto latestBlockNumber = co_await pollingTip(*nodeService);
-    auto startBlockNumber = filter->startBlockNumber();
     auto fromBlock = filter->params()->fromBlock();
     auto toBlock = filter->params()->toBlock();
     auto fromIsLatest = filter->params()->fromIsLatest();
@@ -278,28 +278,41 @@ task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId,
     //     - Since the last query, no new blocks have been generated
     //   -------------------------------------------------------------------------------------------
     /* clang-format on */
-    auto begin = fromIsLatest ? startBlockNumber : std::max(fromBlock, startBlockNumber);
-    auto end = toIsLatest ? latestBlockNumber : std::min(toBlock, latestBlockNumber);
+    auto const end = toIsLatest ? latestBlockNumber : std::min(toBlock, latestBlockNumber);
+    auto const startBlockNumber = filter->startBlockNumber();
+    auto const begin = fromIsLatest ? startBlockNumber : std::max(fromBlock, startBlockNumber);
     if (end < begin)
     {
         co_return Json::Value(Json::arrayValue);
     }
 
     auto params = m_factory->create(*(filter->params()));
-    // limit the number of blocks processed
-    auto processBlockNum = std::min(end - begin + 1, m_maxBlockProcessPerReq);
+    auto const processBlockNum = std::min(end - begin + 1, m_maxBlockProcessPerReq);
+    auto const nextBlockNumber = begin + processBlockNum;
     params->setFromBlock(begin);
-    params->setToBlock(begin + processBlockNum - 1);
-    filter->setStartBlockNumber(begin + processBlockNum);
+    params->setToBlock(nextBlockNumber - 1);
+    auto const isOp = static_cast<bool>(nodeService->opCanonicalReader());
+    if (!isOp)
+    {
+        filter->setStartBlockNumber(nextBlockNumber);
+    }
+    // OP polls are bounded by the finalized tip, so the selected blocks are on disk.
+    auto logs = co_await getLogsInternal(*nodeService, std::move(params),
+        /*enforceLogCountCap=*/false);
+    // Publish the cursor after a successful read and cap each request at one page of work.
+    if (isOp && !filter->advanceStartBlockNumber(startBlockNumber, nextBlockNumber))
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            JsonRpcError::InternalError, "Another poll advanced this filter. Retry the poll."));
+    }
     FILTER_LOG(DEBUG) << LOG_BADGE("getLogChangeImpl") << LOG_KV("id", filter->id())
                       << LOG_KV("latestBlockNumber", latestBlockNumber)
                       << LOG_KV("startBlockNumber", startBlockNumber)
                       << LOG_KV("processBlockNum", processBlockNum)
-                      << LOG_KV("nextStartBlockNumber", begin + processBlockNum)
-                      << LOG_KV("begin", begin) << LOG_KV("end", end) << LOG_KV("from", begin)
-                      << LOG_KV("to", begin + processBlockNum - 1);
-    co_return co_await getLogsInternal(
-        *nodeService, std::move(params), /*enforceLogCountCap=*/false);
+                      << LOG_KV("nextStartBlockNumber", nextBlockNumber) << LOG_KV("begin", begin)
+                      << LOG_KV("end", end) << LOG_KV("from", begin)
+                      << LOG_KV("to", nextBlockNumber - 1);
+    co_return logs;
 }
 
 task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId, u256 filterID)
@@ -315,8 +328,8 @@ task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId
     co_return co_await getLogsImpl(groupId, params, false);
 }
 
-task::Task<Json::Value> FilterSystem::getLogsImpl(
-    std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange)
+task::Task<Json::Value> FilterSystem::getLogsImpl(std::string_view groupId,
+    FilterRequest::Ptr params, bool needCheckRange, std::optional<HeadReadView> view)
 {
     // getLatestBlockNumber and getLogsInternal use the same node service
     auto nodeService = getNodeService(groupId, "getLogsImpl");
@@ -384,7 +397,11 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
     }
     else
     {
-        auto latestBlockNumber = getLatestBlockNumber(*nodeService);
+        if (auto const& reader = nodeService->opCanonicalReader(); reader && !view)
+        {
+            view = co_await reader->captureHeadView();
+        }
+        auto latestBlockNumber = view ? view->head : getLatestBlockNumber(*nodeService);
         auto fromBlock = params->fromBlock();
         auto toBlock = params->toBlock();
         if (needCheckRange && !params->checkBlockRange())
@@ -438,21 +455,22 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         // One-shot caller: a result larger than MAX_RETURNED_LOGS_PER_QUERY is refused rather
         // than returned, because there is no cursor to resume from (see getLogsInternal).
         co_return co_await getLogsInternal(
-            *nodeService, std::move(params), /*enforceLogCountCap=*/true);
+            *nodeService, std::move(params), /*enforceLogCountCap=*/true, view ? &*view : nullptr);
     }
 }
 
-task::Task<Json::Value> FilterSystem::getLogsInternal(
-    NodeService& nodeService, FilterRequest::Ptr params, bool enforceLogCountCap)
+task::Task<Json::Value> FilterSystem::getLogsInternal(NodeService& nodeService,
+    FilterRequest::Ptr params, bool enforceLogCountCap, HeadReadView const* view)
 {
     auto fromBlock = params->fromBlock();
     auto toBlock = params->toBlock();
     Json::Value jArray(Json::arrayValue);
     auto matcher = m_matcher;
+    constexpr auto flags = ledger::HEADER | ledger::RECEIPTS | ledger::TRANSACTIONS_HASH;
     for (auto number = fromBlock; number <= toBlock; ++number)
     {
-        auto block = co_await canonicalBlockByNumber(nodeService, number,
-            bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
+        auto block = co_await (view ? blockInView(nodeService, *view, number, flags) :
+                                      ledger::getBlockData(*nodeService.ledger(), number, flags));
         // Derive the block position before matching: the matcher reads logIndex off the receipts,
         // and a stored value is not authoritative (historical rows may predate the field).
         protocol::stampReceiptBlockPositions(*block);

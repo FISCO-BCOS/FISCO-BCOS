@@ -54,7 +54,7 @@
 
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
-#include <opstack-executor/OpAdmissionRollupCost.h>  // makeOpAdmissionRollupCost
+#include <opstack-executor/OpAdmissionRollupCost.h>
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -369,15 +369,16 @@ struct Fixture
 
     /// @p schedule lets a case cross an OP fork inside this fixture; the default leaves both
     /// forks unscheduled, which is what every pre-existing case relies on.
-    explicit Fixture(bcos::ledger::OpForkSchedule schedule = {})
+    explicit Fixture(bcos::ledger::OpForkSchedule schedule = {},
+        int64_t unfinalizedWindow = bcos::engine::c_defaultUnfinalizedWindow)
       : forkSchedule(schedule),
         legacyLedgerStorage(
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        scheduler(
-            std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
-                kChainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool))
+        scheduler(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
+            hashImpl, kChainId, forkSchedule, blockFactory, multiLayerStorage, ledger,
+            ioServicePool, unfinalizedWindow))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
         seedSysTables(multiLayerStorage);
@@ -1325,6 +1326,63 @@ BOOST_AUTO_TEST_CASE(WindowStateMachine)
         stale.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
 }
 
+BOOST_AUTO_TEST_CASE(WindowCapacityReplacesAbandonedStagesAndPrunesTheirChildren)
+{
+    Fixture f({}, /*unfinalizedWindow=*/1);
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+    auto const deposit = opeth::encodeOpEthDepositEnvelope(makeDeposit());
+    driveOpBlock(f, makeHeader(), {deposit});
+
+    auto stage = [&](evmc::bytes32 source, bcos::protocol::BlockNumber number) {
+        auto out = executeOpBlock(f, makeHeaderAt(number, bcos::u256(2'000'000'000)),
+            {depositEnvWithSource(source)}, /*verify=*/true);
+        BOOST_REQUIRE_MESSAGE(out.err == nullptr, (out.err ? out.err->errorMessage() : ""));
+        BOOST_REQUIRE(out.header);
+        return std::pair{f.announcedHashAt.at(number), std::move(out.header)};
+    };
+    auto checkStageDropped = [&](bcos::protocol::BlockHeader::Ptr const& header) {
+        bcos::Error::Ptr error;
+        f.scheduler->commitBlock(
+            header, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) { error = e; });
+        BOOST_REQUIRE(error);
+        BOOST_CHECK(boost::get_error_info<bcos::engine::OpPendingDropped>(*error) != nullptr);
+    };
+
+    auto a = stage(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_bytes32, 2);
+    auto b = stage(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bytes32, 2);
+    auto c = stage(0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc_bytes32, 2);
+    if (b.first < a.first)
+    {
+        std::swap(a, b);
+    }
+    checkStageDropped(a.second);
+    commitOpBlock(f, b.second);
+    commitOpBlock(f, c.second);
+    BOOST_REQUIRE_EQUAL(f.scheduler->windowSize(), 2U);
+    f.scheduler->setCanonicalHeadProvider([head = c.first] { return std::optional(head); });
+
+    f.announcedHashAt[2] = b.first;
+    auto child =
+        stage(0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd_bytes32, 3);
+    auto d = stage(0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee_bytes32, 2);
+    commitOpBlock(f, d.second);
+    BOOST_CHECK(!f.scheduler->unfinalizedBlock(b.first).has_value());
+    BOOST_CHECK(f.scheduler->unfinalizedBlock(c.first).has_value());
+    BOOST_CHECK(f.scheduler->unfinalizedBlock(d.first).has_value());
+    checkStageDropped(child.second);
+
+    // Capture the replacement when the first sampled head fell out of the window.
+    int samples = 0;
+    f.scheduler->setCanonicalHeadProvider(
+        [&] { return std::optional(samples++ == 0 ? b.first : c.first); });
+    auto snapshot = bcos::task::syncWait(f.scheduler->headView());
+    auto const hash =
+        bcos::task::syncWait(bcos::ledger::getBlockHash(snapshot, 2, bcos::ledger::fromStorage));
+    BOOST_REQUIRE(hash);
+    BOOST_CHECK_EQUAL(hash->hex(), c.first.hex());
+}
+
 /// Multi-block finalizeUpTo prunes non-descendant siblings immediately as each block lands on
 /// disk (never leaving a sibling stacked over a finalized competitor on a mid-chain error) and
 /// invokes block-number notifiers after releasing m_commitMutex.
@@ -2214,9 +2272,8 @@ L1BlockSlots ecotoneSlots(uint64_t l1BaseFee)
 
 /// Writes @p slots through the lane's table name (as the attributes deposit does), rebuilds the
 /// full MPT over the committed flat state and persists its nodes, and commits a header at
-/// @p number carrying that root. Returns the snapshot admission judges by: (number, canonical
-/// hash, timestamp) exactly as the ledger config republish publishes it.
-bcos::ledger::LedgerConfig commitL1BlockSlotsAsHead(
+/// @p number carrying that root.
+bcos::protocol::BlockHeader::Ptr commitL1BlockSlotsAsHead(
     Fixture& f, bcos::protocol::BlockNumber number, L1BlockSlots const& slots)
 {
     bcos::Address l1Block;
@@ -2247,11 +2304,7 @@ bcos::ledger::LedgerConfig commitL1BlockSlotsAsHead(
     header->setTimestamp((1000 + number) * 1000);  // whole seconds in ms, fork at ~1000 s
     seedCallGenesis(f.multiLayerStorage, header);
 
-    bcos::ledger::LedgerConfig head;
-    head.setBlockNumber(number);
-    head.setTimestamp(header->timestamp());
-    head.setHash(bcos::protocol::canonicalBlockHash(*header));
-    return head;
+    return header;
 }
 
 /// opTotalRollupCost over @p slots directly -- what the callable must answer, computed without
@@ -2268,20 +2321,25 @@ bcos::u512 expectedRollupCost(L1BlockSlots const& slots, evmc::bytes_view envelo
         opeth::opTotalRollupCost(fee, envelope, gasLimit, opeth::opForkSpecAt(schedule, 1000)));
 }
 
-struct RollupCostOwner
+/// Construct the root-pinned view the OP admission provider gives the calculator.
+bcos::u512 priceAtHeader(Fixture& fixture, opeth::OpAdmissionRollupCost& rollupCost,
+    bcos::protocol::BlockHeader const& header, bcos::bytesConstRef envelope, uint64_t gasLimit)
 {
-    MLS& mls;
-    MLS& storage() { return mls; }
-};
+    auto view = fixture.multiLayerStorage.forkCommitted();
+    using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<decltype(view)>;
+    HistoricalBackend backend(
+        view, header.stateRoot(), bcos::ledger::account::nodeAddressTableMode(), true);
+    bcos::storage2::View<MLS::MutableStorage, void, HistoricalBackend> rootedView(
+        std::addressof(backend));
+    auto const hash = bcos::protocol::canonicalBlockHash(header);
+    auto const spec =
+        opeth::opForkSpecAt(fixture.forkSchedule, opeth::opForkTimestampSec(header.timestamp()));
+    return bcos::task::syncWait(rollupCost.price(rootedView, hash, spec, envelope, gasLimit));
+}
 }  // namespace
 
-/// The admission callable (TxValidator's RollupCostFn on the OP lane) prices with the L1Block
-/// slots OF THE HEAD IT IS KEYED BY, read through that header's state root, and caches them per
-/// (number, hash). A new head committed between two asks under the old key changes nothing:
-/// the cached set is the old head's, and a cold read under the old key -- against a committed
-/// plane that now holds the new head's slots -- yields the same old set. A head whose hash the
-/// committed header at that number does not carry is refused, never priced from another head's
-/// state.
+/// The OP calculator caches by hash. Two heads at one height price against their own L1Block
+/// slots, including a cold read of the old root after the live backend has advanced.
 BOOST_AUTO_TEST_CASE(AdmissionRollupCostReadsTheSlotsOfTheHeadItIsKeyedBy)
 {
     Fixture f;
@@ -2295,49 +2353,29 @@ BOOST_AUTO_TEST_CASE(AdmissionRollupCostReadsTheSlotsOfTheHeadItIsKeyedBy)
     auto const expected1 = expectedRollupCost(slots1, envelopeView, gasLimit, f.forkSchedule);
     BOOST_REQUIRE(expected1 > 0);
 
-    auto const rollupCost = opeth::makeOpAdmissionRollupCost(
-        std::make_shared<RollupCostOwner>(RollupCostOwner{f.multiLayerStorage}), f.forkSchedule,
-        f.blockFactory);
-    auto const priced1 = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head1));
-    BOOST_REQUIRE(priced1.has_value());
-    BOOST_CHECK_EQUAL(*priced1, expected1);
+    opeth::OpAdmissionRollupCost rollupCost;
+    BOOST_CHECK_EQUAL(
+        priceAtHeader(f, rollupCost, *head1, bcos::ref(envelope), gasLimit), expected1);
 
-    // A new head lands: doubled l1BaseFee, header 2. The committed plane now holds head 2's slots.
+    // Replace the live view's slots with those of another block at the same height.
     auto const slots2 = ecotoneSlots(2'000'000'000);
-    auto const head2 = commitL1BlockSlotsAsHead(f, 2, slots2);
+    auto const head2 = commitL1BlockSlotsAsHead(f, 1, slots2);
     auto const expected2 = expectedRollupCost(slots2, envelopeView, gasLimit, f.forkSchedule);
     BOOST_REQUIRE(expected2 != expected1);
 
-    // Still under head 1: the cached set is head 1's.
-    auto const cached = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head1));
-    BOOST_REQUIRE(cached.has_value());
-    BOOST_CHECK_EQUAL(*cached, expected1);
+    // Both a cached query and a cold read still see the old head's L1Block slots.
+    opeth::OpAdmissionRollupCost cold;
+    BOOST_CHECK_EQUAL(
+        priceAtHeader(f, rollupCost, *head1, bcos::ref(envelope), gasLimit), expected1);
+    BOOST_CHECK_EQUAL(priceAtHeader(f, cold, *head1, bcos::ref(envelope), gasLimit), expected1);
 
-    // A cold callable under head 1 reads head 1's slots through header 1's root, not the plane.
-    auto const cold = opeth::makeOpAdmissionRollupCost(
-        std::make_shared<RollupCostOwner>(RollupCostOwner{f.multiLayerStorage}), f.forkSchedule,
-        f.blockFactory);
-    auto const coldUnderHead1 = bcos::task::syncWait(cold(bcos::ref(envelope), gasLimit, head1));
-    BOOST_REQUIRE(coldUnderHead1.has_value());
-    BOOST_CHECK_EQUAL(*coldUnderHead1, expected1);
-
-    // Under head 2, both callables price head 2's slots.
-    for (auto const* fn : {&rollupCost, &cold})
+    for (auto* calculator : {&rollupCost, &cold})
     {
-        auto const priced2 = bcos::task::syncWait((*fn)(bcos::ref(envelope), gasLimit, head2));
-        BOOST_REQUIRE(priced2.has_value());
-        BOOST_CHECK_EQUAL(*priced2, expected2);
+        BOOST_CHECK_EQUAL(
+            priceAtHeader(f, *calculator, *head2, bcos::ref(envelope), gasLimit), expected2);
+        BOOST_CHECK_EQUAL(
+            priceAtHeader(f, *calculator, *head1, bcos::ref(envelope), gasLimit), expected1);
     }
-
-    // A snapshot the ledger does not carry: refused, not priced from someone else's state.
-    auto foreign = head1;
-    foreign.setHash(bcos::crypto::HashType{0x99});
-    BOOST_CHECK_THROW(
-        bcos::task::syncWait(cold(bcos::ref(envelope), gasLimit, foreign)), std::runtime_error);
-    auto beyond = head2;
-    beyond.setBlockNumber(3);
-    BOOST_CHECK_THROW(
-        bcos::task::syncWait(cold(bcos::ref(envelope), gasLimit, beyond)), std::runtime_error);
 }
 
 /// The callable answers the true 512-bit total. Slots that push the L1 fee past 2^256 saturate
@@ -2358,14 +2396,11 @@ BOOST_AUTO_TEST_CASE(AdmissionRollupCostCarriesTheTotalPast2To256)
     L1BlockSlots const slots{{1, maxWord}, {3, scalars}, {7, slotWord(1)}, {8, slotWord(5)}};
     auto const head = commitL1BlockSlotsAsHead(f, 1, slots);
 
-    auto const rollupCost = opeth::makeOpAdmissionRollupCost(
-        std::make_shared<RollupCostOwner>(RollupCostOwner{f.multiLayerStorage}), f.forkSchedule,
-        f.blockFactory);
-    auto const priced = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head));
-    BOOST_REQUIRE(priced.has_value());
+    opeth::OpAdmissionRollupCost rollupCost;
+    auto const priced = priceAtHeader(f, rollupCost, *head, bcos::ref(envelope), gasLimit);
     // L1 fee saturated to 2^256-1, operator fee = gasLimit * 0 / 1e6 + 5.
-    BOOST_CHECK_EQUAL(*priced, (bcos::u512{1} << 256) + 4);
-    BOOST_CHECK(*priced > bcos::u512{std::numeric_limits<bcos::u256>::max()});
+    BOOST_CHECK_EQUAL(priced, (bcos::u512{1} << 256) + 4);
+    BOOST_CHECK(priced > bcos::u512{std::numeric_limits<bcos::u256>::max()});
 }
 
 /// Binary-layout variant of the pending-plane test above: the unfinalized nonce row lives at

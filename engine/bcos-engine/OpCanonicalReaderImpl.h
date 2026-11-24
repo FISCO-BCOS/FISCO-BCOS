@@ -72,6 +72,58 @@ public:
         co_return fin.number;
     }
 
+    task::Task<HeadReadView> captureHeadView() override
+    {
+        for (;;)
+        {
+            auto const fin = co_await finalized();
+            auto const [tracked, safe] = m_engineService->trackedHeadAndSafe();
+            std::optional<WindowBlockView> selected;
+            if (tracked && tracked->blockNumber > fin.number)
+            {
+                selected = co_await captureWindowView(tracked->hash);
+            }
+            // A view captured after finalization might rely on more committed blocks than
+            // 'fin' indicated. Resolve the tags again against the advanced boundary.
+            if ((co_await finalized()).number != fin.number)
+            {
+                continue;
+            }
+            if (selected)
+            {
+                co_return HeadReadView{.head = selected->number,
+                    .safe = std::clamp(safe.value_or(fin.number), fin.number, selected->number),
+                    .finalized = fin.number,
+                    .window = std::move(selected->window)};
+            }
+            // A switch can remove the sampled head before we capture its layers. Retry with
+            // the new head. A tracker left stale after failed finalization falls back to disk.
+            if (tracked && tracked->blockNumber > fin.number)
+            {
+                if (auto current = m_engineService->trackedHead();
+                    current && current->hash != tracked->hash)
+                {
+                    continue;
+                }
+            }
+            co_return HeadReadView{
+                .head = fin.number, .safe = fin.number, .finalized = fin.number, .window = nullptr};
+        }
+    }
+
+    task::Task<std::optional<WindowBlockView>> captureWindowView(
+        crypto::HashType const& hash) override
+    {
+        auto entry = co_await m_delegate->windowBlockView(hash);
+        if (!entry)
+        {
+            co_return std::nullopt;
+        }
+        co_return WindowBlockView{.number = entry->number,
+            .window =
+                std::make_unique<ReadView>(m_backendOwner, m_blockFactory, std::move(*entry))};
+    }
+
     task::Task<std::optional<crypto::HashType>> canonicalHashAt(
         protocol::BlockNumber number) override
     {
@@ -162,6 +214,40 @@ public:
     }
 
 private:
+    class ReadView final : public WindowReadView
+    {
+    public:
+        ReadView(std::shared_ptr<const void> backendOwner, protocol::BlockFactory::Ptr blockFactory,
+            typename DelegateT::WindowBlockView window)
+          : m_backendOwner(std::move(backendOwner)),
+            m_blockFactory(std::move(blockFactory)),
+            m_window(std::move(window))
+        {}
+
+        task::Task<protocol::Block::Ptr> block(protocol::BlockNumber number, int32_t flags) override
+        {
+            // A deposit hash may repeat at a later height. Resolve hash-keyed data in this
+            // block's own ledger layer so a descendant receipt cannot shadow it.
+            return bcos::ledger::getBlockDataFromStorages(
+                m_window.view, m_window.ledgerAt(number), number, flags, *m_blockFactory);
+        }
+
+        task::Task<std::optional<protocol::BlockNumber>> blockNumber(crypto::HashType hash) override
+        {
+            return bcos::ledger::getBlockNumber(m_window.view, hash, bcos::ledger::fromStorage);
+        }
+
+        std::shared_ptr<MPTNodeReader> takeMptNodeReader() override
+        {
+            return storage2::makeMPTNodeReader(std::move(m_window.view), std::move(m_backendOwner));
+        }
+
+    private:
+        std::shared_ptr<const void> m_backendOwner;
+        protocol::BlockFactory::Ptr m_blockFactory;
+        typename DelegateT::WindowBlockView m_window;
+    };
+
     BlockRef validatedHead(BlockRef const& fin) const
     {
         if (auto tracked = m_engineService->trackedHead();

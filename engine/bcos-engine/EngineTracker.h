@@ -31,6 +31,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <thread>
+#include <utility>
 
 namespace bcos::engine
 {
@@ -103,6 +104,8 @@ public:
     ForkchoiceApplyResult applyForkchoice(const ResolvedForkchoice& resolved);
     GetPayloadResult getPayload(const PayloadID& payloadId, std::uint32_t version) const;
     std::optional<TrackedHeadBlock> trackedHead() const;
+    std::pair<std::optional<TrackedHeadBlock>, std::optional<bcos::protocol::BlockNumber>>
+    headAndSafe() const;
     std::optional<bcos::protocol::BlockNumber> safeBlockNumber() const;
     std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber() const;
     /// RAII guards over m_mutex. Unlock must run on the locking thread

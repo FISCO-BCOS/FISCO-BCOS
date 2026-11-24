@@ -389,12 +389,18 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
         // silently evicted). OP floors the tip at 1e6 wei (op-geth --gpo.minsuggestedpriorityfee).
         // The head block's base fee: on the OP lane the canonical head (an unfinalized window
         // block), which the ledger config — republished on finalize — is behind.
-        u256 baseFee = 0;
-        if (auto block = co_await canonicalBlockByNumber(
-                *m_nodeService, co_await canonicalLatestNumber(*m_nodeService), ledger::HEADER))
+        protocol::Block::Ptr block;
+        if (auto const& reader = m_nodeService->opCanonicalReader())
         {
-            baseFee = protocol::blockBaseFee(*block->blockHeader());
+            auto view = co_await reader->captureHeadView();
+            block = co_await blockInView(*m_nodeService, view, view.head, ledger::HEADER);
         }
+        else
+        {
+            auto const latest = co_await canonicalLatestNumber(*m_nodeService);
+            block = co_await canonicalBlockByNumber(*m_nodeService, latest, ledger::HEADER);
+        }
+        auto const baseFee = block ? protocol::blockBaseFee(*block->blockHeader()) : u256(0);
         auto const tip = suggestedPriorityFeeWei(ledgerConfig->executorVersion());
         result = toQuantity(baseFee + u256(tip));
     }
@@ -2335,10 +2341,20 @@ task::Task<void> EthEndpoint::getLogs(const Json::Value& request, Json::Value& r
     // result: logs(ARRAY)
     const Json::Value& jParams = request[0U];
     auto params = m_filterSystem->requestFactory()->create();
-    auto const context = co_await tagContext();
-    params->fromJson(jParams, context.latest, context.safeDepth, context.finalizedDepth,
-        context.safe, context.finalized, context.failClosedOnMissingForkchoice);
-    Json::Value result = co_await m_filterSystem->getLogs(params);
+    std::optional<HeadReadView> view;
+    if (auto const& reader = m_nodeService->opCanonicalReader();
+        reader && !FilterRequest::blockHashSelector(jParams))
+    {
+        view = co_await reader->captureHeadView();
+        params->fromJson(jParams, view->head, 0, 0, view->safe, view->finalized, false);
+    }
+    else
+    {
+        auto const context = co_await tagContext();
+        params->fromJson(jParams, context.latest, context.safeDepth, context.finalizedDepth,
+            context.safe, context.finalized, context.failClosedOnMissingForkchoice);
+    }
+    auto result = co_await m_filterSystem->getLogs(std::move(params), std::move(view));
     buildJsonContent(result, response);
 }
 /// The block number for @p blockTag plus whether it IS the current head. Delegates to
@@ -2397,23 +2413,7 @@ EthEndpoint::getBlockNumberAndHeadByTag(std::string_view blockTag)
                     JsonRpcException(InvalidParams, std::string(c_blockNotFoundMessage)));
             }
         }
-        protocol::BlockNumber number = 0;
-        try
-        {
-            number = co_await ledger::getBlockNumber(*m_nodeService->ledger(), hash);
-        }
-        catch (bcos::Error const& e)
-        {
-            // GetStorageError without a chained cause is "no such hash"; a storage fault
-            // carries one and must keep propagating as an internal error.
-            if (e.errorCode() != bcos::ledger::LedgerError::GetStorageError ||
-                boost::get_error_info<bcos::Error::STDError>(e) != nullptr)
-            {
-                throw;
-            }
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, std::string(c_blockNotFoundMessage)));
-        }
+        auto const number = co_await ledgerBlockNumberByHash(hash);
         co_return std::make_tuple(number, context.latest);
     }
     auto [number, _] = bcos::rpc::getBlockNumberByTag(context.latest, blockTag, context.safeDepth,
@@ -2435,6 +2435,62 @@ EthEndpoint::getBlockNumberAndHeadByTag(std::string_view blockTag)
     // is — stateRootMissingMessage compares the requested height against it to decide
     // "pruned" vs "missing".
     co_return std::make_tuple(number, context.latest);
+}
+
+task::Task<protocol::BlockNumber> EthEndpoint::ledgerBlockNumberByHash(crypto::HashType hash)
+{
+    try
+    {
+        co_return co_await ledger::getBlockNumber(*m_nodeService->ledger(), hash);
+    }
+    catch (bcos::Error const& e)
+    {
+        // GetStorageError without a chained cause is "no such hash"; a storage fault
+        // carries one and must keep propagating as an internal error.
+        if (e.errorCode() != bcos::ledger::LedgerError::GetStorageError ||
+            boost::get_error_info<bcos::Error::STDError>(e) != nullptr)
+        {
+            throw;
+        }
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, std::string(c_blockNotFoundMessage)));
+    }
+}
+
+task::Task<protocol::BlockNumber> EthEndpoint::blockNumberInView(
+    std::string_view blockTag, HeadReadView const& view)
+{
+    if (!isBlockHashString(blockTag))
+    {
+        co_return std::get<0>(
+            bcos::rpc::getBlockNumberByTag(view.head, blockTag, 0, 0, view.safe, view.finalized));
+    }
+    if (!bcos::isHexString(std::string(blockTag)))
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Invalid block hash: not hexadecimal"));
+    }
+    auto const hash = crypto::HashType(blockTag, crypto::HashType::FromHex);
+    std::optional<protocol::BlockNumber> number;
+    if (view.window)
+    {
+        number = co_await view.window->blockNumber(hash);
+    }
+    if (!number)
+    {
+        number = co_await ledgerBlockNumberByHash(hash);
+    }
+    if (*number >= 0 && *number <= view.head)
+    {
+        // The live backend can index a block that finalized after the capture. Its hash
+        // must still match the block at this height on the retained branch.
+        auto block = co_await blockInView(*m_nodeService, view, *number, ledger::HEADER);
+        if (block && block->blockHeader() &&
+            protocol::canonicalBlockHash(*block->blockHeader()) == hash)
+        {
+            co_return *number;
+        }
+    }
+    BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, std::string(c_blockNotFoundMessage)));
 }
 
 task::Task<EthEndpoint::TagContext> EthEndpoint::tagContext()
@@ -2476,30 +2532,9 @@ task::Task<bool> EthEndpoint::isUnfinalizedHeight(protocol::BlockNumber blockNum
 }
 
 task::Task<EthEndpoint::StateReadContext> EthEndpoint::stateReadContext(
-    protocol::BlockNumber blockNumber, std::optional<crypto::HashType> chainHash)
+    protocol::BlockNumber blockNumber)
 {
     auto const& reader = m_nodeService->opCanonicalReader();
-    if (reader && chainHash)
-    {
-        // A proof by hash must remain tied to this exact block through finalization.
-        if (auto block = co_await reader->unfinalizedBlock(*chainHash, bcos::ledger::HEADER))
-        {
-            co_return StateReadContext{.block = std::move(block),
-                .mptReader = co_await reader->mptNodeReaderAt(*chainHash)};
-        }
-        if (blockNumber <= (co_await reader->finalized()).number)
-        {
-            auto block = co_await ledger::getBlockData(
-                *m_nodeService->ledger(), blockNumber, bcos::ledger::HEADER);
-            if (block && block->blockHeader() &&
-                protocol::canonicalBlockHash(*block->blockHeader()) == *chainHash)
-            {
-                co_return StateReadContext{
-                    .block = std::move(block), .mptReader = m_nodeService->mptNodeReader()};
-            }
-        }
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, std::string(c_blockNotFoundMessage)));
-    }
     if (reader && co_await isUnfinalizedHeight(blockNumber))
     {
         // Resolve the trie against the selected header's chain even if head changes before
@@ -2722,9 +2757,27 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
         }
         percentiles.push_back(entry.asDouble());
     }
-    auto const [newest, head] = co_await getBlockNumberAndHeadByTag(toView(request[1U]));
-    FeeHistoryBlockSource const blockSource = [this](protocol::BlockNumber number, int32_t flags) {
-        return canonicalBlockByNumber(*m_nodeService, number, flags);
+    auto const blockTag = toView(request[1U]);
+    std::optional<HeadReadView> view;
+    protocol::BlockNumber newest = 0;
+    protocol::BlockNumber head = 0;
+    if (auto const& reader = m_nodeService->opCanonicalReader())
+    {
+        view = co_await reader->captureHeadView();
+        newest = co_await blockNumberInView(blockTag, *view);
+        head = view->head;
+    }
+    else
+    {
+        std::tie(newest, head) = co_await getBlockNumberAndHeadByTag(blockTag);
+    }
+    FeeHistoryBlockSource const blockSource = [this, &ledger, &view](
+                                                  protocol::BlockNumber number, int32_t flags) {
+        if (view)
+        {
+            return blockInView(*m_nodeService, *view, number, flags);
+        }
+        return ledger::getBlockData(ledger, number, flags);
     };
     // The same two blob-schedule sources eth_blobBaseFee resolves from (its
     // ledgerConfig->blobSchedule() / evmcRevision()), so the two endpoints cannot disagree about
@@ -2946,28 +2999,63 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     // are unchanged.
     auto const blockTagStr = resolveBlockTagString(request[2U]);
     std::string_view const blockTag = blockTagStr;
-    // op-node passes the 32-byte block hash (DATA) for eth_getProof, unlike the number/tag the
-    // other eth_* endpoints take. A hash in the OP window selects that block's own chain.
     protocol::BlockNumber blockNumber = 0;
     protocol::BlockNumber head = 0;
-    std::optional<bcos::crypto::HashType> windowChainHash;
-    if (auto const& reader = m_nodeService->opCanonicalReader();
-        reader && isBlockHashString(blockTag) && bcos::isHexString(std::string(blockTag)))
+    StateReadContext context;
+    auto const ledger = m_nodeService->ledger();
+    if (auto const& reader = m_nodeService->opCanonicalReader())
     {
-        auto const hash = crypto::HashType(blockTag, crypto::HashType::FromHex);
-        if (auto const number = reader->unfinalizedNumberOf(hash))
+        if (isBlockHashString(blockTag))
         {
-            blockNumber = *number;
-            windowChainHash = hash;
+            if (!bcos::isHexString(std::string(blockTag)))
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "Invalid block hash: not hexadecimal"));
+            }
+            // The requested hash may refer to a retained sibling. Pin that block's layers
+            // before decoding its header so a concurrent finalize cannot change its trie.
+            auto const hash = crypto::HashType(blockTag, crypto::HashType::FromHex);
+            if (auto selected = co_await reader->captureWindowView(hash))
+            {
+                blockNumber = selected->number;
+                context.block = co_await selected->window->block(blockNumber, ledger::HEADER);
+                context.mptReader = selected->window->takeMptNodeReader();
+            }
+            else
+            {
+                blockNumber = co_await ledgerBlockNumberByHash(hash);
+                if (blockNumber >= 0 && blockNumber <= (co_await reader->finalized()).number)
+                {
+                    auto block =
+                        co_await ledger::getBlockData(*ledger, blockNumber, ledger::HEADER);
+                    if (block && block->blockHeader() &&
+                        protocol::canonicalBlockHash(*block->blockHeader()) == hash)
+                    {
+                        context = {std::move(block), m_nodeService->mptNodeReader()};
+                    }
+                }
+            }
+            head = (co_await reader->head()).number;
         }
-    }
-    if (windowChainHash)
-    {
-        head = co_await canonicalLatestNumber(*m_nodeService);
+        else
+        {
+            auto view = co_await reader->captureHeadView();
+            blockNumber = co_await blockNumberInView(blockTag, view);
+            head = view.head;
+            if (blockNumber <= head)
+            {
+                context.block =
+                    co_await blockInView(*m_nodeService, view, blockNumber, ledger::HEADER);
+                context.mptReader = blockNumber > view.finalized ?
+                                        view.window->takeMptNodeReader() :
+                                        m_nodeService->mptNodeReader();
+            }
+        }
     }
     else
     {
         std::tie(blockNumber, head) = co_await getBlockNumberAndHeadByTag(blockTag);
+        context = co_await stateReadContext(blockNumber);
     }
     if (c_fileLogLevel == TRACE)
     {
@@ -2976,11 +3064,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
                         << LOG_KV("blockNumber", blockNumber);
     }
 
-    // Resolve the block's stateRoot from its header, and the trie it is rooted in: the
-    // committed plane for a finalized block (the kona challenger path stays byte-identical),
-    // the chain view for an unfinalized one.
-    auto const ledger = m_nodeService->ledger();
-    auto const [block, mptReader] = co_await stateReadContext(blockNumber, windowChainHash);
+    auto const& [block, mptReader] = context;
     if (!block || !block->blockHeader()) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));

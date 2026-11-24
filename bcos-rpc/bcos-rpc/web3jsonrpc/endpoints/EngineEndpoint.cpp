@@ -43,6 +43,7 @@
 #include <bcos-utilities/Error.h>
 #include <algorithm>
 #include <exception>
+#include <optional>
 #include <string_view>
 
 using namespace bcos;
@@ -466,20 +467,25 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     buildJsonContent(result, response);
 }
 
-task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumber number)
+task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(
+    protocol::BlockNumber number, engine::OpCanonicalReader::HeadReadView const* view)
 {
     protocol::Block::Ptr block;
     try
     {
-        // The canonical chain: the ledger, or on the OP lane the head chain's window above
-        // the finalized tip (rpc::canonicalBlockByNumber).
-        block = co_await canonicalBlockByNumber(
-            *m_nodeService, number, bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
+        constexpr auto flags = bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS;
+        auto read = view ? blockInView(*m_nodeService, *view, number, flags) :
+                           canonicalBlockByNumber(*m_nodeService, number, flags);
+        block = co_await std::move(read);
     }
     catch (std::exception const&)
     {
         // An unavailable (pruned / never-seen) block is a null body, matching geth's
         // GetBlockByNumber-miss path — not an RPC error.
+        co_return Json::nullValue;
+    }
+    if (!block)
+    {
         co_return Json::nullValue;
     }
     co_return co_await payloadBodyOf(block);
@@ -636,7 +642,12 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV1(
             "engine_getPayloadBodiesByRangeV1: requested count too large: " +
                 std::to_string(count)));
     }
-    auto const head = co_await canonicalLatestNumber(*m_nodeService);
+    std::optional<engine::OpCanonicalReader::HeadReadView> view;
+    if (auto const& reader = m_nodeService->opCanonicalReader())
+    {
+        view.emplace(co_await reader->captureHeadView());
+    }
+    auto const head = view ? view->head : co_await canonicalLatestNumber(*m_nodeService);
     Json::Value result(Json::arrayValue);
     // A range beyond the latest block answers an empty array (no trailing nulls); the
     // start <= head guard also keeps start + count - 1 from overflowing.
@@ -645,7 +656,8 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV1(
         auto const last = std::min(start + count - 1, static_cast<uint64_t>(head));
         for (auto number = start; number <= last; ++number)
         {
-            result.append(co_await payloadBodyAtNumber(static_cast<protocol::BlockNumber>(number)));
+            result.append(co_await payloadBodyAtNumber(
+                static_cast<protocol::BlockNumber>(number), view ? &*view : nullptr));
         }
     }
     buildJsonContent(result, response);

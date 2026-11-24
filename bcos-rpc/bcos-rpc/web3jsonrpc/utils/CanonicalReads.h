@@ -18,6 +18,7 @@
  */
 #pragma once
 
+#include <bcos-framework/engine/OpCanonicalReader.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
@@ -42,6 +43,12 @@ task::Task<protocol::BlockNumber> canonicalLatestNumber(NodeService& nodeService
 /// The block at @p blockNumber on the canonical chain, with @p blockFlag rows.
 task::Task<protocol::Block::Ptr> canonicalBlockByNumber(
     NodeService& nodeService, protocol::BlockNumber blockNumber, int32_t blockFlag);
+
+/// Read a block from the branch captured for an OP request. The captured finalized prefix
+/// is stable and served by the ledger, including any separately stored block data.
+task::Task<protocol::Block::Ptr> blockInView(NodeService& nodeService,
+    engine::OpCanonicalReader::HeadReadView const& view, protocol::BlockNumber blockNumber,
+    int32_t blockFlag);
 
 /// The block with @p blockHash: an unfinalized block (ANY branch — op-node's backup-unsafe
 /// restore reads a replaced sibling by hash) from its own window layer, else the ledger.

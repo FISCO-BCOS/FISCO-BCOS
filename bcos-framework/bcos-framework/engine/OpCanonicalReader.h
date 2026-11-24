@@ -66,6 +66,34 @@ public:
         protocol::BlockNumber number = 0;
     };
 
+    /// A single branch's retained layers. Reads above the captured finalized height use
+    /// these layers even if forkchoice changes or the window releases them during the request.
+    class WindowReadView
+    {
+    public:
+        virtual ~WindowReadView() = default;
+        virtual task::Task<protocol::Block::Ptr> block(
+            protocol::BlockNumber number, int32_t flags) = 0;
+        virtual task::Task<std::optional<protocol::BlockNumber>> blockNumber(
+            crypto::HashType hash) = 0;
+        /// Transfer ownership to a reader after the caller has read the block header.
+        virtual std::shared_ptr<MPTNodeReader> takeMptNodeReader() = 0;
+    };
+
+    struct HeadReadView
+    {
+        protocol::BlockNumber head;
+        protocol::BlockNumber safe;
+        protocol::BlockNumber finalized;
+        std::unique_ptr<WindowReadView> window;
+    };
+
+    struct WindowBlockView
+    {
+        protocol::BlockNumber number;
+        std::unique_ptr<WindowReadView> window;
+    };
+
     /// A transaction resolved on the head chain with the rows eth_getTransactionByHash /
     /// eth_getTransactionReceipt render: its receipt and the canonical hash of its block.
     struct ChainTransaction
@@ -83,6 +111,13 @@ public:
     virtual task::Task<BlockRef> head() = 0;
     /// The tracker's safe height, else finalized().number.
     virtual task::Task<protocol::BlockNumber> safeNumber() = 0;
+
+    /// Capture the head and its tag resolution for a request. A null window means the
+    /// entire selected chain is finalized and the caller reads its blocks from the ledger.
+    virtual task::Task<HeadReadView> captureHeadView() = 0;
+    /// Capture a specific window block and its view together, including non-head branches.
+    virtual task::Task<std::optional<WindowBlockView>> captureWindowView(
+        crypto::HashType const& hash) = 0;
 
     /// The hash at @p number on the HEAD chain: the window walk from head(), then the ledger's
     /// SYS_NUMBER_2_HASH once the height is finalized. nullopt above the head.

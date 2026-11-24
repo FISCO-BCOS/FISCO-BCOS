@@ -1422,7 +1422,8 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; It is independent of enable_debug_api and only applies to this listener.
         ; enable_trace_api=false
         ; OP lane only: how many blocks newPayload may run ahead of the finalized (backend)
-        ; tip before answering SYNCING, in [16, 100000]
+        ; tip before answering SYNCING, in [16, 100000]. The admitted window holds at most twice
+        ; this many blocks across all branches. At capacity it can evict unused side leaves.
         ; unfinalized_window=1024
     */
     m_engineRpc.listenIP = _pt.get<std::string>("engine_rpc.listen_ip", "127.0.0.1");

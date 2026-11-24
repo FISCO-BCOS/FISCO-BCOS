@@ -120,6 +120,11 @@ private:
     };
     task::Task<TagContext> tagContext();
 
+    using HeadReadView = engine::OpCanonicalReader::HeadReadView;
+    task::Task<protocol::BlockNumber> ledgerBlockNumberByHash(crypto::HashType hash);
+    task::Task<protocol::BlockNumber> blockNumberInView(
+        std::string_view blockTag, HeadReadView const& view);
+
     /// A transaction with its receipt and block hash: the ledger first (finalized blocks, as
     /// before), then the OP head chain's unfinalized part. nullopt when neither carries it —
     /// including a transaction that exists only on a side branch, which is null like geth's
@@ -130,15 +135,13 @@ private:
     /// The (header block, MPT node reader) pair a state read at @p blockNumber resolves its
     /// root and trie from: the ledger row and the committed-plane reader at or below the
     /// finalized tip (or off the OP lane), the head chain's window block and a reader over
-    /// its chain view above it. @p chainHash names a specific chain (eth_getProof by block
-    /// hash, which may be a replaced sibling) instead of the head chain.
+    /// its chain view above it.
     struct StateReadContext
     {
         protocol::Block::Ptr block;
         std::shared_ptr<NodeService::MPTNodeReader> mptReader;
     };
-    task::Task<StateReadContext> stateReadContext(protocol::BlockNumber blockNumber,
-        std::optional<crypto::HashType> chainHash = std::nullopt);
+    task::Task<StateReadContext> stateReadContext(protocol::BlockNumber blockNumber);
 
     /// The flat state plane behind `latest`: the OP head chain's view, else the node's
     /// committed-plane provider (NodeService::stateStorageProvider); null when neither is
