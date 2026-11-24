@@ -45,6 +45,10 @@ public:
 
     void updateLastAccessTime() { m_lastAccessTime.store(utcTime()); }
     void setStartBlockNumber(int64_t number) { m_startBlockNumber.store(number); }
+    bool advanceStartBlockNumber(int64_t expected, int64_t next)
+    {
+        return m_startBlockNumber.compare_exchange_strong(expected, next);
+    }
     void setId(u256 id) { m_id = id; }
 
 private:

@@ -33,6 +33,7 @@
 #include <optional>
 #include <range/v3/view/transform.hpp>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -145,44 +146,27 @@ private:
     Storage* m_storage;
 };
 
-/// Build the handle NodeService::setMPTNodeReader takes: an AnyStorage<h256, bytes> that
-/// OWNS its MPTNodeReadStorage adapter via an aliasing shared_ptr, so callers manage exactly
-/// one lifetime. The only borrowed piece is @p storage itself (production: the state
-/// backend, owned by the Initializer), which must outlive the returned handle.
+/// Build an owning adapter. An lvalue storage is borrowed, while an rvalue view is moved
+/// into the handle. Supply @p backendOwner if the underlying backend needs to be retained.
 template <class Storage>
 [[nodiscard]] std::shared_ptr<AnyStorage<bcos::h256, bcos::bytes>> makeMPTNodeReader(
-    Storage& storage)
+    Storage&& storage, std::shared_ptr<const void> backendOwner = {})
 {
     struct OwningReader
     {
-        MPTNodeReadStorage<Storage> adapter;
-        std::optional<AnyStorage<bcos::h256, bcos::bytes>> erased;
-
-        explicit OwningReader(Storage& storage) : adapter(storage) { erased.emplace(adapter); }
-    };
-    auto owner = std::make_shared<OwningReader>(storage);
-    return {owner, std::addressof(*owner->erased)};
-}
-
-/// The same handle over a storage the CALLER hands over (a forked chain view of the OP
-/// unfinalized window, OpCanonicalReaderImpl::mptNodeReaderAt): the view, the adapter and
-/// the handle share one lifetime.
-template <class Storage>
-[[nodiscard]] std::shared_ptr<AnyStorage<bcos::h256, bcos::bytes>> makeOwningMPTNodeReader(
-    Storage storage)
-{
-    struct OwningReader
-    {
+        std::shared_ptr<const void> backendOwner;
         Storage storage;
-        MPTNodeReadStorage<Storage> adapter;
+        MPTNodeReadStorage<std::remove_reference_t<Storage>> adapter;
         std::optional<AnyStorage<bcos::h256, bcos::bytes>> erased;
 
-        explicit OwningReader(Storage s) : storage(std::move(s)), adapter(storage)
+        OwningReader(Storage&& s, std::shared_ptr<const void> backend)
+          : backendOwner(std::move(backend)), storage(std::forward<Storage>(s)), adapter(storage)
         {
             erased.emplace(adapter);
         }
     };
-    auto owner = std::make_shared<OwningReader>(std::move(storage));
+    auto owner =
+        std::make_shared<OwningReader>(std::forward<Storage>(storage), std::move(backendOwner));
     return {owner, std::addressof(*owner->erased)};
 }
 

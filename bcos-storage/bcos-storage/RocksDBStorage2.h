@@ -39,6 +39,8 @@ private:
     std::variant<std::reference_wrapper<::rocksdb::DB>, std::unique_ptr<::rocksdb::DB>> m_rocksDB;
     [[no_unique_address]] KeyResolver m_keyResolver;
     [[no_unique_address]] ValueResolver m_valueResolver;
+    using Snapshot = std::shared_ptr<const ::rocksdb::Snapshot>;
+    Snapshot m_snapshot;
 
     ::rocksdb::DB& rocksDBRef() noexcept
     {
@@ -55,6 +57,29 @@ private:
                 }
             },
             m_rocksDB);
+    }
+
+    Snapshot pinSnapshot()
+    {
+        if (m_snapshot)
+        {
+            return m_snapshot;
+        }
+        auto& db = rocksDBRef();
+        auto const* snapshot = db.GetSnapshot();
+        if (!snapshot)
+        {
+            BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment("Could not pin snapshot"));
+        }
+        return Snapshot(
+            snapshot, [&db](const ::rocksdb::Snapshot* pinned) { db.ReleaseSnapshot(pinned); });
+    }
+
+    ::rocksdb::ReadOptions readOptions() const
+    {
+        ::rocksdb::ReadOptions options;
+        options.snapshot = m_snapshot.get();
+        return options;
     }
 
 public:
@@ -76,6 +101,14 @@ public:
 
     ::rocksdb::DB& rocksDB() noexcept { return rocksDBRef(); }
     ::rocksdb::DB const& rocksDB() const noexcept { return rocksDBRef(); }
+
+    /// Point-in-time reads over a borrowed DB. The DB must outlive the returned handle.
+    RocksDBStorage2 readSnapshot()
+    {
+        RocksDBStorage2 storage(rocksDBRef(), m_keyResolver, m_valueResolver);
+        storage.m_snapshot = pinSnapshot();
+        return storage;
+    }
 
     // Helper: encode an item into a std::string via the resolver's sink-based encode.
     // NOTE: This allocates a std::string for RocksDB Slice compatibility on read
@@ -105,8 +138,8 @@ public:
         auto rocksDBKeys = encodedKeys | ::ranges::views::transform([](const auto& encodedKey) {
             return ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey));
         }) | ::ranges::to<std::vector>();
-        rocksDBRef().MultiGet(::rocksdb::ReadOptions(), rocksDBRef().DefaultColumnFamily(),
-            rocksDBKeys.size(), rocksDBKeys.data(), results.data(), status.data());
+        rocksDBRef().MultiGet(readOptions(), rocksDBRef().DefaultColumnFamily(), rocksDBKeys.size(),
+            rocksDBKeys.data(), results.data(), status.data());
 
         auto values =
             ::ranges::views::zip(results, status) |
@@ -133,7 +166,7 @@ public:
 
         auto encodedKey = encodeToBuffer(m_keyResolver, std::move(key));
         ::rocksdb::PinnableSlice result;
-        auto status = rocksDBRef().Get(::rocksdb::ReadOptions(), rocksDBRef().DefaultColumnFamily(),
+        auto status = rocksDBRef().Get(readOptions(), rocksDBRef().DefaultColumnFamily(),
             ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey)), &result);
 
         if (!status.ok())
@@ -302,41 +335,24 @@ public:
     class Iterator
     {
     private:
-        const ::rocksdb::Snapshot* m_snapshot;
+        Snapshot m_snapshot;
         std::unique_ptr<::rocksdb::Iterator> m_iterator;
         RocksDBStorage2* m_storage;
 
     public:
         Iterator(const Iterator&) = delete;
-        Iterator(Iterator&& iterator) noexcept
-          : m_snapshot(iterator.m_snapshot),
-            m_iterator(std::move(iterator.m_iterator)),
-            m_storage(iterator.m_storage)
-        {
-            iterator.m_snapshot = nullptr;
-            iterator.m_storage = nullptr;
-        }
+        Iterator(Iterator&&) noexcept = default;
         Iterator& operator=(const Iterator&) = delete;
         Iterator& operator=(Iterator&& iterator) noexcept
         {
-            m_snapshot = iterator.m_snapshot;
             m_iterator = std::move(iterator.m_iterator);
+            m_snapshot = std::move(iterator.m_snapshot);
             m_storage = iterator.m_storage;
-            iterator.m_snapshot = nullptr;
-            iterator.m_storage = nullptr;
             return *this;
         }
-        Iterator(const ::rocksdb::Snapshot* snapshot, ::rocksdb::Iterator* iterator,
-            RocksDBStorage2* storage)
-          : m_snapshot(snapshot), m_iterator(iterator), m_storage(storage)
+        Iterator(Snapshot snapshot, ::rocksdb::Iterator* iterator, RocksDBStorage2* storage)
+          : m_snapshot(std::move(snapshot)), m_iterator(iterator), m_storage(storage)
         {}
-        ~Iterator() noexcept
-        {
-            if (m_snapshot != nullptr && m_storage != nullptr)
-            {
-                m_storage->rocksDBRef().ReleaseSnapshot(m_snapshot);
-            }
-        }
 
         auto next()
         {
@@ -355,9 +371,9 @@ public:
     static task::Immediate<Iterator> rangeImpl(
         RocksDBStorage2& storage, const ::rocksdb::Slice* startSlice = nullptr)
     {
-        const auto* snapshot = storage.rocksDBRef().GetSnapshot();
+        auto snapshot = storage.pinSnapshot();
         ::rocksdb::ReadOptions readOptions;
-        readOptions.snapshot = snapshot;
+        readOptions.snapshot = snapshot.get();
         auto* iterator = storage.rocksDBRef().NewIterator(readOptions);
         if (startSlice != nullptr)
         {
@@ -367,7 +383,7 @@ public:
         {
             iterator->SeekToFirst();
         }
-        return Iterator{snapshot, iterator, std::addressof(storage)};
+        return Iterator{std::move(snapshot), iterator, std::addressof(storage)};
     }
 
     task::Immediate<Iterator> range() { return rangeImpl(*this); }

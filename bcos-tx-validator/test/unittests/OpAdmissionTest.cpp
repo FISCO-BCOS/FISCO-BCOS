@@ -20,7 +20,8 @@
 
 #include "AdmissionHarness.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
-#include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
+#include <algorithm>
+#include <array>
 #include <limits>
 
 namespace bcos::test
@@ -76,6 +77,36 @@ BOOST_AUTO_TEST_CASE(pooledCostStacksOnTheRollupCost)
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
 }
 
+BOOST_AUTO_TEST_CASE(retainedTransactionsAreChargedOnlyWhenPendingAgainstTheHead)
+{
+    OpHarness harness;
+    harness.rollupCost = 1;
+    auto const cost = OpHarness::txCost();
+    harness.account.balance = cost + 1;
+    harness.publishChainConfig();
+    auto validator = harness.make();
+    auto tx = admitTx();  // nonce 7, immediately after the three retained transactions
+    std::array<u256, 3> const retainedNonces{4, 5, 6};
+    validator->setPendingCostFn([&](std::string_view, std::string_view, protocol::CostBasis,
+                                    std::optional<u256> const& fromNonce) -> u512 {
+        auto const count = std::count_if(retainedNonces.begin(), retainedNonces.end(),
+            [&](u256 const& nonce) { return !fromNonce || nonce >= *fromNonce; });
+        return u512{cost} * count;
+    });
+    auto verify = [&] {
+        return task::syncWait(
+            validator->verify(*tx, AdmissionContext::PoolAdmission, SignaturePolicy::Required));
+    };
+
+    BOOST_CHECK(verify() == TransactionStatus::None);
+    // A rewind restores the last retained nonce to the pending budget and its spend to balance.
+    harness.account.nonce = 6;
+    harness.account.balance += cost;
+    BOOST_CHECK(verify() == TransactionStatus::None);
+    harness.account.balance -= 1;
+    BOOST_CHECK(verify() == TransactionStatus::InsufficientFunds);
+}
+
 BOOST_AUTO_TEST_CASE(balanceCoveringTheRollupCostTooIsAdmitted)
 {
     OpHarness harness;
@@ -83,12 +114,7 @@ BOOST_AUTO_TEST_CASE(balanceCoveringTheRollupCostTooIsAdmitted)
     harness.account.balance = OpHarness::txCost() + u256(*harness.rollupCost);
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
-    // Priced on the wire form and the transaction's gas limit, against the snapshot's head.
-    BOOST_CHECK(
-        harness.lastRollupEnvelope == bcostars::protocol::reassembleWeb3RawTransaction(
-                                          tx->extraTransactionBytes(), tx->signatureData()));
-    BOOST_CHECK_EQUAL(harness.lastRollupGasLimit, TxSpec{}.gasLimit);
-    BOOST_CHECK_EQUAL(harness.lastRollupHeadNumber, harness.ledgerConfig->blockNumber());
+    BOOST_CHECK_EQUAL(harness.rollupCostAsks, 1);
 
     // One wei short of the total is the boundary.
     harness.account.balance -= 1;
@@ -127,17 +153,39 @@ BOOST_AUTO_TEST_CASE(ethereumLaneKeepsTxGasPriceAsTheFeeFloor)
 
 // Acceptance 2: the fee floor follows the head base fee block by block. The existing
 // FeeCapVsBaseFee row does the work once the chain view reads the head instead of tx_gas_price.
-BOOST_AUTO_TEST_CASE(headBaseFeeRiseRejectsAndFallReadmits)
+BOOST_AUTO_TEST_CASE(unfinalizedHeadBaseFeeAndNonceFollowForkchoice)
 {
     OpHarness harness;
-    auto tx = admitTx();  // maxFee 30 gwei
-    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+    harness.publishAccount();
+    harness.publishChainConfig();  // stays at block 100 and base fee 20
+    auto validator = harness.make();
+    auto head = std::make_shared<ledger::LedgerConfig>(*harness.ledgerConfig);
+    auto sender = harness.account;
+    validator->setAdmissionChainStateFn(
+        [&](Transaction const&, Check) -> task::Task<AdmissionChainState> {
+            co_return AdmissionChainState{
+                .config = head, .revision = EVMC_PRAGUE, .sender = sender, .rollupCost = 0};
+        });
+    auto tx = admitTx();  // maxFee 30 gwei, nonce 7
+    auto verify = [&] {
+        return task::syncWait(
+            validator->verify(*tx, AdmissionContext::PoolAdmission, SignaturePolicy::Required));
+    };
 
-    harness.ledgerConfig->setBaseFeePerGas(u256(40) * kGwei);
-    BOOST_CHECK(harness.run(*tx) == TransactionStatus::FeeCapLessThanBaseFee);
-
-    harness.ledgerConfig->setBaseFeePerGas(u256(30) * kGwei);  // equal is enough
-    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+    head->setBlockNumber(101);
+    head->setBaseFeePerGas(u256(40) * kGwei);
+    BOOST_CHECK(verify() == TransactionStatus::FeeCapLessThanBaseFee);
+    head->setBlockNumber(102);
+    head->setBaseFeePerGas(u256(30) * kGwei);
+    BOOST_CHECK(verify() == TransactionStatus::None);
+    sender.nonce = 8;
+    BOOST_CHECK(verify() == TransactionStatus::NonceCheckFail);
+    // Rewind both the fee floor and the sender nonce, despite unchanged finalized inputs.
+    head = harness.ledgerConfig;
+    sender = harness.account;
+    BOOST_CHECK(verify() == TransactionStatus::None);
+    BOOST_CHECK_EQUAL(harness.accountNonceReads(), 0);
+    BOOST_CHECK_EQUAL(harness.accountStateReads(), 0);
 }
 
 // A zero head base fee does not make gas free on the OP lane: execution always verifies

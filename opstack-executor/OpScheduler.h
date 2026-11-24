@@ -113,6 +113,28 @@ public:
         protocol::BlockHeader::Ptr executedHeader;  // commitment-filled header
     };
 
+    struct HeadView
+    {
+        protocol::BlockNumber number;
+        bcos::crypto::HashType hash;
+        ViewType view;
+        protocol::BlockNumber finalizedNumber;
+    };
+
+    /// Capture the committed head identity and state from the same storage snapshot.
+    task::Task<HeadView> headViewWithRef()
+    {
+        auto view = m_multiLayerStorage->forkCommittedSnapshot();
+        auto const number = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
+        bcos::crypto::HashType hash{};
+        if (number >= 0)
+        {
+            hash = (co_await ledger::getBlockHash(view, number, ledger::fromStorage))
+                       .value_or(bcos::crypto::HashType{});
+        }
+        co_return {number, hash, std::move(view), number};
+    }
+
     // ---- SchedulerInterface overrides ----
 
     /// Engine newPayload drives this; PBFT/sync do not.

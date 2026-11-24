@@ -198,6 +198,7 @@ BOOST_AUTO_TEST_CASE(pooledCostCountsAgainstTheBalance)
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
     BOOST_CHECK_EQUAL(harness.lastPendingCostSender, std::string(tx->sender()));
     BOOST_CHECK_EQUAL(harness.lastPendingCostNonce, std::string(tx->nonce()));
+    BOOST_CHECK(!harness.lastPendingCostFromNonce);
 
     harness.pendingCost = cost * 2;  // two pooled: the third does not
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
