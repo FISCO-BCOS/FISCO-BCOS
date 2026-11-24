@@ -252,7 +252,13 @@ task::Task<Json::Value> FilterSystem::getPendingTxChangeImpl(
 task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId, Filter::Ptr filter)
 {
     auto nodeService = getNodeService(groupId, "getLogsImpl");
-    auto latestBlockNumber = co_await pollingTip(*nodeService);
+    std::optional<HeadReadView> view;
+    if (auto const& reader = nodeService->opCanonicalReader())
+    {
+        view = co_await reader->captureHeadView();
+    }
+    auto const latestBlockNumber =
+        view ? view->finalized : co_await ledger::getCurrentBlockNumber(*nodeService->ledger());
     auto fromBlock = filter->params()->fromBlock();
     auto toBlock = filter->params()->toBlock();
     auto fromIsLatest = filter->params()->fromIsLatest();
@@ -291,19 +297,17 @@ task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId,
     auto const nextBlockNumber = begin + processBlockNum;
     params->setFromBlock(begin);
     params->setToBlock(nextBlockNumber - 1);
-    auto const isOp = static_cast<bool>(nodeService->opCanonicalReader());
-    if (!isOp)
+    if (!view)
     {
         filter->setStartBlockNumber(nextBlockNumber);
     }
-    // OP polls are bounded by the finalized tip, so the selected blocks are on disk.
-    auto logs = co_await getLogsInternal(*nodeService, std::move(params),
-        /*enforceLogCountCap=*/false);
+    auto logs = co_await getLogsInternal(
+        *nodeService, std::move(params), /*enforceLogCountCap=*/false, view ? &*view : nullptr);
     // Publish the cursor after a successful read and cap each request at one page of work.
-    if (isOp && !filter->advanceStartBlockNumber(startBlockNumber, nextBlockNumber))
+    if (view && !filter->advanceStartBlockNumber(startBlockNumber, nextBlockNumber))
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            JsonRpcError::InternalError, "Another poll advanced this filter. Retry the poll."));
+        // The poll that advanced the cursor owns this page.
+        co_return Json::Value(Json::arrayValue);
     }
     FILTER_LOG(DEBUG) << LOG_BADGE("getLogChangeImpl") << LOG_KV("id", filter->id())
                       << LOG_KV("latestBlockNumber", latestBlockNumber)
@@ -469,7 +473,7 @@ task::Task<Json::Value> FilterSystem::getLogsInternal(NodeService& nodeService,
     constexpr auto flags = ledger::HEADER | ledger::RECEIPTS | ledger::TRANSACTIONS_HASH;
     for (auto number = fromBlock; number <= toBlock; ++number)
     {
-        auto block = co_await (view ? blockInView(nodeService, *view, number, flags) :
+        auto block = co_await (view ? blockInView(*view, number, flags) :
                                       ledger::getBlockData(*nodeService.ledger(), number, flags));
         // Derive the block position before matching: the matcher reads logIndex off the receipts,
         // and a stored value is not authoritative (historical rows may predate the field).

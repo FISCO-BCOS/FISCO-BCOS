@@ -215,17 +215,6 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         // Throws InvalidForkchoiceState (-38002) on ordering / ancestry violations before
         // touching disk or the tracker.
         EngineTracker::validateForkchoice(resolved);
-        if ((safe && !safe->inWindow && safe->number < finalizedTip) ||
-            (finalized && !finalized->inWindow && finalized->number < finalizedTip))
-        {
-            if (windowChangedConcurrently())
-            {
-                continue;
-            }
-            BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
-                                      "Forkchoice safe or finalized block is below the finalized "
-                                      "tip; the finalized chain does not rewind"});
-        }
 
         // Serialize the synchronous finalize + tracker commit step (never held across co_await).
         // If admission or finalization changed the window during resolution, re-resolve
@@ -243,7 +232,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
                 continue;
             }
             // Finalized advancing into the window: merge tip..F and prune side branches BEFORE
-            // updating the tracker, so a failed finalization never mutates tracked head/safe/fin.
+            // updating the tracker. Older canonical safe/finalized markers only update it.
             if (finalized && finalized->inWindow)
             {
                 requireDelegate();
@@ -497,9 +486,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         // nothing here; the candidate execution below rejects them.
         auto const blockGasLimit = static_cast<int64_t>(payloadAttributes.gasLimit.value());
         sealView.newMutable();
-        // Do not call m_memPool.remove(sealView) here: sealView may carry unfinalized window
-        // layers whose transactions must survive a rewind; seal() already skips nonces below
-        // accountNonce(sealView), and finalized transactions are pruned on finalizeUpTo.
+        // Keep pooled transactions through finality so a rewind can select them again. Sealing
+        // and admission's pending budget skip nonces already consumed on their selected chain.
         m_memPool.seal(engine_common::poolGasBudget(blockGasLimit, forcedEnvelopes,
                            *m_blockFactory->cryptoSuite()->hashImpl(), /*allowDeposit=*/true),
             sealView, std::back_inserter(sealedTxs));
@@ -884,9 +872,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     // Applies to built-here payloads too (their staged block simply waits). Throttle repeated
     // warnings by time, including retries of the same payload at an unchanged depth.
     auto const finalizedTip = co_await finalizedTipNumber();
-    if (auto const over =
-            static_cast<int64_t>(payload.blockNumber) - finalizedTip - m_unfinalizedWindow;
-        over > 0)
+    if (auto const heightMinusWindow = payload.blockNumber - m_unfinalizedWindow;
+        heightMinusWindow > finalizedTip)
     {
         if (shouldLogWindowPressure())
         {
@@ -897,7 +884,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
                               << LOG_KV("blockNumber", payload.blockNumber)
                               << LOG_KV("finalized", finalizedTip)
                               << LOG_KV("unfinalizedWindow", m_unfinalizedWindow)
-                              << LOG_KV("blocksOver", over);
+                              << LOG_KV("blocksOver", heightMinusWindow - finalizedTip);
         }
         co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
     }
@@ -939,6 +926,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             if (!pendingDropped)
             {
                 co_return mapDelegateError(*commitError, std::nullopt);
+            }
+            if ((co_await resolveBlock(payload.blockHash)).has_value())
+            {
+                co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash);
             }
             BCOS_LOG(WARNING) << LOG_BADGE("OpEngineService")
                               << LOG_DESC("newPayload: built staged block dropped; re-executing")
@@ -1037,10 +1028,16 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     if (executeError)
     {
         // The parent can be evicted by another admission after the Engine API lookup.
-        if (executeError->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber &&
-            parent->inWindow && !m_delegate->unfinalizedBlock(parent->hash))
+        if (executeError->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber)
         {
-            co_return makeStatus(PayloadValidationStatus::Syncing);
+            if ((co_await resolveBlock(payload.blockHash)).has_value())
+            {
+                co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash);
+            }
+            if (parent->inWindow && !m_delegate->unfinalizedBlock(parent->hash))
+            {
+                co_return makeStatus(PayloadValidationStatus::Syncing);
+            }
         }
         co_return mapDelegateError(*executeError, latestValidHash);
     }
@@ -1062,6 +1059,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     {
         if (boost::get_error_info<bcos::engine::OpPendingDropped>(*commitError))
         {
+            // A concurrent submission can finalize the block after our initial lookup.
+            if ((co_await resolveBlock(payload.blockHash)).has_value())
+            {
+                co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash);
+            }
             co_return makeStatus(PayloadValidationStatus::Syncing);
         }
         co_return mapDelegateError(*commitError, latestValidHash);

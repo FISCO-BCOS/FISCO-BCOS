@@ -1,4 +1,5 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
@@ -14,6 +15,7 @@
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/repeat.hpp>
 #include <range/v3/view/zip.hpp>
+#include <stdexcept>
 #include <string_view>
 
 using namespace bcos;
@@ -274,6 +276,124 @@ BOOST_AUTO_TEST_CASE(mergeAppliesSourcesInArgumentOrder)
 
         co_return;
     }());
+}
+
+BOOST_AUTO_TEST_CASE(finalizedSnapshotsKeepTheOldBackendAndBypassTheCache)
+{
+    using namespace storage2::memory_storage;
+    using Layer = MemoryStorage<StateKey, StateValue, ORDERED | LOGICAL_DELETION>;
+    using Cache = MemoryStorage<StateKey, StateValue, CONCURRENT | LRU>;
+    TestCheckpointStorage checkpoint(path + "/checkpoints");
+    Cache cache(1);
+    cache.setMaxCapacity(1024 * 1024);
+    storage2::MultiLayerStorage<Layer, Cache, TestCheckpointStorage> storage(checkpoint, cache);
+
+    StateKey const key{"state"sv, "account"sv};
+    StateKey const added{"state"sv, "winner-only"sv};
+    Layer block;
+    task::syncWait(storage2::writeOne(block, key, bcos::storage::Entry{"old"}));
+    task::syncWait(storage.mergeFinalized(block));
+    auto before = storage.forkCommittedSnapshot();
+
+    task::syncWait(storage2::writeOne(block, key, bcos::storage::Entry{"new"}));
+    task::syncWait(storage2::writeOne(block, added, bcos::storage::Entry{"visible after publish"}));
+    task::syncWait(storage.mergeFinalized(block));
+    auto during = storage.forkCommittedSnapshot(&before);
+    auto after = storage.forkCommittedSnapshot();
+
+    auto const old = task::syncWait(storage2::readOne(before, key));
+    auto const duringRows = task::syncWait(storage2::readSome(during, std::array{key, added}));
+    auto const current = task::syncWait(storage2::readOne(after, key));
+    BOOST_REQUIRE(old && duringRows[0] && current);
+    BOOST_CHECK_EQUAL(old->get(), "old");
+    BOOST_CHECK_EQUAL(duringRows[0]->get(), "old");
+    BOOST_CHECK(!duringRows[1]);
+    BOOST_CHECK_EQUAL(current->get(), "new");
+    auto const cached = task::syncWait(storage2::readOne(cache, key));
+    BOOST_REQUIRE(cached);
+    BOOST_CHECK_EQUAL(cached->get(), "new");
+}
+
+BOOST_AUTO_TEST_CASE(failedFinalizedWriteLeavesTheCacheUnchanged)
+{
+    struct ReadOnlyCheckpoint : TestCheckpointStorage
+    {
+        using TestCheckpointStorage::open;
+        using TestCheckpointStorage::TestCheckpointStorage;
+
+        Storage open()
+        {
+            ::rocksdb::DB* db = nullptr;
+            auto status = ::rocksdb::DB::OpenForReadOnly({}, latestPath(), &db);
+            BOOST_REQUIRE_MESSAGE(status.ok(), status.ToString());
+            return Storage(std::unique_ptr<::rocksdb::DB>(db));
+        }
+    };
+
+    using namespace storage2::memory_storage;
+    using Layer = MemoryStorage<StateKey, StateValue, ORDERED | LOGICAL_DELETION>;
+    using Cache = MemoryStorage<StateKey, StateValue, CONCURRENT | LRU>;
+    ReadOnlyCheckpoint checkpoint(path + "/checkpoints");
+    auto const key = StateKey{"state"sv, "account"sv};
+    {
+        auto writable = checkpoint.TestCheckpointStorage::open();
+        task::syncWait(storage2::writeOne(writable, key, storage::Entry{"old"}));
+    }
+    Cache cache(1);
+    cache.setMaxCapacity(1024 * 1024);
+    task::syncWait(storage2::writeOne(cache, key, storage::Entry{"old"}));
+    storage2::MultiLayerStorage<Layer, Cache, ReadOnlyCheckpoint> mls(checkpoint, cache);
+
+    Layer block;
+    task::syncWait(storage2::writeOne(block, key, storage::Entry{"new"}));
+    BOOST_CHECK_THROW(task::syncWait(mls.mergeFinalized(block)), RocksDBException);
+    auto const cached = task::syncWait(storage2::readOne(cache, key));
+    auto const disk = task::syncWait(storage2::readOne(mls.latestBackend(), key));
+    BOOST_REQUIRE(cached && disk);
+    BOOST_CHECK_EQUAL(cached->get(), "old");
+    BOOST_CHECK_EQUAL(disk->get(), "old");
+}
+
+BOOST_AUTO_TEST_CASE(failedFinalizedCacheRefreshClearsTheCache)
+{
+    using namespace storage2::memory_storage;
+    using Layer = MemoryStorage<StateKey, StateValue, ORDERED | LOGICAL_DELETION>;
+    using Cache = MemoryStorage<StateKey, StateValue, CONCURRENT | LRU>;
+    struct FailingCache : Cache
+    {
+        using Cache::Cache;
+        bool wrotePartialEntry = false;
+
+        task::Task<void> merge(Layer& block)
+        {
+            StateKey const key{"state"sv, "account"sv};
+            auto entry = co_await storage2::readOne(block, key);
+            co_await storage2::writeOne(*this, key, std::move(entry.value()));
+            wrotePartialEntry = true;
+            throw std::runtime_error("Injected cache refresh failure");
+        }
+    };
+
+    TestCheckpointStorage checkpoint(path + "/checkpoints");
+    FailingCache cache(1);
+    cache.setMaxCapacity(1024 * 1024);
+    storage2::MultiLayerStorage<Layer, FailingCache, TestCheckpointStorage> mls(checkpoint, cache);
+
+    StateKey const priorKey{"state"sv, "cached-account"sv};
+    StateKey const updatedKey{"state"sv, "account"sv};
+    task::syncWait(storage2::writeOne(cache, priorKey, storage::Entry{"cached"}));
+    Layer block;
+    task::syncWait(storage2::writeOne(block, updatedKey, storage::Entry{"finalized"}));
+
+    BOOST_CHECK_NO_THROW(task::syncWait(mls.mergeFinalized(block)));
+    BOOST_REQUIRE(cache.wrotePartialEntry);
+    BOOST_CHECK(!task::syncWait(storage2::readOne(cache, priorKey)));
+    BOOST_CHECK(!task::syncWait(storage2::readOne(cache, updatedKey)));
+
+    auto view = mls.forkCommitted();
+    auto const finalized = task::syncWait(storage2::readOne(view, updatedKey));
+    BOOST_REQUIRE(finalized);
+    BOOST_CHECK_EQUAL(finalized->get(), "finalized");
 }
 
 BOOST_AUTO_TEST_CASE(openLatestOrCheckpointByDirectory)

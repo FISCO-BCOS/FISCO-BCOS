@@ -28,6 +28,8 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
+#include <bcos-rpc/groupmgr/AirGroupManager.h>
+#include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EngineEndpoint.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
@@ -40,7 +42,9 @@
 #include <future>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace bcos::test
@@ -59,7 +63,9 @@ protocol::Block::Ptr copyBlock(protocol::BlockFactory& factory, protocol::Block 
 /// transactions the head chain carries. Flat state can be supplied by hash when needed.
 struct FakeReader : engine::OpCanonicalReader
 {
-    explicit FakeReader(protocol::BlockFactory& factory) : blockFactory(factory) {}
+    FakeReader(protocol::BlockFactory& factory, FakeLedger& ledger)
+      : blockFactory(factory), committedLedger(ledger)
+    {}
 
     struct ReadView : WindowReadView
     {
@@ -81,20 +87,33 @@ struct FakeReader : engine::OpCanonicalReader
             }
             co_return std::nullopt;
         }
-        std::shared_ptr<MPTNodeReader> takeMptNodeReader() override { return nullptr; }
+        std::shared_ptr<MPTNodeReader> takeMptNodeReader(
+            std::shared_ptr<StateStorage>* state) override
+        {
+            if (state)
+            {
+                *state = takeStateStorage();
+            }
+            return nullptr;
+        }
+        std::shared_ptr<StateStorage> takeStateStorage() override { return std::move(flatState); }
 
         FakeReader& reader;
         std::map<protocol::BlockNumber, protocol::Block::Ptr> blocks;
+        std::shared_ptr<StateStorage> flatState;
     };
 
     protocol::BlockFactory& blockFactory;
+    FakeLedger& committedLedger;
     BlockRef finalizedRef;
     BlockRef headRef;
     std::optional<protocol::BlockNumber> safe;
     std::map<protocol::BlockNumber, h256> headChain;
     std::map<h256, protocol::Block::Ptr> window;
     std::map<h256, ChainTransaction> headTxs;
+    std::map<h256, ChainTransaction> finalizedTxs;
     std::map<h256, std::shared_ptr<StateStorage>> flatStates;
+    std::function<void()> onCaptureHeadView;
     std::function<void(protocol::BlockNumber)> onWindowRead;
     /// A hash the window still LISTS (unfinalizedNumberOf answers) but no longer HOLDS
     /// (unfinalizedBlock null): the finalize race between an endpoint's two lookups.
@@ -108,20 +127,34 @@ struct FakeReader : engine::OpCanonicalReader
     }
     task::Task<HeadReadView> captureHeadView() override
     {
-        HeadReadView result{.head = headRef.number,
-            .safe = safe.value_or(finalizedRef.number),
-            .finalized = finalizedRef.number,
-            .window = nullptr};
-        if (result.head > result.finalized)
+        auto view = std::make_unique<ReadView>(*this);
+        if (auto state = flatStates.find(headRef.hash); state != flatStates.end())
         {
-            auto view = std::make_unique<ReadView>(*this);
-            for (auto const& [number, hash] : headChain)
+            view->flatState = state->second;
+        }
+        for (auto const& block : committedLedger.ledgerData())
+        {
+            if (block && block->blockHeader()->number() <= finalizedRef.number)
+            {
+                view->blocks.emplace(block->blockHeader()->number(), block);
+            }
+        }
+        for (auto const& [number, hash] : headChain)
+        {
+            if (number > finalizedRef.number)
             {
                 view->blocks.emplace(number, window.at(hash));
             }
-            result.window = std::move(view);
         }
-        co_return result;
+        auto snapshot = HeadReadView{.head = headRef.number,
+            .safe = safe.value_or(finalizedRef.number),
+            .finalized = finalizedRef.number,
+            .window = std::move(view)};
+        if (auto callback = std::exchange(onCaptureHeadView, {}))
+        {
+            callback();
+        }
+        co_return snapshot;
     }
     task::Task<std::optional<WindowBlockView>> captureWindowView(h256 const& hash) override
     {
@@ -161,17 +194,23 @@ struct FakeReader : engine::OpCanonicalReader
         notifyWindowRead(block->blockHeader()->number());
         co_return copyBlock(blockFactory, *block);
     }
-    task::Task<std::optional<ChainTransaction>> transactionOnHeadChain(h256 const& txHash) override
+    task::Task<std::optional<ChainTransaction>> transactionOnHeadChain(
+        h256 const& txHash, int32_t blockFlag = 0) override
     {
         auto it = headTxs.find(txHash);
         if (it == headTxs.end())
         {
-            co_return std::nullopt;
+            it = finalizedTxs.find(txHash);
+            if (it == finalizedTxs.end())
+            {
+                co_return std::nullopt;
+            }
         }
         auto result = it->second;
         bytes encoded;
         result.receipt->encode(encoded);
         result.receipt = blockFactory.receiptFactory()->createReceipt(encoded);
+        result.block = blockFlag != 0 ? copyBlock(blockFactory, *result.block) : nullptr;
         co_return result;
     }
     task::Task<std::shared_ptr<MPTNodeReader>> mptNodeReaderAt(h256 const&) override
@@ -182,6 +221,12 @@ struct FakeReader : engine::OpCanonicalReader
     {
         auto it = flatStates.find(hash);
         co_return it == flatStates.end() ? nullptr : it->second;
+    }
+
+    task::Task<std::shared_ptr<StateStorage>> headStateStorage() override
+    {
+        auto const hash = headRef.hash;
+        co_return co_await stateStorageAt(hash);
     }
 
     void notifyWindowRead(protocol::BlockNumber number)
@@ -238,7 +283,7 @@ public:
         // head chain runs through sibling B.
         tip = m_ledger->blockNumber();
         tipHash = protocol::canonicalBlockHash(*m_ledger->ledgerData().at(tip)->blockHeader());
-        reader = std::make_shared<FakeReader>(*m_blockFactory);
+        reader = std::make_shared<FakeReader>(*m_blockFactory, *m_ledger);
         reader->finalizedRef = {tipHash, tip};
         a = windowBlock(0xa1);
         b = windowBlock(0xb1);
@@ -268,8 +313,11 @@ public:
         reader->headRef = {head.hash, tip + 1};
         reader->headChain = {{tip + 1, head.hash}};
         reader->headTxs.clear();
-        reader->headTxs[head.txHash] = engine::OpCanonicalReader::ChainTransaction{
-            .transaction = head.tx, .receipt = head.receipt, .blockHash = head.hash};
+        reader->headTxs[head.txHash] =
+            engine::OpCanonicalReader::ChainTransaction{.transaction = head.tx,
+                .receipt = head.receipt,
+                .blockHash = head.hash,
+                .block = head.block};
     }
 
     void finalize(WindowBlock const& head)
@@ -278,6 +326,12 @@ public:
         reader->finalizedRef = {head.hash, tip + 1};
         reader->window.clear();
         reader->headChain.clear();
+        reader->headTxs.clear();
+        reader->finalizedTxs[head.txHash] =
+            engine::OpCanonicalReader::ChainTransaction{.transaction = head.tx,
+                .receipt = head.receipt,
+                .blockHash = head.hash,
+                .block = head.block};
     }
 
     /// One block at tip+1 with one transaction whose receipt carries one log; @p salt makes
@@ -394,6 +448,22 @@ BOOST_AUTO_TEST_CASE(TagsFollowTheFacade)
     BOOST_CHECK(blockByNumber(toQuantity(tip + 2)).isNull());
 }
 
+BOOST_AUTO_TEST_CASE(SafeBlockUsesCapturedHeadDuringReorg)
+{
+    setHead(a);
+    reader->safe = tip + 1;
+    reader->onCaptureHeadView = [&] {
+        setHead(b);
+        reader->safe.reset();
+    };
+
+    auto const captured = blockByNumber("safe");
+    BOOST_REQUIRE(captured.isObject());
+    BOOST_CHECK_EQUAL(captured["hash"].asString(), hashA.hexPrefixed());
+    BOOST_CHECK_EQUAL(blockByNumber("safe")["hash"].asString(), tipHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(blockByNumber("latest")["hash"].asString(), hashB.hexPrefixed());
+}
+
 // By hash: any window block, from its own rows. By number: the head chain only.
 BOOST_AUTO_TEST_CASE(SideBranchByHashOnly)
 {
@@ -428,9 +498,8 @@ BOOST_AUTO_TEST_CASE(SideBranchByHashOnly)
         hashA.hexPrefixed());
 }
 
-// Transactions: the ledger first (finalized), then the head chain's window; a side-branch-only
-// transaction is null, as geth answers for a non-canonical inclusion.
-BOOST_AUTO_TEST_CASE(TransactionsLedgerThenHeadChain)
+// Both finalized and unfinalized transactions use the captured head's chain view.
+BOOST_AUTO_TEST_CASE(TransactionsUseTheCapturedHeadChain)
 {
     auto const headTag = toQuantity(tip + 1);
     auto receiptB = call("eth_getTransactionReceipt", params({txB.hexPrefixed()}))["result"];
@@ -442,8 +511,7 @@ BOOST_AUTO_TEST_CASE(TransactionsLedgerThenHeadChain)
     BOOST_CHECK_EQUAL(txJson["blockHash"].asString(), hashB.hexPrefixed());
     BOOST_CHECK(call("eth_getTransactionReceipt", params({txA.hexPrefixed()}))["result"].isNull());
     BOOST_CHECK(call("eth_getTransactionByHash", params({txA.hexPrefixed()}))["result"].isNull());
-    // A finalized transaction is the ledger's, whatever the head (FakeLedger serves the
-    // receipts it was handed through storeTxAndReceipt).
+    // A durable row that is ahead of the captured view does not show up in the response.
     h256 const ledgerTx(0xeeU);
     auto tx = makeReadPlaneTx(7, ledgerTx);
     auto receipt = m_blockFactory->receiptFactory()->createReceipt(
@@ -456,6 +524,10 @@ BOOST_AUTO_TEST_CASE(TransactionsLedgerThenHeadChain)
     finalizedBlock->appendReceipt(receipt);
     m_ledger->replaceBlock(finalizedBlock);
     m_ledger->storeTxAndReceipt(tx, receipt);
+    BOOST_CHECK(
+        call("eth_getTransactionReceipt", params({ledgerTx.hexPrefixed()}))["result"].isNull());
+    reader->finalizedTxs[ledgerTx] = engine::OpCanonicalReader::ChainTransaction{
+        .transaction = tx, .receipt = receipt, .blockHash = tipHash, .block = finalizedBlock};
     auto ledgerReceipt =
         call("eth_getTransactionReceipt", params({ledgerTx.hexPrefixed()}))["result"];
     BOOST_REQUIRE(ledgerReceipt.isObject());
@@ -721,15 +793,57 @@ BOOST_AUTO_TEST_CASE(FailedLogPollKeepsItsCursor)
     auto const id = call("eth_newFilter", params({filter}))["result"].asString();
     BOOST_REQUIRE(!id.empty());
 
-    // Announce a finalized height before its test ledger row is available to inject a read error.
-    reader->finalizedRef = {hashA, tip + 1};
-    BOOST_CHECK(call("eth_getFilterChanges", params({id})).isMember("error"));
-
     finalize(a);
+    reader->onWindowRead = [](protocol::BlockNumber) {
+        throw std::runtime_error("injected finalized log poll read error");
+    };
+    BOOST_CHECK(call("eth_getFilterChanges", params({id})).isMember("error"));
+    reader->onWindowRead = {};
+
     auto const logs = call("eth_getFilterChanges", params({id}))["result"];
     BOOST_REQUIRE_EQUAL(logs.size(), 1U);
     BOOST_CHECK_EQUAL(logs[0U]["blockHash"].asString(), hashA.hexPrefixed());
     BOOST_CHECK(call("eth_getFilterChanges", params({id}))["result"].empty());
+}
+
+BOOST_AUTO_TEST_CASE(ConcurrentLogPollReturnsThePageOnce)
+{
+    auto pollNode = std::make_shared<rpc::NodeService>(
+        m_ledger, nullptr, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    pollNode->setOpCanonicalReader(reader);
+    auto groupManager = std::make_shared<rpc::AirGroupManager>(chainId, groupInfo, pollNode);
+    auto filters = std::make_shared<rpc::Web3FilterSystem>(*ioServicePool->getIOService(),
+        groupManager, groupId, /*filterTimeout=*/10'000, /*maxBlockProcessPerReq=*/1,
+        /*maxBlockRange=*/2);
+    auto request = filters->requestFactory()->create();
+    request->setFromBlock(tip + 1);
+    request->setToBlock(tip + 2);
+    auto const id = u256(task::syncWait(filters->newFilter(request)));
+
+    auto next = windowBlock(0xa2, 100, engine::OpCanonicalReader::BlockRef{hashA, tip + 1});
+    finalize(a);
+    m_ledger->appendBuiltBlock(next.block);
+    reader->finalizedRef = {next.hash, tip + 2};
+    reader->headRef = reader->finalizedRef;
+
+    Json::Value winner;
+    bool interleaved = false;
+    reader->onWindowRead = [&](protocol::BlockNumber number) {
+        if (number == tip + 1 && !std::exchange(interleaved, true))
+        {
+            winner = task::syncWait(filters->getFilterChanges(id));
+        }
+    };
+    // The second poll advances the same cursor while the first poll is reading its block.
+    auto const loser = task::syncWait(filters->getFilterChanges(id));
+    BOOST_REQUIRE_EQUAL(winner.size(), 1U);
+    BOOST_CHECK_EQUAL(winner[0U]["blockHash"].asString(), hashA.hexPrefixed());
+    BOOST_CHECK(loser.isArray());
+    BOOST_CHECK(loser.empty());
+
+    auto const following = task::syncWait(filters->getFilterChanges(id));
+    BOOST_REQUIRE_EQUAL(following.size(), 1U);
+    BOOST_CHECK_EQUAL(following[0U]["blockHash"].asString(), next.hash.hexPrefixed());
 }
 
 // The fake's missing committed MPT reader provides a distinct error after the correct
@@ -809,6 +923,19 @@ BOOST_AUTO_TEST_CASE(LatestFlatStateAndPendingNonceFollowHead)
     BOOST_CHECK_EQUAL(nonce("pending"), "0x1");  // nonce 2 is now queued
     BOOST_CHECK_EQUAL(
         call("eth_getBalance", params({address, "latest"}))["result"].asString(), "0x16");
+}
+
+BOOST_AUTO_TEST_CASE(LatestCodeRequiresAnExactAddress)
+{
+    for (auto const* address : {"0xb1", "0x0000000000000000000000000000000000000000b1",
+             "0x0x000000000000000000000000000000000000b1"})
+    {
+        auto const response = call("eth_getCode", params({address, "latest"}));
+        BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), -32602);
+    }
+    auto const response =
+        call("eth_getCode", params({"0x00000000000000000000000000000000000000b1", "latest"}));
+    BOOST_CHECK_EQUAL(response["result"].asString(), "0x");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

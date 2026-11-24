@@ -41,12 +41,12 @@ namespace bcos::engine
 ///
 ///   latest    = the tracker's head; the finalized tip until the first forkchoiceUpdated after
 ///               a restart (D1 §13.2), so the three tags agree and op-node refills from there;
-///   safe      = the tracker's safe, falling back to finalized;
+///   safe      = the tracker's safe block when it is on the selected chain, else finalized;
 ///   finalized = the backend tip.
 ///
-/// A height is served from the LEDGER when it is at or below finalizedNumber() (unchanged
-/// read path), from this facade above it. A window block that is not on the head chain is
-/// still readable BY HASH (op-node's backup-unsafe restore walks it) but never BY NUMBER.
+/// Captured reads use the pinned backend up to the captured finalized height and the selected
+/// window layers above it. A window block that is not on the head chain is still readable by
+/// hash (op-node's backup-unsafe restore walks it) but never by number.
 ///
 /// Type-erased so bcos-rpc names no scheduler or engine template; the concrete
 /// implementation lives in engine/bcos-engine/OpCanonicalReaderImpl.h and is wired by the
@@ -66,8 +66,8 @@ public:
         protocol::BlockNumber number = 0;
     };
 
-    /// A single branch's retained layers. Reads above the captured finalized height use
-    /// these layers even if forkchoice changes or the window releases them during the request.
+    /// The selected chain's ledger rows and trie nodes. Unfinalized rows stay in retained
+    /// layers, and the finalized prefix stays on the captured backend snapshot.
     class WindowReadView
     {
     public:
@@ -77,7 +77,9 @@ public:
         virtual task::Task<std::optional<protocol::BlockNumber>> blockNumber(
             crypto::HashType hash) = 0;
         /// Transfer ownership to a reader after the caller has read the block header.
-        virtual std::shared_ptr<MPTNodeReader> takeMptNodeReader() = 0;
+        virtual std::shared_ptr<MPTNodeReader> takeMptNodeReader(
+            std::shared_ptr<StateStorage>* state = nullptr) = 0;
+        virtual std::shared_ptr<StateStorage> takeStateStorage() = 0;
     };
 
     struct HeadReadView
@@ -95,12 +97,13 @@ public:
     };
 
     /// A transaction resolved on the head chain with the rows eth_getTransactionByHash /
-    /// eth_getTransactionReceipt render: its receipt and the canonical hash of its block.
+    /// eth_getTransactionReceipt render, including block rows requested for its position.
     struct ChainTransaction
     {
         protocol::Transaction::Ptr transaction;
         protocol::TransactionReceipt::Ptr receipt;
         crypto::HashType blockHash;
+        protocol::Block::Ptr block{};
     };
 
     virtual ~OpCanonicalReader() = default;
@@ -109,11 +112,10 @@ public:
     virtual task::Task<BlockRef> finalized() = 0;
     /// The tracker's head, else finalized() (empty tracker after a restart).
     virtual task::Task<BlockRef> head() = 0;
-    /// The tracker's safe height, else finalized().number.
+    /// The tracker's safe height if on the selected chain, else finalized().number.
     virtual task::Task<protocol::BlockNumber> safeNumber() = 0;
 
-    /// Capture the head and its tag resolution for a request. A null window means the
-    /// entire selected chain is finalized and the caller reads its blocks from the ledger.
+    /// Capture the head and its tag resolution together with the view for all selected heights.
     virtual task::Task<HeadReadView> captureHeadView() = 0;
     /// Capture a specific window block and its view together, including non-head branches.
     virtual task::Task<std::optional<WindowBlockView>> captureWindowView(
@@ -144,9 +146,10 @@ public:
     /// nullopt when the head chain does not carry it — a transaction that exists only on a
     /// side branch is NOT answered (eth_getTransactionByHash then returns null, as geth does
     /// for a non-canonical inclusion).
-    /// The receipt belongs to this read and may be mutated by the caller.
+    /// Non-zero @p blockFlag loads block rows from the same view as the transaction and
+    /// receipt. The decoded objects belong to this read and may be mutated by the caller.
     virtual task::Task<std::optional<ChainTransaction>> transactionOnHeadChain(
-        crypto::HashType const& txHash) = 0;
+        crypto::HashType const& txHash, int32_t blockFlag = 0) = 0;
 
     /// MPT node reader over the chain view of @p blockHash (a window block, the finalized
     /// tip, or any canonical finalized block below the tip): the trie nodes of that chain's
@@ -162,6 +165,9 @@ public:
     /// OP lane.
     virtual task::Task<std::shared_ptr<StateStorage>> stateStorageAt(
         crypto::HashType const& blockHash) = 0;
+
+    /// Capture the current head and its flat state together.
+    virtual task::Task<std::shared_ptr<StateStorage>> headStateStorage() = 0;
 };
 
 }  // namespace bcos::engine

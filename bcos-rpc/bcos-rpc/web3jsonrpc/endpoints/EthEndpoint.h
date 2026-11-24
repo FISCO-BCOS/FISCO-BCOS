@@ -79,7 +79,8 @@ public:
     task::Task<std::tuple<protocol::BlockNumber, bool>> getBlockNumberByTag(
         std::string_view blockTag);
     task::Task<std::tuple<protocol::BlockNumber, protocol::BlockNumber>> getBlockNumberAndHeadByTag(
-        std::string_view blockTag);
+        std::string_view blockTag,
+        std::optional<engine::OpCanonicalReader::HeadReadView>* selected = nullptr);
     task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
     // Ethereum/OP lane only (requireEthereumLane / executor_version >= 2): geth-standard
     // methods with no meaning on the legacy FISCO lane.
@@ -125,12 +126,10 @@ private:
     task::Task<protocol::BlockNumber> blockNumberInView(
         std::string_view blockTag, HeadReadView const& view);
 
-    /// A transaction with its receipt and block hash: the ledger first (finalized blocks, as
-    /// before), then the OP head chain's unfinalized part. nullopt when neither carries it —
-    /// including a transaction that exists only on a side branch, which is null like geth's
-    /// answer for a non-canonical inclusion.
+    /// OP reads the transaction, receipt and requested block rows from one canonical view.
+    /// Other lanes look up the transaction and receipt through the ledger.
     task::Task<std::optional<bcos::engine::OpCanonicalReader::ChainTransaction>> lookupTransaction(
-        crypto::HashType const& hash);
+        crypto::HashType const& hash, int32_t blockFlags);
 
     /// The (header block, MPT node reader) pair a state read at @p blockNumber resolves its
     /// root and trie from: the ledger row and the committed-plane reader at or below the
@@ -140,8 +139,10 @@ private:
     {
         protocol::Block::Ptr block;
         std::shared_ptr<NodeService::MPTNodeReader> mptReader;
+        std::shared_ptr<NodeService::StateStorage> stateStorage{};
     };
-    task::Task<StateReadContext> stateReadContext(protocol::BlockNumber blockNumber);
+    task::Task<StateReadContext> stateReadContext(
+        protocol::BlockNumber blockNumber, std::optional<HeadReadView>* selected = nullptr);
 
     /// The flat state plane behind `latest`: the OP head chain's view, else the node's
     /// committed-plane provider (NodeService::stateStorageProvider); null when neither is
@@ -150,19 +151,11 @@ private:
 
     /// Read a flat account field from the same block selected for the latest MPT read.
     task::Task<std::optional<storage::Entry>> latestAccountField(
-        protocol::Block::Ptr const& block, std::string_view address, std::string_view field);
+        StateReadContext const& context, std::string_view address, std::string_view field);
 
-    /// True when @p blockNumber is above the OP facade's finalized tip (an unfinalized height
-    /// served from the window); false off the OP lane.
-    task::Task<bool> isUnfinalizedHeight(protocol::BlockNumber blockNumber);
-
-    /// An OP window block by hash (any branch) / the head chain's block at an unfinalized
-    /// height, with @p blockFlag rows; null off the OP lane, for a finalized block or a height
-    /// the head chain does not reach — the caller then takes its ledger path unchanged.
+    /// An OP window block by hash (any branch), with @p blockFlag rows.
     task::Task<protocol::Block::Ptr> unfinalizedBlockByHash(
         crypto::HashType const& blockHash, int32_t blockFlag);
-    task::Task<protocol::Block::Ptr> unfinalizedBlockByNumber(
-        protocol::BlockNumber blockNumber, int32_t blockFlag);
     /// eth_getTransactionByBlock*AndIndex's result from a block's own transaction and
     /// receipt rows; null for an index out of range.
     static Json::Value transactionAtIndex(

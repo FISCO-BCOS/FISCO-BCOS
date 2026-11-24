@@ -20,6 +20,8 @@
 
 #include "AdmissionHarness.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include <algorithm>
+#include <array>
 #include <limits>
 
 namespace bcos::test
@@ -73,6 +75,36 @@ BOOST_AUTO_TEST_CASE(pooledCostStacksOnTheRollupCost)
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
     harness.account.balance -= 1;
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
+}
+
+BOOST_AUTO_TEST_CASE(retainedTransactionsAreChargedOnlyWhenPendingAgainstTheHead)
+{
+    OpHarness harness;
+    harness.rollupCost = 1;
+    auto const cost = OpHarness::txCost();
+    harness.account.balance = cost + 1;
+    harness.publishChainConfig();
+    auto validator = harness.make();
+    auto tx = admitTx();  // nonce 7, immediately after the three retained transactions
+    std::array<u256, 3> const retainedNonces{4, 5, 6};
+    validator->setPendingCostFn([&](std::string_view, std::string_view, protocol::CostBasis,
+                                    std::optional<u256> const& fromNonce) -> u512 {
+        auto const count = std::count_if(retainedNonces.begin(), retainedNonces.end(),
+            [&](u256 const& nonce) { return !fromNonce || nonce >= *fromNonce; });
+        return u512{cost} * count;
+    });
+    auto verify = [&] {
+        return task::syncWait(
+            validator->verify(*tx, AdmissionContext::PoolAdmission, SignaturePolicy::Required));
+    };
+
+    BOOST_CHECK(verify() == TransactionStatus::None);
+    // A rewind restores the last retained nonce to the pending budget and its spend to balance.
+    harness.account.nonce = 6;
+    harness.account.balance += cost;
+    BOOST_CHECK(verify() == TransactionStatus::None);
+    harness.account.balance -= 1;
+    BOOST_CHECK(verify() == TransactionStatus::InsufficientFunds);
 }
 
 BOOST_AUTO_TEST_CASE(balanceCoveringTheRollupCostTooIsAdmitted)

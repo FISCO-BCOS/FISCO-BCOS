@@ -1040,7 +1040,11 @@ task::Task<TransactionStatus> TxValidator::verify(
             }
             if (pendingCostFn)
             {
-                pendingCost = (*pendingCostFn)(tx.sender(), tx.nonce(), costBasisOf(chain));
+                // The captured OP balance already reflects all transactions below this nonce.
+                auto const fromNonce =
+                    chain.opLane && chainState && state.sender ? state.sender->nonce : std::nullopt;
+                pendingCost =
+                    (*pendingCostFn)(tx.sender(), tx.nonce(), costBasisOf(chain), fromNonce);
             }
         }
         const StateInputs inputs{.tx = tx,

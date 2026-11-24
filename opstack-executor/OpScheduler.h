@@ -232,16 +232,11 @@ public:
     {
         co_await hydrateFinalized();
         std::lock_guard<std::mutex> lock(m_windowMutex);
-        if (blockHash != bcos::crypto::HashType{} && blockHash == m_finalizedHash)
+        if (auto selected = blockViewLocked(blockHash))
         {
-            co_return m_multiLayerStorage->forkCommitted();
+            co_return std::move(selected->view);
         }
-        auto it = m_window.find(blockHash);
-        if (it == m_window.end())
-        {
-            co_return std::nullopt;
-        }
-        co_return m_multiLayerStorage->forkChain(chainLayersLocked(it->second));
+        co_return std::nullopt;
     }
 
     /// Chain view for content-addressed MPT reads: window block, finalized tip, or any canonical
@@ -256,7 +251,10 @@ public:
         {
             co_return std::nullopt;
         }
-        auto committed = m_multiLayerStorage->forkCommitted();
+        auto committed = [&] {
+            std::lock_guard<std::mutex> lock(m_windowMutex);
+            return readViewLocked();
+        }();
         auto number = co_await ledger::getBlockNumber(committed, blockHash, ledger::fromStorage);
         if (!number || *number < 0 || *number > m_finalizedNumber.load())
         {
@@ -293,8 +291,19 @@ public:
         {
             co_return std::nullopt;
         }
-        co_return WindowBlockView{
-            it->second.number, m_multiLayerStorage->forkChain(chainLayersLocked(it->second))};
+        co_return WindowBlockView{it->second.number, readViewLocked(chainLayersLocked(it->second))};
+    }
+
+    task::Task<std::optional<std::pair<protocol::BlockNumber, LayerPtr>>> windowBlockLedger(
+        bcos::crypto::HashType blockHash)
+    {
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        auto it = m_window.find(blockHash);
+        if (it == m_window.end())
+        {
+            co_return std::nullopt;
+        }
+        co_return std::pair{it->second.number, it->second.ledger};
     }
 
     /// The hash at height @p number on the chain whose tip is @p tipHash: walks the window
@@ -370,12 +379,33 @@ public:
         m_headProvider = std::move(provider);
     }
 
-    /// The read view of the canonical head's chain: viewAt(head) when the provider names a
-    /// window block or the finalized tip, else the finalized plane — no provider, or no
-    /// tracker head yet after a restart. A head change can expose the old branch to pruning,
-    /// so retry a failed view lookup against the replacement before falling back.
-    task::Task<ViewType> headView()
+    struct HeadView
     {
+        protocol::BlockNumber number;
+        bcos::crypto::HashType hash;
+        ViewType view;
+        protocol::BlockNumber finalizedNumber;
+    };
+
+    task::Task<HeadView> headViewWithRef(std::optional<bcos::crypto::HashType> tracked)
+    {
+        co_await hydrateFinalized();
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        if (tracked)
+        {
+            if (auto selected = blockViewLocked(*tracked))
+            {
+                co_return std::move(*selected);
+            }
+        }
+        co_return finalizedViewLocked();
+    }
+
+    /// Capture the head's identity with its view. If pruning races the lookup, try the
+    /// replacement head before falling back to the finalized tip.
+    task::Task<HeadView> headViewWithRef()
+    {
+        co_await hydrateFinalized();
         CanonicalHeadProvider provider;
         {
             std::lock_guard<std::mutex> lock(m_windowMutex);
@@ -386,12 +416,13 @@ public:
             auto head = provider();
             while (head)
             {
-                if (auto view = co_await viewAt(*head))
                 {
-                    co_return std::move(*view);
+                    std::lock_guard<std::mutex> lock(m_windowMutex);
+                    if (auto selected = blockViewLocked(*head))
+                    {
+                        co_return std::move(*selected);
+                    }
                 }
-                // A head switch can make the old head eligible for eviction before viewAt.
-                // Attempt to capture the replacement before falling back to the backend.
                 auto next = provider();
                 if (next == head)
                 {
@@ -400,8 +431,14 @@ public:
                 head = std::move(next);
             }
         }
-        co_await hydrateFinalized();
-        co_return m_multiLayerStorage->forkCommitted();
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        co_return finalizedViewLocked();
+    }
+
+    task::Task<ViewType> headView()
+    {
+        auto head = co_await headViewWithRef();
+        co_return std::move(head.view);
     }
 
     void status(
@@ -732,6 +769,33 @@ public:
     void setCrossCheckIncrementalRoot(bool enable) { m_crossCheckIncrementalRoot = enable; }
 
 private:
+    ViewType readViewLocked(std::vector<LayerPtr> layers = {})
+    {
+        return m_multiLayerStorage->forkChainSnapshot(
+            std::move(layers), m_preFinalizeView ? std::addressof(*m_preFinalizeView) : nullptr);
+    }
+
+    HeadView finalizedViewLocked()
+    {
+        auto const number = m_finalizedNumber.load();
+        return {number, m_finalizedHash, readViewLocked(), number};
+    }
+
+    std::optional<HeadView> blockViewLocked(bcos::crypto::HashType const& blockHash)
+    {
+        if (blockHash != bcos::crypto::HashType{} && blockHash == m_finalizedHash)
+        {
+            return finalizedViewLocked();
+        }
+        auto it = m_window.find(blockHash);
+        if (it == m_window.end())
+        {
+            return std::nullopt;
+        }
+        return HeadView{it->second.number, blockHash, readViewLocked(chainLayersLocked(it->second)),
+            m_finalizedNumber.load()};
+    }
+
     // ---- execute / commit ----
 
     task::Task<std::tuple<Error::Ptr, protocol::BlockHeader::Ptr, bool>> coExecuteBlock(
@@ -800,10 +864,9 @@ private:
                     OP_SCHEDULER_LOG(INFO)
                         << "Block " << number
                         << " is already the finalized tip; serving without re-execution";
-                    auto served = m_blockFactory->blockHeaderFactory()->populateBlockHeader(
-                        protocol::BlockHeader::ConstPtr{
-                            blockHeader.get(), [](protocol::BlockHeader const*) {}});
-                    co_return {nullptr, std::move(served), false};
+                    auto stored = co_await ledger::getBlockData(
+                        tipView, number, ledger::HEADER, *m_blockFactory);
+                    co_return {nullptr, stored->blockHeader(), false};
                 }
                 auto message = fmt::format(
                     "Block {} is at or below the finalized height {} with a different hash; "
@@ -1247,8 +1310,6 @@ private:
                 std::lock_guard<std::mutex> lock(m_windowMutex);
                 if (target != bcos::crypto::HashType{} && target == m_finalizedHash)
                 {
-                    // Already the finalized tip. Prune any stale non-descendants idempotently.
-                    pruneWindowLocked(target, m_finalizedNumber.load());
                     co_return nullptr;
                 }
                 auto cursor = target;
@@ -1277,18 +1338,61 @@ private:
             std::size_t pruned = 0;
             std::size_t remaining = 0;
             finalizedNumbers.reserve(chain.size());
+            std::vector<std::size_t> entriesAtHeight(chain.size());
+            auto const countIndex = [&](protocol::BlockNumber number) {
+                return static_cast<std::size_t>(number - chain.front().number);
+            };
+            {
+                std::lock_guard<std::mutex> lock(m_windowMutex);
+                for (auto const& [_, layer] : m_window)
+                {
+                    if (auto const index = countIndex(layer.number); index < chain.size())
+                    {
+                        ++entriesAtHeight[index];
+                    }
+                }
+            }
             for (auto& block : chain)
             {
-                // One merge per block: state + ledger rows land together. Prune non-descendants
-                // under the same window lock that advances m_finalizedHash so no reader can ever
-                // stack a sibling atop a finalized competitor.
-                co_await m_multiLayerStorage->mergeToBackends(*block.state, *block.ledger);
+                std::vector<bcos::crypto::HashType> losingBlocks;
                 {
                     std::lock_guard<std::mutex> lock(m_windowMutex);
+                    if (entriesAtHeight[countIndex(block.number)] > 1)
+                    {
+                        losingBlocks = losingWindowBlocksLocked(block.hash);
+                    }
+                    // Prepare all allocations before the durable write. Readers selecting the
+                    // old window while the backend is updated still use its old disk version.
+                    m_preFinalizeView.emplace(m_multiLayerStorage->forkCommittedSnapshot());
+                }
+                try
+                {
+                    co_await m_multiLayerStorage->mergeFinalized(*block.state, *block.ledger);
+                }
+                catch (...)
+                {
+                    std::lock_guard<std::mutex> lock(m_windowMutex);
+                    m_preFinalizeView.reset();
+                    throw;
+                }
+                {
+                    std::lock_guard<std::mutex> lock(m_windowMutex);
+                    for (auto const& hash : losingBlocks)
+                    {
+                        auto const entry = m_window.find(hash);
+                        if (auto const index = countIndex(entry->second.number);
+                            index < chain.size())
+                        {
+                            --entriesAtHeight[index];
+                        }
+                        m_window.erase(entry);
+                    }
+                    pruned += losingBlocks.size();
                     m_window.erase(block.hash);
                     m_finalizedNumber.store(block.number);
                     m_finalizedHash = block.hash;
-                    pruned += pruneWindowLocked(block.hash, block.number);
+                    m_preFinalizeView.reset();
+                    dropOrphanStagesLocked(block.hash);
                     remaining = m_window.size();
                 }
                 OP_SCHEDULER_LOG(INFO)
@@ -1390,54 +1494,35 @@ private:
         }
     }
 
-    /// Drop every window block that does not descend from @p root, and every staged block
-    /// whose parent is no longer resolvable. Caller holds m_windowMutex.
-    std::size_t pruneWindowLocked(
-        bcos::crypto::HashType const& root, protocol::BlockNumber rootNumber)
+    /// Plan the removal of non-descendants before publishing a finalized block.
+    std::vector<bcos::crypto::HashType> losingWindowBlocksLocked(
+        bcos::crypto::HashType const& root) const
     {
-        std::size_t pruned = 0;
-        // Every window entry descends from the prior finalized tip; a non-descendant of @p root
-        // exists iff at least one remaining entry sits at or below @p rootNumber (a sibling of
-        // @p root). Skip graph construction on the linear common path.
-        bool const hasNonDescendant = std::any_of(m_window.begin(), m_window.end(),
-            [rootNumber](auto const& kv) { return kv.second.number <= rootNumber; });
-        if (hasNonDescendant)
+        std::unordered_multimap<bcos::crypto::HashType, bcos::crypto::HashType> children;
+        for (auto const& [hash, layer] : m_window)
         {
-            std::unordered_multimap<bcos::crypto::HashType, bcos::crypto::HashType> children;
-            for (auto const& [hash, layer] : m_window)
+            children.emplace(layer.parentHash, hash);
+        }
+        std::unordered_set<bcos::crypto::HashType> keep{root};
+        std::vector<bcos::crypto::HashType> descendants{root};
+        for (std::size_t i = 0; i < descendants.size(); ++i)
+        {
+            auto [begin, end] = children.equal_range(descendants[i]);
+            for (auto it = begin; it != end; ++it)
             {
-                children.emplace(layer.parentHash, hash);
-            }
-            std::unordered_set<bcos::crypto::HashType> keep;
-            std::vector<bcos::crypto::HashType> stack{root};
-            while (!stack.empty())
-            {
-                auto parent = stack.back();
-                stack.pop_back();
-                auto [begin, end] = children.equal_range(parent);
-                for (auto it = begin; it != end; ++it)
-                {
-                    if (keep.insert(it->second).second)
-                    {
-                        stack.push_back(it->second);
-                    }
-                }
-            }
-            for (auto it = m_window.begin(); it != m_window.end();)
-            {
-                if (keep.contains(it->first))
-                {
-                    ++it;
-                    continue;
-                }
-                OP_SCHEDULER_LOG(INFO) << "Pruned side-branch block " << it->second.number << " "
-                                       << it->first.abridged();
-                it = m_window.erase(it);
-                ++pruned;
+                keep.insert(it->second);
+                descendants.push_back(it->second);
             }
         }
-        dropOrphanStagesLocked(root);
-        return pruned;
+        std::vector<bcos::crypto::HashType> losing;
+        for (auto const& [hash, _] : m_window)
+        {
+            if (!keep.contains(hash))
+            {
+                losing.push_back(hash);
+            }
+        }
+        return losing;
     }
 
     /// An initialized ledger anchors every chain at the next height and, when present,
@@ -2258,6 +2343,7 @@ private:
     bcos::crypto::HashType m_finalizedHash;
     /// Admitted blocks by announced hash; parentHash chains to the window or the finalized tip.
     std::unordered_map<bcos::crypto::HashType, BlockLayer> m_window;
+    std::optional<ViewType> m_preFinalizeView;
     /// Executed (verify=true) but not yet admitted; dropped by reset().
     std::unordered_map<bcos::crypto::HashType, BlockLayer> m_staged;
     /// The tracker's head for this scheduler's own reads (setCanonicalHeadProvider); guarded

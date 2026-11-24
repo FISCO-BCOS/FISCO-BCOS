@@ -25,6 +25,7 @@
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <future>
+#include <utility>
 
 
 BOOST_AUTO_TEST_SUITE(OpEngineReorgTest)
@@ -155,16 +156,15 @@ BOOST_AUTO_TEST_CASE(rows2_3_4_depth_rewind_and_finalize_past_side_branch)
     // §12.3 row 5: finalized neither in the window nor on disk → -38002.
     BOOST_CHECK_THROW(f.fcu(f.fc(h4b, h3b, bcos::h256(std::string(64, 'f')))),
         bcos::engine::InvalidForkchoiceState);
-    // Crossing finalized via safe or finalized cursor (B1 < finalizedTip B2b) → -38002,
-    // leaving tracker safe/finalized heights intact.
-    BOOST_CHECK_THROW(f.fcu(f.fc(h4b, c.h1, bcos::h256{})), bcos::engine::InvalidForkchoiceState);
-    BOOST_CHECK_THROW(f.fcu(f.fc(h4b, s.h2b, c.h1)), bcos::engine::InvalidForkchoiceState);
-    BOOST_CHECK_THROW(f.fcu(f.fc(h4b, c.h1, c.h1)), bcos::engine::InvalidForkchoiceState);
-    BOOST_CHECK_EQUAL(f.service->getSafeBlockNumber().value_or(-1), 3);
-    BOOST_CHECK_EQUAL(f.service->getFinalizedBlockNumber().value_or(-1), 2);
-    // The finalized tip itself is a legal head (heartbeat after a full finalize).
+    // Accept older canonical markers even when using the persisted tip as head.
     BOOST_CHECK(
-        f.fcu(f.fc(s.h2b, s.h2b, s.h2b)).payloadStatus.status == PayloadValidationStatus::Valid);
+        f.fcu(f.fc(s.h2b, c.h1, c.h1)).payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK_EQUAL(f.trackedHead().value_or(bcos::h256{}).hex(), s.h2b.hex());
+    BOOST_CHECK_EQUAL(f.service->getSafeBlockNumber().value_or(-1), 1);
+    BOOST_CHECK_EQUAL(f.service->getFinalizedBlockNumber().value_or(-1), 1);
+    BOOST_CHECK_EQUAL(f.backendNumber(), 2);
+    BOOST_CHECK_EQUAL(f.opDelegate->finalizedHash().hex(), s.h2b.hex());
+    BOOST_CHECK_EQUAL(f.finalizeNotifications.size(), 1U);
 }
 
 // Row 5 — op-node's backup restore: FCU(head=B2a) without attributes after B2b won.
@@ -374,6 +374,7 @@ BOOST_AUTO_TEST_CASE(window_capacity_evicts_only_unused_side_leaves)
 //     FCU's finalization must retry cleanly and answer VALID.
 // (d) A same-chain FCU starting while another FCU is already mid-finalizeUpTo (odd epoch) must
 //     still detect the concurrent finalization and answer VALID.
+// (e) A newPayload that raced execution and finalization of the same hash must answer VALID.
 BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurrent_fcu)
 {
     struct HookedDelegate final : bcos::scheduler::SchedulerInterface
@@ -382,6 +383,7 @@ BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurren
         std::function<void(bcos::crypto::HashType const&, std::function<void(bcos::Error::Ptr)>)>
             onFinalize;
         std::function<void(bcos::crypto::HashType const&)> onUnfinalizedLookup;
+        std::function<void()> beforeExecute;
 
         explicit HookedDelegate(std::shared_ptr<Delegate> d) : inner(std::move(d)) {}
 
@@ -389,6 +391,10 @@ BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurren
             std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> cb)
             override
         {
+            if (beforeExecute)
+            {
+                beforeExecute();
+            }
             inner->executeBlock(std::move(block), verify, std::move(cb));
         }
         void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
@@ -526,9 +532,7 @@ BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurren
             }
         };
 
-        // Pass safe=B1, finalized=B1 so FCU2 also exercises the safe/finalized < finalizedTip
-        // check after FCU1 advances finalizedTip from 1 to 2: must retry and answer SYNCING
-        // (linearizable with after-FCU1), never a non-linearizable -38002.
+        // B1 remains a canonical safe/finalized marker, but B2a is no longer a known head.
         std::future<bcos::engine::ForkchoiceUpdatedResult> fcu2Future =
             std::async(std::launch::async, [&]() {
                 ScopeRelease onExit{releaseResolved};
@@ -628,6 +632,32 @@ BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurren
         BOOST_CHECK_EQUAL(f.trackedHead().value_or(bcos::h256{}).hex(), h5b.hex());
         BOOST_CHECK_EQUAL(f.service->getSafeBlockNumber().value_or(-1), 4);
         BOOST_CHECK_EQUAL(f.service->getFinalizedBlockNumber().value_or(-1), 4);
+    }
+
+    {
+        auto const head = f.trackedHead();
+        BOOST_REQUIRE(head);
+        auto const b6b = f.build(f.fc(*head, h4b, h4b), 6, 1);
+        auto const h6b = f.hashOf(b6b);
+        // Drop the local payload artifact so both submissions take the external execution path.
+        f.service = std::make_unique<OpEngine>(f.memPool, f.multiLayerStorage, f.seam,
+            f.blockFactory, hooked, nullptr, false, f.unfinalizedWindow);
+        bool finalizedDuringExecute = false;
+        hooked->beforeExecute = [&] {
+            if (!std::exchange(finalizedDuringExecute, true))
+            {
+                BOOST_REQUIRE(f.np(b6b).status == PayloadValidationStatus::Valid);
+                BOOST_REQUIRE(f.fcu(f.fc(h6b, h6b, h6b)).payloadStatus.status ==
+                              PayloadValidationStatus::Valid);
+            }
+        };
+        auto const result = f.np(b6b);
+        hooked->beforeExecute = nullptr;
+        BOOST_CHECK(finalizedDuringExecute);
+        BOOST_CHECK(result.status == PayloadValidationStatus::Valid);
+        BOOST_REQUIRE(result.latestValidHash);
+        BOOST_CHECK_EQUAL(result.latestValidHash->hex(), h6b.hex());
+        BOOST_CHECK_EQUAL(f.backendNumber(), 6);
     }
 }
 

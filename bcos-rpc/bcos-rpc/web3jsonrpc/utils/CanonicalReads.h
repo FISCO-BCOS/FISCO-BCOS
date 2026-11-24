@@ -44,11 +44,9 @@ task::Task<protocol::BlockNumber> canonicalLatestNumber(NodeService& nodeService
 task::Task<protocol::Block::Ptr> canonicalBlockByNumber(
     NodeService& nodeService, protocol::BlockNumber blockNumber, int32_t blockFlag);
 
-/// Read a block from the branch captured for an OP request. The captured finalized prefix
-/// is stable and served by the ledger, including any separately stored block data.
-task::Task<protocol::Block::Ptr> blockInView(NodeService& nodeService,
-    engine::OpCanonicalReader::HeadReadView const& view, protocol::BlockNumber blockNumber,
-    int32_t blockFlag);
+/// Read a block from the selected layers and backend snapshot captured for an OP request.
+task::Task<protocol::Block::Ptr> blockInView(engine::OpCanonicalReader::HeadReadView const& view,
+    protocol::BlockNumber blockNumber, int32_t blockFlag);
 
 /// The block with @p blockHash: an unfinalized block (ANY branch — op-node's backup-unsafe
 /// restore reads a replaced sibling by hash) from its own window layer, else the ledger.

@@ -26,13 +26,14 @@ BOOST_AUTO_TEST_CASE(admissionReadsSelectedWindowHeadAndRewinds)
     task::syncWait(fixture->multiLayerStorage.mergeView(std::move(view)));
 
     auto const chain = op_engine_reorg::setupB1B2a(*fixture);
-    auto read = initializer::makeOpAdmissionChainState(
+    auto readAdmissionState = initializer::makeOpAdmissionChainState(
         std::weak_ptr{fixture->opDelegate}, fixture, fixture->blockFactory, fixture->forkSchedule);
     bcostars::protocol::TransactionImpl tx;
     tx.forceSender(bytes(
         std::begin(op_engine_reorg::kAccount.bytes), std::end(op_engine_reorg::kAccount.bytes)));
     auto probe = [&] {
-        return task::syncWait(read(tx, txvalidator::Check::Balance | txvalidator::Check::ChainId));
+        return task::syncWait(
+            readAdmissionState(tx, txvalidator::Check::Balance | txvalidator::Check::ChainId));
     };
 
     auto const first = probe();
@@ -63,6 +64,21 @@ BOOST_AUTO_TEST_CASE(admissionReadsSelectedWindowHeadAndRewinds)
     BOOST_CHECK_EQUAL(rewind.sender->balance, 10);
     BOOST_CHECK_EQUAL(*rewind.sender->nonce + 1, *first.sender->nonce);
     BOOST_CHECK_EQUAL(fixture->backendNumber(), 1);
+
+    // Make a header read fail so this probe specifically exercises the cache hit.
+    auto committed = fixture->multiLayerStorage.forkCommitted();
+    committed.newMutable();
+    auto const headerKey = executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, "1"};
+    task::syncWait(storage2::removeOne(committed, headerKey));
+    task::syncWait(fixture->multiLayerStorage.mergeView(std::move(committed)));
+    auto afterRemoval = fixture->multiLayerStorage.forkCommitted();
+    BOOST_REQUIRE(!task::syncWait(storage2::readOne(afterRemoval, headerKey)));
+
+    auto const cached = probe();
+    BOOST_REQUIRE(cached.sender);
+    BOOST_CHECK(cached.config == rewind.config);
+    BOOST_CHECK(cached.revision == rewind.revision);
+    BOOST_CHECK_EQUAL(cached.sender->balance, rewind.sender->balance);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

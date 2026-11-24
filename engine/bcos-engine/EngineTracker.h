@@ -104,8 +104,7 @@ public:
     ForkchoiceApplyResult applyForkchoice(const ResolvedForkchoice& resolved);
     GetPayloadResult getPayload(const PayloadID& payloadId, std::uint32_t version) const;
     std::optional<TrackedHeadBlock> trackedHead() const;
-    std::pair<std::optional<TrackedHeadBlock>, std::optional<bcos::protocol::BlockNumber>>
-    headAndSafe() const;
+    std::pair<std::optional<TrackedHeadBlock>, std::optional<TrackedHeadBlock>> headAndSafe() const;
     std::optional<bcos::protocol::BlockNumber> safeBlockNumber() const;
     std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber() const;
     /// RAII guards over m_mutex. Unlock must run on the locking thread
@@ -120,7 +119,7 @@ private:
     mutable std::shared_mutex m_mutex;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHead;
-    std::optional<bcos::protocol::BlockNumber> m_safe;
+    std::optional<TrackedHeadBlock> m_safe;
     std::optional<bcos::protocol::BlockNumber> m_finalized;
     PayloadCache m_payloads;
 };

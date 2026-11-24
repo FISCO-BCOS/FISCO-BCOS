@@ -491,6 +491,11 @@ BOOST_AUTO_TEST_CASE(mpt_reader_survives_multi_block_finalize)
 {
     ReadPlaneFixture t;
     auto c = setupB1B2a(t.f);
+    auto const flags =
+        bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::RECEIPTS;
+    auto const tx =
+        bcos::task::syncWait(t.reader->transactionOnHeadChain(t.f.mintTxHash(c.b2a), flags));
+    BOOST_REQUIRE(tx);
     auto s = deriveB2b(t.f, c);
     auto captured = bcos::task::syncWait(t.reader->captureWindowView(c.h2a));
     BOOST_REQUIRE(captured.has_value());
@@ -520,6 +525,15 @@ BOOST_AUTO_TEST_CASE(mpt_reader_survives_multi_block_finalize)
         bcos::task::syncWait(bcos::storage2::readOne(*mpt2a, block->blockHeader()->stateRoot()))
             .has_value());
     BOOST_CHECK(!bcos::task::syncWait(t.reader->captureWindowView(c.h2a)).has_value());
+
+    // The transaction lookup already returned the block used to derive its receipt position.
+    // It still describes the captured branch after the sibling is finalized.
+    BOOST_REQUIRE(tx->block);
+    BOOST_CHECK_EQUAL(tx->blockHash.hex(), c.h2a.hex());
+    BOOST_CHECK_EQUAL(
+        bcos::protocol::canonicalBlockHash(*tx->block->blockHeader()).hex(), c.h2a.hex());
+    BOOST_REQUIRE_EQUAL(tx->block->receipts().size(), 2U);
+    BOOST_CHECK_EQUAL(tx->block->receipts()[1U]->blockNumber(), tx->receipt->blockNumber());
 
     // Flat stateStorageAt does not serve historical finalized heights below the tip.
     BOOST_CHECK(bcos::task::syncWait(t.reader->mptNodeReaderAt(c.h2a)) == nullptr);
@@ -560,12 +574,87 @@ BOOST_AUTO_TEST_CASE(captured_head_keeps_receipts_at_their_own_height)
         BOOST_REQUIRE_EQUAL(block->receipts().size(), 2U);
         BOOST_CHECK_EQUAL(block->receipts()[1U]->blockNumber(), height);
     }
+
+    BOOST_REQUIRE(
+        t.f.fcu(t.f.fc(h3a, c.h2a, c.h2a)).payloadStatus.status == PayloadValidationStatus::Valid);
+    auto const committed =
+        bcos::task::syncWait(t.reader->transactionOnHeadChain(t.f.mintTxHash(c.b2a), flags));
+    BOOST_REQUIRE(committed && committed->block);
+    BOOST_CHECK_EQUAL(committed->blockHash.hex(), c.h2a.hex());
+    BOOST_CHECK_EQUAL(committed->receipt->blockNumber(), 2);
+    BOOST_REQUIRE_EQUAL(committed->block->receipts().size(), 2U);
+    BOOST_CHECK_EQUAL(committed->block->receipts()[1U]->blockNumber(), 2);
+
+    auto mixed = bcos::task::syncWait(t.reader->captureHeadView());
+    BOOST_REQUIRE(mixed.window);
+    BOOST_CHECK_EQUAL(mixed.finalized, 2);
+    auto const block = bcos::task::syncWait(mixed.window->block(2, flags));
+    BOOST_REQUIRE_EQUAL(block->receipts().size(), 2U);
+    BOOST_CHECK_EQUAL(block->receipts()[1U]->blockNumber(), 2);
+
+    BOOST_REQUIRE(
+        t.f.fcu(t.f.fc(h3a, h3a, h3a)).payloadStatus.status == PayloadValidationStatus::Valid);
+    auto fullyFinalized = bcos::task::syncWait(t.reader->captureHeadView());
+    BOOST_CHECK_EQUAL(fullyFinalized.head, fullyFinalized.finalized);
+    BOOST_REQUIRE(fullyFinalized.window);
+    auto const head = bcos::task::syncWait(fullyFinalized.window->block(3, flags));
+    BOOST_CHECK_EQUAL(bcos::protocol::canonicalBlockHash(*head->blockHeader()).hex(), h3a.hex());
 }
 
-// If finalization advances on disk without updating the tracker (e.g. a mid-chain merge error
-// after pruning the previously tracked branch), or a head rewind leaves safe > head, head() and
-// safeNumber() preserve finalized <= safe <= head so RPC reads never observe a pruned or
-// out-of-range block tag.
+BOOST_AUTO_TEST_CASE(safe_tag_falls_back_to_finalized_when_head_switches_branches)
+{
+    ReadPlaneFixture t;
+    auto c = setupB1B2a(t.f);
+    auto s = deriveB2b(t.f, c);
+    BOOST_REQUIRE(
+        t.f.fcu(t.f.fc(c.h2a, c.h2a, c.h1)).payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK_EQUAL(t.blockByNumber("safe", false)["hash"].asString(), c.h2a.hexPrefixed());
+
+    BOOST_REQUIRE(t.f.fcu(t.f.fc(s.h2b, bcos::h256{}, bcos::h256{})).payloadStatus.status ==
+                  PayloadValidationStatus::Valid);
+    auto view = bcos::task::syncWait(t.reader->captureHeadView());
+    BOOST_CHECK_EQUAL(view.head, 2);
+    BOOST_CHECK_EQUAL(view.safe, 1);
+    BOOST_CHECK_EQUAL(t.blockByNumber("safe", false)["hash"].asString(), c.h1.hexPrefixed());
+    BOOST_CHECK_EQUAL(t.blockByNumber("latest", false)["hash"].asString(), s.h2b.hexPrefixed());
+}
+
+BOOST_AUTO_TEST_CASE(head_read_survives_the_sampled_block_becoming_finalized)
+{
+    ReadPlaneFixture t;
+    auto c = setupB1B2a(t.f);
+    using namespace bcos;
+
+    // Finish finalizing the sampled head before the reader looks for it in the window.
+    struct FinalizingTracker
+    {
+        ReorgFixture& fixture;
+        h256 hash;
+
+        auto trackedHead() const
+        {
+            auto tracked = fixture.service->trackedHead();
+            if (fixture.inWindow(hash))
+            {
+                Error::Ptr error;
+                fixture.opDelegate->finalizeUpTo(hash, [&](Error::Ptr e) { error = std::move(e); });
+                BOOST_REQUIRE(error == nullptr);
+            }
+            return tracked;
+        }
+
+        auto trackedHeadAndSafe() const { return fixture.service->trackedHeadAndSafe(); }
+    };
+
+    engine::OpCanonicalReaderImpl<FinalizingTracker, Delegate> reader(
+        nullptr, std::make_shared<FinalizingTracker>(t.f, c.h2a), t.f.opDelegate, t.f.blockFactory);
+    auto const head = task::syncWait(reader.head());
+    BOOST_CHECK_EQUAL(head.number, 2);
+    BOOST_CHECK_EQUAL(head.hash.hex(), c.h2a.hex());
+    BOOST_CHECK_EQUAL(t.f.backendNumber(), 2);
+}
+
+// A partial finalize can advance on disk and prune the tracked branch before the tracker commits.
 BOOST_AUTO_TEST_CASE(reader_falls_back_to_finalized_when_tracked_head_is_pruned)
 {
     ReadPlaneFixture t;
@@ -586,13 +675,13 @@ BOOST_AUTO_TEST_CASE(reader_falls_back_to_finalized_when_tracked_head_is_pruned)
     auto const head = bcos::task::syncWait(t.reader->head());
     BOOST_CHECK_EQUAL(head.hash.hex(), s.h2b.hex());
     BOOST_CHECK_EQUAL(head.number, 2);
-    // Tracked safe was 3 (> fin = 2), must clamp to head (2) rather than escaping above latest.
+    // Tracked safe was on the pruned branch, so the tag falls back to the finalized tip.
     BOOST_CHECK_EQUAL(bcos::task::syncWait(t.reader->safeNumber()), 2);
     BOOST_CHECK_EQUAL(t.blockByNumber("latest", false)["hash"].asString(), s.h2b.hexPrefixed());
     BOOST_CHECK_EQUAL(t.blockByNumber("safe", false)["hash"].asString(), s.h2b.hexPrefixed());
     BOOST_CHECK_EQUAL(t.balance("latest"), "0xf");
 
-    // Rewinding head with safe=0x0 also keeps safeNumber() clamped to head().number.
+    // Rewinding head with safe=0x0 makes the prior safe block cease to be an ancestor.
     auto b3b = t.f.build(t.f.fc(s.h2b, s.h2b, s.h2b), 3, 1);
     auto h3b = t.f.hashOf(b3b);
     BOOST_REQUIRE(t.f.np(b3b).status == PayloadValidationStatus::Valid);

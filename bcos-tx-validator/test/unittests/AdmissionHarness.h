@@ -254,6 +254,7 @@ struct AdmitHarness
     std::string lastPendingCostSender;
     std::string lastPendingCostNonce;
     std::optional<protocol::CostBasis> lastPendingCostBasis;
+    std::optional<u256> lastPendingCostFromNonce;
 
     AdmitHarness()
     {
@@ -336,10 +337,12 @@ struct AdmitHarness
         if (pendingCost)
         {
             validator->setPendingCostFn(
-                [this](std::string_view sender, std::string_view nonce, protocol::CostBasis basis) {
+                [this](std::string_view sender, std::string_view nonce, protocol::CostBasis basis,
+                    std::optional<u256> const& fromNonce) {
                     lastPendingCostSender = std::string(sender);
                     lastPendingCostNonce = std::string(nonce);
                     lastPendingCostBasis = basis;
+                    lastPendingCostFromNonce = fromNonce;
                     return *pendingCost;
                 });
         }

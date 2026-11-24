@@ -474,7 +474,7 @@ task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(
     try
     {
         constexpr auto flags = bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS;
-        auto read = view ? blockInView(*m_nodeService, *view, number, flags) :
+        auto read = view ? blockInView(*view, number, flags) :
                            canonicalBlockByNumber(*m_nodeService, number, flags);
         block = co_await std::move(read);
     }

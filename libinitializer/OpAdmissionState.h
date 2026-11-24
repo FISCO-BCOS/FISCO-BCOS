@@ -16,6 +16,7 @@
 #include <opstack-executor/OpForkSpec.h>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 
 namespace bcos::initializer
@@ -29,10 +30,16 @@ txvalidator::AdmissionChainStateFn makeOpAdmissionChainState(std::weak_ptr<Sched
     ledger::OpForkSchedule schedule)
 {
     namespace op = executor_v1::opstack;
+    struct HeadData
+    {
+        std::shared_ptr<const ledger::LedgerConfig> config;
+        crypto::HashType stateRoot;
+        op::OpForkSpec spec;
+    };
     struct HeadCache
     {
         std::mutex mutex;
-        std::shared_ptr<const ledger::LedgerConfig> config;
+        std::optional<HeadData> head;
         op::OpAdmissionRollupCost rollupCost;
     };
     auto cache = std::make_shared<HeadCache>();
@@ -47,29 +54,31 @@ txvalidator::AdmissionChainStateFn makeOpAdmissionChainState(std::weak_ptr<Sched
         {
             throw std::runtime_error("OP admission: scheduler unavailable");
         }
-        auto view = co_await delegate->headView();
-        auto const number = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-        auto const headHash = co_await ledger::getBlockHash(view, number, ledger::fromStorage);
-        auto block = co_await ledger::getBlockData(view, number, ledger::HEADER, *blockFactory);
-        auto header = block ? block->blockHeader() : nullptr;
-        if (!headHash || !header)
+        auto selected = co_await delegate->headViewWithRef();
+        auto const number = selected.number;
+        auto const& hash = selected.hash;
+        auto view = std::move(selected.view);
+        if (number < 0 || hash == crypto::HashType{})
         {
             throw std::runtime_error("OP admission: canonical head header unavailable");
         }
-        auto const& hash = *headHash;
-        auto const spec = op::opForkSpecAt(schedule, op::opForkTimestampSec(header->timestamp()));
 
-        txvalidator::AdmissionChainState result{};
-        result.revision = spec.rev;
+        std::optional<HeadData> head;
         {
             std::lock_guard lock(cache->mutex);
-            if (cache->config && cache->config->hash() == hash)
+            if (cache->head && cache->head->config->hash() == hash)
             {
-                result.config = cache->config;
+                head = cache->head;
             }
         }
-        if (!result.config)
+        if (!head)
         {
+            auto block = co_await ledger::getBlockData(view, number, ledger::HEADER, *blockFactory);
+            auto header = block ? block->blockHeader() : nullptr;
+            if (!header)
+            {
+                throw std::runtime_error("OP admission: canonical head header unavailable");
+            }
             auto config = std::make_shared<ledger::LedgerConfig>();
             auto nodes = co_await ledger::getNodeList(view);
             ledger::SystemConfigs systemConfigs;
@@ -77,10 +86,14 @@ txvalidator::AdmissionChainStateFn makeOpAdmissionChainState(std::weak_ptr<Sched
             co_await ledger::readFromStorage(systemConfigs, view, number + 1);
             ledger::applyLedgerConfig(*config, nodes, systemConfigs, {}, number,
                 header->timestamp(), hash, protocol::blockBaseFee(*header));
+            head.emplace(HeadData{std::move(config), header->stateRoot(),
+                op::opForkSpecAt(schedule, op::opForkTimestampSec(header->timestamp()))});
             std::lock_guard lock(cache->mutex);
-            cache->config = config;
-            result.config = std::move(config);
+            cache->head = head;
         }
+        txvalidator::AdmissionChainState result{};
+        result.config = std::move(head->config);
+        result.revision = head->spec.rev;
         if ((checks & txvalidator::c_accountStateDependent) == txvalidator::Check::None)
         {
             co_return result;
@@ -88,8 +101,8 @@ txvalidator::AdmissionChainStateFn makeOpAdmissionChainState(std::weak_ptr<Sched
 
         using View = decltype(view);
         using HistoricalBackend = scheduler_v1::HistoricalStateBackend<View>;
-        HistoricalBackend backend(view, header->stateRoot(),
-            ledger::account::nodeAddressTableMode(), /*ethLaneNaming=*/true);
+        HistoricalBackend backend(
+            view, head->stateRoot, ledger::account::nodeAddressTableMode(), /*ethLaneNaming=*/true);
         storage2::View<typename View::MutableStorage, void, HistoricalBackend> rootedView(
             std::addressof(backend));
         ledger::account::EVMAccount account(rootedView, ledger::account::FromTableName{},
@@ -105,7 +118,7 @@ txvalidator::AdmissionChainStateFn makeOpAdmissionChainState(std::weak_ptr<Sched
             auto const envelope = bcostars::protocol::reassembleWeb3RawTransaction(
                 tx.extraTransactionBytes(), tx.signatureData());
             result.rollupCost = co_await cache->rollupCost.price(
-                rootedView, hash, spec, ref(envelope), static_cast<uint64_t>(tx.gasLimit()));
+                rootedView, hash, head->spec, ref(envelope), static_cast<uint64_t>(tx.gasLimit()));
         }
         co_return result;
     };

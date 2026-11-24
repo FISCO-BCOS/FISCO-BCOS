@@ -82,12 +82,13 @@ using AdmissionChainStateFn =
     std::function<task::Task<AdmissionChainState>(protocol::Transaction const&, Check)>;
 
 /// What the sender's already-pooled transactions can cost at most, leaving out the one at
-/// @p excludeNonce (the slot the incoming transaction would replace), charged on the chain's
+/// @p excludeNonce (the slot the incoming transaction would replace) and any already executed
+/// below @p fromNonce in the captured OP head. Charged on the chain's
 /// cost basis (the same one Check::Balance charges the new transaction on):
 /// MemPoolImpl::pendingCost. Bound by the Engine-driven lanes' initializer; unbound, admission
 /// budgets against the committed balance alone.
-using PendingCostFn = std::function<u512(
-    std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis)>;
+using PendingCostFn = std::function<u512(std::string_view sender, std::string_view excludeNonce,
+    protocol::CostBasis basis, std::optional<u256> const& fromNonce)>;
 
 /// The one place a transaction is judged admissible, for every ingress of both transaction
 /// pools: JSON-RPC (BCOS and Web3), P2P, and block-proposal verification. The txpool's two

@@ -36,9 +36,11 @@
 #include <bcos-ledger/Ledger.h>         // real bcos::ledger::Ledger for the commit hook
 #include <bcos-ledger/LedgerMethods.h>  // getBlockData (probe's parent-root lookup)
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-ledger/mpt/MPTBuilder.h>           // buildAndCollect (①a incremental cross-check)
-#include <bcos-ledger/mpt/StateRoots.h>           // computeMptStateDelta (genesis trie)
-#include <bcos-storage/KeyPrefixes.h>             // mptNodeStateKey (corrupt-root seeding)
+#include <bcos-ledger/mpt/MPTBuilder.h>  // buildAndCollect (①a incremental cross-check)
+#include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateDelta (genesis trie)
+#include <bcos-storage/CheckpointRocksDBStorage.h>
+#include <bcos-storage/KeyPrefixes.h>  // mptNodeStateKey (corrupt-root seeding)
+#include <bcos-storage/StateKVResolver.h>
 #include <bcos-table/src/LegacyStorageWrapper.h>  // LegacyStorageWrapper<BackendMemStorage>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
@@ -48,6 +50,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <boost/exception/get_error_info.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 #include <evmc/hex.hpp>
@@ -122,14 +125,21 @@ using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, Backend
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
-struct FaultyMergeMLS : MLS
+using RocksCheckpoint = bcos::storage2::rocksdb::CheckpointRocksDBStorage<StateKey, StateValue,
+    bcos::storage2::rocksdb::StateKeyResolver, bcos::storage2::rocksdb::StateValueResolver>;
+using LruCache = memory_storage::MemoryStorage<StateKey, StateValue,
+    memory_storage::CONCURRENT | memory_storage::LRU>;
+using RocksMLS = bcos::storage2::MultiLayerStorage<MutableStorage, LruCache, RocksCheckpoint>;
+
+struct FaultyMergeMLS : RocksMLS
 {
-    using MLS::MLS;
+    using RocksMLS::RocksMLS;
     int failOnMergeCall = 0;
     int mergeCalls = 0;
     std::function<void(int)> onBeforeMerge;
+    std::function<void(int)> onAfterMerge;
 
-    bcos::task::Task<void> mergeToBackends(auto&... fromStorage)
+    bcos::task::Task<void> mergeFinalized(auto&... fromStorage)
     {
         auto const call = ++mergeCalls;
         if (onBeforeMerge)
@@ -138,9 +148,13 @@ struct FaultyMergeMLS : MLS
         }
         if (failOnMergeCall > 0 && call == failOnMergeCall)
         {
-            throw bcos::evm::engine::OpStorageError("injected mergeToBackends failure");
+            throw bcos::evm::engine::OpStorageError("injected finalized merge failure");
         }
-        co_await MLS::mergeToBackends(fromStorage...);
+        co_await RocksMLS::mergeFinalized(fromStorage...);
+        if (onAfterMerge)
+        {
+            onAfterMerge(call);
+        }
     }
 };
 
@@ -324,7 +338,7 @@ void seedSender(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Ptr con
 /// m_stateStorage (here: a LegacyStorageWrapper over the MLS backend, distinct from the
 /// commit-hook MutableStorage that prewriteBlockToBuffer writes through). Without the SYS_TABLES
 /// row the open fails (Table does not exist) and the whole prewriteBlock errors out.
-void seedSysTables(MLS& mls)
+void seedSysTables(auto& mls)
 {
     auto view = mls.fork();
     view.newMutable();
@@ -422,7 +436,7 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeCallGenesisHeader(
 
 /// Seed the minimal OP ledger the RPC call()/read paths need: current head (SYS_CURRENT_STATE)
 /// and the block-0 header (getBlockData(HEADER) reads SYS_NUMBER_2_BLOCK_HEADER by number).
-void seedCallGenesis(MLS& mls, bcos::protocol::BlockHeader::Ptr const& genesisHeader)
+void seedCallGenesis(auto& mls, bcos::protocol::BlockHeader::Ptr const& genesisHeader)
 {
     auto view = mls.fork();
     view.newMutable();
@@ -1390,14 +1404,25 @@ BOOST_AUTO_TEST_CASE(FinalizeMultiBlockPrunesPerBlockAndNotifiesUnlocked)
 {
     using FaultyScheduler = bcos::executor_v1::opstack::OpScheduler<FaultyMergeMLS>;
 
-    BackendMemStorage backendStorage{1};
-    CheckpointBackend checkpointBackend{backendStorage};
-    FaultyMergeMLS multiLayerStorage{checkpointBackend};
+    struct TempDirectory
+    {
+        boost::filesystem::path path = boost::filesystem::temp_directory_path() /
+                                       boost::filesystem::unique_path("op-finalize-%%%%-%%%%");
+        ~TempDirectory()
+        {
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path, error);
+        }
+    } directory;
+    RocksCheckpoint checkpointBackend(directory.path.string());
+    LruCache cache{1};
+    FaultyMergeMLS multiLayerStorage{checkpointBackend, cache};
     auto receiptFactory = makeReceiptFactory();
     auto hashImpl = makeCryptoSuite()->hashImpl();
     auto blockFactory = makeBlockFactory();
     auto legacyStorage =
-        std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(backendStorage);
+        std::make_shared<bcos::storage::LegacyStorageWrapper<RocksMLS::OpenedStorage>>(
+            multiLayerStorage.latestBackend());
     auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyStorage, 1000);
     auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
     bcos::ledger::OpForkSchedule forkSchedule{};
@@ -1405,8 +1430,7 @@ BOOST_AUTO_TEST_CASE(FinalizeMultiBlockPrunesPerBlockAndNotifiesUnlocked)
         multiLayerStorage, ledger, ioServicePool);
 
     seedSysTables(multiLayerStorage);
-    auto const genesisRoot = computeAndPersistGenesisTrie(multiLayerStorage);
-    seedCallGenesis(multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+    seedCallGenesis(multiLayerStorage, makeCallGenesisHeader(bcos::ledger::mpt::emptyRootHash()));
 
     auto runBlock = [&](bcos::protocol::BlockHeader::Ptr header,
                         std::vector<bcos::bytes> const& envelopes,
@@ -1463,6 +1487,31 @@ BOOST_AUTO_TEST_CASE(FinalizeMultiBlockPrunesPerBlockAndNotifiesUnlocked)
     auto [h3b, hdr3b] = runBlock(makeHeaderAt(3, bcos::u256(3'000'000'000)), {dep3b}, h2b);
     BOOST_REQUIRE_EQUAL(scheduler.windowSize(), 3U);
 
+    auto const winnerTx = hashImpl->hash(dep2b);
+    StateKey const winnerReceipt{
+        bcos::ledger::SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(winnerTx)};
+    auto hasWinnerReceipt = [&](auto& view) {
+        return bcos::task::syncWait(bcos::storage2::readOne(view, winnerReceipt)).has_value();
+    };
+    auto heldSibling = bcos::task::syncWait(scheduler.viewAt(h2a));
+    BOOST_REQUIRE(heldSibling);
+    BOOST_CHECK(!hasWinnerReceipt(*heldSibling));
+    bool checkedBeforePublication = false;
+    multiLayerStorage.onAfterMerge = [&](int call) {
+        if (call == 2)
+        {
+            // Both backends have B2b, but the scheduler still advertises B1 and B2a.
+            checkedBeforePublication = true;
+            BOOST_CHECK(hasWinnerReceipt(multiLayerStorage.latestBackend()));
+            BOOST_CHECK(hasWinnerReceipt(cache));
+            BOOST_CHECK_EQUAL(scheduler.finalizedNumber(), 1);
+            auto freshSibling = bcos::task::syncWait(scheduler.viewAt(h2a));
+            BOOST_REQUIRE(freshSibling);
+            BOOST_CHECK(!hasWinnerReceipt(*freshSibling));
+            BOOST_CHECK(!hasWinnerReceipt(*heldSibling));
+        }
+    };
+
     // During multi-block finalizeUpTo(h3b): merge #2 commits B2b, merge #3 fails on B3b.
     // Right before merge #3 starts, sibling B2a must ALREADY be pruned so no reader can stack
     // B2a atop finalized B2b.
@@ -1503,6 +1552,7 @@ BOOST_AUTO_TEST_CASE(FinalizeMultiBlockPrunesPerBlockAndNotifiesUnlocked)
     scheduler.finalizeUpTo(h3b, [&](bcos::Error::Ptr e) { finErr = std::move(e); });
     BOOST_REQUIRE(finErr != nullptr);
     BOOST_CHECK_EQUAL(finErr->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
+    BOOST_CHECK(checkedBeforePublication);
     BOOST_CHECK(checkedMidLoop);
     BOOST_CHECK(!siblingPresentMidLoop);
     BOOST_CHECK(!siblingViewPresentMidLoop);
@@ -1516,6 +1566,10 @@ BOOST_AUTO_TEST_CASE(FinalizeMultiBlockPrunesPerBlockAndNotifiesUnlocked)
     BOOST_CHECK(!scheduler.unfinalizedBlock(h2a).has_value());
     BOOST_CHECK(scheduler.unfinalizedBlock(h3b).has_value());
     BOOST_CHECK_EQUAL(scheduler.windowSize(), 1U);
+    auto published = bcos::task::syncWait(scheduler.viewAt(h2b));
+    BOOST_REQUIRE(published);
+    BOOST_CHECK(hasWinnerReceipt(*published));
+    BOOST_CHECK(!hasWinnerReceipt(*heldSibling));
 
     // Retry succeeds cleanly once storage recovers.
     multiLayerStorage.failOnMergeCall = 0;

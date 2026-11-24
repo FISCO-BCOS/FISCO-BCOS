@@ -1123,9 +1123,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // one (MemPoolImpl::pendingCost): without it a sender can pool more than it can pay
         // for and the surplus fails at execution instead of at the door.
         m_memPoolValidator->setPendingCostFn(
-            [memPoolInitializer = m_memPoolInitializer](
-                std::string_view sender, std::string_view nonce, bcos::protocol::CostBasis basis) {
-                return memPoolInitializer->memPool().pendingCost(sender, nonce, basis);
+            [memPoolInitializer = m_memPoolInitializer](std::string_view sender,
+                std::string_view nonce, bcos::protocol::CostBasis basis,
+                std::optional<bcos::u256> const& fromNonce) {
+                return memPoolInitializer->memPool().pendingCost(sender, nonce, basis, fromNonce);
             });
         // OP: one selected head supplies the account, chain config and the rollup fee.
         if (m_executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION)

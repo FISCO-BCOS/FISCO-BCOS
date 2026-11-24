@@ -174,11 +174,12 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     // all-zero (Engine-API "not set") safe/finalized hash must NOT clear the stored
     // value: op-geth only calls SetSafe/SetFinalized for non-zero hashes.
     // Same requiresCanonical predicate as the gate above: only a fully resolved
-    // (non-zero hash + present number) pair overwrites the stored height, so a
+    // (non-zero hash + present number) pair overwrites the stored block, so a
     // set-but-unresolved hash can never wipe it.
     if (requiresCanonical(resolved.state.safeBlockHash, safeBlockNumber))
     {
-        m_safe = safeBlockNumber;
+        m_safe =
+            TrackedHeadBlock{.hash = resolved.state.safeBlockHash, .blockNumber = *safeBlockNumber};
     }
     if (requiresCanonical(resolved.state.finalizedBlockHash, finalizedBlockNumber))
     {
@@ -219,7 +220,7 @@ std::optional<TrackedHeadBlock> EngineTracker::trackedHead() const
     return m_trackedHead;
 }
 
-std::pair<std::optional<TrackedHeadBlock>, std::optional<bcos::protocol::BlockNumber>>
+std::pair<std::optional<TrackedHeadBlock>, std::optional<TrackedHeadBlock>>
 EngineTracker::headAndSafe() const
 {
     std::shared_lock lock(m_mutex);
@@ -229,7 +230,7 @@ EngineTracker::headAndSafe() const
 std::optional<bcos::protocol::BlockNumber> EngineTracker::safeBlockNumber() const
 {
     std::shared_lock lock(m_mutex);
-    return m_safe;
+    return m_safe ? std::optional(m_safe->blockNumber) : std::nullopt;
 }
 
 std::optional<bcos::protocol::BlockNumber> EngineTracker::finalizedBlockNumber() const

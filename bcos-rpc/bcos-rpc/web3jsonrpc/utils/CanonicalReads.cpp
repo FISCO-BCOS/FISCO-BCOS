@@ -43,7 +43,7 @@ task::Task<protocol::BlockNumber> bcos::rpc::canonicalLatestNumber(NodeService& 
     co_return co_await ledger::getCurrentBlockNumber(*nodeService.ledger());
 }
 
-task::Task<protocol::Block::Ptr> bcos::rpc::blockInView(NodeService& nodeService,
+task::Task<protocol::Block::Ptr> bcos::rpc::blockInView(
     engine::OpCanonicalReader::HeadReadView const& view, protocol::BlockNumber blockNumber,
     int32_t blockFlag)
 {
@@ -51,11 +51,7 @@ task::Task<protocol::Block::Ptr> bcos::rpc::blockInView(NodeService& nodeService
     {
         throwNotOnCanonicalChain(blockNumber);
     }
-    if (blockNumber > view.finalized)
-    {
-        return view.window->block(blockNumber, blockFlag);
-    }
-    return ledger::getBlockData(*nodeService.ledger(), blockNumber, blockFlag);
+    return view.window->block(blockNumber, blockFlag);
 }
 
 task::Task<protocol::Block::Ptr> bcos::rpc::canonicalBlockByNumber(
@@ -63,22 +59,8 @@ task::Task<protocol::Block::Ptr> bcos::rpc::canonicalBlockByNumber(
 {
     if (auto const& reader = nodeService.opCanonicalReader())
     {
-        if (blockNumber > (co_await reader->finalized()).number)
-        {
-            auto const hash = co_await reader->canonicalHashAt(blockNumber);
-            if (!hash)
-            {
-                throwNotOnCanonicalChain(blockNumber);
-            }
-            auto block = co_await reader->unfinalizedBlock(*hash, blockFlag);
-            if (!block)
-            {
-                // Finalized between the two lookups: the ledger has it now.
-                co_return co_await ledger::getBlockData(
-                    *nodeService.ledger(), blockNumber, blockFlag);
-            }
-            co_return block;
-        }
+        auto view = co_await reader->captureHeadView();
+        co_return co_await blockInView(view, blockNumber, blockFlag);
     }
     co_return co_await ledger::getBlockData(*nodeService.ledger(), blockNumber, blockFlag);
 }
