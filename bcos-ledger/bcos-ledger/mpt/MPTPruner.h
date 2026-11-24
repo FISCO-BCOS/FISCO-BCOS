@@ -53,6 +53,7 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <unordered_map>
