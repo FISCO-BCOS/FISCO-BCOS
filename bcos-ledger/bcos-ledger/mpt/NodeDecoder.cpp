@@ -19,6 +19,7 @@
 
 #include "NodeDecoder.h"
 #include "Account.h"
+#include "Constants.h"
 #include "Errors.h"
 #include "HexPrefix.h"
 #include <bcos-codec/rlp/RLPDecode.h>
