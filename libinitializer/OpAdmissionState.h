@@ -3,15 +3,13 @@
 
 #pragma once
 
-#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/Ledger.h>
-#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-ledger/LedgerMethods.h>
+#include <bcos-ledger/mpt/MPTReadView.h>
+#include <bcos-ledger/mpt/ViewNodeStorage.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
-#include <bcos-transaction-scheduler/HistoricalCallStorage.h>
 #include <bcos-tx-validator/TxValidator.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <opstack-executor/OpAdmissionRollupCost.h>
 #include <opstack-executor/OpForkSpec.h>
 #include <memory>
@@ -22,8 +20,8 @@
 namespace bcos::initializer
 {
 /// Keep the OP admission snapshot separate from the node's finalized LedgerConfigState.
-/// A request uses one canonical chain view, and reads both the sender and L1Block at its
-/// header's state root even if forkchoice or finality changes during the reads.
+/// A request uses one canonical chain view. The sender leaf is read at that head's state root;
+/// L1Block fee slots come from the same pinned view used by block execution.
 template <class Scheduler, class StorageOwner>
 txvalidator::AdmissionChainStateFn makeOpAdmissionChainState(std::weak_ptr<Scheduler> scheduler,
     std::shared_ptr<StorageOwner> storageOwner, protocol::BlockFactory::Ptr blockFactory,
@@ -75,9 +73,10 @@ txvalidator::AdmissionChainStateFn makeOpAdmissionChainState(std::weak_ptr<Sched
         {
             auto block = co_await ledger::getBlockData(view, number, ledger::HEADER, *blockFactory);
             auto header = block ? block->blockHeader() : nullptr;
-            if (!header)
+            if (!header || protocol::canonicalBlockHash(*header) != hash)
             {
-                throw std::runtime_error("OP admission: canonical head header unavailable");
+                throw std::runtime_error(
+                    "OP admission: canonical head header does not match its hash");
             }
             auto config = std::make_shared<ledger::LedgerConfig>();
             auto nodes = co_await ledger::getNodeList(view);
@@ -99,26 +98,21 @@ txvalidator::AdmissionChainStateFn makeOpAdmissionChainState(std::weak_ptr<Sched
             co_return result;
         }
 
-        using View = decltype(view);
-        using HistoricalBackend = scheduler_v1::HistoricalStateBackend<View>;
-        HistoricalBackend backend(
-            view, head->stateRoot, ledger::account::nodeAddressTableMode(), /*ethLaneNaming=*/true);
-        storage2::View<typename View::MutableStorage, void, HistoricalBackend> rootedView(
-            std::addressof(backend));
-        ledger::account::EVMAccount account(rootedView, ledger::account::FromTableName{},
-            ledger::account::legacyAppsAccountTableName(toHex(tx.sender())));
         auto& sender = result.sender.emplace();
-        sender.balance = co_await account.balance();
-        if (auto nonce = co_await account.nonce())
+        ledger::mpt::ViewNodeStorage nodes(view);
+        ledger::mpt::MPTReadView state(nodes, head->stateRoot);
+        auto const address = Address{tx.sender(), Address::FromBinary, Address::AcquireEqual};
+        if (auto account = co_await state.readAccount(address))
         {
-            sender.nonce = u256(*nonce);
+            sender.balance = account->balance;
+            sender.nonce = account->nonce;
         }
         if ((checks & txvalidator::c_rollupCostDependent) != txvalidator::Check::None)
         {
             auto const envelope = bcostars::protocol::reassembleWeb3RawTransaction(
                 tx.extraTransactionBytes(), tx.signatureData());
             result.rollupCost = co_await cache->rollupCost.price(
-                rootedView, hash, head->spec, ref(envelope), static_cast<uint64_t>(tx.gasLimit()));
+                view, hash, head->spec, ref(envelope), static_cast<uint64_t>(tx.gasLimit()));
         }
         co_return result;
     };
