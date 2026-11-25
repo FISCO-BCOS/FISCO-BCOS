@@ -617,9 +617,8 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // (RocksDBStorage2::merge).
         //
         // MPT pruning (CommitObserver::coPreparePruneRows): the observer turns the block's
-        // delta into the deletion keys of expired node rows (pruning keeps no metadata on
-        // disk — its counts and queue are in memory — so the batch carries deletions only),
-        // applied to prewriteStorage so they land in the SAME WriteBatch as the block data —
+        // delta into node/metadata upserts, expired deletions and queue changes, applied to
+        // prewriteStorage so they land in the SAME WriteBatch as the block data —
         // data and deletions can never diverge across a crash, and the deletion decision runs
         // here, under m_commitMutex, so it can
         // never race a concurrent commit reviving the node (F2 review fix: an earlier revision

@@ -1229,8 +1229,8 @@ public:
         //    BaselineScheduler::coExecuteBlock uses around pushView.
         //
         //    MPT pruning (CommitObserver.h): the observer's pre-commit hook turns the
-        //    block's node delta into the deletion keys of expired "/mpt/" node rows,
-        //    applied to prewriteStorage so the deletions land in the SAME WriteBatch as
+        //    block's node delta into node/metadata upserts, expired deletions and queue
+        //    changes, applied to prewriteStorage so they land in the SAME WriteBatch as
         //    the block data; onCommit fires only after the batch has landed. The
         //    [prepare -> merge -> onCommit] triple runs under m_commitMutex, held from
         //    this function's entry (BaselineSchedulerMPTHelpers.h's serialization
@@ -1304,8 +1304,8 @@ public:
             }
             if (mptDelta)
             {
-                // The deletions of expired node rows land in the SAME WriteBatch as the
-                // block data (crash-atomicity contract, CommitObserver.h).
+                // Node/metadata upserts, expired deletions and queue changes land in the SAME
+                // WriteBatch as the block data (crash-atomicity contract, CommitObserver.h).
                 co_await prepareMPTPruneRows(
                     *m_commitObserver, ethHeader.number, *mptDelta, prewriteStorage);
             }

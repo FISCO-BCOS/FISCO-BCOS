@@ -18,6 +18,8 @@
  */
 
 #include "NodeDecoder.h"
+#include "Account.h"
+#include "Constants.h"
 #include "Errors.h"
 #include "HexPrefix.h"
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -148,6 +150,105 @@ TrieNode decodeNode(bcos::bytesConstRef rawInput)
     // 5) Any other item count is not a valid MPT node.
     BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
                               "RLP list has an item count that is not a valid MPT node (2 or 17)"));
+}
+
+NodeReferences decodeNodeReferences(bcos::bytesConstRef rawInput, bool accountTrie)
+{
+    bcos::bytesRef cursor(const_cast<bcos::byte*>(rawInput.data()), rawInput.size());
+    DecoderItem const top = readItem(cursor);
+    if (!top.isList)
+    {
+        if (top.content.empty())
+        {
+            return {};
+        }
+        BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
+                                  "top-level RLP item is a non-empty string, not a node list"));
+    }
+
+    bcos::bytesRef payload(const_cast<bcos::byte*>(top.content.data()), top.content.size());
+    if (payload.empty())
+    {
+        BOOST_THROW_EXCEPTION(
+            MPTDecodeError{} << bcos::errinfo_comment(
+                "RLP list has an item count that is not a valid MPT node (2 or 17)"));
+    }
+    DecoderItem const first = readItem(payload);
+    if (payload.empty())
+    {
+        BOOST_THROW_EXCEPTION(
+            MPTDecodeError{} << bcos::errinfo_comment(
+                "RLP list has an item count that is not a valid MPT node (2 or 17)"));
+    }
+    DecoderItem const second = readItem(payload);
+
+    NodeReferences references;
+    if (payload.empty())
+    {
+        if (first.content.empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                MPTDecodeError{} << bcos::errinfo_comment("hexPrefixDecode: empty input"));
+        }
+        bool const isLeaf = (first.content[0] & 0x20U) != 0;
+        if (isLeaf)
+        {
+            references.accountLeaf = accountTrie;
+            if (accountTrie)
+            {
+                references.storageRoot = Account::decode(second.content).storageRoot;
+            }
+        }
+        else if (second.raw.size() == HASH_REF_ENCODED_SIZE && second.raw[0] == RLP_HASH_REF_PREFIX)
+        {
+            references.children.emplace_back(second.content.data(), second.content.size());
+        }
+        return references;
+    }
+
+    references.children.reserve(NIBBLE_RANGE);
+    auto consumeChild = [&references](DecoderItem const& child) {
+        if (!child.isList && child.content.empty())
+        {
+            return;
+        }
+        if (!child.isList && child.content.size() == bcos::h256::SIZE)
+        {
+            references.children.emplace_back(child.content.data(), child.content.size());
+            return;
+        }
+        if (child.raw.size() >= bcos::h256::SIZE)
+        {
+            BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
+                                      "branch child embeds an inline node of >= 32 bytes"));
+        }
+    };
+
+    consumeChild(first);
+    consumeChild(second);
+    size_t items = LEAF_OR_EXTENSION_ITEM_COUNT;
+    while (!payload.empty())
+    {
+        if (items >= NIBBLE_RANGE + 1)
+        {
+            BOOST_THROW_EXCEPTION(
+                MPTDecodeError{} << bcos::errinfo_comment(
+                    "RLP list has an item count that is not a valid MPT node (2 or 17)"));
+        }
+        auto const item = readItem(payload);
+        if (items < NIBBLE_RANGE)
+        {
+            consumeChild(item);
+        }
+        ++items;
+    }
+    if (items != NIBBLE_RANGE + 1)
+    {
+        BOOST_THROW_EXCEPTION(
+            MPTDecodeError{} << bcos::errinfo_comment(
+                "RLP list has an item count that is not a valid MPT node (2 or 17)"));
+    }
+    return references;
 }
 
 }  // namespace bcos::ledger::mpt

@@ -82,7 +82,7 @@ public:
             co_return std::nullopt;
         }
         auto raw = entry->get();
-        co_return bcos::bytes(raw.begin(), raw.end());
+        co_return decodeStoredNode(raw).rlp;
     }
 
     bcos::task::Task<std::vector<std::optional<bcos::bytes>>> readSome(
@@ -99,7 +99,7 @@ public:
     bcos::task::Task<void> writeOne(bcos::h256 key, bcos::bytes value)
     {
         bcos::storage::Entry entry;
-        entry.set(std::move(value));
+        entry.set(encodeStoredNode(bcos::ref(value), 1));
         co_await bcos::storage2::writeOne(
             *m_backend, bcos::ledger::mptNodeStateKey(key), std::move(entry));
     }
@@ -109,7 +109,7 @@ public:
         for (auto const& [key, value] : keyValues)
         {
             bcos::storage::Entry entry;
-            entry.set(bcos::bytes(value.begin(), value.end()));
+            entry.set(encodeStoredNode(bcos::ref(value), 1));
             co_await bcos::storage2::writeOne(
                 *m_backend, bcos::ledger::mptNodeStateKey(key), std::move(entry));
         }
@@ -291,18 +291,27 @@ Pruner::StateRootLookup rootLookupOf(std::map<bcos::protocol::BlockNumber, bcos:
     };
 }
 
-/// One full commit of block @p blockNumber over @p delta, in the production commit flow's order
-/// (BaselineScheduler-tpp.h): prepare the pruning batch → apply its deletions (the stand-in for
-/// the block's single WriteBatch onto prewriteStorage) → onCommit. onCommit is what lands the
-/// block's staged counting on the pruner's base tables, so tests read post-commit state only
-/// after this returns. The in-memory pruner never produces upsert rows — only node deletions.
+/// One full commit of block @p blockNumber over @p delta, in the production commit flow's order:
+/// prepare → apply node/metadata upserts and deletions → apply queue changes → onCommit.
 void commitPruneBlock(PruneBackend& backend, Pruner& pruner,
     bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& delta)
 {
     auto batch = bcos::task::syncWait(pruner.coPreparePruneRows(blockNumber, delta));
+    if (!batch.upserts.empty())
+    {
+        bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(batch.upserts)));
+    }
     if (!batch.deletions.empty())
     {
         bcos::task::syncWait(bcos::storage2::removeSome(backend, std::move(batch.deletions)));
+    }
+    if (!batch.queueUpserts.empty())
+    {
+        bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(batch.queueUpserts)));
+    }
+    if (!batch.queueDeletions.empty())
+    {
+        bcos::task::syncWait(bcos::storage2::removeSome(backend, std::move(batch.queueDeletions)));
     }
     pruner.onCommit(blockNumber, delta);
 }
@@ -345,7 +354,6 @@ MPTDeltaLayer commitAccountBlock(PruneBackend& backend, auto& nodes, Pruner& pru
     MPTDeltaLayer delta;
     delta.stateRoot = result.root;
     mergeNodeDelta(std::move(result), delta);
-    bcos::task::syncWait(flushTrieNodes(nodes, delta.newNodes));
     commitPruneBlock(backend, pruner, blockNumber, delta);
     return delta;
 }
@@ -447,7 +455,7 @@ BOOST_AUTO_TEST_CASE(ObsoletionToZeroQueuesDeletion)
     BOOST_CHECK(pruner.countOf(h1) == std::optional<uint64_t>{0});
     BOOST_CHECK(pruner.deadlineOf(h1) == std::optional<uint64_t>{7});
     BOOST_CHECK_EQUAL(pruner.pendingCount(), 1U);
-    BOOST_CHECK(nodeRowExists(backend, h1) == false);  // this test never wrote a node row
+    BOOST_CHECK(nodeRowExists(backend, h1));  // count zero remains inline until the deadline
 }
 
 BOOST_AUTO_TEST_CASE(SharedRefCountSurvivesSingleObsoletion)
@@ -491,7 +499,6 @@ BOOST_AUTO_TEST_CASE(CommitRetryPrepareIsIdempotent)
     Pruner pruner(backend, /*pruneWindow=*/5);
     auto const shared = makeHash(0x01);
     auto const expiring = makeHash(0x02);
-    bcos::task::syncWait(nodes.writeOne(expiring, bcos::bytes{0x22}));
 
     // Block 1: the shared node's first reference; the expiring node is created. Block 2: the
     // shared node's second reference (count 2); the expiring node is obsoleted → deadline 7.
@@ -528,6 +535,9 @@ BOOST_AUTO_TEST_CASE(CommitRetryPrepareIsIdempotent)
     BOOST_CHECK(pruner.countOf(shared) == std::optional<uint64_t>{2});
 
     // One onCommit for the one successful merge: exactly one application — count 1, not 0.
+    bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(retry.upserts)));
+    bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(retry.queueUpserts)));
+    bcos::task::syncWait(bcos::storage2::removeSome(backend, std::move(retry.queueDeletions)));
     pruner.onCommit(3, delta3);
     BOOST_CHECK(pruner.countOf(shared) == std::optional<uint64_t>{1});
     BOOST_CHECK(!pruner.deadlineOf(shared).has_value());
@@ -706,7 +716,6 @@ BOOST_AUTO_TEST_CASE(CrossTrieSharingSurvivesUntilLastReferenceDrops)
     delta1.stateRoot = sharedRoot;
     mergeNodeDelta(std::move(resultA), delta1);
     mergeNodeDelta(std::move(resultB), delta1);
-    bcos::task::syncWait(flushTrieNodes(nodes, delta1.newNodes));
     commitPruneBlock(backend, pruner, 1, delta1);
 
     // Sanity: the delta really did deduplicate the double emission (else the test is vacuous),
@@ -735,7 +744,6 @@ BOOST_AUTO_TEST_CASE(CrossTrieSharingSurvivesUntilLastReferenceDrops)
     mergeNodeDelta(std::move(resultA2), delta2);
     BOOST_REQUIRE(!delta2.obsoletedNodes.empty());
     BOOST_REQUIRE(reemitted > 0U);  // else the no-op puts exercised nothing
-    bcos::task::syncWait(flushTrieNodes(nodes, delta2.newNodes));
     commitPruneBlock(backend, pruner, 2, delta2);
 
     for (auto const& hash : delta2.obsoletedNodes)
@@ -772,7 +780,6 @@ BOOST_AUTO_TEST_CASE(CrossTrieSharingSurvivesUntilLastReferenceDrops)
     MPTDeltaLayer delta3;
     delta3.stateRoot = resultB2.root;
     mergeNodeDelta(std::move(resultB2), delta3);
-    bcos::task::syncWait(flushTrieNodes(nodes, delta3.newNodes));
     commitPruneBlock(backend, pruner, blockB, delta3);
 
     for (auto const& hash : delta2.obsoletedNodes)
@@ -950,7 +957,6 @@ BOOST_AUTO_TEST_CASE(TombstoneObsoletionCountedManually)
     BackendNodeStorage nodes(backend);
     Pruner pruner(backend, /*pruneWindow=*/2);
     auto const storageRoot = makeHash(0x77);
-    bcos::task::syncWait(nodes.writeOne(storageRoot, bcos::bytes{0xAA}));
 
     // The storage trie's own build counted its root at creation (+1 tallied by the build).
     MPTDeltaLayer delta1;
@@ -1025,7 +1031,6 @@ BOOST_AUTO_TEST_CASE(RebuildCountsCrossTrieSharing)
     mergeNodeDelta(std::move(resultA), delta);
     mergeNodeDelta(std::move(resultB), delta);
     mergeNodeDelta(std::move(accountResult), delta);
-    bcos::task::syncWait(flushTrieNodes(nodes, delta.newNodes));
     commitPruneBlock(backend, pruner, 1, delta);
 
     auto const storageLive = liveNodeHashes(nodes, storageRoot);
@@ -1454,6 +1459,18 @@ BOOST_FIXTURE_TEST_CASE(StartupSweepParallelShardsOnRocksDB, RocksDBSweepFixture
     }
 }
 
+BOOST_FIXTURE_TEST_CASE(StartupRebuildFailsLoudOnMissingNode, RocksDBSweepFixture)
+{
+    RocksPruneBackend backend(*rocksDB, bcos::storage2::rocksdb::StateKeyResolver{},
+        bcos::storage2::rocksdb::StateValueResolver{});
+    writeMptActivation(backend, /*activation=*/0);
+    RocksPruner pruner(backend, /*pruneWindow=*/2);
+    std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, makeHash(0x01)}};
+    BOOST_CHECK_THROW(bcos::task::syncWait(pruner.init(
+                          1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false)),
+        MPTInvariantViolation);
+}
+
 BOOST_AUTO_TEST_CASE(RebuildTruncatesAtScenarioAActivation)
 {
     // Scenario A: feature_mpt_state_root activates at block 5, so the first MPT block is 6.
@@ -1696,7 +1713,6 @@ BOOST_AUTO_TEST_CASE(RebuildSkippedBeforeActivationThenDeltaSeeds)
     MPTDeltaLayer delta;
     delta.stateRoot = result.root;
     mergeNodeDelta(std::move(result), delta);
-    bcos::task::syncWait(flushTrieNodes(nodes, delta.newNodes));
     commitPruneBlock(backend, pruner, 3, delta);
 
     auto const live = liveNodeHashes(nodes, delta.stateRoot);
@@ -1717,6 +1733,117 @@ BOOST_AUTO_TEST_CASE(RebuildSkippedBeforeActivationThenDeltaSeeds)
     {
         BOOST_CHECK(rebuilt.countOf(hash) == std::optional<uint64_t>{1});
     }
+}
+
+BOOST_AUTO_TEST_CASE(RebuildInvalidatesUntrackedStoredCounts)
+{
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    writeMptActivation(backend, /*activation=*/0);
+    constexpr int64_t N = 2;
+    auto const root = seedTrieFlushed(nodes, emptyRootHash(),
+        {{accountKeyHash(makeAddress(1)), makePruneAccount(0, 100).encode()}})
+                          .root;
+    std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, root}};
+
+    auto const abandoned = garbageHash(0xF2);
+    bcos::task::syncWait(nodes.writeOne(abandoned, bcos::bytes{0xBB}));
+    Pruner rebuilt(backend, N);
+    bcos::task::syncWait(
+        rebuilt.init(1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
+    BOOST_CHECK(rebuilt.countOf(abandoned) == std::optional<uint64_t>{0});
+    BOOST_CHECK(!rebuilt.deadlineOf(abandoned).has_value());
+
+    MPTDeltaLayer born;
+    born.refCountDeltas[abandoned] = 1;
+    born.newNodes[abandoned] = bcos::bytes{0xBB};
+    commitPruneBlock(backend, rebuilt, 2, born);
+    BOOST_CHECK(rebuilt.countOf(abandoned) == std::optional<uint64_t>{1});
+
+    MPTDeltaLayer obsoleted;
+    obsoleted.refCountDeltas[abandoned] = -1;
+    obsoleted.obsoletedNodes.insert(abandoned);
+    commitPruneBlock(backend, rebuilt, 3, obsoleted);
+    BOOST_CHECK(rebuilt.countOf(abandoned) == std::optional<uint64_t>{0});
+    BOOST_CHECK(rebuilt.deadlineOf(abandoned) == std::optional<uint64_t>{5});
+    runEmptyBlocks(backend, rebuilt, 4, 5);
+    BOOST_CHECK(!nodeRowExists(backend, abandoned));
+}
+
+BOOST_AUTO_TEST_CASE(InterruptedRebuildMarkerPreventsFastRestore)
+{
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    writeMptActivation(backend, /*activation=*/0);
+    constexpr int64_t N = 2;
+    auto const rootA = seedTrieFlushed(nodes, emptyRootHash(),
+        {{accountKeyHash(makeAddress(1)), makePruneAccount(0, 100).encode()}})
+                           .root;
+    auto const rootB = seedTrieFlushed(
+        nodes, rootA, {{accountKeyHash(makeAddress(1)), makePruneAccount(1, 200).encode()}})
+                           .root;
+    std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, rootA}, {2, rootB}};
+
+    Pruner initial(backend, N);
+    bcos::task::syncWait(
+        initial.init(2, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
+    auto const expectedPending = initial.pendingCount();
+    BOOST_REQUIRE_GT(expectedPending, 0U);
+
+    std::vector<bcos::executor_v1::StateKey> queueRows;
+    auto iterator = bcos::task::syncWait(bcos::storage2::range(backend, bcos::storage2::RANGE_SEEK,
+        bcos::executor_v1::StateKey{bcos::storage2::kMPTPruneQueueTable, std::string_view{}}));
+    while (auto item = bcos::task::syncWait(iterator.next()))
+    {
+        bcos::executor_v1::StateKeyView const key{std::get<0>(*item)};
+        if (key.m_table != bcos::storage2::kMPTPruneQueueTable)
+        {
+            break;
+        }
+        queueRows.push_back(std::get<0>(*item));
+    }
+    bcos::task::syncWait(bcos::storage2::removeSome(backend, std::move(queueRows)));
+
+    bcos::storage::Entry marker;
+    marker.set(std::string_view{"1"});
+    std::vector<std::pair<bcos::executor_v1::StateKey, bcos::storage::Entry>> markerRows;
+    markerRows.emplace_back(bcos::executor_v1::StateKey{bcos::storage2::kMPTPruneMetaTable,
+                                bcos::storage2::kMPTPruneRebuildInProgressKey},
+        std::move(marker));
+    bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(markerRows)));
+
+    Pruner restored(backend, N);
+    bcos::task::syncWait(
+        restored.init(2, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
+    BOOST_CHECK_EQUAL(restored.pendingCount(), expectedPending);
+    auto const markerAfter = bcos::task::syncWait(bcos::storage2::readOne(
+        backend, bcos::executor_v1::StateKey{bcos::storage2::kMPTPruneMetaTable,
+                     bcos::storage2::kMPTPruneRebuildInProgressKey}));
+    BOOST_REQUIRE(markerAfter.has_value());
+    BOOST_CHECK_EQUAL(markerAfter->get(), "0");
+}
+
+BOOST_AUTO_TEST_CASE(RebuildRequiresExplicitOptIn)
+{
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    writeMptActivation(backend, /*activation=*/0);
+    std::map<bcos::h256, bcos::bytes> entries{
+        {accountKeyHash(makeAddress(1)), makePruneAccount(0, 100).encode()}};
+    auto const root = seedTrieFlushed(nodes, emptyRootHash(), entries).root;
+    std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, root}};
+
+    Pruner refused(backend, /*pruneWindow=*/2);
+    BOOST_CHECK_THROW(bcos::task::syncWait(refused.init(1, /*executorVersion=*/0,
+                          rootLookupOf(roots), /*sweepGarbage=*/false, /*progress=*/{},
+                          /*forceRebuild=*/false, /*allowRebuild=*/false)),
+        MPTInvariantViolation);
+
+    Pruner allowed(backend, /*pruneWindow=*/2);
+    BOOST_CHECK_NO_THROW(bcos::task::syncWait(allowed.init(1, /*executorVersion=*/0,
+        rootLookupOf(roots), /*sweepGarbage=*/false, /*progress=*/{},
+        /*forceRebuild=*/false, /*allowRebuild=*/true)));
+    BOOST_CHECK_GT(allowed.trackedCount(), 0U);
 }
 
 BOOST_AUTO_TEST_CASE(RebuildFailsLoudOnMissingNode)
@@ -1746,7 +1873,6 @@ BOOST_AUTO_TEST_CASE(NewNodesGuardKeepsQueueEntryForRecheck)
     BackendNodeStorage nodes(backend);
     Pruner pruner(backend, /*pruneWindow=*/2);
     auto const h1 = makeHash(0x01);
-    bcos::task::syncWait(nodes.writeOne(h1, bcos::bytes{0x11}));
 
     // Counted history: created at block 1, obsoleted at block 2 → deadline 4.
     MPTDeltaLayer delta1;

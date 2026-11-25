@@ -118,6 +118,14 @@ BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
     BOOST_CHECK_NO_THROW(
         sweepOn.loadStorageConfig(fromIni("[storage]\nmpt_prune_sweep_garbage=true\n")));
     BOOST_CHECK(sweepOn.mptPruneSweepGarbage());
+
+    LoaderProbe rebuildDefault;
+    BOOST_CHECK_NO_THROW(rebuildDefault.loadStorageConfig({}));
+    BOOST_CHECK(!rebuildDefault.mptPruneAllowRebuild());
+    LoaderProbe rebuildAllowed;
+    BOOST_CHECK_NO_THROW(
+        rebuildAllowed.loadStorageConfig(fromIni("[storage]\nmpt_prune_allow_rebuild=true\n")));
+    BOOST_CHECK(rebuildAllowed.mptPruneAllowRebuild());
 }
 
 

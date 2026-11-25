@@ -176,6 +176,9 @@ public:
     // finds (init Phase 3). Default false: the scan is skipped entirely (only a hint is
     // logged — counting the garbage would itself cost the full-table scan).
     bool mptPruneSweepGarbage() const;
+    // Whether a full reachability rebuild is explicitly allowed. Default false: refuse it with
+    // an actionable error instead of allocating a large temporary map at startup.
+    bool mptPruneAllowRebuild() const;
     // One-shot offline hex→binary account-table migration at boot
     // ([storage] migrate_account_tables_to_binary, default false). Safe to leave on: once the
     // layout flag in the state DB says "bin" the boot skips the scan entirely.
@@ -315,7 +318,8 @@ public:
     const std::string& ethereumBootnodesFile() const;
     // eth/68 transaction gossip ([ethereum] tx_gossip, default true): dedicated outbound
     // sessions that exchange pooled transactions with bootnode peers and admit what
-    // arrives into the engine mempool. Only meaningful in EL mode.
+    // arrives into the engine mempool. Uses a derived node identity so these sessions
+    // can coexist with block sync. Only meaningful in EL mode.
     bool ethereumTxGossipEnabled() const;
     // path to a file holding the 32-byte secp256k1 node private key (hex, optional
     // 0x prefix); empty => auto-generate a persistent key next to the FISCO node key
@@ -597,6 +601,8 @@ private:
     // booting. Default off — the boot skips the scan entirely and only logs a hint (counting
     // the garbage would itself cost the full-table scan).
     bool m_mptPruneSweepGarbage = false;
+    // Required for reorg-enabled pruning: a rollback needs a full reachability rebuild.
+    bool m_mptPruneAllowRebuild = false;
     // One-shot boot-time migration of the account tables to the binary encoding
     // (libinitializer/AccountTableMigration). Hex-only executor lanes refuse it at boot.
     bool m_migrateAccountTablesToBinary = false;

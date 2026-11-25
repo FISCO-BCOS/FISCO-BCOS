@@ -94,6 +94,13 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
         try
         {
             auto established = server.accept();
+            BOOST_CHECK_EQUAL(established.peerStatus.earliestBlock, 7u);
+            BOOST_CHECK_EQUAL(established.peerStatus.latestBlock, 123u);
+            BOOST_CHECK(
+                established.peerStatus.latestBlockHash ==
+                h256(std::string_view(
+                         "0x1111111111111111111111111111111111111111111111111111111111111111"),
+                    h256::FromHex));
             auto msgResult = established.session.recvMessage();
             if (!msgResult)
             {
@@ -150,6 +157,11 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
         h256(std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
             h256::FromHex);
     config.forkId = {0x12345678, 0};
+    config.headHash =
+        h256(std::string_view("0x1111111111111111111111111111111111111111111111111111111111111111"),
+            h256::FromHex);
+    config.earliestBlock = 7;
+    config.latestBlock = 123;
 
     rlpx::RlpxClient client(std::move(clientKey), config);
     auto established = client.connect();

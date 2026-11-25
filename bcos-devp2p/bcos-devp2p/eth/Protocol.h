@@ -48,6 +48,7 @@ constexpr uint8_t GetPooledTransactions = 0x09;
 constexpr uint8_t PooledTransactions = 0x0a;
 constexpr uint8_t GetReceipts = 0x0f;
 constexpr uint8_t Receipts = 0x10;
+constexpr uint8_t BlockRangeUpdate = 0x11;
 }  // namespace msg
 
 constexpr uint8_t kProtocolVersion = 69;  // highest eth version we support
@@ -165,6 +166,17 @@ struct NewBlockHashesMessage
 bcos::bytes encodeNewBlockHashes(NewBlockHashesMessage const& _msg);
 bcos::codec::rlp::RlpResult<NewBlockHashesMessage> decodeNewBlockHashes(bytesConstRef _data);
 
+// BlockRangeUpdate (eth/69+): [earliestBlock, latestBlock, latestBlockHash]
+struct BlockRangeUpdateMessage
+{
+    uint64_t earliestBlock{0};
+    uint64_t latestBlock{0};
+    bcos::h256 latestBlockHash;
+};
+
+bcos::bytes encodeBlockRangeUpdate(BlockRangeUpdateMessage const& _msg);
+bcos::codec::rlp::RlpResult<BlockRangeUpdateMessage> decodeBlockRangeUpdate(bytesConstRef _data);
+
 // ---------------------------------------------------------------------------
 // Transaction gossip (eth/68): message-count DoS caps, enforced by the decoders.
 // geth's own soft limits are far lower (it announces ~256 hashes and serves
@@ -236,5 +248,28 @@ bcos::codec::rlp::RlpResult<PooledTransactionsMessage> decodePooledTransactions(
 inline std::vector<bcos::devp2p::rlpx::Capability> ethCapabilities()
 {
     return {{std::string("eth"), kProtocolVersion}, {std::string("eth"), kMinProtocolVersion}};
+}
+
+inline std::optional<uint8_t> negotiateEthVersion(
+    std::vector<bcos::devp2p::rlpx::Capability> const& _localCapabilities,
+    std::vector<bcos::devp2p::rlpx::Capability> const& _peerCapabilities)
+{
+    std::optional<uint8_t> negotiated;
+    for (auto const& local : _localCapabilities)
+    {
+        if (local.name != "eth")
+        {
+            continue;
+        }
+        for (auto const& peer : _peerCapabilities)
+        {
+            if (local.name == peer.name && local.version == peer.version &&
+                (!negotiated || peer.version > *negotiated))
+            {
+                negotiated = peer.version;
+            }
+        }
+    }
+    return negotiated;
 }
 }  // namespace bcos::devp2p::eth

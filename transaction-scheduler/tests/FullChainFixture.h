@@ -53,6 +53,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/Classify.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
+#include "bcos-ledger/mpt/NodeStorageCodec.h"
 #include "bcos-ledger/mpt/StorageValueCodec.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-storage/CheckpointRocksDBStorage.h"
@@ -451,7 +452,7 @@ public:
             return std::nullopt;
         }
         auto raw = entry->get();
-        return bytes(raw.begin(), raw.end());
+        return ledger::mpt::decodeStoredNode(raw).rlp;
     }
 
     /// Count of committed "/mpt/" rows in the RocksDB backend.

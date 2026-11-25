@@ -25,7 +25,7 @@
  *              its watermark advances to the head;
  *          (b) past the window the committed "/mpt/" node-row count plateaus (bounded);
  *          (c) roots inside [head-N, head] keep their nodes, older roots are deleted;
- *          (d) no "/sys/mpt_prune_*" metadata row ever lands on the backend.
+ *          (d) counts and deletion metadata persist inline and in the prune tables.
  *        Deletions land synchronously inside newPayload (coPreparePruneRows' batch rides the
  *        block's WriteBatch), so every assertion runs against the committed state.
  */
@@ -71,7 +71,7 @@ bool engineNodeRowInBackend(FCBackend& backend, h256 const& hash)
     return task::syncWait(storage2::existsOne(backend, bcos::ledger::mptNodeStateKey(hash)));
 }
 
-/// Rows under any "/sys/mpt_prune_*" table — the in-memory pruner must never write one.
+/// Rows under any "/sys/mpt_prune_*" table — persistent queue and head metadata.
 size_t enginePruneMetadataRowCount(FCBackend& backend)
 {
     return task::syncWait([](FCBackend& backend) -> task::Task<size_t> {
@@ -270,11 +270,11 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
         roots[number] = fixture.headerOnChain(number)->stateRoot();
         nodeCounts[number] = fixture.backendNodeCount();
         // Every block is an MPT block on the Ethereum lane and fires the observer: the
-        // in-memory count of the just-committed root reads exactly one reference, no
-        // deadline — and no metadata row may have landed with any block.
+        // persistent count of the just-committed root reads exactly one reference, no
+        // deadline — and the queue/head metadata is present.
         BOOST_CHECK(pruner->countOf(roots[number]) == std::optional<uint64_t>{1});
         BOOST_CHECK(!pruner->deadlineOf(roots[number]).has_value());
-        BOOST_CHECK_EQUAL(enginePruneMetadataRowCount(backend), 0U);
+        BOOST_CHECK_GT(enginePruneMetadataRowCount(backend), 0U);
     }
 
     // (a) The engine commit path really fired the hooks: the pruner tracks the live window's
@@ -309,8 +309,8 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
     BOOST_CHECK(!pruner->countOf(roots[1]).has_value());
     BOOST_CHECK(pruner->countOf(roots[8]) == std::optional<uint64_t>{1});
 
-    // (d) The in-memory pruner never wrote a "/sys/mpt_prune_*" metadata row.
-    BOOST_CHECK_EQUAL(enginePruneMetadataRowCount(backend), 0U);
+    // (d) The pruner persists queue and head metadata in the prune tables.
+    BOOST_CHECK_GT(enginePruneMetadataRowCount(backend), 0U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

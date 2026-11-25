@@ -225,6 +225,72 @@ BOOST_AUTO_TEST_CASE(statusRoundTrip)
     BOOST_CHECK_EQUAL(decoded->forkId.next, 0u);
 }
 
+BOOST_AUTO_TEST_CASE(statusEth69Golden)
+{
+    eth::StatusMessage msg;
+    msg.protocolVersion = 69;
+    msg.networkId = 1;
+    msg.genesisHash =
+        h256(std::string_view("0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
+            h256::FromHex);
+    msg.forkId = {0x12345678, 0};
+    msg.earliestBlock = 7;
+    msg.latestBlock = 256;
+    msg.latestBlockHash =
+        h256(std::string_view("0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"),
+            h256::FromHex);
+    msg.eip7642 = true;
+
+    auto encoded = eth::encodeStatus(msg);
+    BOOST_CHECK_EQUAL(toHex(encoded),
+        "f84f4501a0000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+        "c684123456788007820100a0202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f");
+    auto decoded = eth::decodeStatus(ref(encoded), 69);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->earliestBlock, 7u);
+    BOOST_CHECK_EQUAL(decoded->latestBlock, 256u);
+    BOOST_CHECK(decoded->latestBlockHash == msg.latestBlockHash);
+    BOOST_CHECK(decoded->headHash == msg.latestBlockHash);
+}
+
+BOOST_AUTO_TEST_CASE(negotiateEthVersionUsesIntersection)
+{
+    using rlpx::Capability;
+    std::vector<Capability> local68{{"eth", 68}, {"snap", 1}};
+    std::vector<Capability> peer{{"eth", 69}, {"eth", 68}, {"snap", 2}};
+    auto negotiated = eth::negotiateEthVersion(local68, peer);
+    BOOST_REQUIRE(negotiated.has_value());
+    BOOST_CHECK_EQUAL(*negotiated, 68);
+
+    negotiated = eth::negotiateEthVersion({{"eth", 68}, {"eth", 69}}, {{"eth", 68}});
+    BOOST_REQUIRE(negotiated.has_value());
+    BOOST_CHECK_EQUAL(*negotiated, 68);
+
+    negotiated = eth::negotiateEthVersion({{"eth", 68}, {"eth", 69}}, {{"eth", 69}, {"eth", 70}});
+    BOOST_REQUIRE(negotiated.has_value());
+    BOOST_CHECK_EQUAL(*negotiated, 69);
+
+    negotiated = eth::negotiateEthVersion({{"snap", 1}}, {{"snap", 1}, {"eth", 69}});
+    BOOST_CHECK(!negotiated.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(blockRangeUpdateRoundTrip)
+{
+    eth::BlockRangeUpdateMessage msg;
+    msg.earliestBlock = 3;
+    msg.latestBlock = 9;
+    msg.latestBlockHash =
+        h256(std::string_view("0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"),
+            h256::FromHex);
+    auto encoded = eth::encodeBlockRangeUpdate(msg);
+    auto decoded = eth::decodeBlockRangeUpdate(ref(encoded));
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->earliestBlock, msg.earliestBlock);
+    BOOST_CHECK_EQUAL(decoded->latestBlock, msg.latestBlock);
+    BOOST_CHECK(decoded->latestBlockHash == msg.latestBlockHash);
+    BOOST_CHECK_EQUAL(eth::frameId(eth::msg::BlockRangeUpdate), 0x21u);
+}
+
 BOOST_AUTO_TEST_CASE(newBlockHashesRoundTrip)
 {
     eth::NewBlockHashesMessage msg;

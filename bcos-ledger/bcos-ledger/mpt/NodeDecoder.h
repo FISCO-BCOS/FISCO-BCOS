@@ -20,9 +20,18 @@
 
 #include "TrieNode.h"
 #include <bcos-utilities/Common.h>
+#include <optional>
+#include <vector>
 
 namespace bcos::ledger::mpt
 {
+
+struct NodeReferences
+{
+    std::vector<bcos::h256> children;
+    std::optional<bcos::h256> storageRoot;
+    bool accountLeaf = false;
+};
 
 /// Reconstruct a TrieNode from its canonical RLP encoding (inverse of encodeRaw).
 ///
@@ -34,5 +43,7 @@ namespace bcos::ledger::mpt
 ///
 /// @throws MPTDecodeError on malformed input (truncated header, span past end, wrong item count).
 TrieNode decodeNode(bcos::bytesConstRef raw);
+
+NodeReferences decodeNodeReferences(bcos::bytesConstRef raw, bool accountTrie);
 
 }  // namespace bcos::ledger::mpt

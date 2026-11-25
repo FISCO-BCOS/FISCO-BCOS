@@ -26,8 +26,8 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-ledger/mpt/MPTNodeReadStorage.h>
 #include <bcos-storage/KeyPrefixes.h>
-#include <bcos-storage/MPTNodeReadStorage.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
 #include <boost/filesystem.hpp>
@@ -60,7 +60,7 @@ bytes nodeRlpB()
 task::Task<void> writeNodeRow(auto& storage, h256 const& hash, bytes rlp)
 {
     storage::Entry entry;
-    entry.set(std::move(rlp));
+    entry.set(bcos::storage2::encodeStoredNode(bcos::ref(rlp), 1));
     co_await storage2::writeOne(storage, storage2::mptNodeStateKey(hash), std::move(entry));
 }
 }  // namespace

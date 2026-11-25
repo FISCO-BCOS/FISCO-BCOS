@@ -51,16 +51,20 @@
     ; State roots within [latest - mpt_prune_window, latest] stay fully reachable
     ; (eth_getProof / historical eth_call); older roots answer -32004.
     ; -1 disables pruning (default, archive-node behavior); a suggested value is 128.
-    ; Reference counts live in memory only and are rebuilt from the recent state
-    ; roots at every startup, so pruning can be enabled and the window resized at
-    ; any restart. Enlarging the window recovers only the coverage of roots still
-    ; surviving on disk: roots already pruned under a previous smaller window are
-    ; skipped (an INFO log names the first surviving root), and the effective
-    ; window starts there. Accepted values: -1 or [1, 10000000].
-    ; Binary upgrades/downgrades need no migration: counts are in-memory only, and
-    ; a pre-pruning binary keeps executing on a pruned database (head-reachable
-    ; nodes are never deleted); only historical reads beyond the window degrade
-    ; to a generic miss error.
+    ; Reference counts and deletion deadlines are stored inline in the MPT node
+    ; storage RLP, with a persistent deadline queue. Matching metadata restores
+    ; directly at startup; missing/mismatched metadata or a window change forces
+    ; a reachability rebuild. Enlarging the window recovers only roots still on
+    ; disk; already-pruned roots are skipped (an INFO log names the first survivor).
+    ; Accepted values: -1 or [1, 10000000].
+    ; The refcounted node storage format is not compatible with the legacy raw-RLP
+    ; format; no migration is provided.
+    ; A full reachability rebuild can use a large temporary in-memory map. Default
+    ; false refuses that rebuild with an actionable error; set true only when you
+    ; explicitly allow the startup cost. Matching metadata needs no rebuild. When
+    ; pruning is enabled with ethereum.reorg_window > 0, true is required because
+    ; a rollback also needs a full reachability rebuild.
+    ;mpt_prune_allow_rebuild=false
     ;mpt_prune_window=-1
     ; Startup garbage sweep: set true to scan the whole MPT node table at boot and
     ; delete (in batches) pre-existing unreachable rows (historical garbage from

@@ -31,6 +31,7 @@
 #include "transaction-scheduler/tests/FullChainFixture.h"
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-ledger/mpt/NodeStorageCodec.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/jsonrpc/Common.h>
@@ -99,8 +100,8 @@ void epiLoadNodes(FullChainFixture& fixture, EpiNodeStorage& nodes)
                     reinterpret_cast<bcos::byte const*>(view.m_key.data()), h256::SIZE)};
                 auto const* entry = std::get_if<storage::Entry>(std::addressof(value));
                 BOOST_REQUIRE(entry != nullptr);
-                auto raw = entry->get();
-                co_await storage2::writeOne(nodes, hash, bytes(raw.begin(), raw.end()));
+                auto raw = mpt::decodeStoredNode(entry->get()).rlp;
+                co_await storage2::writeOne(nodes, hash, std::move(raw));
             }
         }
     }());

@@ -862,6 +862,7 @@ private:
                         clientConfig.networkId = chainId;
                         clientConfig.genesisHash = bcos::protocol::ethHeaderHash(genesisHeader);
                         clientConfig.headHash = bcos::protocol::ethHeaderHash(anchor);
+                        clientConfig.latestBlock = static_cast<uint64_t>(resume.anchor.number);
                         // totalDifficulty: minimal big-endian u256(0). An EMPTY byte
                         // string RLP-encodes as 0x80 (the canonical RLP integer 0); a
                         // single {0} would encode as 0x00 (non-canonical, rejected by
@@ -1415,6 +1416,7 @@ private:
                 config.networkId = m_nodeConfig->ethereumChainId();
                 config.genesisHash = bcos::protocol::ethHeaderHash(resume.genesisHeader);
                 config.headHash = bcos::protocol::ethHeaderHash(resume.anchor);
+                config.latestBlock = static_cast<uint64_t>(resume.anchor.number);
                 // Minimal big-endian u256(0), same as the sync loop's Status: 0x80.
                 config.totalDifficulty = {};
                 config.forkId = computeForkId(static_cast<uint64_t>(resume.anchor.number),

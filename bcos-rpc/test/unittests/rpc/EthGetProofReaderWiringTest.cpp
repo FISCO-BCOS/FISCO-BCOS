@@ -29,11 +29,11 @@
 #include <bcos-ledger/mpt/Account.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
+#include <bcos-ledger/mpt/MPTNodeReadStorage.h>
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-storage/KeyPrefixes.h>
-#include <bcos-storage/MPTNodeReadStorage.h>
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
@@ -78,7 +78,7 @@ public:
             for (auto const& [hash, rlp] : result.newNodes)
             {
                 storage::Entry entry;
-                entry.set(bcos::bytes(rlp));
+                entry.set(mpt::encodeStoredNode(bcos::ref(rlp), 1));
                 co_await storage2::writeOne(
                     m_stateRows, storage2::mptNodeStateKey(hash), std::move(entry));
             }

@@ -32,6 +32,7 @@
 #include "bcos-ledger/mpt/HashBuilder.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-ledger/mpt/NodeDecoder.h"
+#include "bcos-ledger/mpt/NodeStorageCodec.h"
 #include "bcos-ledger/mpt/StorageValueCodec.h"
 #include "bcos-ledger/mpt/TrieNode.h"
 #include "bcos-task/Wait.h"
@@ -137,7 +138,7 @@ task::Task<bcos::bytes> readNodeRowChecked(storage::StorageInterface& storage, h
     BOOST_REQUIRE_MESSAGE(
         entry.has_value(), "missing genesis trie node row for hash " + hash.hex());
     auto raw = entry->get();
-    bcos::bytes rlp(raw.begin(), raw.end());
+    bcos::bytes rlp = ledger::mpt::decodeStoredNode(raw).rlp;
     BOOST_CHECK_EQUAL(crypto::keccak256Hash(bcos::ref(rlp)).hex(), hash.hex());
     co_return rlp;
 }
@@ -235,7 +236,7 @@ public:
             co_return std::nullopt;
         }
         auto raw = entry->get();
-        co_return bcos::bytes(raw.begin(), raw.end());
+        co_return ledger::mpt::decodeStoredNode(raw).rlp;
     }
 
     task::Task<std::vector<std::optional<bcos::bytes>>> readSome(::ranges::input_range auto keys)
@@ -251,7 +252,7 @@ public:
     task::Task<void> writeOne(h256 key, bcos::bytes value)
     {
         storage::Entry entry;
-        entry.set(std::move(value));
+        entry.set(ledger::mpt::encodeStoredNode(bcos::ref(value), 1));
         co_await storage2::writeOne(*m_backend, storage2::mptNodeStateKey(key), std::move(entry));
     }
 

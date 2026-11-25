@@ -46,7 +46,7 @@
  *  - MPT pruning interaction: with the startup check mpt_prune_window >= reorg_window,
  *    every node reachable from a rollback target's state root is still on disk (a node
  *    deleted at block b was obsoleted at b - pruneWindow <= head - reorgWindow <= r, so
- *    root(r >= that) cannot reference it). The pruner rebuilds its in-memory counts from
+ *    root(r >= that) cannot reference it). The pruner rebuilds its persistent counts from
  *    the new head after a rollback (CommitObserver::coOnRollback) — with pruning enabled
  *    that costs a full head-trie walk per reorg, the accepted trade-off for exact
  *    self-healing; with the default (pruning disabled, NoopCommitObserver) the hook is a

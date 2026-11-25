@@ -944,6 +944,14 @@ void NodeConfig::validateELModeInvariants() const
                                   std::to_string(m_ethereumReorgWindow) +
                                   "): an EL rollback target's trie nodes would already be pruned"));
     }
+    if (ethereumELModeEnabled() && m_ethereumReorgWindow > 0 && m_mptPruneWindow != -1 &&
+        !m_mptPruneAllowRebuild)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "storage.mpt_prune_allow_rebuild=true is required when MPT "
+                                  "pruning and ethereum.reorg_window are both enabled: an EL "
+                                  "rollback requires a full reference-count rebuild"));
+    }
     // The challenger data plane (debug_dbGet, gated by enable_debug_api on either listener)
     // reads MPT preimages straight out of the node store with no retention guarantee: a block
     // still inside a dispute game's challenge window can have its trie nodes pruned, and
@@ -2525,6 +2533,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     // pre-existing unreachable "/mpt/" rows entirely (only a hint is logged); enable to delete
     // them (in batches) while booting.
     m_mptPruneSweepGarbage = _pt.get<bool>("storage.mpt_prune_sweep_garbage", false);
+    m_mptPruneAllowRebuild = _pt.get<bool>("storage.mpt_prune_allow_rebuild", false);
     // One-shot hex→binary account-table migration at boot (AccountTableMigration.cpp).
     // Idempotent and crash-safe; the "bin" layout flag in the state DB short-circuits later
     // boots.
@@ -2555,6 +2564,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("enable_rocksdb_blob", m_enableRocksDBBlob)
                          << LOG_KV("mptPruneWindow", m_mptPruneWindow)
                          << LOG_KV("mptPruneSweepGarbage", m_mptPruneSweepGarbage)
+                         << LOG_KV("mptPruneAllowRebuild", m_mptPruneAllowRebuild)
                          << LOG_KV("migrateAccountTablesToBinary", m_migrateAccountTablesToBinary)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
@@ -3144,6 +3154,11 @@ std::int64_t NodeConfig::mptPruneWindow() const
 bool NodeConfig::mptPruneSweepGarbage() const
 {
     return m_mptPruneSweepGarbage;
+}
+
+bool NodeConfig::mptPruneAllowRebuild() const
+{
+    return m_mptPruneAllowRebuild;
 }
 
 bool NodeConfig::migrateAccountTablesToBinary() const

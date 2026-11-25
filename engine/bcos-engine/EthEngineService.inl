@@ -956,12 +956,12 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             co_await scheduler_v1::writeRollbackJournalRows(prewriteStorage,
                 cached->executionPayload.blockNumber, *rollbackJournal, reorgWindow);
         }
-        // MPT pruning: the observer turns the block's delta into the deletion keys of expired
-        // node rows, applied to prewriteStorage so deletions land in the SAME WriteBatch as
-        // the block data — the same hook (and ordering) as BaselineScheduler::coCommitBlock.
-        // A throw here fails the commit before any row lands; the CL's retry re-runs it (the
-        // pruner's staged overlay is discarded and re-derived, so the retry reproduces the
-        // identical batch).
+        // MPT pruning: the observer turns the block's delta into node/metadata upserts,
+        // expired deletions and queue changes, applied to prewriteStorage so they land in the SAME
+        // WriteBatch as the block data — the same hook (and ordering) as
+        // BaselineScheduler::coCommitBlock. A throw here fails the commit before any row lands; the
+        // CL's retry re-runs it (the pruner's staged overlay is discarded and re-derived, so the
+        // retry reproduces the identical batch).
         if (localArtifact->mptDelta)
         {
             co_await scheduler_v1::prepareMPTPruneRows(*m_commitObserver,

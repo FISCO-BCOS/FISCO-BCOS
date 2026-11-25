@@ -24,6 +24,7 @@
  */
 #pragma once
 
+#include "NodeStorageCodec.h"
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-storage/KeyPrefixes.h>
@@ -79,7 +80,7 @@ public:
             co_return std::nullopt;
         }
         auto raw = entry->get();
-        co_return bcos::bytes(raw.begin(), raw.end());
+        co_return decodeStoredNode(raw).rlp;
     }
 
     task::Task<std::vector<std::optional<bcos::bytes>>> readSome(::ranges::input_range auto keys)
@@ -100,7 +101,7 @@ public:
                 continue;
             }
             auto raw = entry->get();
-            values.emplace_back(bcos::bytes(raw.begin(), raw.end()));
+            values.emplace_back(decodeStoredNode(raw).rlp);
         }
         co_return values;
     }
@@ -108,7 +109,7 @@ public:
     task::Task<void> writeOne(bcos::h256 key, bcos::bytes value)
     {
         storage::Entry entry;
-        entry.set(std::move(value));
+        entry.set(encodeStoredNode(bcos::ref(value), 1));
         co_await storage2::writeOne(
             mutableStorage(*m_view), storage2::mptNodeStateKey(key), std::move(entry));
     }
@@ -122,7 +123,7 @@ public:
             mutableStorage(*m_view), keyValues | ::ranges::views::transform([](auto&& keyValue) {
                 auto const& [key, value] = keyValue;
                 storage::Entry entry;
-                entry.set(bcos::bytes(value.begin(), value.end()));
+                entry.set(encodeStoredNode(bcos::ref(value), 1));
                 return std::make_pair(storage2::mptNodeStateKey(key), std::move(entry));
             }));
     }

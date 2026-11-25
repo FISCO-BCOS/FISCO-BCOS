@@ -44,6 +44,8 @@ struct PeerConfig
     uint64_t networkId{1};
     bcos::h256 genesisHash;
     bcos::h256 headHash;
+    uint64_t earliestBlock{0};
+    uint64_t latestBlock{0};
     bcos::bytes totalDifficulty;  // minimal big-endian u256
     bcos::devp2p::eth::ForkId forkId;
 };

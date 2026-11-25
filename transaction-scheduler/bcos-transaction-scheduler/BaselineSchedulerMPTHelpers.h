@@ -156,8 +156,8 @@ task::Task<void> publishPendingBlockHeaderForMPT(
 
 /// The pre-commit pruning hook, shared by every producer that lands an MPT delta (the PBFT
 /// BaselineScheduler::coCommitBlock and the engine services' newPayload commit): the observer
-/// turns the block's delta into the deletion keys of expired "/mpt/" node rows, applied to
-/// @p prewriteStorage so the deletions land in the SAME WriteBatch as the block data
+/// turns the block's delta into node/metadata upserts, expired deletions and queue changes,
+/// applied to @p prewriteStorage so they land in the SAME WriteBatch as the block data
 /// (CommitObserver.h explains the crash-atomicity contract). The NoopCommitObserver default returns
 /// an empty batch, so a node without pruning configured pays nothing.
 ///
@@ -173,12 +173,24 @@ task::Task<void> prepareMPTPruneRows(ledger::mpt::CommitObserver& commitObserver
     MutableStorageType& prewriteStorage)
 {
     auto pruneRows = co_await commitObserver.coPreparePruneRows(blockNumber, mptDelta);
+    if (!pruneRows.upserts.empty())
+    {
+        co_await storage2::writeSome(prewriteStorage, std::move(pruneRows.upserts));
+    }
     if (!pruneRows.deletions.empty())
     {
         // The mutable layer is LOGICAL_DELETION: removeSome writes tombstones that the
         // merge turns into physical deletes in the backend's WriteBatch (and removals
         // in the cache fan-out).
         co_await storage2::removeSome(prewriteStorage, std::move(pruneRows.deletions));
+    }
+    if (!pruneRows.queueUpserts.empty())
+    {
+        co_await storage2::writeSome(prewriteStorage, std::move(pruneRows.queueUpserts));
+    }
+    if (!pruneRows.queueDeletions.empty())
+    {
+        co_await storage2::removeSome(prewriteStorage, std::move(pruneRows.queueDeletions));
     }
 }
 

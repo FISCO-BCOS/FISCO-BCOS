@@ -74,7 +74,7 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
         if (response.id == rlpx::baseMsg::Ping)
         {
             // RLPx base protocol: Ping (id 0x02) is answered with Pong (id 0x03).
-            _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, {}});
+            _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, rlpx::encodePong()});
             BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain") << "answered Ping with Pong";
             continue;
         }
@@ -92,6 +92,13 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
                     "HeaderChain: peer disconnected: " +
                     (disc ? "reason=" + std::to_string(static_cast<int>(disc->reason)) :
                             "reason undecodable: " + disc.error().message));
+            }
+            if (response.id == eth::frameId(eth::msg::BlockRangeUpdate))
+            {
+                unwrapOrThrow(eth::decodeBlockRangeUpdate(
+                                  bytesConstRef(response.data.data(), response.data.size())),
+                    "HeaderChain: malformed BlockRangeUpdate: ");
+                continue;
             }
             // Peers freely broadcast transactions/new blocks while we are
             // waiting for the BlockHeaders reply — NewBlockHashes(0x11),

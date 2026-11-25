@@ -31,6 +31,7 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/Exceptions.h"
+#include "mpt/NodeStorageCodec.h"
 #include <bcos-utilities/Exceptions.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
@@ -137,7 +138,7 @@ task::Task<bcos::h256> importEthereumGenesisState(
     for (auto& [nodeHash, nodeRlp] : trie.nodes)
     {
         storage::Entry nodeEntry;
-        nodeEntry.set(std::move(nodeRlp));
+        nodeEntry.set(mpt::encodeStoredNode(bcos::ref(nodeRlp), 1));
         task::syncWait(
             storage2::writeOne(storage, mptNodeStateKey(nodeHash), std::move(nodeEntry)));
     }
