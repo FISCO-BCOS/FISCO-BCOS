@@ -4,6 +4,7 @@
 #include <concepts>
 #include <cstdint>
 #include <iterator>
+#include <ranges>
 #include <string_view>
 #include <vector>
 
@@ -12,13 +13,13 @@ namespace bcos::mempool
 
 template <class TransactionsType>
 concept InputTransactions =
-    ::ranges::input_range<TransactionsType> &&
-    std::same_as<::ranges::range_value_t<TransactionsType>, protocol::Transaction::Ptr>;
+    std::ranges::input_range<TransactionsType> &&
+    std::same_as<std::ranges::range_value_t<TransactionsType>, protocol::Transaction::Ptr>;
 
 template <class InputHashesType>
 concept InputHashes =
-    ::ranges::input_range<InputHashesType> &&
-    std::same_as<::ranges::range_value_t<InputHashesType>, bcos::crypto::HashType>;
+    std::ranges::input_range<InputHashesType> &&
+    std::same_as<std::ranges::range_value_t<InputHashesType>, bcos::crypto::HashType>;
 
 template <class SenderNonceTuple>
 concept SenderNonce = requires(SenderNonceTuple senderNonce) {
@@ -27,8 +28,8 @@ concept SenderNonce = requires(SenderNonceTuple senderNonce) {
 };
 
 template <class SenderNoncesType>
-concept SenderNonces = ::ranges::input_range<SenderNoncesType> &&
-                       SenderNonce<::ranges::range_value_t<SenderNoncesType>>;
+concept SenderNonces = std::ranges::input_range<SenderNoncesType> &&
+                       SenderNonce<std::ranges::range_value_t<SenderNoncesType>>;
 
 template <class MemPoolType, class StateStorage>
 concept MemPool =

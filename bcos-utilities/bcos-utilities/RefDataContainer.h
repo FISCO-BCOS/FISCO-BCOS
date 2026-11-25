@@ -23,6 +23,7 @@
 #include <cassert>
 #include <cstring>
 #include <range/v3/view/facade.hpp>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -30,7 +31,7 @@ namespace bcos
 {
 
 template <typename T>
-class RefDataContainer : public ::ranges::view_base
+class RefDataContainer : public ::ranges::view_base, public std::ranges::view_base
 {
 public:
     using value_type = T;

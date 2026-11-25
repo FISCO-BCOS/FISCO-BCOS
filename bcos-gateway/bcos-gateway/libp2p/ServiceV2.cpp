@@ -23,6 +23,7 @@
 #include "bcos-utilities/LogStream.h"
 #include <bcos-task/Wait.h>
 #include <cstring>
+#include <range/v3/view/single.hpp>
 #include <utility>
 
 using namespace bcos;

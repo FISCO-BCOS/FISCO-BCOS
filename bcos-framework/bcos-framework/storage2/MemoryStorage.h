@@ -35,9 +35,7 @@
 #include <boost/throw_exception.hpp>
 #include <concepts>
 #include <optional>
-#include <range/v3/view/chunk_by.hpp>
-#include <range/v3/view/transform.hpp>
-#include <range/v3/view/zip.hpp>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 
@@ -247,13 +245,13 @@ public:
         co_return DataValue{};
     }
 
-    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
+    auto readSomeRaw(std::ranges::input_range auto keys, auto&&... args)
         -> task::Task<std::vector<DataValue>>
     {
         std::vector<DataValue> values;
-        if constexpr (::ranges::sized_range<decltype(keys)>)
+        if constexpr (std::ranges::sized_range<decltype(keys)>)
         {
-            values.reserve(::ranges::size(keys));
+            values.reserve(std::ranges::size(keys));
         }
         for (auto&& key : keys)
         {
@@ -346,7 +344,7 @@ public:
         return !found;
     }
 
-    void removeSome(::ranges::input_range auto keys, bool ignoreLogicalDeletion)
+    void removeSome(std::ranges::input_range auto keys, bool ignoreLogicalDeletion)
     {
         for (auto&& key : keys)
         {
@@ -356,7 +354,7 @@ public:
         }
     }
 
-    auto readSome(::ranges::input_range auto keys, auto&&... args)
+    auto readSome(std::ranges::input_range auto keys, auto&&... args)
         -> task::Task<std::vector<std::optional<Value>>>
     {
         auto rawValues =
@@ -424,7 +422,7 @@ public:
         return {true};
     }
 
-    task::Task<void> writeSome(::ranges::input_range auto keyValues)
+    task::Task<void> writeSome(std::ranges::input_range auto keyValues)
     {
         for (auto&& [key, value] : keyValues)
         {
@@ -438,7 +436,7 @@ public:
 
     task::Immediate<void> removeOne(auto key)
     {
-        removeSome(::ranges::views::single(std::move(key)), false);
+        removeSome(std::ranges::views::single(std::move(key)), false);
         return {};
     }
 
@@ -477,17 +475,17 @@ public:
     task::Immediate<void> removeOne(auto key, auto... tags)
     {
         constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
-        removeSome(::ranges::views::single(std::move(key)), physical);
+        removeSome(std::ranges::views::single(std::move(key)), physical);
         return {};
     }
 
-    task::Task<void> removeSome(::ranges::input_range auto keys)
+    task::Task<void> removeSome(std::ranges::input_range auto keys)
     {
         removeSome(std::move(keys), false);
         co_return;
     }
 
-    task::Task<void> removeSome(::ranges::input_range auto keys, auto... tags)
+    task::Task<void> removeSome(std::ranges::input_range auto keys, auto... tags)
     {
         constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
         removeSome(std::move(keys), physical);
@@ -497,7 +495,8 @@ public:
     task::Immediate<void> merge(MemoryStorage& fromStorage)
         requires(!std::is_const_v<decltype(fromStorage)>)
     {
-        for (auto&& [bucket, fromBucket] : ::ranges::views::zip(m_buckets, fromStorage.m_buckets))
+        for (auto&& [bucket, fromBucket] :
+            std::ranges::views::zip(m_buckets, fromStorage.m_buckets))
         {
             Lock toLock(bucket.mutex, true);
             Lock fromLock(fromBucket.mutex, true);
@@ -529,8 +528,8 @@ public:
         size_t m_bucketIndex{};
         std::reference_wrapper<Buckets> m_buckets;
         std::unique_ptr<Lock> m_bucketLock;
-        ::ranges::iterator_t<Container> m_begin;
-        ::ranges::iterator_t<Container> m_end;
+        std::ranges::iterator_t<Container> m_begin;
+        std::ranges::iterator_t<Container> m_end;
 
         void updateIterator()
         {
@@ -598,19 +597,19 @@ public:
     {
         auto& bucket = fromStorage.m_buckets[0];
         auto& index = bucket.container.template get<0>();
-        auto sortedList = ::ranges::views::transform(index,
+        auto sortedList = std::ranges::views::transform(index,
                               [&](typename std::decay_t<FromStorage>::Data const& data) {
                                   return std::make_tuple(
                                       std::addressof(data), toStorage.getBucketIndex(data.key));
                               }) |
-                          ::ranges::to<std::vector>();
+                          std::ranges::to<std::vector>();
         std::sort(sortedList.begin(), sortedList.end(), [](auto const& left, auto const& right) {
             return std::get<1>(left) < std::get<1>(right);
         });
-        auto chunks = ::ranges::views::chunk_by(sortedList, [](auto const& left,
-                                                                auto const& right) {
+        auto chunks = std::ranges::views::chunk_by(sortedList, [](auto const& left,
+                                                                   auto const& right) {
             return std::get<1>(left) == std::get<1>(right);
-        }) | ::ranges::to<std::vector>();
+        }) | std::ranges::to<std::vector>();
         tbb::parallel_for(tbb::blocked_range<size_t>(0U, chunks.size()), [&](auto const& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {

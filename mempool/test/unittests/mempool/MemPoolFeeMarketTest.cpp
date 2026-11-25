@@ -15,7 +15,6 @@
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <iterator>
-#include <range/v3/all.hpp>
 #include <unordered_map>
 
 using namespace bcos;

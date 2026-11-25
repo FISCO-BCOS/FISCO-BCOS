@@ -24,7 +24,7 @@
 #include "TransactionMetaData.h"
 #include "TransactionReceipt.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
-#include <range/v3/view/any_view.hpp>
+#include <bcos-utilities/AnyView.h>
 
 namespace bcos::protocol
 {

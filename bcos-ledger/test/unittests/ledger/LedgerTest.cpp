@@ -62,6 +62,8 @@
 #include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <memory>
+#include <range/v3/view/indirect.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -160,7 +162,7 @@ public:
         co_return entry;
     }
 
-    task::Task<std::vector<std::optional<Entry>>> readSome(::ranges::input_range auto keys)
+    task::Task<std::vector<std::optional<Entry>>> readSome(std::ranges::input_range auto keys)
     {
         std::vector<std::optional<Entry>> entries;
         for (auto&& key : keys)
@@ -190,7 +192,7 @@ public:
         co_return;
     }
 
-    task::Task<void> writeSome(::ranges::input_range auto keyValues)
+    task::Task<void> writeSome(std::ranges::input_range auto keyValues)
     {
         for (auto&& [key, value] : keyValues)
         {
@@ -1334,8 +1336,8 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
         std::string hexCode;
         boost::algorithm::hex_lower(code, std::back_inserter(hexCode));
 
-        genesisConfig.m_allocs = ::ranges::views::iota(0, 10) |
-                                 ::ranges::views::transform([&](int index) {
+        genesisConfig.m_allocs = std::ranges::views::iota(0, 10) |
+                                 std::ranges::views::transform([&](int index) {
                                      Alloc alloc{.address = fmt::format("{:0>40}", index),
                                          .balance = bcos::u256(index * 10),
                                          .nonce = {},
@@ -1349,11 +1351,11 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
                                      }
                                      return alloc;
                                  }) |
-                                 ::ranges::to<std::vector>();
+                                 std::ranges::to<std::vector>();
 
         co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
 
-        for (auto i : ::ranges::views::iota(0, 10))
+        for (auto i : std::ranges::views::iota(0, 10))
         {
             auto tableName = fmt::format("{}{:0>40}", SYS_DIRECTORY::USER_APPS, i);
             auto codeHashEntry = co_await storage2::readOne(

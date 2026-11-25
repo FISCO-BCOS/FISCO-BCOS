@@ -17,6 +17,7 @@
 #include <evmc/evmc.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -461,7 +462,7 @@ BOOST_AUTO_TEST_CASE(web3Nonce)
             storage, address1, bcos::ledger::account::AddressTableMode::Hex);
         BOOST_CHECK_EQUAL((co_await deployAccount.nonce()).value(), "11");
 
-        for (auto i : ::ranges::views::iota(1, 11))
+        for (auto i : std::ranges::views::iota(1, 11))
         {
             auto rawAddr = newLegacyEVMAddress(bytesConstRef{address1.data(), address1.size()}, i);
             evmc_address expectAddress;

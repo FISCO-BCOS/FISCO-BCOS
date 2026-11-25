@@ -31,9 +31,8 @@
 #include <concepts>
 #include <deque>
 #include <functional>
-#include <range/v3/view/filter.hpp>
-#include <range/v3/view/map.hpp>
-#include <range/v3/view/zip.hpp>
+#include <range/v3/view/indirect.hpp>
+#include <ranges>
 #include <type_traits>
 #include <variant>
 
@@ -61,16 +60,16 @@ std::optional<Value> getValue(auto& input)
 
 template <class KeyType, class ValueType>
 task::Task<bool> fillMissingValues(
-    auto& storage, ::ranges::input_range auto& keys, ::ranges::input_range auto& values)
+    auto& storage, std::ranges::input_range auto& keys, std::ranges::input_range auto& values)
 {
     using StoreKeyType =
-        std::conditional_t<std::is_lvalue_reference_v<::ranges::range_value_t<decltype(keys)>>,
+        std::conditional_t<std::is_lvalue_reference_v<std::ranges::range_value_t<decltype(keys)>>,
             std::reference_wrapper<KeyType>, KeyType>;
 
     std::vector<
         std::pair<StoreKeyType, std::reference_wrapper<storage2::StorageValueType<ValueType>>>>
         missingKeyValues;
-    for (auto&& [key, value] : ::ranges::views::zip(std::forward<decltype(keys)>(keys), values))
+    for (auto&& [key, value] : std::ranges::views::zip(std::forward<decltype(keys)>(keys), values))
     {
         if (std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
         {
@@ -81,20 +80,20 @@ task::Task<bool> fillMissingValues(
     auto gotValues =
         co_await [&]() -> task::Task<std::vector<storage2::StorageValueType<ValueType>>> {
         if constexpr (task::IsAwaitable<decltype(storage.readSomeRaw(
-                          ::ranges::views::keys(missingKeyValues)))>)
+                          std::ranges::views::keys(missingKeyValues)))>)
         {
-            co_return co_await storage.readSomeRaw(::ranges::views::keys(missingKeyValues));
+            co_return co_await storage.readSomeRaw(std::ranges::views::keys(missingKeyValues));
         }
         else
         {
-            co_return storage.readSomeRaw(::ranges::views::keys(missingKeyValues));
+            co_return storage.readSomeRaw(std::ranges::views::keys(missingKeyValues));
         }
     }();
 
-    auto gotSize = ::ranges::size(gotValues);
+    auto gotSize = std::ranges::size(gotValues);
     size_t count = 0;
     for (auto&& [from, to] :
-        ::ranges::views::zip(gotValues, ::ranges::views::values(missingKeyValues)))
+        std::ranges::views::zip(gotValues, std::ranges::views::values(missingKeyValues)))
     {
         if (!std::holds_alternative<storage2::NOT_EXISTS_TYPE>(from))
         {
@@ -178,9 +177,9 @@ public:
         return *storage.m_mutableStorage;
     }
 
-    template <::ranges::input_range Keys>
+    template <std::ranges::input_range Keys>
     auto readSomeRaw(Keys keys) -> task::Task<std::vector<storage2::StorageValueType<Value>>>
-        requires ::ranges::sized_range<Keys>
+        requires std::ranges::sized_range<Keys>
     {
         auto keySize = static_cast<size_t>(keys.size());
         std::vector<storage2::StorageValueType<Value>> values(keySize);
@@ -214,10 +213,10 @@ public:
         co_return values;
     }
 
-    template <::ranges::input_range Keys>
+    template <std::ranges::input_range Keys>
     auto readSomeRaw(Keys keys, auto... tags)
         -> task::Task<std::vector<storage2::StorageValueType<Value>>>
-        requires ::ranges::sized_range<Keys>
+        requires std::ranges::sized_range<Keys>
     {
         constexpr bool bypassMultiLayer = contains_tag_v<BYPASS_MULTILAYER_TYPE, decltype(tags)...>;
         if constexpr (bypassMultiLayer)
@@ -305,17 +304,17 @@ public:
         }
     }
 
-    template <::ranges::input_range Keys>
+    template <std::ranges::input_range Keys>
     task::Task<std::vector<std::optional<Value>>> readSome(Keys keys)
     {
         auto values = co_await readSomeRaw(std::move(keys));
-        co_return ::ranges::views::transform(values, [](auto&& value) -> std::optional<Value> {
+        co_return std::ranges::views::transform(values, [](auto&& value) -> std::optional<Value> {
             if (auto entry = std::get_if<Value>(std::addressof(value)))
             {
                 return std::make_optional(std::move(*entry));
             }
             return {};
-        }) | ::ranges::to<std::vector>();
+        }) | std::ranges::to<std::vector>();
     }
 
     auto readOne(const auto& key) -> task::Task<task::AwaitableReturnType<
@@ -350,7 +349,7 @@ public:
         co_return co_await storage2::readOne(backendStorageRef(), key);
     }
 
-    task::Task<void> writeSome(::ranges::input_range auto keyValues)
+    task::Task<void> writeSome(std::ranges::input_range auto keyValues)
     {
         co_await storage2::writeSome(mutableStorage(*this), std::move(keyValues));
     }
@@ -371,7 +370,7 @@ public:
             mutableStorage(*this), std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    task::Task<void> removeSome(::ranges::input_range auto keys, auto&&... args)
+    task::Task<void> removeSome(std::ranges::input_range auto keys, auto&&... args)
     {
         co_await storage2::removeSome(
             mutableStorage(*this), std::move(keys), std::forward<decltype(args)>(args)...);
@@ -388,7 +387,7 @@ public:
         using RangeValue = std::optional<std::tuple<Key, storage2::StorageValueType<Value>>>;
         std::vector<std::tuple<StorageIterator, RangeValue>> m_iterators;
 
-        task::Task<void> forwardIterators(::ranges::range auto iterators)
+        task::Task<void> forwardIterators(std::ranges::range auto iterators)
         {
             for (auto& [variantIterator, item] : iterators)
             {
@@ -424,17 +423,17 @@ public:
             m_iterators.emplace_back(co_await storage2::range(view.backendStorageRef(),
                                          std::forward<decltype(args)>(args)...),
                 RangeValue{});
-            co_await forwardIterators(::ranges::views::all(m_iterators));
+            co_await forwardIterators(std::ranges::views::all(m_iterators));
         }
 
         task::Task<RangeValue> next()
         {
             // Based on merge sort, find the minimum value of all iterators, advance the
             // iterator and return its value
-            auto iterators = m_iterators | ::ranges::views::filter([](auto const& rangeValue) {
+            auto iterators = m_iterators | std::ranges::views::filter([](auto const& rangeValue) {
                 return std::get<1>(rangeValue).has_value();
             });
-            if (::ranges::empty(iterators))
+            if (std::ranges::empty(iterators))
             {
                 co_return {};
             }

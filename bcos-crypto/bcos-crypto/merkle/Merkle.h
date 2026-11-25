@@ -11,9 +11,7 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <iterator>
-#include <range/v3/algorithm/find.hpp>
-#include <range/v3/view/all.hpp>
-#include <range/v3/view/subrange.hpp>
+#include <ranges>
 #include <stdexcept>
 #include <type_traits>
 
@@ -22,8 +20,8 @@ namespace bcos::crypto::merkle
 
 template <class Range>
 concept HashRange =
-    ::ranges::random_access_range<Range> &&
-    bcos::concepts::bytebuffer::ByteBuffer<std::remove_cvref_t<::ranges::range_value_t<Range>>>;
+    std::ranges::random_access_range<Range> &&
+    bcos::concepts::bytebuffer::ByteBuffer<std::remove_cvref_t<std::ranges::range_value_t<Range>>>;
 
 template <class Range>
 concept MerkleRange = HashRange<Range>;
@@ -31,7 +29,7 @@ concept MerkleRange = HashRange<Range>;
 template <class Range>
 concept ProofRange =
     bcos::concepts::DynamicRange<Range> &&
-    bcos::concepts::bytebuffer::ByteBuffer<std::remove_cvref_t<::ranges::range_value_t<Range>>>;
+    bcos::concepts::bytebuffer::ByteBuffer<std::remove_cvref_t<std::ranges::range_value_t<Range>>>;
 
 template <bcos::crypto::hasher::Hasher HasherType, size_t width = 2>
 class Merkle
@@ -45,19 +43,19 @@ public:
     bool verifyMerkleProof(ProofRange auto const& proof, bcos::concepts::bytebuffer::Hash auto hash,
         bcos::concepts::bytebuffer::Hash auto const& root)
     {
-        if (::ranges::empty(proof)) [[unlikely]]
+        if (std::ranges::empty(proof)) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input proof!"});
         }
 
-        if (::ranges::size(proof) > 1)
+        if (std::ranges::size(proof) > 1)
         {
-            for (auto it = ::ranges::begin(proof); it != ::ranges::end(proof);)
+            for (auto it = std::ranges::begin(proof); it != std::ranges::end(proof);)
             {
                 auto count = getNumberFromHash(*(it++));
-                auto range = ::ranges::subrange<decltype(it)>{it, it + count};
+                auto range = std::ranges::subrange<decltype(it)>{it, it + count};
 
-                if (::ranges::find(range, hash) == ::ranges::end(range)) [[unlikely]]
+                if (std::ranges::find(range, hash) == std::ranges::end(range)) [[unlikely]]
                 {
                     return false;
                 }
@@ -85,65 +83,66 @@ public:
         bcos::concepts::bytebuffer::Hash auto const& hash, ProofRange auto& out) const
     {
         // Find the hash in originHashes first
-        auto it = ::ranges::find(originHashes, hash);
-        if (it == ::ranges::end(originHashes)) [[unlikely]]
+        auto it = std::ranges::find(originHashes, hash);
+        if (it == std::ranges::end(originHashes)) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash!"});
         }
 
         std::vector<HashType> merkle;
-        generateMerkle(::ranges::views::all(originHashes), merkle);
-        generateMerkleProof(::ranges::views::all(originHashes), merkle,
-            ::ranges::distance(::ranges::begin(originHashes), it), out);
+        generateMerkle(std::ranges::views::all(originHashes), merkle);
+        generateMerkleProof(std::ranges::views::all(originHashes), merkle,
+            std::ranges::distance(std::ranges::begin(originHashes), it), out);
     }
 
     void generateMerkleProof(HashRange auto originHashes, MerkleRange auto const& merkle,
         bcos::concepts::bytebuffer::Hash auto const& hash, ProofRange auto& out) const
     {
         // Find the hash in originHashes first
-        auto it = ::ranges::find(originHashes, hash);
-        if (it == ::ranges::end(originHashes)) [[unlikely]]
+        auto it = std::ranges::find(originHashes, hash);
+        if (it == std::ranges::end(originHashes)) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash!"});
         }
-        generateMerkleProof(::ranges::views::all(originHashes), merkle,
-            ::ranges::distance(::ranges::begin(originHashes), it), out);
+        generateMerkleProof(std::ranges::views::all(originHashes), merkle,
+            std::ranges::distance(std::ranges::begin(originHashes), it), out);
     }
 
     void generateMerkleProof(HashRange auto originHashes, MerkleRange auto const& merkle,
         std::integral auto index, ProofRange auto& out) const
     {
-        if ((size_t)index >= (size_t)::ranges::size(originHashes)) [[unlikely]]
+        if ((size_t)index >= (size_t)std::ranges::size(originHashes)) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Out of range!"});
         }
 
-        if (::ranges::size(originHashes) == 1)
+        if (std::ranges::size(originHashes) == 1)
         {
             concepts::resizeTo(out, 1);
-            bcos::concepts::bytebuffer::assignTo(*::ranges::begin(merkle), *::ranges::begin(out));
+            bcos::concepts::bytebuffer::assignTo(
+                *std::ranges::begin(merkle), *std::ranges::begin(out));
             return;
         }
 
-        auto [merkleNodes, merkleLevels] = getMerkleSize(::ranges::size(originHashes));
-        if (merkleNodes != ::ranges::size(merkle))
+        auto [merkleNodes, merkleLevels] = getMerkleSize(std::ranges::size(originHashes));
+        if (merkleNodes != std::ranges::size(merkle))
         {
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle size mismatch!"});
         }
 
         index = indexAlign(index);
-        auto count = std::min((size_t)(::ranges::size(originHashes) - index), (size_t)width);
+        auto count = std::min((size_t)(std::ranges::size(originHashes) - index), (size_t)width);
 
         setNumberToHash(count, out.emplace_back());
-        for (auto it = ::ranges::begin(originHashes) + index;
-            it < ::ranges::begin(originHashes) + index + count; ++it)
+        for (auto it = std::ranges::begin(originHashes) + index;
+            it < std::ranges::begin(originHashes) + index + count; ++it)
         {
             bcos::concepts::bytebuffer::assignTo(*it, out.emplace_back());
         }
 
         // Query next level hashes
-        auto inputIt = ::ranges::begin(merkle);
-        while (inputIt != ::ranges::end(merkle))
+        auto inputIt = std::ranges::begin(merkle);
+        while (inputIt != std::ranges::end(merkle))
         {
             index = indexAlign(index / width);
             auto levelLength = getNumberFromHash(*(inputIt++));
@@ -160,48 +159,48 @@ public:
             {
                 bcos::concepts::bytebuffer::assignTo(*it, out.emplace_back());
             }
-            ::ranges::advance(inputIt, levelLength);
+            std::ranges::advance(inputIt, levelLength);
         }
     }
 
     void generateMerkle(HashRange auto originHashes, MerkleRange auto& out) const
     {
-        if (::ranges::empty(originHashes))
+        if (std::ranges::empty(originHashes))
         {
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
         }
 
-        if (::ranges::size(originHashes) == 1)
+        if (std::ranges::size(originHashes) == 1)
         {
             bcos::concepts::resizeTo(out, 1);
             bcos::concepts::bytebuffer::assignTo(
-                *::ranges::begin(originHashes), *::ranges::begin(out));
+                *std::ranges::begin(originHashes), *std::ranges::begin(out));
             return;
         }
 
         [[maybe_unused]] auto [merkleNodes, merkleLevels] =
-            getMerkleSize((unsigned)::ranges::size(originHashes));
+            getMerkleSize((unsigned)std::ranges::size(originHashes));
         bcos::concepts::resizeTo(out, merkleNodes);
 
         // Calculate first level from originHashes
-        auto it = ::ranges::begin(out);
-        auto nextNodes = getNextLevelSize((unsigned)::ranges::size(originHashes));
+        auto it = std::ranges::begin(out);
+        auto nextNodes = getNextLevelSize((unsigned)std::ranges::size(originHashes));
         setNumberToHash(nextNodes, *(it++));
-        auto outputRange = ::ranges::subrange<decltype(it)>(it, it + nextNodes);
-        calculateLevelHashes(::ranges::views::all(originHashes), outputRange);
+        auto outputRange = std::ranges::subrange<decltype(it)>(it, it + nextNodes);
+        calculateLevelHashes(std::ranges::views::all(originHashes), outputRange);
 
         while (nextNodes > 1)  // Calculate next level from out, ignore only root
         {
-            auto inputRange = ::ranges::subrange<decltype(it)>(it, it + nextNodes);
+            auto inputRange = std::ranges::subrange<decltype(it)>(it, it + nextNodes);
 
-            ::ranges::advance(it, nextNodes);
+            std::ranges::advance(it, nextNodes);
             nextNodes = getNextLevelSize(nextNodes);
 
             setNumberToHash(nextNodes, *(it++));
-            auto nextOutputRange = ::ranges::subrange<decltype(it)>(it, it + nextNodes);
+            auto nextOutputRange = std::ranges::subrange<decltype(it)>(it, it + nextNodes);
             calculateLevelHashes(inputRange, nextOutputRange);
 
-            assert(it <= ::ranges::end(out));
+            assert(it <= std::ranges::end(out));
         }
     }
 
@@ -242,16 +241,17 @@ private:
 
     void calculateLevelHashes(HashRange auto input, HashRange auto& output) const
     {
-        assert(::ranges::size(input) > 0);
+        assert(std::ranges::size(input) > 0);
 
-        auto outputSize = ::ranges::size(output);
+        auto outputSize = std::ranges::size(output);
         tbb::parallel_for(tbb::blocked_range<size_t>(0, outputSize),
             [this, &input, &output](const tbb::blocked_range<size_t>& range) {
                 auto hasher = m_hasher.clone();
 
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
-                    for (auto j = i * width; j < (i + 1) * width && j < ::ranges::size(input); ++j)
+                    for (auto j = i * width; j < (i + 1) * width && j < std::ranges::size(input);
+                        ++j)
                     {
                         hasher.update(input[j]);
                     }

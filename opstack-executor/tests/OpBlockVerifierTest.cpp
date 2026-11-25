@@ -58,6 +58,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -425,7 +426,7 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
         f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);
     auto transactionsRefs =
         transactions |
-        ::ranges::views::transform(
+        std::ranges::views::transform(
             [](bcos::protocol::Transaction::Ptr const& ptr) -> bcos::protocol::Transaction const& {
                 return *ptr;
             });

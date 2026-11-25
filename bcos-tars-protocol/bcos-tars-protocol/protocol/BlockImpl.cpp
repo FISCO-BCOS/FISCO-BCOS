@@ -37,6 +37,7 @@
 #include "bcos-utilities/AnyHolder.h"
 #include <algorithm>
 #include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <stdexcept>
 
 bcostars::protocol::BlockImpl::BlockImpl(bcostars::Block _block) : BlockImpl()
@@ -116,7 +117,7 @@ void bcostars::protocol::BlockImpl::clearReceipts()
 
 void bcostars::protocol::BlockImpl::setNonceList(::ranges::any_view<std::string> nonces)
 {
-    m_inner.nonceList = ::ranges::to<std::vector>(nonces);
+    m_inner.nonceList = std::ranges::to<std::vector>(nonces);
 }
 
 ::ranges::any_view<std::string> bcostars::protocol::BlockImpl::nonceList() const
@@ -214,7 +215,7 @@ bcos::crypto::HashType bcostars::protocol::BlockImpl::calculateTransactionRoot(
                                });
         merkle.generateMerkle(hashesRange, m_inner.transactionsMerkle);
     }
-    bcos::concepts::bytebuffer::assignTo(*::ranges::rbegin(m_inner.transactionsMerkle), txsRoot);
+    bcos::concepts::bytebuffer::assignTo(*std::ranges::rbegin(m_inner.transactionsMerkle), txsRoot);
 
     return txsRoot;
 }
@@ -235,7 +236,8 @@ bcos::crypto::HashType bcostars::protocol::BlockImpl::calculateReceiptRoot(
                        });
     bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
     merkle.generateMerkle(hashesRange, m_inner.receiptsMerkle);
-    bcos::concepts::bytebuffer::assignTo(*::ranges::rbegin(m_inner.receiptsMerkle), receiptsRoot);
+    bcos::concepts::bytebuffer::assignTo(
+        *std::ranges::rbegin(m_inner.receiptsMerkle), receiptsRoot);
 
     return receiptsRoot;
 }

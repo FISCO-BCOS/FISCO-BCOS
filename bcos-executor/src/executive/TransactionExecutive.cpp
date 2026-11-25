@@ -34,8 +34,9 @@
 #include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-table/src/ContractShardUtils.h"
 #include "bcos-utilities/Exceptions.h"
+#include <algorithm>
 #include <optional>
-#include <range/v3/view/reverse.hpp>
+#include <ranges>
 #include <span>
 
 #include "BlockContext.h"
@@ -1496,7 +1497,7 @@ void TransactionExecutive::revert()
     if (m_blockContext.features().get(ledger::Features::Flag::bugfix_revert))
     {
         // revert child beforehand from back to front
-        for (auto& childExecutive : ::ranges::views::reverse(m_childExecutives))
+        for (auto& childExecutive : std::ranges::views::reverse(m_childExecutives))
         {
             childExecutive->revert();
         }

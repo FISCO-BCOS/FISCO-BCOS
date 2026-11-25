@@ -1,7 +1,7 @@
 #pragma once
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Trait.h"
-#include <range/v3/range/concepts.hpp>
+#include <ranges>
 
 namespace bcos::scheduler_v1
 {
@@ -12,7 +12,7 @@ concept TransactionScheduler = requires(TransactionSchedulerType& scheduler, Sto
     TransactionExecutor& executor, const protocol::BlockHeader& blockHeader,
     const Transactions& transactions, const ledger::LedgerConfig& ledgerConfig) {
     requires executor_v1::TransactionExecutor<TransactionExecutor, Storage>;
-    requires ::ranges::input_range<Transactions>;
+    requires std::ranges::input_range<Transactions>;
 
     {
         scheduler.executeBlock(storage, executor, blockHeader, transactions, ledgerConfig)

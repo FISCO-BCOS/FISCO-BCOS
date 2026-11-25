@@ -16,6 +16,7 @@
 #include <concepts>
 #include <range/v3/view/chunk.hpp>
 #include <range/v3/view/iota.hpp>
+#include <ranges>
 #include <type_traits>
 
 namespace bcos::scheduler_v1
@@ -86,12 +87,12 @@ public:
     template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
         TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig,
+        std::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig,
         typename BlockContextOf<TransactionExecutor>::type const& ctx)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().SERIAL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().SERIAL_EXECUTE);
-        auto count = static_cast<int32_t>(::ranges::size(transactions));
+        auto count = static_cast<int32_t>(std::ranges::size(transactions));
 
         std::vector<typename TransactionExecutor::template ExecuteContext<Storage>> contexts;
         contexts.reserve(count);
@@ -107,8 +108,8 @@ public:
                             (size_t)SchedulerSerialImpl::MIN_TRANSACTION_GRAIN_SIZE) :
                         m_chunkSize);
         auto chunks = ::ranges::views::iota(0, count) | ::ranges::views::chunk(chunkSize);
-        using ChunkRange = ::ranges::range_value_t<decltype(chunks)>;
-        ::ranges::range_size_t<decltype(transactions)> chunkIndex = 0;
+        using ChunkRange = std::ranges::range_value_t<decltype(chunks)>;
+        std::ranges::range_size_t<decltype(transactions)> chunkIndex = 0;
 
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
         receipts.reserve(count);
@@ -121,7 +122,7 @@ public:
                 tbb::make_filter<void, ChunkRange>(tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control) -> ChunkRange {
                         return task::tbb::syncWait([&]() -> task::Task<ChunkRange> {
-                            if (chunkIndex >= ::ranges::size(chunks))
+                            if (chunkIndex >= std::ranges::size(chunks))
                             {
                                 control.stop();
                                 co_return {};
@@ -218,7 +219,7 @@ public:
         requires ValueInitValidBlockContext<typename BlockContextOf<TransactionExecutor>::type>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
         TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig)
+        std::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig)
     {
         if constexpr (std::same_as<typename BlockContextOf<TransactionExecutor>::type,
                           EmptyBlockContext>)

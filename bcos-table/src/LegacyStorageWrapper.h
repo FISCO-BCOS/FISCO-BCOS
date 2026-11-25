@@ -10,6 +10,7 @@
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <functional>
+#include <ranges>
 #include <stdexcept>
 #include <variant>
 
@@ -106,7 +107,7 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto stateKeys = ::ranges::views::transform(keys, [&table](auto&& key) -> auto {
+                auto stateKeys = std::ranges::views::transform(keys, [&table](auto&& key) -> auto {
                     return executor_v1::StateKeyView{table, std::forward<decltype(key)>(key)};
                 });
                 auto values = co_await storage2::readSome(self->m_storage.get(), stateKeys);
@@ -159,8 +160,8 @@ public:
                 try
                 {
                     co_await storage2::writeSome(self->m_storage.get(),
-                        ::ranges::views::zip(keys, values) |
-                            ::ranges::views::transform([&](auto tuple) {
+                        std::ranges::views::zip(keys, values) |
+                            std::ranges::views::transform([&](auto tuple) {
                                 auto& [key, value] = tuple;
                                 storage::Entry entry;
                                 entry.set(value);

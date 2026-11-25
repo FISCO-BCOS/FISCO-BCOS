@@ -1,5 +1,6 @@
 #include "CoroutineTransactionExecutive.h"
 #include "bcos-framework/executor/ExecuteError.h"
+#include <ranges>
 
 using namespace bcos::executor;
 
@@ -117,8 +118,8 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
 {
     try
     {
-        for (auto it = ::ranges::begin(*getPullMessage()); it != ::ranges::end(*getPullMessage());
-            ++it)
+        for (auto it = std::ranges::begin(*getPullMessage());
+            it != std::ranges::end(*getPullMessage()); ++it)
         {
             if (*it)
             {

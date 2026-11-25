@@ -10,7 +10,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/LogStream.h>
-#include <range/v3/range/concepts.hpp>
+#include <ranges>
 
 #define LEDGER_LOG(LEVEL) BCOS_MODULE_LOG(LEDGER, LEVEL) << LOG_BADGE("LEDGER")
 
@@ -181,7 +181,7 @@ inline constexpr struct SetNodeList
 {
     task::Task<void> operator()(
         storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
-        ::ranges::input_range auto&& nodeList, auto&&... args) const
+        std::ranges::input_range auto&& nodeList, auto&&... args) const
     {
         co_await tag_invoke(*this, storage, std::forward<decltype(nodeList)>(nodeList),
             std::forward<decltype(args)>(args)...);

@@ -35,7 +35,7 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <range/v3/range/concepts.hpp>
+#include <ranges>
 #include <set>
 #include <string_view>
 #include <utility>
@@ -150,12 +150,12 @@ public:
     }
 
     task::Task<std::vector<storage2::StorageValueType<Value>>> readSomeRaw(
-        ::ranges::input_range auto keys)
+        std::ranges::input_range auto keys)
     {
         std::vector<storage2::StorageValueType<Value>> values;
-        if constexpr (::ranges::sized_range<decltype(keys)>)
+        if constexpr (std::ranges::sized_range<decltype(keys)>)
         {
-            values.reserve(::ranges::size(keys));
+            values.reserve(std::ranges::size(keys));
         }
         for (auto const& key : keys)
         {
@@ -174,12 +174,12 @@ public:
         co_return std::nullopt;
     }
 
-    task::Task<std::vector<std::optional<Value>>> readSome(::ranges::input_range auto keys)
+    task::Task<std::vector<std::optional<Value>>> readSome(std::ranges::input_range auto keys)
     {
         std::vector<std::optional<Value>> values;
-        if constexpr (::ranges::sized_range<decltype(keys)>)
+        if constexpr (std::ranges::sized_range<decltype(keys)>)
         {
-            values.reserve(::ranges::size(keys));
+            values.reserve(std::ranges::size(keys));
         }
         for (auto const& key : keys)
         {

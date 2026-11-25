@@ -62,28 +62,30 @@
 #include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <evmone/vm.hpp>
-#include <range/v3/algorithm/any_of.hpp>
-#include <range/v3/iterator/operations.hpp>
+#include <iterator>
 #include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/indirect.hpp>
+#include <ranges>
 
 namespace bcos::scheduler_v1
 {
 
 h256 calculateReceiptRoot(
-    ::ranges::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
+    std::ranges::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
 {
     h256 receiptRoot;
 
     bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
-    auto hashesRange =
-        receipts | ::ranges::views::transform([](const auto& receipt) { return receipt->hash(); });
+    auto hashesRange = receipts | std::ranges::views::transform(
+                                      [](const auto& receipt) { return receipt->hash(); });
 
-    if (!::ranges::empty(hashesRange))
+    if (!std::ranges::empty(hashesRange))
     {
         std::vector<bcos::h256> merkleTrie;
         merkle.generateMerkle(hashesRange, merkleTrie);
-        receiptRoot = *::ranges::rbegin(merkleTrie);
+        receiptRoot = *std::ranges::rbegin(merkleTrie);
     }
 
     return receiptRoot;
@@ -109,9 +111,9 @@ h256 calculateReceiptRoot(
  *        blocks); lower versions keep the legacy Merkle roots byte-identical (no behaviour
  *        change on legacy chains).
  */
-task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
+task::Task<void> finishExecute(auto& storage, std::ranges::range auto receipts,
     protocol::BlockHeader& newBlockHeader, protocol::Block& block,
-    ::ranges::input_range auto transactions, bool& sysBlock, crypto::Hash const& hashImpl,
+    std::ranges::input_range auto transactions, bool& sysBlock, crypto::Hash const& hashImpl,
     ledger::Features const& features, int executorVersion, std::optional<h256> mptStateRoot = {})
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
@@ -148,8 +150,8 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         [&]() {
             block.clearReceipts();
             totalGasUsed = protocol::normalizeReceipts(receipts);
-            auto transactionIt = ::ranges::begin(transactions);
-            auto const transactionEnd = ::ranges::end(transactions);
+            auto transactionIt = std::ranges::begin(transactions);
+            auto const transactionEnd = std::ranges::end(transactions);
             for (auto const& receipt : receipts)
             {
                 // one DEBUG line per tx (the handbook's TxExecuted stage, baseline lane)
@@ -167,7 +169,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
             }
         },
         [&]() {
-            sysBlock = ::ranges::any_of(transactions, [](auto const& transaction) {
+            sysBlock = std::ranges::any_of(transactions, [](auto const& transaction) {
                 return precompiled::contains(
                     bcos::precompiled::c_systemTxsAddress, transaction->to());
             });
@@ -329,7 +331,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
         auto view = m_multiLayerStorage.get().fork();
         view.newMutable();
         auto transactions = co_await getTransactions(m_txpool.get(), *block);
-        if (::ranges::any_of(transactions, [](auto const& tx) { return tx == nullptr; }))
+        if (std::ranges::any_of(transactions, [](auto const& tx) { return tx == nullptr; }))
         {
             auto message = fmt::format(
                 "Not found transactions in txpool for block: {}", blockHeader->number());
@@ -389,8 +391,8 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
         auto executedBlockHeader =
             m_blockFactory.get().blockHeaderFactory()->populateBlockHeader(blockHeader);
         bool sysBlock = false;
-        co_await finishExecute(mutableStorage(view), ::ranges::views::all(receipts),
-            *executedBlockHeader, *block, ::ranges::views::all(transactions), sysBlock,
+        co_await finishExecute(mutableStorage(view), std::ranges::views::all(receipts),
+            *executedBlockHeader, *block, std::ranges::views::all(transactions), sysBlock,
             m_hashImpl.get(), ledgerConfig->features(), ledgerConfig->executorVersion(),
             mptStateRoot);
 
@@ -690,9 +692,9 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
                 ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
 
             auto submitResults =
-                ::ranges::views::zip(
-                    ::ranges::views::iota(0), *result->m_transactions, result->m_receipts) |
-                ::ranges::views::transform(
+                std::ranges::views::zip(
+                    std::ranges::views::iota(0), *result->m_transactions, result->m_receipts) |
+                std::ranges::views::transform(
                     [&](auto input) -> protocol::TransactionSubmitResult::Ptr {
                         auto&& [index, transaction, receipt] = input;
 
@@ -710,7 +712,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
 
                         return submitResult;
                     }) |
-                ::ranges::to<std::vector>();
+                std::ranges::to<std::vector>();
 
             auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
                 std::move(submitResults));

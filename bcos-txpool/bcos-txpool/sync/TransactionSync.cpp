@@ -24,8 +24,10 @@
 #include "bcos-txpool/sync/utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <range/v3/algorithm/any_of.hpp>
-#include <range/v3/view/zip.hpp>
+#include <algorithm>
+#include <range/v3/view/all.hpp>
+#include <range/v3/view/single.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -94,16 +96,16 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
 {
     auto const& txsHash = _txsRequest->txsHash();
     auto txs = m_config->txpoolStorage()->getTransactions(txsHash);
-    auto missedTxs = ::ranges::views::zip(txsHash, txs) |
-                     ::ranges::views::filter([](const auto& pair) {
+    auto missedTxs = std::ranges::views::zip(txsHash, txs) |
+                     std::ranges::views::filter([](const auto& pair) {
                          auto& [hash, tx] = pair;
                          return !tx;
                      }) |
-                     ::ranges::views::transform([](const auto& pair) {
+                     std::ranges::views::transform([](const auto& pair) {
                          auto& [hash, tx] = pair;
                          return hash;
                      }) |
-                     ::ranges::to<HashList>();
+                     std::ranges::to<HashList>();
     // Note: here assume that all the transaction should be hit in the txpool
     if (!missedTxs.empty())
     {
@@ -421,8 +423,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         }
     }
     // Verify transaction hashes match requested hashes BEFORE import
-    const auto hashMismatch = ::ranges::any_of(
-        ::ranges::views::zip(*_missedTxs, transactions->transactions()), [](auto const& pair) {
+    const auto hashMismatch = std::ranges::any_of(
+        std::ranges::views::zip(*_missedTxs, transactions->transactions()), [](auto const& pair) {
             auto& [expectedHash, tx] = pair;
             return expectedHash != tx->hash();
         });

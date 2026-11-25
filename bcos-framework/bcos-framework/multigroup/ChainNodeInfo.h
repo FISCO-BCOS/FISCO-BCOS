@@ -24,7 +24,7 @@
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include <bcos-utilities/Common.h>
 #include <memory>
-#include <range/v3/range.hpp>
+#include <ranges>
 
 namespace bcos::group
 {
@@ -95,8 +95,8 @@ public:
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
 
     auto const& featureKeys() const { return m_featureKeys; }
-    void setFeatureKeys(::ranges::input_range auto&& featureKeys)
-        requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(featureKeys)>>,
+    void setFeatureKeys(std::ranges::input_range auto&& featureKeys)
+        requires std::same_as<std::decay_t<std::ranges::range_value_t<decltype(featureKeys)>>,
             std::string>
     {
         m_featureKeys.clear();
@@ -107,8 +107,9 @@ public:
     }
 
     auto const& supportConfigs() const { return m_configs; }
-    void setSupportConfigs(::ranges::input_range auto&& configs)
-        requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(configs)>>, std::string>
+    void setSupportConfigs(std::ranges::input_range auto&& configs)
+        requires std::same_as<std::decay_t<std::ranges::range_value_t<decltype(configs)>>,
+            std::string>
     {
         m_configs.clear();
         for (auto&& config : configs)

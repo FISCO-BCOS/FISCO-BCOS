@@ -75,10 +75,10 @@
 #include <iterator>
 #include <list>
 #include <memory>
-#include <range/v3/algorithm/sort.hpp>
 #include <range/v3/view/chunk.hpp>
 #include <range/v3/view/concat.hpp>
-#include <range/v3/view/take.hpp>
+#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <utility>
 
 using namespace bcos;
@@ -929,7 +929,7 @@ task::Task<NonceListResult> Ledger::getNonceList(
         throw;
     }
 
-    auto numberRange = ::ranges::views::iota(_startNumber, _startNumber + _offset + 1);
+    auto numberRange = std::ranges::views::iota(_startNumber, _startNumber + _offset + 1);
     std::vector<std::optional<Entry>> entries;
     try
     {
@@ -947,7 +947,7 @@ task::Task<NonceListResult> Ledger::getNonceList(
     }
 
     auto retMap = std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
-    for (auto const& [number, entry] : ::ranges::views::zip(numberRange, entries))
+    for (auto const& [number, entry] : std::ranges::views::zip(numberRange, entries))
     {
         try
         {
@@ -961,7 +961,7 @@ task::Task<NonceListResult> Ledger::getNonceList(
                 bcos::bytesConstRef((bcos::byte*)value.data(), value.size()), false, false);
 
             retMap->emplace(std::make_pair(number,
-                std::make_shared<NonceList>(block->nonceList() | ::ranges::to<NonceList>())));
+                std::make_shared<NonceList>(block->nonceList() | std::ranges::to<NonceList>())));
         }
         catch (std::exception const& e)
         {
@@ -1023,9 +1023,9 @@ task::Task<consensus::ConsensusNodeList> Ledger::getNodeListByType(std::string_v
         auto effectNumber = blockNumber + 1;
         auto nodeList = co_await ledger::getNodeList(*m_stateStorage);
 
-        auto filterNodeList = ::ranges::views::filter(nodeList, [&](auto const& node) {
+        auto filterNodeList = std::ranges::views::filter(nodeList, [&](auto const& node) {
             return (!eType || node.type == *eType) && node.enableNumber <= effectNumber;
-        }) | ::ranges::to<std::vector>();
+        }) | std::ranges::to<std::vector>();
         co_return std::move(filterNodeList);
     }
     catch (std::exception& e)
@@ -1356,7 +1356,7 @@ task::Task<MerkleProofPtr> Ledger::getReceiptProof(protocol::TransactionReceipt:
     co_return merkleProofPtr;
 }
 
-static task::Task<void> setGenesisFeatures(::ranges::input_range auto const& featureSets,
+static task::Task<void> setGenesisFeatures(std::ranges::input_range auto const& featureSets,
     const ledger::Features existsFeatures, auto& storage)
 {
     ledger::Features features = existsFeatures;
@@ -1446,7 +1446,7 @@ static void importGenesisAccount(
     }
 }
 
-static task::Task<void> importGenesisState(::ranges::forward_range auto const& allocs,
+static task::Task<void> importGenesisState(std::ranges::forward_range auto const& allocs,
     auto& storage, const crypto::Hash& hashImpl, bool ethLane)
 {
     // The account-table naming rule (lane rule vs the v1 /sys/ routing) lives in
@@ -2134,7 +2134,7 @@ bool Ledger::buildGenesisBlock(
             RPBFT_CONSENSUS_TYPE == genesis.m_consensusType)
         {
             auto workingSealerList = selectWorkingSealer(ledgerConfig, genesis.m_epochSealerNum);
-            ::ranges::sort(workingSealerList, [](auto const& lhs, auto const& rhs) {
+            std::ranges::sort(workingSealerList, [](auto const& lhs, auto const& rhs) {
                 return lhs.nodeID->data() < rhs.nodeID->data();
             });
             co_await ledger::setNodeList(*m_stateStorage,
@@ -2236,7 +2236,7 @@ bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
     }
 
     bcos::consensus::ConsensusNodeList workingSealerList =
-        ::ranges::views::take(sealerList, selectedNum) | ::ranges::to<std::vector>();
+        std::ranges::views::take(sealerList, selectedNum) | std::ranges::to<std::vector>();
     for (auto& node : workingSealerList)
     {
         LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer") << LOG_KV("nodeID", node.nodeID->hex())
@@ -2399,7 +2399,7 @@ task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
         allConfigKeys | ::ranges::views::transform(
                             [](auto&& key) { return executor_v1::StateKeyView(SYS_CONFIG, key); }));
     bcos::ledger::SystemConfigs configs;
-    for (auto&& [key, entry] : ::ranges::views::zip(allConfigKeys, entries))
+    for (auto&& [key, entry] : std::ranges::views::zip(allConfigKeys, entries))
     {
         if (entry)
         {

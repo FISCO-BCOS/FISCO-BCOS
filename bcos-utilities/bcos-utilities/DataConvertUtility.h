@@ -28,9 +28,7 @@
 #include <iterator>
 #include <limits>
 #include <optional>
-#include <range/v3/range/concepts.hpp>
-#include <range/v3/view/concat.hpp>
-#include <range/v3/view/single.hpp>
+#include <ranges>
 #include <set>
 #include <string>
 #include <type_traits>
@@ -41,7 +39,7 @@ namespace bcos
 {
 DERIVE_BCOS_EXCEPTION(BadHexCharacter);
 template <class Binary, class Out = std::string>
-    requires ::ranges::range<Binary> && ::ranges::sized_range<Binary>
+    requires std::ranges::range<Binary> && std::ranges::sized_range<Binary>
 Out toHex(const Binary& binary, std::string_view prefix = std::string_view())
 {
     Out out;
@@ -65,7 +63,7 @@ Out toHex(std::unsigned_integral auto number, std::string_view prefix = std::str
 }
 
 template <class T>
-concept Binary = ::ranges::contiguous_range<T>;
+concept Binary = std::ranges::contiguous_range<T>;
 std::string toQuantity(const Binary auto& binary)
 {
     if (binary.empty())
@@ -156,9 +154,11 @@ Out fromHex(const Hex& hex)
     {
         if (needPadding)
         {
-            auto padded = ::ranges::views::concat(::ranges::views::single('0'), payload);
-            boost::algorithm::unhex(
-                ::ranges::begin(padded), ::ranges::end(padded), std::back_inserter(out));
+            std::string padded;
+            padded.reserve(payload.size() + 1);
+            padded += '0';
+            padded += payload;
+            boost::algorithm::unhex(padded.begin(), padded.end(), std::back_inserter(out));
         }
         else
         {

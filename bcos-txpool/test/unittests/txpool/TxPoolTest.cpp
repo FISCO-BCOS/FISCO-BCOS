@@ -31,8 +31,9 @@
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/algorithm/any_of.hpp>
-#include <range/v3/view/filter.hpp>
+#include <algorithm>
+#include <range/v3/view/single.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -279,7 +280,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         txsResult->emplace_back(txResult);
     }
     auto notifiedTxs = _txpoolStorage->getTransactions(*sealedTxs);
-    BOOST_TEST(!::ranges::any_of(notifiedTxs, [](auto& tx) { return !tx; }));
+    BOOST_TEST(!std::ranges::any_of(notifiedTxs, [](auto& tx) { return !tx; }));
     BOOST_TEST(notifiedTxs.size() == sealedTxs->size());
 
     auto finish = false;
@@ -298,7 +299,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // check the txpoolNonce
     auto txPoolNonceChecker = _faker->txpool()->txpoolConfig()->txPoolNonceChecker();
     auto ledgerNonceChecker = _faker->txpool()->txpoolConfig()->ledgerNonceChecker();
-    for (const auto& tx : notifiedTxs | ::ranges::views::filter([](auto const& tx) {
+    for (const auto& tx : notifiedTxs | std::ranges::views::filter([](auto const& tx) {
              return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction);
          }))
     {
@@ -308,7 +309,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // check the nonce of ledger->blockNumber() hash been removed from ledgerNonceChecker
     auto const& blockData = _faker->ledger()->ledgerData();
     auto nonceList =
-        ::ranges::views::transform(blockData[_faker->ledger()->blockNumber()]->transactions(),
+        std::ranges::views::transform(blockData[_faker->ledger()->blockNumber()]->transactions(),
             [](auto tx) { return tx->nonce(); });
     for (auto nonce : nonceList)
     {

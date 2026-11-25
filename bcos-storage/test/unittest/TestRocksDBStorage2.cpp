@@ -11,9 +11,7 @@
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <range/v3/view/enumerate.hpp>
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/repeat.hpp>
-#include <range/v3/view/zip.hpp>
+#include <ranges>
 #include <string_view>
 
 using namespace bcos;
@@ -85,27 +83,28 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
             co_await storage2::readOne(rocksDB, StateKey{"Non exists table"sv, "Non exists key"sv});
         BOOST_REQUIRE(!notExistsValue);
 
-        auto keys = ::ranges::views::iota(0, 100) | ::ranges::views::transform([](int num) {
+        auto keys = std::ranges::views::iota(0, 100) | std::ranges::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
             auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
-        auto values = ::ranges::views::iota(0, 100) | ::ranges::views::transform([](int num) {
+        auto values = std::ranges::views::iota(0, 100) | std::ranges::views::transform([](int num) {
             storage::Entry entry;
             entry.set(fmt::format("Entry value is: i am a value!!!!!!! {}", num));
             return entry;
         });
 
         BOOST_CHECK_NO_THROW(
-            co_await storage2::writeSome(rocksDB, ::ranges::views::zip(keys, values)));
+            co_await storage2::writeSome(rocksDB, std::ranges::views::zip(keys, values)));
 
-        auto queryKeys = ::ranges::views::iota(0, 150) | ::ranges::views::transform([](int num) {
-            auto tableName = fmt::format("Table~{}", num % 10);
-            auto key = fmt::format("Key~{}", num);
-            auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
-            return stateKey;
-        });
+        auto queryKeys =
+            std::ranges::views::iota(0, 150) | std::ranges::views::transform([](int num) {
+                auto tableName = fmt::format("Table~{}", num % 10);
+                auto key = fmt::format("Key~{}", num);
+                auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
+                return stateKey;
+            });
         auto gotValues = co_await rocksDB.readSomeRaw(queryKeys);
         for (auto&& [i, value] : ::ranges::views::enumerate(gotValues))
         {
@@ -122,12 +121,13 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
         }
 
         // Remove some
-        auto removeKeys = ::ranges::views::iota(50, 70) | ::ranges::views::transform([](int num) {
-            auto tableName = fmt::format("Table~{}", num % 10);
-            auto key = fmt::format("Key~{}", num);
-            StateKey stateKey{std::string_view(tableName), std::string_view(key)};
-            return stateKey;
-        });
+        auto removeKeys =
+            std::ranges::views::iota(50, 70) | std::ranges::views::transform([](int num) {
+                auto tableName = fmt::format("Table~{}", num % 10);
+                auto key = fmt::format("Key~{}", num);
+                StateKey stateKey{std::string_view(tableName), std::string_view(key)};
+                return stateKey;
+            });
         co_await storage2::removeSome(rocksDB, removeKeys);
 
         auto gotValues2 = co_await rocksDB.readSomeRaw(queryKeys);
@@ -160,18 +160,18 @@ BOOST_AUTO_TEST_CASE(merge)
             storage2::memory_storage::ORDERED>
             memoryStorage;
 
-        auto keys = ::ranges::views::iota(0, 100) | ::ranges::views::transform([](int num) {
+        auto keys = std::ranges::views::iota(0, 100) | std::ranges::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
             auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
-        auto values = ::ranges::views::iota(0, 100) | ::ranges::views::transform([](int num) {
+        auto values = std::ranges::views::iota(0, 100) | std::ranges::views::transform([](int num) {
             storage::Entry entry;
             entry.set(fmt::format("Entry value is: i am a value!!!!!!! {}", num));
             return entry;
         });
-        co_await storage2::writeSome(memoryStorage, ::ranges::views::zip(keys, values));
+        co_await storage2::writeSome(memoryStorage, std::ranges::views::zip(keys, values));
 
         RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
             bcos::storage2::rocksdb::StateValueResolver>
@@ -207,22 +207,22 @@ BOOST_AUTO_TEST_CASE(merge)
             bcos::storage2::rocksdb::StateValueResolver>
             rocksDB2(*originRocksDB, StateKeyResolver{}, StateValueResolver{});
 
-        co_await storage2::writeSome(
-            storage3, ::ranges::views::zip(
-                          ::ranges::views::iota(0, 10) | ::ranges::views::transform([](int i) {
-                              return StateKey{"Hello"sv, fmt::format("key{}", i)};
-                          }),
-                          ::ranges::views::repeat(storage::Entry{"Hello"})));
-        co_await storage2::writeSome(
-            storage4, ::ranges::views::zip(
-                          ::ranges::views::iota(10, 20) | ::ranges::views::transform([](int i) {
-                              return StateKey{"Hello"sv, fmt::format("key{}", i)};
-                          }),
-                          ::ranges::views::repeat(storage::Entry{"Hello"})));
+        co_await storage2::writeSome(storage3,
+            std::ranges::views::zip(
+                std::ranges::views::iota(0, 10) | std::ranges::views::transform([](int i) {
+                    return StateKey{"Hello"sv, fmt::format("key{}", i)};
+                }),
+                std::ranges::views::repeat(storage::Entry{"Hello"})));
+        co_await storage2::writeSome(storage4,
+            std::ranges::views::zip(
+                std::ranges::views::iota(10, 20) | std::ranges::views::transform([](int i) {
+                    return StateKey{"Hello"sv, fmt::format("key{}", i)};
+                }),
+                std::ranges::views::repeat(storage::Entry{"Hello"})));
         co_await storage2::merge(rocksDB2, storage3, storage4);
 
         auto values2 = co_await rocksDB2.readSomeRaw(
-            ::ranges::views::iota(0, 20) | ::ranges::views::transform([](int i) {
+            std::ranges::views::iota(0, 20) | std::ranges::views::transform([](int i) {
                 return StateKey{"Hello"sv, fmt::format("key{}", i)};
             }));
         BOOST_CHECK_EQUAL(values2.size(), 20);

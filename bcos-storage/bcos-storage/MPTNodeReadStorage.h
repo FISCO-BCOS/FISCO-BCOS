@@ -31,7 +31,7 @@
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <optional>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -73,11 +73,11 @@ public:
         co_return bcos::bytes(raw.begin(), raw.end());
     }
 
-    task::Task<std::vector<std::optional<bcos::bytes>>> readSome(::ranges::input_range auto keys)
+    task::Task<std::vector<std::optional<bcos::bytes>>> readSome(std::ranges::input_range auto keys)
     {
         // One batched read: a proof walk resolves whole node paths at a time.
         auto entries = co_await storage2::readSome(
-            *m_storage, keys | ::ranges::views::transform(
+            *m_storage, keys | std::ranges::views::transform(
                                    [](auto const& key) { return storage2::mptNodeStateKey(key); }));
 
         std::vector<std::optional<bcos::bytes>> values;
@@ -114,7 +114,7 @@ public:
         throwReadOnly();
         co_return;
     }
-    task::Task<void> writeSome(::ranges::input_range auto /*keyValues*/)
+    task::Task<void> writeSome(std::ranges::input_range auto /*keyValues*/)
     {
         throwReadOnly();
         co_return;
@@ -124,7 +124,7 @@ public:
         throwReadOnly();
         co_return;
     }
-    task::Task<void> removeSome(::ranges::input_range auto /*keys*/, auto&&... /*tags*/)
+    task::Task<void> removeSome(std::ranges::input_range auto /*keys*/, auto&&... /*tags*/)
     {
         throwReadOnly();
         co_return;

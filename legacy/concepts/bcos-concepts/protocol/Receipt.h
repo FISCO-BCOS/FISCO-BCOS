@@ -2,14 +2,14 @@
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
-#include <range/v3/range.hpp>
+#include <ranges>
 
 namespace bcos::concepts::receipt
 {
 template <class LogEntryType>
 concept LogEntry = requires(LogEntryType logEntry) {
     logEntry.address;
-    requires ::ranges::range<decltype(logEntry.topic)>;
+    requires std::ranges::range<decltype(logEntry.topic)>;
     logEntry.data;
 };
 
@@ -20,8 +20,8 @@ concept TransactionReceiptData = requires(TransactionReceiptDataType transaction
     transactionReceiptData.contractAddress;
     requires std::integral<decltype(transactionReceiptData.status)>;
     transactionReceiptData.output;
-    requires ::ranges::range<decltype(transactionReceiptData.logEntries)> &&
-                 LogEntry<::ranges::range_value_t<decltype(transactionReceiptData.logEntries)>>;
+    requires std::ranges::range<decltype(transactionReceiptData.logEntries)> &&
+                 LogEntry<std::ranges::range_value_t<decltype(transactionReceiptData.logEntries)>>;
     requires std::integral<decltype(transactionReceiptData.blockNumber)>;
 };
 

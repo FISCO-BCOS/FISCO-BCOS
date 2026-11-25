@@ -1,8 +1,7 @@
 #pragma once
 #include "../protocol/Block.h"
 #include <bcos-concepts/ByteBuffer.h>
-#include <range/v3/range/concepts.hpp>
-#include <range/v3/range/traits.hpp>
+#include <ranges>
 
 namespace bcos::concepts::ledger
 {
@@ -63,8 +62,9 @@ public:
     auto getABI(std::string contractAddress) { return impl().impl_getABI(contractAddress); }
 
 
-    auto getTransactions(::ranges::range auto const& hashes, ::ranges::range auto& out)
-        requires TransactionOrReceipt<::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>>
+    auto getTransactions(std::ranges::range auto const& hashes, std::ranges::range auto& out)
+        requires TransactionOrReceipt<
+            std::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>>
     {
         return impl().impl_getTransactions(hashes, out);
     }

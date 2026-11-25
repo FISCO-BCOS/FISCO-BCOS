@@ -26,10 +26,11 @@
 #include <fmt/format.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/algorithm/sort.hpp>
+#include <algorithm>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <tuple>
 
 struct LegacyStorageTestFixture
@@ -46,7 +47,7 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
 {
     bcos::task::syncWait([this]() -> bcos::task::Task<void> {
         co_await bcos::storage2::writeSome(
-            storage, ::ranges::views::iota(0, 10) | ::ranges::views::transform([](int i) {
+            storage, std::ranges::views::iota(0, 10) | std::ranges::views::transform([](int i) {
                 auto key = bcos::executor_v1::StateKey("t_test", std::to_string(i));
                 return std::make_tuple(key, bcos::storage::Entry("t_test"));
             }));
@@ -108,12 +109,12 @@ BOOST_AUTO_TEST_CASE(balanceCase)
             ::ranges::views::concat(::ranges::views::transform(keys,
                                         [](std::string_view view) { return std::string(view); }),
                 otherKeys) |
-            ::ranges::to<std::vector>();
-        ::ranges::sort(totalKeys);
+            std::ranges::to<std::vector>();
+        std::ranges::sort(totalKeys);
 
         using namespace std::string_literals;
         co_await bcos::storage2::writeSome(
-            storage, totalKeys | ::ranges::views::transform([](std::string keyView) {
+            storage, totalKeys | std::ranges::views::transform([](std::string keyView) {
                 auto key = bcos::executor_v1::StateKey("s_balance_caller"s, std::move(keyView));
                 return std::make_tuple(key, bcos::storage::Entry("1"));
             }));
@@ -125,13 +126,13 @@ BOOST_AUTO_TEST_CASE(balanceCase)
                 BOOST_CHECK(!error);
                 BOOST_CHECK(!gotKeys.empty());
                 BOOST_CHECK_EQUAL(gotKeys.size(), 500);
-                ::ranges::sort(gotKeys);
+                std::ranges::sort(gotKeys);
                 BOOST_CHECK_EQUAL_COLLECTIONS(
                     gotKeys.begin(), gotKeys.end(), totalKeys.begin(), totalKeys.end());
             });
 
         co_await bcos::storage2::removeSome(
-            storage, ::ranges::views::transform(otherKeys, [](std::string view) {
+            storage, std::ranges::views::transform(otherKeys, [](std::string view) {
                 return bcos::executor_v1::StateKey("s_balance_caller", view);
             }));
 

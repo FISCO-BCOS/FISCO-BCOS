@@ -26,9 +26,10 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include <bcos-task/Wait.h>
 #include <json/json.h>
+#include <algorithm>
 #include <chrono>
-#include <range/v3/algorithm/for_each.hpp>
-#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/view/single.hpp>
+#include <ranges>
 #include <string>
 
 using namespace bcos;
@@ -1110,16 +1111,17 @@ void BlockSync::updateTreeTopologyNodeInfo()
     bcos::crypto::NodeIDs allNodeIDs;
 
     // extract NodeIDs
-    ::ranges::for_each(m_config->consensusNodeList(), [&consensusNodeIDs, &allNodeIDs](auto& node) {
-        consensusNodeIDs.emplace_back(node.nodeID);
-        allNodeIDs.emplace_back(node.nodeID);
-    });
-    ::ranges::for_each(m_config->observerNodeList(),
+    std::ranges::for_each(
+        m_config->consensusNodeList(), [&consensusNodeIDs, &allNodeIDs](auto& node) {
+            consensusNodeIDs.emplace_back(node.nodeID);
+            allNodeIDs.emplace_back(node.nodeID);
+        });
+    std::ranges::for_each(m_config->observerNodeList(),
         [&allNodeIDs](auto& node) { allNodeIDs.emplace_back(node.nodeID); });
 
-    ::ranges::sort(consensusNodeIDs.begin(), consensusNodeIDs.end(),
+    std::ranges::sort(consensusNodeIDs.begin(), consensusNodeIDs.end(),
         [](auto& a, auto& b) { return a->data() < b->data(); });
-    ::ranges::sort(allNodeIDs.begin(), allNodeIDs.end(),
+    std::ranges::sort(allNodeIDs.begin(), allNodeIDs.end(),
         [](auto& a, auto& b) { return a->data() < b->data(); });
 
     m_syncTreeTopology->updateAllNodeInfo(consensusNodeIDs, allNodeIDs);

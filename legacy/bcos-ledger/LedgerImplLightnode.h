@@ -12,7 +12,7 @@
 #include <bcos-utilities/LogStream.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
-#include <range/v3/range/access.hpp>
+#include <ranges>
 
 namespace bcos::ledger
 {
@@ -136,7 +136,7 @@ public:
                     blockNumber, block, syncNodeList);
             }
             // if getBlockByNodeList return empty block, break
-            if (::ranges::empty(block.blockHeader.data.parentInfo))
+            if (std::ranges::empty(block.blockHeader.data.parentInfo))
             {
                 LEDGER_LOG(WARNING)
                     << LOG_DESC("No blockHeader in block") << LOG_KV("blockNumber", blockNumber);

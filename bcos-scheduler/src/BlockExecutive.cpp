@@ -25,6 +25,7 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
+#include <ranges>
 #include <utility>
 
 #ifdef USE_TCMALLOC
@@ -361,7 +362,7 @@ bcos::protocol::ConstTransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
     {
         // Get tx hash list
         auto txHashes = std::make_shared<protocol::HashList>(
-            ::ranges::to<std::vector>(block->transactionHashes()));
+            std::ranges::to<std::vector>(block->transactionHashes()));
         if (c_fileLogLevel <= TRACE) [[unlikely]]
         {
             for (auto const& tx : *txHashes)

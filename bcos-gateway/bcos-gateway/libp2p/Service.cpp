@@ -19,8 +19,8 @@
 #include <bcos-task/Wait.h>
 #include <boost/random.hpp>
 #include <boost/throw_exception.hpp>
-#include <range/v3/view/map.hpp>
-#include <range/v3/view/transform.hpp>
+#include <range/v3/view/single.hpp>
+#include <ranges>
 #include <shared_mutex>
 #include <utility>
 
@@ -582,9 +582,9 @@ bcos::task::Task<void> Service::broadcastMessageToNeighbors(Message::Ptr message
 P2PInfos Service::sessionInfos()
 {
     std::shared_lock lock(x_sessions);
-    return ::ranges::views::values(m_sessions) |
-           ::ranges::views::transform([](auto const& session) { return session->p2pInfo(); }) |
-           ::ranges::to<P2PInfos>();
+    return std::ranges::views::values(m_sessions) |
+           std::ranges::views::transform([](auto const& session) { return session->p2pInfo(); }) |
+           std::ranges::to<P2PInfos>();
 }
 
 bool Service::isConnected(P2pID const& nodeID) const

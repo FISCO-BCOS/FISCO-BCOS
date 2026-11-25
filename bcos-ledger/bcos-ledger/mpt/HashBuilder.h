@@ -29,8 +29,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <map>
 #include <optional>
-#include <range/v3/range.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <span>
 #include <tuple>
 #include <unordered_map>
@@ -179,10 +178,10 @@ template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
 /// storage, never moved from: the caller's delta must stay intact for the commit flow and
 /// CommitObserver.
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
-bcos::task::Task<void> flushTrieNodes(Storage& storage, ::ranges::input_range auto const& nodes)
+bcos::task::Task<void> flushTrieNodes(Storage& storage, std::ranges::input_range auto const& nodes)
 {
     co_await bcos::storage2::writeSome(
-        storage, nodes | ::ranges::views::transform(
+        storage, nodes | std::ranges::views::transform(
                              [](auto const& node) { return std::tie(node.first, node.second); }));
 }
 

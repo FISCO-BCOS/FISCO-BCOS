@@ -1,5 +1,6 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include <boost/test/unit_test.hpp>
+#include <ranges>
 
 using namespace bcos::executor_v1;
 using namespace std::string_view_literals;
@@ -29,7 +30,7 @@ BOOST_AUTO_TEST_CASE(single_view)
     int i = 100;
     auto& ref = i;
 
-    auto view = ::ranges::views::single(ref);
+    auto view = std::ranges::views::single(ref);
     auto&& j = view[0];
     BOOST_CHECK_EQUAL(view[0], 100);
 }

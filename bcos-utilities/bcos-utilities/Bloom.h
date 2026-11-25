@@ -22,8 +22,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-utilities/Common.h"
-#include <range/v3/range/concepts.hpp>
-#include <range/v3/range/traits.hpp>
+#include <ranges>
 
 namespace bcos
 {
@@ -50,8 +49,8 @@ static void bytesToBloom(bcos::concepts::ByteBuffer auto const& _bytes, Bloom& _
 
 
 template <class Logs>
-    requires ::ranges::input_range<Logs> &&
-             std::same_as<std::remove_cvref_t<typename ::ranges::range_value_t<Logs>>,
+    requires std::ranges::input_range<Logs> &&
+             std::same_as<std::remove_cvref_t<typename std::ranges::range_value_t<Logs>>,
                  protocol::LogEntry>
 Bloom getLogsBloom(Logs logs)
 {

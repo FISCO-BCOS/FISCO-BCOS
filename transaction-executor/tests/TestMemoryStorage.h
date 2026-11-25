@@ -3,6 +3,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include <ranges>
 
 namespace bcos::executor_v1
 {
@@ -20,7 +21,7 @@ inline void clearGlobalExecutableCache()
 }
 
 auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, MutableStorage& storage,
-    ::ranges::input_range auto&& keys, storage2::BYPASS_READ_SET_TYPE /*unused*/)
+    std::ranges::input_range auto&& keys, storage2::BYPASS_READ_SET_TYPE /*unused*/)
     -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage, keys))>>
 {
     co_return co_await storage2::readSome(storage, std::forward<decltype(keys)>(keys));

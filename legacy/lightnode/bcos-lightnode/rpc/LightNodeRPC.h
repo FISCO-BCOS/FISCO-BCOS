@@ -28,8 +28,7 @@
 #include <exception>
 #include <iterator>
 #include <memory>
-#include <range/v3/range/access.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <stdexcept>
 
 namespace bcos::rpc
@@ -299,7 +298,7 @@ public:
                     {
                         BOOST_THROW_EXCEPTION(std::runtime_error{e.what()});
                     }
-                    if (::ranges::empty(block.transactionsMetaData) && blockNumber != 0)
+                    if (std::ranges::empty(block.transactionsMetaData) && blockNumber != 0)
                     {
                         LIGHTNODE_LOG(ERROR)
                             << LOG_DESC("getBlockByNumber")
@@ -308,19 +307,19 @@ public:
                         self->toErrorResp(error, respFunc);
                         co_return;
                     }
-                    if (!::ranges::empty(block.transactionsMetaData))
+                    if (!std::ranges::empty(block.transactionsMetaData))
                     {
                         // Check transaction merkle
                         crypto::merkle::Merkle<Hasher> merkle(self->m_hasher.clone());
                         auto hashesRange =
                             block.transactionsMetaData |
-                            ::ranges::views::transform(
+                            std::ranges::views::transform(
                                 [](const bcostars::TransactionMetaData& transactionMetaData)
                                     -> auto& { return transactionMetaData.hash; });
                         std::vector<bcos::bytes> merkles;
                         merkle.generateMerkle(hashesRange, merkles);
 
-                        if (::ranges::empty(merkles))
+                        if (std::ranges::empty(merkles))
                         {
                             BOOST_THROW_EXCEPTION(
                                 std::runtime_error{"Unable to generate transaction merkle root!"});
@@ -332,9 +331,9 @@ public:
                             << LOG_KV("transaction number", block.transactions.size());
 
                         if (!bcos::concepts::bytebuffer::equalTo(
-                                block.blockHeader.data.txsRoot, *::ranges::rbegin(merkles)))
+                                block.blockHeader.data.txsRoot, *std::ranges::rbegin(merkles)))
                         {
-                            auto merkleRoot = *::ranges::rbegin(merkles);
+                            auto merkleRoot = *std::ranges::rbegin(merkles);
                             std::ostringstream strHex;
                             strHex << "0x" << std::hex << std::setfill('0');
                             for (size_t i = 0; i < Hasher::HASH_SIZE; ++i)
@@ -368,7 +367,7 @@ public:
                         bcos::concepts::hash::calculate(
                             parentBlock, self->m_hasher.clone(), parentHash);
 
-                        if (::ranges::empty(block.blockHeader.data.parentInfo) ||
+                        if (std::ranges::empty(block.blockHeader.data.parentInfo) ||
                             (block.blockHeader.data.parentInfo[0].blockNumber !=
                                 parentBlock.blockHeader.data.blockNumber) ||
                             !bcos::concepts::bytebuffer::equalTo(
@@ -636,9 +635,9 @@ private:
     void decodeData(bcos::concepts::bytebuffer::ByteBuffer auto const& input,
         bcos::concepts::bytebuffer::ByteBuffer auto& out)
     {
-        auto begin = ::ranges::begin(input);
-        auto end = ::ranges::end(input);
-        auto length = ::ranges::size(input);
+        auto begin = std::ranges::begin(input);
+        auto end = std::ranges::end(input);
+        auto length = std::ranges::size(input);
 
         if ((length == 0) || (length % 2 != 0)) [[unlikely]]
         {
@@ -652,7 +651,7 @@ private:
         }
 
         bcos::concepts::resizeTo(out, length / 2);
-        boost::algorithm::unhex(begin, end, ::ranges::begin(out));
+        boost::algorithm::unhex(begin, end, std::ranges::begin(out));
     }
 
     LocalLedgerType m_localLedger;

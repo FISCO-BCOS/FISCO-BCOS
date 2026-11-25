@@ -22,6 +22,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include <evmc/evmc.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <memory>
 #include <sstream>
 
@@ -52,7 +53,7 @@ public:
         if (!output.empty())
         {
             auto* outputData = new uint8_t[output.size() + 1];
-            ::ranges::copy(output, outputData);
+            std::ranges::copy(output, outputData);
             outputData[output.size()] = 0;  // Null-terminate the output
             result.output_data = outputData;
             result.output_size = output.size();

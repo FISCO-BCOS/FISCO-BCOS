@@ -24,8 +24,8 @@
 #include "../protocol/TransactionSubmitResult.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Error.h"
+#include <bcos-utilities/AnyView.h>
 #include <boost/throw_exception.hpp>
-#include <range/v3/view/any_view.hpp>
 #include <stdexcept>
 
 namespace bcos::txpool

@@ -25,7 +25,7 @@
 #include <bcos-pbft/pbft/utilities/SealStall.h>
 #include <bcos-utilities/ITTAPI.h>
 #include <chrono>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <utility>
 
 using namespace bcos;
@@ -220,18 +220,18 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
         bcos::consensus::noteSealSkipped(bcos::consensus::SealSkipReason::AlreadyCommitted,
             _block->blockHeader()->number(), m_sealingManager->latestNumber());
         m_sealingManager->notifyResetTxsFlag(
-            ::ranges::to<std::vector>(_block->transactionHashes()), false);
+            std::ranges::to<std::vector>(_block->transactionHashes()), false);
         return;
     }
     // supplement the header info: set sealerList and weightList
     auto consensusNodeInfo = m_sealerConfig->consensus()->consensusNodeList();
-    _block->blockHeader()->setSealerList(::ranges::views::transform(consensusNodeInfo,
+    _block->blockHeader()->setSealerList(std::ranges::views::transform(consensusNodeInfo,
                                              [](auto const& node) { return node.nodeID->data(); }) |
-                                         ::ranges::to<std::vector>());
+                                         std::ranges::to<std::vector>());
     _block->blockHeader()->setConsensusWeights(
-        ::ranges::views::transform(
+        std::ranges::views::transform(
             consensusNodeInfo, [](auto const& node) { return node.voteWeight; }) |
-        ::ranges::to<std::vector>());
+        std::ranges::to<std::vector>());
     _block->blockHeader()->setSealer(m_sealerConfig->consensus()->nodeIndex());
     // set the version
     auto version = std::min(m_sealerConfig->consensus()->compatibilityVersion(),
@@ -266,7 +266,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
             // silently exhaust the sealer's effective txpool capacity.
             try
             {
-                auto hashes = ::ranges::to<std::vector>(_block->transactionHashes());
+                auto hashes = std::ranges::to<std::vector>(_block->transactionHashes());
                 sealingManager->notifyResetTxsFlag(hashes, false);
             }
             catch (std::exception const& e)

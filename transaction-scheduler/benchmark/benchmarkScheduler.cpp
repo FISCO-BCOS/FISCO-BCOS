@@ -23,7 +23,10 @@
 #include <boost/log/core/core.hpp>
 #include <boost/throw_exception.hpp>
 #include <random>
+#include <range/v3/view/chunk.hpp>
 #include <range/v3/view/indirect.hpp>
+#include <range/v3/view/single.hpp>
+#include <ranges>
 #include <variant>
 
 using namespace bcos;
@@ -164,20 +167,20 @@ struct Fixture
         std::mt19937_64 rng(std::random_device{}());
 
         // Generation accounts
-        m_addresses = ::ranges::views::iota(0LU, count) |
-                      ::ranges::views::transform([&rng](size_t index) {
+        m_addresses = std::ranges::views::iota(0LU, count) |
+                      std::ranges::views::transform([&rng](size_t index) {
                           bcos::h160 address;
                           address.generateRandomFixedBytesByEngine(rng);
                           return address;
                       }) |
-                      ::ranges::to<decltype(m_addresses)>();
+                      std::ranges::to<decltype(m_addresses)>();
     }
 
     void prepareIssue(size_t count)
     {
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
-            m_addresses | ::ranges::views::transform([this, &abiCodec](const Address& address) {
+            m_addresses | std::ranges::views::transform([this, &abiCodec](const Address& address) {
                 auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>();
                 auto& inner = transaction->mutableInner();
 
@@ -187,7 +190,7 @@ struct Fixture
                 transaction->calculateHash(*m_cryptoSuite->hashImpl());
                 return transaction;
             }) |
-            ::ranges::to<decltype(m_transactions)>();
+            std::ranges::to<decltype(m_transactions)>();
     }
 
     void prepareNoConflictTransfer()
@@ -195,7 +198,7 @@ struct Fixture
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
             m_addresses | ::ranges::views::chunk(2) |
-            ::ranges::views::transform([this, &abiCodec](auto&& range) {
+            std::ranges::views::transform([this, &abiCodec](auto&& range) {
                 auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>();
                 auto& inner = transaction->mutableInner();
                 inner.data.to = m_contractAddress;
@@ -208,7 +211,7 @@ struct Fixture
                 transaction->calculateHash(*m_cryptoSuite->hashImpl());
                 return transaction;
             }) |
-            ::ranges::to<decltype(m_transactions)>();
+            std::ranges::to<decltype(m_transactions)>();
     }
 
     void prepareRandomTransfer()
@@ -218,7 +221,7 @@ struct Fixture
         std::mt19937_64 rng(std::random_device{}());
         m_transfers.resize(count);
         m_transactions =
-            ::ranges::views::transform(::ranges::views::iota(0LU, count),
+            std::ranges::views::transform(std::ranges::views::iota(0LU, count),
                 [&, this](size_t index) {
                     auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>();
                     auto& inner = transaction->mutableInner();
@@ -235,15 +238,16 @@ struct Fixture
                     transaction->calculateHash(*m_cryptoSuite->hashImpl());
                     return transaction;
                 }) |
-            ::ranges::to<decltype(m_transactions)>();
+            std::ranges::to<decltype(m_transactions)>();
     }
 
     void prepareConflictTransfer()
     {
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
-            ::ranges::views::zip(m_addresses, ::ranges::views::iota(0LU, m_addresses.size())) |
-            ::ranges::views::transform([this, &abiCodec](auto&& tuple) {
+            std::ranges::views::zip(
+                m_addresses, std::ranges::views::iota(0LU, m_addresses.size())) |
+            std::ranges::views::transform([this, &abiCodec](auto&& tuple) {
                 auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
                     [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
                 auto& inner = transaction->mutableInner();
@@ -262,7 +266,7 @@ struct Fixture
                 transaction->calculateHash(*m_cryptoSuite->hashImpl());
                 return transaction;
             }) |
-            ::ranges::to<decltype(m_transactions)>();
+            std::ranges::to<decltype(m_transactions)>();
     }
 
     task::Task<std::vector<s256>> balances()
@@ -284,7 +288,7 @@ struct Fixture
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
 
                     auto checkTransactions =
-                        ::ranges::views::transform(m_addresses,
+                        std::ranges::views::transform(m_addresses,
                             [&](const auto& address) {
                                 auto transaction =
                                     std::make_unique<bcostars::protocol::TransactionImpl>();
@@ -296,7 +300,7 @@ struct Fixture
                                 transaction->calculateHash(*m_cryptoSuite->hashImpl());
                                 return transaction;
                             }) |
-                        ::ranges::to<
+                        std::ranges::to<
                             std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
                     auto view = m_multiLayerStorage.fork();
@@ -305,7 +309,7 @@ struct Fixture
                         ::ranges::views::indirect(checkTransactions), m_ledgerConfig);
 
                     auto balances = receipts |
-                                    ::ranges::views::transform([&abiCodec](auto const& receipt) {
+                                    std::ranges::views::transform([&abiCodec](auto const& receipt) {
                                         if (receipt->status() != 0)
                                         {
                                             BOOST_THROW_EXCEPTION(std::runtime_error(
@@ -317,7 +321,7 @@ struct Fixture
                                         abiCodec.abiOut(receipt->output(), balance);
                                         return balance;
                                     }) |
-                                    ::ranges::to<std::vector<s256>>();
+                                    std::ranges::to<std::vector<s256>>();
 
                     co_return balances;
                 }
@@ -479,7 +483,7 @@ static void randomTransfer(benchmark::State& state)
                         expectbalances[transfer.from] -= singleTransfer * i;
                         expectbalances[transfer.to] += singleTransfer * i;
                     }
-                    for (auto&& [expect, got] : ::ranges::views::zip(expectbalances, balances))
+                    for (auto&& [expect, got] : std::ranges::views::zip(expectbalances, balances))
                     {
                         if (expect != got)
                         {
@@ -547,7 +551,7 @@ static void conflictTransfer(benchmark::State& state)
                     fixture.m_multiLayerStorage.pushView(std::move(view));
                     auto balances = co_await fixture.balances();
                     for (auto&& [balance, index] :
-                        ::ranges::views::zip(balances, ::ranges::views::iota(0LU)))
+                        std::ranges::views::zip(balances, std::ranges::views::iota(0LU)))
                     {
                         if (index == 0)
                         {

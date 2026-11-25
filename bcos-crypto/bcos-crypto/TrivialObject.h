@@ -21,7 +21,7 @@
 #pragma once
 
 #include <boost/throw_exception.hpp>
-#include <range/v3/range.hpp>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 
@@ -33,8 +33,8 @@ concept Value = std::is_trivial_v<std::remove_cvref_t<Object>> &&
                 !std::is_pointer_v<std::remove_cvref_t<Object>>;
 
 template <class Object>
-concept Range = ::ranges::contiguous_range<std::remove_cvref_t<Object>> &&
-                std::is_trivial_v<std::remove_cvref_t<::ranges::range_value_t<Object>>>;
+concept Range = std::ranges::contiguous_range<std::remove_cvref_t<Object>> &&
+                std::is_trivial_v<std::remove_cvref_t<std::ranges::range_value_t<Object>>>;
 
 template <class Input>
 concept Object = Value<Input> || Range<Input>;
@@ -61,10 +61,11 @@ constexpr auto toView(trivial::Object auto&& object)
     else if constexpr (trivial::Range<RawType>)
     {
         using ByteType = std::conditional_t<
-            std::is_const_v<std::remove_reference_t<::ranges::range_value_t<RawType>>>,
+            std::is_const_v<std::remove_reference_t<std::ranges::range_value_t<RawType>>>,
             std::byte const, std::byte>;
         std::span<ByteType> view{(ByteType*)std::data(object),
-            sizeof(std::remove_cvref_t<::ranges::range_value_t<RawType>>) * ::ranges::size(object)};
+            sizeof(std::remove_cvref_t<std::ranges::range_value_t<RawType>>) *
+                std::ranges::size(object)};
 
         return view;
     }
@@ -76,14 +77,14 @@ constexpr auto toView(trivial::Object auto&& object)
 
 template <class Range>
 concept DynamicRange = requires(Range range, size_t newSize) {
-    requires ::ranges::range<Range>;
+    requires std::ranges::range<Range>;
     range.resize(newSize);
     range.reserve(newSize);
 };
 
-void resizeTo(::ranges::range auto& out, size_t size)
+void resizeTo(std::ranges::range auto& out, size_t size)
 {
-    if ((size_t)::ranges::size(out) < size)
+    if ((size_t)std::ranges::size(out) < size)
     {
         if constexpr (DynamicRange<std::remove_cvref_t<decltype(out)>>)
         {

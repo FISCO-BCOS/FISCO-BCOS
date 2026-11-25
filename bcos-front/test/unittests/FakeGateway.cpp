@@ -21,8 +21,7 @@
 
 #include "FakeGateway.h"
 #include <bcos-front/Common.h>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/join.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::front;
@@ -66,7 +65,7 @@ bcos::task::Task<void> bcos::front::test::FakeGateway::broadcastMessage(uint16_t
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
-    auto data = ::ranges::views::join(payloads) | ::ranges::to<bcos::bytes>();
+    auto data = std::ranges::views::join(payloads) | std::ranges::to<bcos::bytes>();
     auto nodeIDPtr = std::shared_ptr<bcos::crypto::NodeID>(
         const_cast<bcos::crypto::NodeID*>(std::addressof(srcNodeID)), [](auto* ptr) {});
     if (auto frontService = m_frontService.lock())

@@ -4,9 +4,9 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
+#include <bcos-utilities/AnyView.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/RefDataContainer.h>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcostars
 {

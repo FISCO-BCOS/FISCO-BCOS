@@ -26,10 +26,10 @@
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-task/Task.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-utilities/AnyView.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <memory>
-#include <range/v3/view/any_view.hpp>
 #include <tuple>
 
 namespace bcos

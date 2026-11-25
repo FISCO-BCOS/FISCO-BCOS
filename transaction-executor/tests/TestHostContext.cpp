@@ -33,8 +33,6 @@
 #include <atomic>
 #include <iterator>
 #include <memory>
-#include <range/v3/algorithm/sort.hpp>
-#include <range/v3/algorithm/unique.hpp>
 
 using namespace bcos::task;
 using namespace bcos::storage2;
@@ -161,7 +159,7 @@ public:
         auto input = abiCodec.abiIn("initBfs()");
         auto address = bcos::Address(0x100e);
         evmc_address callAddress{};
-        ::ranges::copy(address, callAddress.bytes);
+        std::ranges::copy(address, callAddress.bytes);
         evmc_message message = {.kind = EVMC_CALL,
             .flags = 0,
             .depth = 0,
@@ -460,9 +458,9 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
     // 检查新建的合约地址不重复
     // Verify the new contract address is unique
     BOOST_TEST(addresses.size() == 10);
-    ::ranges::sort(addresses);
-    auto last = ::ranges::unique(addresses);
-    BOOST_TEST(::ranges::distance(addresses.begin(), last) == 10);
+    std::ranges::sort(addresses);
+    auto last = std::ranges::unique(addresses);
+    BOOST_TEST(std::ranges::distance(addresses.begin(), last.begin()) == 10);
 
     for (auto& address2 : addresses)
     {
@@ -1090,7 +1088,7 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
         evmc_address tableManagerAddress{};
         {
             auto address = bcos::Address(0x1002);
-            ::ranges::copy(address, tableManagerAddress.bytes);
+            std::ranges::copy(address, tableManagerAddress.bytes);
         }
         using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
         auto createResult = co_await callAddress(tableManagerAddress,

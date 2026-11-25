@@ -1,6 +1,7 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Trait.h>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 
@@ -46,7 +47,7 @@ private:
     }
 
 public:
-    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
+    auto readSomeRaw(std::ranges::input_range auto keys, auto&&... args)
         -> task::Task<task::AwaitableReturnType<decltype(m_storage.get().readSomeRaw(
             std::move(keys), std::forward<decltype(args)>(args)...))>>
     {
@@ -64,7 +65,7 @@ public:
 
     // Transaction-visible reads must be tracked so that hasRAWIntersection
     // can detect a chunk reading a key written by an earlier chunk.
-    auto readSome(::ranges::input_range auto keys) -> task::Task<task::AwaitableReturnType<
+    auto readSome(std::ranges::input_range auto keys) -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
         for (auto&& key : keys)
@@ -89,7 +90,7 @@ public:
     // protected instead by WAW detection in hasRAWIntersection: two chunks
     // writing the same key are forced to serialize, so the "read stale
     // pre-image" window cannot open.
-    auto readSome(::ranges::input_range auto keys, auto... tags)
+    auto readSome(std::ranges::input_range auto keys, auto... tags)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys), decltype(tags)...>>>
     {
@@ -133,8 +134,9 @@ public:
 
     // FIB-106: forward_range is required so the two-pass pattern (track keys
     // then forward to backend) does not silently consume a single-pass input.
-    auto writeSome(::ranges::forward_range auto keyValues) -> task::Task<task::AwaitableReturnType<
-        std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keyValues)>>>
+    auto writeSome(std::ranges::forward_range auto keyValues)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keyValues)>>>
     {
         for (auto&& [key, _] : keyValues)
         {
@@ -150,7 +152,7 @@ public:
             m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto removeSome(::ranges::forward_range auto keys, auto&&... args)
+    auto removeSome(std::ranges::forward_range auto keys, auto&&... args)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome, Storage&,
             decltype(keys), decltype(args)...>>>
     {
@@ -208,7 +210,7 @@ public:
         auto const& lhsSet = readWriteSet(lhs);
         auto const& rhsSet = readWriteSet(rhs);
 
-        if (::ranges::empty(lhsSet) || ::ranges::empty(rhsSet))
+        if (std::ranges::empty(lhsSet) || std::ranges::empty(rhsSet))
         {
             return false;
         }

@@ -6,9 +6,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
-#include <range/v3/range/access.hpp>
-#include <range/v3/range/traits.hpp>
-#include <range/v3/view/subrange.hpp>
+#include <ranges>
 
 namespace bcos::rpc
 {
@@ -16,21 +14,21 @@ namespace bcos::rpc
 void hex2Bin(bcos::concepts::bytebuffer::ByteBuffer auto const& hex,
     bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
-    auto view = ::ranges::subrange<decltype(::ranges::begin(hex))>(
-        ::ranges::begin(hex), ::ranges::end(hex));
+    auto view = std::ranges::subrange<decltype(std::ranges::begin(hex))>(
+        std::ranges::begin(hex), std::ranges::end(hex));
 
-    if (::ranges::size(view) >= 2 && (view[0] == '0' && view[1] == 'x'))
+    if (std::ranges::size(view) >= 2 && (view[0] == '0' && view[1] == 'x'))
     {
-        view = ::ranges::subrange<decltype(::ranges::begin(hex))>(
-            ::ranges::begin(hex) + 2, ::ranges::end(hex));
+        view = std::ranges::subrange<decltype(std::ranges::begin(hex))>(
+            std::ranges::begin(hex) + 2, std::ranges::end(hex));
     }
 
-    if ((::ranges::size(view) % 2 != 0)) [[unlikely]]
+    if ((std::ranges::size(view) % 2 != 0)) [[unlikely]]
         BOOST_THROW_EXCEPTION(std::invalid_argument{"Invalid input hex string!"});
 
-    bcos::concepts::resizeTo(out, ::ranges::size(view) / 2);
-    boost::algorithm::unhex(::ranges::begin(view), ::ranges::end(view),
-        (::ranges::range_value_t<decltype(view)>*)::ranges::data(out));
+    bcos::concepts::resizeTo(out, std::ranges::size(view) / 2);
+    boost::algorithm::unhex(std::ranges::begin(view), std::ranges::end(view),
+        (std::ranges::range_value_t<decltype(view)>*)std::ranges::data(out));
 }
 
 void toJsonResp(bcos::crypto::hasher::Hasher auto&& hasher,

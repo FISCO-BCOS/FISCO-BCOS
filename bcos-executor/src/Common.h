@@ -39,11 +39,11 @@
 #include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/string/case_conv.hpp>
+#include <algorithm>
 #include <iterator>
 #include <limits>
 #include <memory>
-#include <range/v3/algorithm/copy.hpp>
-#include <range/v3/view/drop.hpp>
+#include <ranges>
 #include <set>
 
 namespace bcos
@@ -302,7 +302,7 @@ inline evmc_uint256be toEvmC(const u256& _n)
 {
     evmc_uint256be ret;
     auto gasPriceBytes = toBigEndian(_n);
-    ::ranges::copy(gasPriceBytes, ret.bytes);
+    std::ranges::copy(gasPriceBytes, ret.bytes);
     return ret;
 }
 
@@ -315,7 +315,7 @@ inline evmc_bytes32 toEvmC(h256 const& hash)
 {
     evmc_bytes32 evmBytes;
     static_assert(sizeof(evmBytes) == h256::SIZE, "Hash size mismatch!");
-    ::ranges::copy(hash, evmBytes.bytes);
+    std::ranges::copy(hash, evmBytes.bytes);
     return evmBytes;
 }
 /// Convert a 20-byte bcos::Address to evmc_address (binary copy, no hex encoding).
@@ -323,7 +323,7 @@ inline evmc_address toEvmC(bcos::Address const& address)
 {
     evmc_address out{};
     static_assert(sizeof(out.bytes) == bcos::Address::SIZE, "Address size mismatch!");
-    ::ranges::copy(address, out.bytes);
+    std::ranges::copy(address, out.bytes);
     return out;
 }
 /**
@@ -368,14 +368,14 @@ inline std::string getContractTableName(
     if (_address[0] == '/')
     {
         out.reserve(prefix.size() + _address.size() - 1);
-        ::ranges::copy(prefix, std::back_inserter(out));
-        ::ranges::copy(::ranges::views::drop(_address, 1), std::back_inserter(out));
+        std::ranges::copy(prefix, std::back_inserter(out));
+        std::ranges::copy(std::ranges::views::drop(_address, 1), std::back_inserter(out));
     }
     else
     {
         out.reserve(prefix.size() + _address.size());
-        ::ranges::copy(prefix, std::back_inserter(out));
-        ::ranges::copy(_address, std::back_inserter(out));
+        std::ranges::copy(prefix, std::back_inserter(out));
+        std::ranges::copy(_address, std::back_inserter(out));
     }
 
     return out;

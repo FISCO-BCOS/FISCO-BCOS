@@ -6,10 +6,8 @@
 #include "bcos-utilities/ITTAPI.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <chrono>
-#include <range/v3/iterator/operations.hpp>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/all.hpp>
-#include <range/v3/view/transform.hpp>
+#include <iterator>
+#include <ranges>
 #include <type_traits>
 
 bcos::task::Task<std::vector<bcos::protocol::Transaction::ConstPtr>>
@@ -20,9 +18,9 @@ bcos::scheduler_v1::getTransactions(txpool::TxPoolInterface& txpool, protocol::B
 
     if (block.transactionsSize() > 0)
     {
-        co_return ::ranges::views::transform(block.transactions(), [](auto tx) {
+        co_return std::ranges::views::transform(block.transactions(), [](auto tx) {
             return bcos::protocol::Transaction::ConstPtr{std::move(tx).toShared()};
-        }) | ::ranges::to<std::vector>();
+        }) | std::ranges::to<std::vector>();
     }
 
     co_return co_await txpool.getTransactions(block.transactionHashes());
@@ -44,14 +42,14 @@ bcos::h256 bcos::scheduler_v1::calculateTransactionRoot(
     {
         if (block.transactionsSize() > 0)
         {
-            auto hashes = ::ranges::views::transform(
+            auto hashes = std::ranges::views::transform(
                 block.transactions(), [](auto tx) { return tx->hash(); });
             merkle.generateMerkle(hashes, merkleTrie);
         }
         else
         {
             auto hashes = block.transactionHashes();
-            merkle.generateMerkle(::ranges::views::all(hashes), merkleTrie);
+            merkle.generateMerkle(std::ranges::views::all(hashes), merkleTrie);
         }
     }
     catch (std::exception const& e)
@@ -66,7 +64,7 @@ bcos::h256 bcos::scheduler_v1::calculateTransactionRoot(
         return {};
     }
 
-    return *::ranges::rbegin(merkleTrie);
+    return *std::ranges::rbegin(merkleTrie);
 }
 
 bcos::h256 bcos::scheduler_v1::calculateEthereumTransactionRoot(protocol::Block const& block)

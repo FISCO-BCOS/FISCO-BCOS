@@ -28,6 +28,7 @@
 
 #include <map>
 #include <range/v3/view/concat.hpp>
+#include <ranges>
 #include <string>
 #include <utility>
 
@@ -487,7 +488,7 @@ public:
             auto allNodes =
                 ::ranges::views::concat(m_ledgerConfig->consensusNodeList(),
                     m_ledgerConfig->observerNodeList(), m_ledgerConfig->candidateSealerNodeList()) |
-                ::ranges::to<std::vector>();
+                std::ranges::to<std::vector>();
             co_return allNodes;
         }
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "invalid Type"));
@@ -504,10 +505,10 @@ public:
         ReadGuard l(x_ledger);
         for (auto index = _startNumber; index <= endNumber; index++)
         {
-            auto nonces = ::ranges::views::transform(
+            auto nonces = std::ranges::views::transform(
                 m_ledger[index]->transactions(), [](auto tx) { return std::string(tx->nonce()); });
             nonceList->insert(std::make_pair(
-                index, std::make_shared<NonceList>(::ranges::to<std::vector>(nonces))));
+                index, std::make_shared<NonceList>(std::ranges::to<std::vector>(nonces))));
         }
         co_return std::move(nonceList);
     }

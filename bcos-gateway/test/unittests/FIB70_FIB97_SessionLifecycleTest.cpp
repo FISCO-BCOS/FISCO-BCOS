@@ -32,6 +32,7 @@
 #include <list>
 #include <optional>
 #include <queue>
+#include <range/v3/view/single.hpp>
 #include <thread>
 #include <tuple>
 

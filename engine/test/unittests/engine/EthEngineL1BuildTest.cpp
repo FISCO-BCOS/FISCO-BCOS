@@ -49,6 +49,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <thread>
 
@@ -416,7 +417,7 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
             key, std::forward<decltype(args)>(args)...);
     }
 
-    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
+    auto readSomeRaw(std::ranges::input_range auto keys, auto&&... args)
         -> task::Task<std::vector<DataValue>>
     {
         if (accountReadGate->load(std::memory_order_acquire) ||
@@ -438,7 +439,7 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
             std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto readSome(::ranges::input_range auto keys, auto&&... args)
+    auto readSome(std::ranges::input_range auto keys, auto&&... args)
         -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
     {
         if (accountReadGate->load(std::memory_order_acquire) ||

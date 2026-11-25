@@ -21,12 +21,12 @@
 #include "BoostLog.h"
 #include <boost/asio.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <algorithm>
 #include <atomic>
 #include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <range/v3/algorithm/binary_search.hpp>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -130,7 +130,7 @@ public:
     void dispatch(Task&& task)
     {
         auto id = std::this_thread::get_id();
-        if (::ranges::binary_search(m_threadIds, id))
+        if (std::ranges::binary_search(m_threadIds, id))
         {
             IOServicePool::safeExecute(std::forward<Task>(task));
         }

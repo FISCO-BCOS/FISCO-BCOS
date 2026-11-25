@@ -12,8 +12,9 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <iterator>
-#include <range/v3/all.hpp>
+#include <ranges>
 #include <unordered_map>
 
 using namespace bcos;
@@ -50,13 +51,13 @@ struct MapStateStorage
     task::Task<std::vector<std::optional<Value>>> readSome(Keys keys)
     {
         std::vector<std::optional<Value>> results;
-        if constexpr (::ranges::sized_range<Keys>)
+        if constexpr (std::ranges::sized_range<Keys>)
         {
-            results.reserve(::ranges::size(keys));
+            results.reserve(std::ranges::size(keys));
         }
         else
         {
-            results.reserve(::ranges::distance(keys));
+            results.reserve(std::ranges::distance(keys));
         }
 
         for (auto&& key : keys)
@@ -224,10 +225,10 @@ BOOST_AUTO_TEST_CASE(seal_limit_within_single_sender)
     pool.seal(kSealLimit * kTxGas, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 2);
-    auto nonces = ::ranges::views::transform(out, [](auto& txPtr) {
+    auto nonces = std::ranges::views::transform(out, [](auto& txPtr) {
         return std::stoll(std::string(txPtr->nonce()));
-    }) | ::ranges::to<std::vector>();
-    ::ranges::sort(nonces);
+    }) | std::ranges::to<std::vector>();
+    std::ranges::sort(nonces);
     BOOST_CHECK(nonces[0] == 0 && nonces[1] == 1);
 
     // seal() is read-only: no sender nonce is created or advanced in `state`.
@@ -333,10 +334,10 @@ BOOST_AUTO_TEST_CASE(seal_with_existing_ledger_nonce)
     pool.seal(10 * kTxGas, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 2);
-    auto nonces = ::ranges::views::transform(out, [](auto& txPtr) {
+    auto nonces = std::ranges::views::transform(out, [](auto& txPtr) {
         return std::stoll(std::string(txPtr->nonce()));
-    }) | ::ranges::to<std::vector>();
-    ::ranges::sort(nonces);
+    }) | std::ranges::to<std::vector>();
+    std::ranges::sort(nonces);
     BOOST_CHECK(nonces == std::vector<long long>({1, 2}));
 
     auto nonce = readNonce(state, sender);
@@ -520,10 +521,10 @@ BOOST_AUTO_TEST_CASE(seal_gas_budget_fits_two_of_three)
     pool.seal(2 * kTxGas, state, std::back_inserter(out));
 
     BOOST_REQUIRE_EQUAL(out.size(), 2);
-    auto nonces = ::ranges::views::transform(out, [](auto& txPtr) {
+    auto nonces = std::ranges::views::transform(out, [](auto& txPtr) {
         return std::stoll(std::string(txPtr->nonce()));
-    }) | ::ranges::to<std::vector>();
-    ::ranges::sort(nonces);
+    }) | std::ranges::to<std::vector>();
+    std::ranges::sort(nonces);
     BOOST_CHECK(nonces == std::vector<long long>({0, 1}));
 }
 

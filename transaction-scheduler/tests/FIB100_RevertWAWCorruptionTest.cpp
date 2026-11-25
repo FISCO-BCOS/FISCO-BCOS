@@ -43,6 +43,7 @@
 #include <transaction-executor/bcos-transaction-executor/RollbackableStorage.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -144,13 +145,14 @@ BOOST_AUTO_TEST_CASE(revertedLaterChunkMustNotOverwriteEarlierWrite)
         bcostars::protocol::BlockHeaderImpl blockHeader;
 
         auto transactions =
-            ::ranges::iota_view<int, int>(0, 2) | ::ranges::views::transform([](int /*index*/) {
+            std::ranges::iota_view<int, int>(0, 2) |
+            std::ranges::views::transform([](int /*index*/) {
                 return std::make_unique<bcostars::protocol::TransactionImpl>(
                     [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
             }) |
-            ::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
+            std::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
         auto transactionRefs =
-            transactions | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+            transactions | std::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
 
         auto view = multiLayerStorage.fork();
         view.newMutable();

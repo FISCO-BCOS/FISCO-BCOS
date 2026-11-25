@@ -2,9 +2,11 @@
 
 #include "Storage.h"
 #include "bcos-utilities/AnyHolder.h"
+#include <bcos-utilities/AnyView.h>
 #include <memory>
 #include <optional>
-#include <range/v3/view/any_view.hpp>
+#include <range/v3/view/all.hpp>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -284,22 +286,23 @@ public:
         std::unique_ptr<IteratorConcept> m_ptr;
     };
 
-    auto readSome(::ranges::input_range auto keys) -> task::Task<std::vector<std::optional<Value>>>
+    auto readSome(std::ranges::input_range auto keys)
+        -> task::Task<std::vector<std::optional<Value>>>
     {
         co_return co_await m_self->readSome(::ranges::views::all(keys));
     }
 
-    auto writeSome(::ranges::input_range auto keyValues) -> task::Task<void>
+    auto writeSome(std::ranges::input_range auto keyValues) -> task::Task<void>
     {
         co_await m_self->writeSome(::ranges::views::all(keyValues));
     }
 
-    auto removeSome(::ranges::input_range auto keys) -> task::Task<void>
+    auto removeSome(std::ranges::input_range auto keys) -> task::Task<void>
     {
         co_await m_self->removeSome(::ranges::views::all(keys), false);
     }
 
-    auto removeSome(::ranges::input_range auto keys, auto... tags) -> task::Task<void>
+    auto removeSome(std::ranges::input_range auto keys, auto... tags) -> task::Task<void>
     {
         constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
         co_await m_self->removeSome(::ranges::views::all(keys), physical);

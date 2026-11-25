@@ -24,7 +24,7 @@
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
-#include <range/v3/algorithm/find.hpp>
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -129,7 +129,7 @@ void BalancePrecompiled::checkOriginAuth(
                            << LOG_BADGE("BalancePrecompiled") << LOG_DESC("checkOriginAuth")
                            << LOG_KV("governors size", governors.size())
                            << LOG_KV("origin address", origin);
-    if (::ranges::find(governors, Address(origin)) == governors.end())
+    if (std::ranges::find(governors, Address(origin)) == governors.end())
     {
         PRECOMPILED_LOG(TRACE)
             << BLOCK_NUMBER(_executive->blockContext().number()) << LOG_BADGE("BalancePrecompiled")

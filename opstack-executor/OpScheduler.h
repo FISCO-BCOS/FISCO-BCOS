@@ -66,9 +66,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/transform.hpp>
-#include <range/v3/view/zip.hpp>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -967,9 +965,9 @@ private:
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         protocol::Block& block, ViewType& /*view*/)
     {
-        co_return ::ranges::views::transform(block.transactions(), [](auto tx) {
+        co_return std::ranges::views::transform(block.transactions(), [](auto tx) {
             return protocol::Transaction::ConstPtr{std::move(tx).toShared()};
-        }) | ::ranges::to<std::vector>();
+        }) | std::ranges::to<std::vector>();
     }
 
     /// preBlockOpEthSteps → serial per-tx → finalizeOpEthBlockResult.
@@ -1071,7 +1069,7 @@ private:
                 m_ioServicePool, /*chunkSize=*/1, /*serial=*/true);
             auto transactionsRefs =
                 transactions |
-                ::ranges::views::transform(
+                std::ranges::views::transform(
                     [](protocol::Transaction::ConstPtr const& ptr) -> protocol::Transaction const& {
                         return *ptr;
                     });
@@ -1277,10 +1275,10 @@ private:
 
         // toShared() is required for ConstPtr.
         auto blockTxs = std::make_shared<protocol::ConstTransactions>(
-            block->transactions() | ::ranges::views::transform([](auto tx) {
+            block->transactions() | std::ranges::views::transform([](auto tx) {
                 return protocol::Transaction::ConstPtr{std::move(tx).toShared()};
             }) |
-            ::ranges::to<std::vector>());
+            std::ranges::to<std::vector>());
 
         co_await bcos::ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, *storage,
             pending.announcedBlockHash, /*writeNonces=*/false);

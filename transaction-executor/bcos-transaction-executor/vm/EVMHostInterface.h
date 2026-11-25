@@ -30,6 +30,7 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include <evmc/evmc.h>
+#include <ranges>
 
 namespace bcos::executor_v1
 {
@@ -171,7 +172,7 @@ struct EVMHostInterface
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         h256s hashTopics;
         hashTopics.reserve(numTopics);
-        for (auto i : ::ranges::views::iota(0LU, numTopics))
+        for (auto i : std::ranges::views::iota(0LU, numTopics))
         {
             hashTopics.emplace_back(topics[i].bytes, sizeof(evmc_bytes32));
         }

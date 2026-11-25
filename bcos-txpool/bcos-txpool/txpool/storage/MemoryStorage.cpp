@@ -33,12 +33,10 @@
 #include <algorithm>
 #include <atomic>
 #include <memory>
-#include <range/v3/algorithm/all_of.hpp>
-#include <range/v3/algorithm/remove_if.hpp>
+#include <range/v3/view/all.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/enumerate.hpp>
-#include <range/v3/view/filter.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <variant>
 
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
@@ -221,12 +219,12 @@ std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
         m_bcosTransactions.unsealTransactions
             .batchFind<decltype(m_bcosTransactions.unsealTransactions)::ReadAccessor>(
                 std::move(hashes));
-    return ::ranges::views::zip(sealedTransactions, unsealTransactions) |
-           ::ranges::views::transform([](auto const& tuple) -> protocol::Transaction::ConstPtr {
+    return std::ranges::views::zip(sealedTransactions, unsealTransactions) |
+           std::ranges::views::transform([](auto const& tuple) -> protocol::Transaction::ConstPtr {
                auto& [sealed, unseal] = tuple;
                return protocol::Transaction::ConstPtr(sealed.value_or(unseal.value_or(nullptr)));
            }) |
-           ::ranges::to<std::vector>();
+           std::ranges::to<std::vector>();
 }
 
 TransactionStatus MemoryStorage::txpoolStorageCheck(
@@ -681,22 +679,22 @@ void MemoryStorage::batchRemoveSealedTxs(
     m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
 
-    auto txHashes = ::ranges::views::transform(txsResult,
+    auto txHashes = std::ranges::views::transform(txsResult,
         [](TransactionSubmitResult::Ptr const& _txResult) { return _txResult->txHash(); });
     auto removedSealedTxs =
         m_bcosTransactions.sealedTransactions
             .batchFind<decltype(m_bcosTransactions.sealedTransactions)::ReadAccessor>(txHashes);
     m_bcosTransactions.sealedTransactions.batchRemove(txHashes);
-    auto removedTxs = ::ranges::views::transform(
+    auto removedTxs = std::ranges::views::transform(
         removedSealedTxs, [](auto const& tx) { return tx.value_or(nullptr); });
 
-    auto results = ::ranges::views::transform(txsResult,
+    auto results = std::ranges::views::transform(txsResult,
                        [](TransactionSubmitResult::Ptr const& _txResult) {
                            return std::make_pair(Transaction::Ptr{}, std::addressof(_txResult));
                        }) |
-                   ::ranges::to<std::vector>;
+                   std::ranges::to<std::vector>();
     for (auto&& [i, txHash, tx] :
-        ::ranges::views::zip(::ranges::views::iota(0), txHashes, removedTxs))
+        std::ranges::views::zip(std::ranges::views::iota(0), txHashes, removedTxs))
     {
         if (!tx)
         {
@@ -913,9 +911,9 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
     removeInvalidTxs(invalidTxs);
 
     auto systemHashes =
-        ::ranges::views::transform(_sysTxsList, [](auto& metaData) { return metaData->hash(); });
+        std::ranges::views::transform(_sysTxsList, [](auto& metaData) { return metaData->hash(); });
     auto txsHashes =
-        ::ranges::views::transform(_txsList, [](auto& metaData) { return metaData->hash(); });
+        std::ranges::views::transform(_txsList, [](auto& metaData) { return metaData->hash(); });
     auto sealedHashes = ::ranges::views::concat(systemHashes, txsHashes);
     std::vector<Transaction::Ptr> values(sealedHashes.size());
     m_bcosTransactions.unsealTransactions
@@ -930,10 +928,11 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
                     }
                 }
             });
-    auto sealedPairs =
-        values | ::ranges::views::filter([](const auto& tx) { return tx != nullptr; }) |
-        ::ranges::views::transform([](const auto& tx) { return std::make_pair(tx->hash(), tx); }) |
-        ::ranges::to<std::vector>();
+    auto sealedPairs = values |
+                       std::ranges::views::filter([](const auto& tx) { return tx != nullptr; }) |
+                       std::ranges::views::transform(
+                           [](const auto& tx) { return std::make_pair(tx->hash(), tx); }) |
+                       std::ranges::to<std::vector>();
     m_bcosTransactions.sealedTransactions.batchInsert(::ranges::views::all(sealedPairs));
 
     const auto fetchTxsT = utcTime() - startT;
@@ -973,16 +972,16 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
                 invalidNonceList.emplace_back(tx->nonce());
             }
         }
-        auto web3Txs =
-            ::ranges::views::values(txs2Remove) | ::ranges::views::filter([](auto const& _tx) {
-                return _tx->type() == TransactionType::Web3Transaction;
-            });
+        auto web3Txs = std::ranges::views::values(txs2Remove) |
+                       std::ranges::views::filter([](auto const& _tx) {
+                           return _tx->type() == TransactionType::Web3Transaction;
+                       });
         m_config->txPoolNonceChecker()->batchRemove(invalidNonceList);
         task::syncWait(m_config->web3NonceChecker()->batchRemoveMemoryNonce(
-            web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->sender(); }),
-            web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->nonce(); })));
+            web3Txs | std::ranges::views::transform([](auto const& _tx) { return _tx->sender(); }),
+            web3Txs | std::ranges::views::transform([](auto const& _tx) { return _tx->nonce(); })));
 
-        for (const auto& tx2Remove : txs2Remove | ::ranges::views::keys)
+        for (const auto& tx2Remove : txs2Remove | std::ranges::views::keys)
         {
             if (decltype(m_bcosTransactions.unsealTransactions)::WriteAccessor accessor;
                 m_bcosTransactions.unsealTransactions.find(accessor, tx2Remove))
@@ -995,7 +994,7 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
             }
         }
 
-        auto txs2Notify = txs2Remove | ::ranges::views::filter([](auto const& tx2Remove) {
+        auto txs2Notify = txs2Remove | std::ranges::views::filter([](auto const& tx2Remove) {
             return tx2Remove.second != nullptr;
         });
 
@@ -1009,7 +1008,7 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
         // keeps the pointer and await_resume throws a copy.
         auto const swept = BCOS_ERROR_PTR((int32_t)TransactionStatus::TransactionPoolTimeout,
             bcos::protocol::toString(TransactionStatus::TransactionPoolTimeout));
-        for (const auto& tx : txs2Notify | ::ranges::views::values)
+        for (const auto& tx : txs2Notify | std::ranges::views::values)
         {
             m_blockStat.add(BlockStatSlot::Expired);
             logTxRemoved(tx->hash(), m_blockNumber.load(), "expired");
@@ -1052,16 +1051,17 @@ HashList MemoryStorage::filterUnknownTxs(crypto::HashListView _txsHashList, Node
         m_bcosTransactions.unsealTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
     auto sealedValues =
         m_bcosTransactions.sealedTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
-    auto missList = ::ranges::views::zip(::ranges::views::iota(0), unSealValues, sealedValues) |
-                    ::ranges::views::filter([](const auto& tuple) {
-                        auto&& [index, unseal, sealed] = tuple;
-                        return !unseal.has_value() && !sealed.has_value();
-                    }) |
-                    ::ranges::views::transform([&](const auto& tuple) {
-                        auto&& [index, _, __] = tuple;
-                        return _txsHashList[index];
-                    }) |
-                    ::ranges::to<std::vector>();
+    auto missList =
+        std::ranges::views::zip(std::ranges::views::iota(0), unSealValues, sealedValues) |
+        std::ranges::views::filter([](const auto& tuple) {
+            auto&& [index, unseal, sealed] = tuple;
+            return !unseal.has_value() && !sealed.has_value();
+        }) |
+        std::ranges::views::transform([&](const auto& tuple) {
+            auto&& [index, _, __] = tuple;
+            return _txsHashList[index];
+        }) |
+        std::ranges::to<std::vector>();
     return missList;
 }
 
@@ -1161,11 +1161,11 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
     }
 
     auto removedEnd =
-        ::ranges::remove_if(moveTransactions, [](const auto& tx) { return tx == nullptr; });
-    auto removedRange = std::span(moveTransactions.begin(), removedEnd);
+        std::ranges::remove_if(moveTransactions, [](const auto& tx) { return tx == nullptr; });
+    auto removedRange = std::span(moveTransactions.begin(), removedEnd.begin());
     fromMap->batchRemove(
-        ::ranges::views::transform(removedRange, [](const auto& tx) { return tx->hash(); }));
-    toMap->batchInsert(::ranges::views::transform(
+        std::ranges::views::transform(removedRange, [](const auto& tx) { return tx->hash(); }));
+    toMap->batchInsert(std::ranges::views::transform(
         removedRange, [](const auto& tx) { return std::make_pair(tx->hash(), tx); }));
 
     TXPOOL_LOG(INFO) << LOG_DESC("batchMarkTxs") << LOG_KV("txsSize", _txsHashList.size())
@@ -1190,7 +1190,7 @@ void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
         moveTxs.emplace_back(accessor.key(), accessor.value());
     }
 
-    fromMap->batchRemove(::ranges::views::keys(moveTxs));
+    fromMap->batchRemove(std::ranges::views::keys(moveTxs));
     toMap->batchInsert(::ranges::views::all(moveTxs));
     for (auto& accessor : toMap->range<TxsMap::ReadAccessor>())
     {
@@ -1219,15 +1219,15 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
     auto lockT = utcTime() - startT;
     startT = utcTime();
 
-    auto txHashes = ::ranges::to<std::vector>(_block->transactionHashes());
+    auto txHashes = std::ranges::to<std::vector>(_block->transactionHashes());
     bool findErrorTxInBlock = false;
 
     auto unsealTransactions =
         m_bcosTransactions.unsealTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
     auto sealedTransactions =
         m_bcosTransactions.sealedTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
-    for (auto&& [index, unsealTx, sealedTx] :
-        ::ranges::views::zip(::ranges::views::iota(0), unsealTransactions, sealedTransactions))
+    for (auto&& [index, unsealTx, sealedTx] : std::ranges::views::zip(
+             std::ranges::views::iota(0), unsealTransactions, sealedTransactions))
     {
         if (sealedTx)
         {
@@ -1289,8 +1289,8 @@ bool MemoryStorage::batchExists(crypto::HashListView _txsHashList)
         m_bcosTransactions.sealedTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
     auto unsealTransactions = m_bcosTransactions.unsealTransactions.batchFind<TxsMap::ReadAccessor>(
         std::move(_txsHashList));
-    return ::ranges::all_of(
-        ::ranges::views::zip(sealedTransactions, unsealTransactions), [](const auto& value) {
+    return std::ranges::all_of(
+        std::ranges::views::zip(sealedTransactions, unsealTransactions), [](const auto& value) {
             auto& [lhs, rhs] = value;
             return lhs.has_value() || rhs.has_value();
         });

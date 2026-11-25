@@ -41,6 +41,7 @@
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <range/v3/view/single.hpp>
 #include <shared_mutex>
 #include <thread>
 

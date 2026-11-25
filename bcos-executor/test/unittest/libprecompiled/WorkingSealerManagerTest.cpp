@@ -11,6 +11,7 @@
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <ranges>
 
 namespace bcos::test
 {
@@ -106,9 +107,9 @@ BOOST_AUTO_TEST_CASE(testRotate)
 
         auto gotNodeList = co_await ledger::getNodeList(storage);
         BOOST_REQUIRE_EQUAL(gotNodeList.size(), 4);
-        auto nodeIDView = ::ranges::views::transform(
+        auto nodeIDView = std::ranges::views::transform(
             gotNodeList, [](auto const& node) { return node.nodeID->data(); });
-        auto gotIDView = ::ranges::views::transform(
+        auto gotIDView = std::ranges::views::transform(
             gotNodeList, [](auto const& node) { return node.nodeID->data(); });
         BOOST_CHECK_EQUAL_COLLECTIONS(
             nodeIDView.begin(), nodeIDView.end(), gotIDView.begin(), gotIDView.end());
@@ -136,7 +137,7 @@ BOOST_AUTO_TEST_CASE(testRotate)
         gotNodeList = co_await ledger::getNodeList(storage);
 
         BOOST_REQUIRE_EQUAL(gotNodeList.size(), 5);
-        auto gotIDView2 = ::ranges::views::transform(
+        auto gotIDView2 = std::ranges::views::transform(
             gotNodeList, [](auto const& node) { return node.nodeID->data(); });
         BOOST_CHECK_EQUAL_COLLECTIONS(
             nodeIDView.begin(), nodeIDView.end(), gotIDView2.begin(), gotIDView2.end());

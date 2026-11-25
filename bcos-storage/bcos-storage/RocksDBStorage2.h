@@ -12,6 +12,7 @@
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <range/v3/view/chunk.hpp>
+#include <ranges>
 #include <variant>
 
 namespace bcos::storage2::rocksdb
@@ -92,25 +93,25 @@ public:
         return buffer;
     }
 
-    auto readSomeRaw(::ranges::input_range auto keys, auto&&... /*args*/)
+    auto readSomeRaw(std::ranges::input_range auto keys, auto&&... /*args*/)
         -> task::Task<std::vector<StorageValueType<ValueType>>>
     {
-        auto encodedKeys = keys | ::ranges::views::transform([&](auto&& key) {
+        auto encodedKeys = keys | std::ranges::views::transform([&](auto&& key) {
             return encodeToBuffer(m_keyResolver, std::forward<decltype(key)>(key));
-        }) | ::ranges::to<std::vector>();
+        }) | std::ranges::to<std::vector>();
 
-        std::vector<::rocksdb::PinnableSlice> results(::ranges::size(encodedKeys));
-        std::vector<::rocksdb::Status> status(::ranges::size(encodedKeys));
+        std::vector<::rocksdb::PinnableSlice> results(std::ranges::size(encodedKeys));
+        std::vector<::rocksdb::Status> status(std::ranges::size(encodedKeys));
 
-        auto rocksDBKeys = encodedKeys | ::ranges::views::transform([](const auto& encodedKey) {
-            return ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey));
-        }) | ::ranges::to<std::vector>();
+        auto rocksDBKeys = encodedKeys | std::ranges::views::transform([](const auto& encodedKey) {
+            return ::rocksdb::Slice(std::ranges::data(encodedKey), std::ranges::size(encodedKey));
+        }) | std::ranges::to<std::vector>();
         rocksDBRef().MultiGet(::rocksdb::ReadOptions(), rocksDBRef().DefaultColumnFamily(),
             rocksDBKeys.size(), rocksDBKeys.data(), results.data(), status.data());
 
         auto values =
-            ::ranges::views::zip(results, status) |
-            ::ranges::views::transform([&](auto tuple) -> StorageValueType<ValueType> {
+            std::ranges::views::zip(results, status) |
+            std::ranges::views::transform([&](auto tuple) -> StorageValueType<ValueType> {
                 auto& [result, status] = tuple;
                 if (!status.ok())
                 {
@@ -123,7 +124,7 @@ public:
                 }
                 return {m_valueResolver.decode(result.ToStringView())};
             }) |
-            ::ranges::to<std::vector>();
+            std::ranges::to<std::vector>();
         co_return values;
     }
 
@@ -134,7 +135,8 @@ public:
         auto encodedKey = encodeToBuffer(m_keyResolver, std::move(key));
         ::rocksdb::PinnableSlice result;
         auto status = rocksDBRef().Get(::rocksdb::ReadOptions(), rocksDBRef().DefaultColumnFamily(),
-            ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey)), &result);
+            ::rocksdb::Slice(std::ranges::data(encodedKey), std::ranges::size(encodedKey)),
+            &result);
 
         if (!status.ok())
         {
@@ -149,17 +151,19 @@ public:
         co_return StorageValueType<ValueType>{m_valueResolver.decode(result.ToStringView())};
     }
 
-    auto readSome(::ranges::input_range auto keys, auto&&... args)
+    auto readSome(std::ranges::input_range auto keys, auto&&... args)
         -> task::Task<std::vector<std::optional<ValueType>>>
     {
         auto values = co_await readSomeRaw(std::move(keys), std::forward<decltype(args)>(args)...);
-        co_return ::ranges::views::transform(values, [](auto&& value) -> std::optional<ValueType> {
-            if (auto* entry = std::get_if<ValueType>(std::addressof(value)))
-            {
-                return std::make_optional(std::move(*entry));
-            }
-            return {};
-        }) | ::ranges::to<std::vector>();
+        co_return std::ranges::views::transform(values,
+            [](auto&& value) -> std::optional<ValueType> {
+                if (auto* entry = std::get_if<ValueType>(std::addressof(value)))
+                {
+                    return std::make_optional(std::move(*entry));
+                }
+                return {};
+            }) |
+            std::ranges::to<std::vector>();
     }
 
     auto readOne(auto key, auto&&... args) -> task::Task<std::optional<ValueType>>
@@ -172,7 +176,7 @@ public:
         co_return std::nullopt;
     }
 
-    task::Immediate<void> writeSome(::ranges::input_range auto keyValues)
+    task::Immediate<void> writeSome(std::ranges::input_range auto keyValues)
     {
         ::rocksdb::WriteBatch writeBatch;
         for (auto&& [key, value] : keyValues)
@@ -224,10 +228,10 @@ public:
 
     task::Immediate<void> removeOne(auto const& key, auto&&... /*args*/)
     {
-        return removeSome(::ranges::single_view(key));
+        return removeSome(std::ranges::single_view(key));
     }
 
-    task::Immediate<void> removeSome(::ranges::input_range auto keys)
+    task::Immediate<void> removeSome(std::ranges::input_range auto keys)
     {
         ::rocksdb::WriteBatch writeBatch;
 
@@ -375,7 +379,7 @@ public:
     task::Immediate<Iterator> range(storage2::RANGE_SEEK_TYPE /*unused*/, auto&& startKey)
     {
         auto encodedKey = encodeToBuffer(m_keyResolver, startKey);
-        ::rocksdb::Slice slice(::ranges::data(encodedKey), ::ranges::size(encodedKey));
+        ::rocksdb::Slice slice(std::ranges::data(encodedKey), std::ranges::size(encodedKey));
         return rangeImpl(*this, std::addressof(slice));
     }
 };

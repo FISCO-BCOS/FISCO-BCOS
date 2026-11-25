@@ -22,6 +22,7 @@
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
+#include <range/v3/view/single.hpp>
 #include <utility>
 
 using namespace bcos;

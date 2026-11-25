@@ -26,6 +26,7 @@
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <memory>
+#include <ranges>
 #include <set>
 #include <thread>
 #include <unordered_map>
@@ -93,7 +94,7 @@ BOOST_AUTO_TEST_CASE(testNormalFlow)
             commitMap.insert({sender, {nonceU256}});
         }
     }
-    task::syncWait(checker.updateNonceCache(::ranges::views::all(commitMap)));
+    task::syncWait(checker.updateNonceCache(std::ranges::views::all(commitMap)));
 
     for (auto&& sender : senders)
     {
@@ -165,7 +166,7 @@ BOOST_AUTO_TEST_CASE(testLedgerNonce)
             commitMap.insert({sender, {nonceU256}});
         }
     }
-    task::syncWait(checker.updateNonceCache(::ranges::views::all(commitMap)));
+    task::syncWait(checker.updateNonceCache(std::ranges::views::all(commitMap)));
 
     uint64_t errorCount = 0;
     for (const auto& [sender, nonce] : nonces)

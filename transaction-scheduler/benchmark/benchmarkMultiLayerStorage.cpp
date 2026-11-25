@@ -5,10 +5,7 @@
 #include <bcos-task/Wait.h>
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/transform.hpp>
-#include <range/v3/view/zip.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -26,20 +23,22 @@ struct Fixture
         task::syncWait([this](int64_t count) -> task::Task<void> {
             auto view = multiLayerStorage.fork();
             view.newMutable();
-            allKeys = ::ranges::views::iota(0, count) | ::ranges::views::transform([](int num) {
-                auto key = fmt::format("key: {}", num);
-                return executor_v1::StateKey{"test_table"sv, std::string_view(key)};
-            }) | ::ranges::to<decltype(allKeys)>();
+            allKeys = std::ranges::views::iota(0, count) |
+                      std::ranges::views::transform([](int num) {
+                          auto key = fmt::format("key: {}", num);
+                          return executor_v1::StateKey{"test_table"sv, std::string_view(key)};
+                      }) |
+                      std::ranges::to<decltype(allKeys)>();
 
             auto allValues =
-                ::ranges::views::iota(0, count) | ::ranges::views::transform([](int num) {
+                std::ranges::views::iota(0, count) | std::ranges::views::transform([](int num) {
                     storage::Entry entry;
                     entry.set(fmt::format("value: {}", num));
 
                     return entry;
                 });
 
-            co_await storage2::writeSome(view, ::ranges::views::zip(allKeys, allValues));
+            co_await storage2::writeSome(view, std::ranges::views::zip(allKeys, allValues));
             multiLayerStorage.pushView(std::move(view));
         }(count));
 

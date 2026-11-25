@@ -22,6 +22,7 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include <bcos-task/Wait.h>
 #include <cstring>
+#include <range/v3/view/single.hpp>
 
 using namespace std;
 using namespace bcos;

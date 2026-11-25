@@ -29,9 +29,9 @@
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/Exceptions.h>
+#include <bcos-utilities/AnyView.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcos::protocol
 {

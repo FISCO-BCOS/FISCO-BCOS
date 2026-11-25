@@ -65,6 +65,7 @@
 #include <iterator>
 #include <memory>
 #include <ostream>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
@@ -327,14 +328,14 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                 }
             });
         archiveStorage->setRows(ledger::SYS_HASH_2_TX,
-            keys | ::ranges::views::transform(
+            keys | std::ranges::views::transform(
                        [](const std::string& str) { return std::string_view{str}; }),
-            transactionValues | ::ranges::views::transform(
+            transactionValues | std::ranges::views::transform(
                                     [](const std::string& str) { return std::string_view{str}; }));
         archiveStorage->setRows(ledger::SYS_HASH_2_RECEIPT,
-            keys | ::ranges::views::transform(
+            keys | std::ranges::views::transform(
                        [](const std::string& str) { return std::string_view{str}; }),
-            receiptValues | ::ranges::views::transform(
+            receiptValues | std::ranges::views::transform(
                                 [](const std::string& str) { return std::string_view{str}; }));
         std::cout << "\r"
                   << "write block " << i << " size: " << size << std::flush;

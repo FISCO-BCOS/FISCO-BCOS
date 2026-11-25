@@ -57,6 +57,7 @@
 #include <cstring>
 #include <magic_enum/magic_enum.hpp>
 #include <memory>
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -264,7 +265,8 @@ task::Task<void> EERunTransfers(Scheduler& scheduler, EthereumExecutor& executor
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
-    auto transactions = txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+    auto transactions =
+        txs | std::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
 
     auto receipts =
         co_await scheduler.executeBlock(view, executor, blockHeader, transactions, ledgerConfig);
@@ -561,7 +563,7 @@ BOOST_AUTO_TEST_CASE(serialModeEquivalentToDefaultPipeline)
         ledgerConfig.setEVMCRevision(EVMC_SHANGHAI);
 
         auto transactions =
-            txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+            txs | std::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
 
         // Each run executes on a fresh fork of the same committed state.
         auto run = [&](SchedulerSerialImpl& scheduler)
@@ -642,7 +644,7 @@ BOOST_AUTO_TEST_CASE(serialInvalidTxDoesNotAbortBlock)
         view.newMutable();
 
         auto transactions =
-            txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+            txs | std::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
         auto receipts = co_await scheduler.executeBlock(
             view, *executor, blockHeader, transactions, ledgerConfig);
 
@@ -707,7 +709,7 @@ BOOST_AUTO_TEST_CASE(serialSameNonceSecondRejected)
         view.newMutable();
 
         auto transactions =
-            txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+            txs | std::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
         auto receipts = co_await scheduler.executeBlock(
             view, *executor, blockHeader, transactions, ledgerConfig);
 
@@ -768,7 +770,7 @@ BOOST_AUTO_TEST_CASE(parallelSameNonceSecondRejected)
         view.newMutable();
 
         auto transactions =
-            txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+            txs | std::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
         auto receipts = co_await scheduler.executeBlock(
             view, *executor, blockHeader, transactions, ledgerConfig);
 
@@ -1415,7 +1417,7 @@ BOOST_AUTO_TEST_CASE(manualTxTransfersValueDirectly)
         view.newMutable();
         std::vector<protocol::Transaction::Ptr> txs{tx};
         auto transactions =
-            txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+            txs | std::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
         auto receipts = co_await scheduler.executeBlock(
             view, *executor, blockHeader, transactions, ledgerConfig);
         BOOST_CHECK_EQUAL(receipts[0]->status(), 0);

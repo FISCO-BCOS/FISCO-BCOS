@@ -12,10 +12,10 @@
 #include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <algorithm>
 #include <exception>
 #include <limits>
 #include <memory>
-#include <range/v3/algorithm/copy.hpp>
 #include <variant>
 
 namespace bcos::executor_v1
@@ -42,7 +42,7 @@ std::optional<ledger::Features::Flag> featureFlag(Precompiled const& precompiled
 inline EVMCResult buildBuiltinPrecompiledResult(bool success, auto const& output, int64_t gasLeft)
 {
     auto buffer = std::make_unique_for_overwrite<uint8_t[]>(output.size());
-    ::ranges::copy(output, buffer.get());
+    std::ranges::copy(output, buffer.get());
     return EVMCResult{
         evmc_result{
             .status_code = success ? EVMC_SUCCESS : EVMC_REVERT,

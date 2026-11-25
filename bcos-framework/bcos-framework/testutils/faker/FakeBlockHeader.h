@@ -29,7 +29,6 @@
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
-#include <range/v3/view/zip.hpp>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::crypto;

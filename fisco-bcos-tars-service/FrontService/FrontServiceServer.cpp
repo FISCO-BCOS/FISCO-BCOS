@@ -3,6 +3,7 @@
 #include "bcos-task/Wait.h"
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <range/v3/view/single.hpp>
 
 using namespace bcostars;
 

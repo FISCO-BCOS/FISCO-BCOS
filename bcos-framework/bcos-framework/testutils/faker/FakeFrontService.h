@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include <range/v3/view/single.hpp>
 #include <utility>
 
 #include "../../consensus/ConsensusInterface.h"

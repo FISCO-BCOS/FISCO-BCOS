@@ -44,6 +44,7 @@
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <memory>
+#include <ranges>
 #include <set>
 #include <string>
 
@@ -238,7 +239,7 @@ public:
         co_return bcos::bytes(raw.begin(), raw.end());
     }
 
-    task::Task<std::vector<std::optional<bcos::bytes>>> readSome(::ranges::input_range auto keys)
+    task::Task<std::vector<std::optional<bcos::bytes>>> readSome(std::ranges::input_range auto keys)
     {
         std::vector<std::optional<bcos::bytes>> values;
         for (auto const& key : keys)
@@ -255,7 +256,7 @@ public:
         co_await storage2::writeOne(*m_backend, storage2::mptNodeStateKey(key), std::move(entry));
     }
 
-    task::Task<void> writeSome(::ranges::input_range auto keyValues)
+    task::Task<void> writeSome(std::ranges::input_range auto keyValues)
     {
         for (auto&& keyValue : keyValues)
         {

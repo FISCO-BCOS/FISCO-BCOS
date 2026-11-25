@@ -31,9 +31,9 @@
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-utilities/AnyView.h>
 #include <gsl/span>
 #include <memory>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcostars::protocol
 {

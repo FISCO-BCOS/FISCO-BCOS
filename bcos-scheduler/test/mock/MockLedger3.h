@@ -15,9 +15,9 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <gsl/span>
 #include <map>
-#include <range/v3/algorithm/count.hpp>
 
 using namespace bcos::ledger;
 
@@ -148,7 +148,7 @@ public:
         {
             co_return SystemConfigEntry{"20200", commitBlockNumber};
         }
-        if (::ranges::count(ledger::Features::featureKeys(), _key) > 0)
+        if (std::ranges::count(ledger::Features::featureKeys(), _key) > 0)
         {
             BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Not found!"));
         }

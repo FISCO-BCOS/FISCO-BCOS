@@ -6,8 +6,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <atomic>
-#include <range/v3/range/concepts.hpp>
-#include <range/v3/range/primitives.hpp>
+#include <ranges>
 
 namespace bcos::storage
 {
@@ -105,12 +104,12 @@ inline task::Task<std::optional<Entry>> tag_invoke(
 
 task::Task<std::vector<std::optional<Entry>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, StorageInterface& storage,
-    ::ranges::input_range auto keys)
+    std::ranges::input_range auto keys)
 {
     std::vector<std::optional<Entry>> values;
-    if constexpr (::ranges::sized_range<decltype(keys)>)
+    if constexpr (std::ranges::sized_range<decltype(keys)>)
     {
-        values.reserve(decltype(values)::size_type(::ranges::size(keys)));
+        values.reserve(decltype(values)::size_type(std::ranges::size(keys)));
     }
     for (auto&& key : keys)
     {
@@ -121,7 +120,7 @@ task::Task<std::vector<std::optional<Entry>>> tag_invoke(
 }
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-    StorageInterface& storage, ::ranges::input_range auto keyValues)
+    StorageInterface& storage, std::ranges::input_range auto keyValues)
 {
     for (auto&& [key, value] : keyValues)
     {

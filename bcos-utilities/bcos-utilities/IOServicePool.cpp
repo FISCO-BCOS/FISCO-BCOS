@@ -5,7 +5,7 @@
 
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/Common.h"
-#include <range/v3/algorithm/sort.hpp>
+#include <algorithm>
 
 using namespace bcos;
 
@@ -32,7 +32,7 @@ IOServicePool::IOServicePool(size_t _workerNum, std::string_view _threadName)
     {
         m_threadIds.push_back(ctx.thread.get_id());
     }
-    ::ranges::sort(m_threadIds);
+    std::ranges::sort(m_threadIds);
 }
 
 IOServicePool::~IOServicePool()

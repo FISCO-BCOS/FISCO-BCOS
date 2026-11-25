@@ -20,7 +20,7 @@
 #include <opstack-executor/OpForkSpec.h>         // OpFork / opForkTimestampSec
 #include <cstdint>
 #include <optional>
-#include <range/v3/range/concepts.hpp>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -71,7 +71,7 @@ public:
     }
 
     /// transactionsRoot over raw EIP-2718 envelopes (needed before execution).
-    static bcos::h256 computeTxRoot(::ranges::input_range auto const& rawTxBytes)
+    static bcos::h256 computeTxRoot(std::ranges::input_range auto const& rawTxBytes)
     {
         return bcos::executor_v1::opstack::computeOpEthTransactionsRoot(rawTxBytes);
     }
@@ -130,7 +130,7 @@ public:
     task::Task<std::vector<bcos::protocol::TransactionReceipt::Ptr>> executeBlock(
         Storage& /*storage*/, auto& /*executor*/,
         bcos::protocol::BlockHeader const& /*blockHeader*/,
-        ::ranges::input_range auto const& /*transactions*/,
+        std::ranges::input_range auto const& /*transactions*/,
         bcos::ledger::LedgerConfig const& /*ledgerConfig*/)
     {
         throw std::logic_error("OpSchedulerSeam::executeBlock: not supported in OP mode");
