@@ -180,9 +180,10 @@ public:
         const auto count = std::ranges::size(contexts);
         ReadWriteSetStorage<Storage> writeSet(storage);
 
+        using ContextRange = ::ranges::subrange<std::ranges::iterator_t<decltype(contexts)>,
+            std::ranges::sentinel_t<decltype(contexts)>>;
         using Chunk = ChunkStatus<typename SchedulerParallelImpl::MutableStorage, Storage,
-            TransactionExecutor,
-            decltype(::ranges::subrange<std::ranges::iterator_t<decltype(contexts)>>(contexts))>;
+            TransactionExecutor, ContextRange>;
 
         boost::atomic_flag hasRAW;
         typename SchedulerParallelImpl::MutableStorage lastStorage;
@@ -325,8 +326,8 @@ public:
         {
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing... " << offset << " | "
                                           << std::ranges::size(contexts);
-            auto nextView = ::ranges::subrange(
-                std::ranges::begin(contexts) + offset, std::ranges::end(contexts));
+            auto nextView =
+                ContextRange(std::ranges::begin(contexts) + offset, std::ranges::end(contexts));
             return 1 + executeSinglePass(
                            storage, executor, blockHeader, ledgerConfig, nextView, chunkSize);
         }
