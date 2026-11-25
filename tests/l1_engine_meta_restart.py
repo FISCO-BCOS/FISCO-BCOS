@@ -25,13 +25,22 @@ def run(args, processes):
         require_valid(engine.result("engine_newPayloadV4", payload))
         return payload[0]["blockHash"]
 
+    final_payload = build_payload(engine, genesis["hash"], timestamp + 3)
     sibling = build_payload(engine, genesis["hash"], timestamp + 1)
-    finalized = accept(build_payload(engine, genesis["hash"], timestamp + 2))
-    safe = accept(build_payload(engine, finalized, timestamp + 3))
+    sibling_hash = accept(sibling)
+    sibling_child = build_payload(engine, sibling_hash, timestamp + 2)
+    require_valid(forkchoice(engine, genesis["hash"], genesis["hash"], genesis["hash"])["result"])
+
+    finalized = accept(final_payload)
+    require_valid(forkchoice(engine, finalized, finalized, finalized)["result"])
+    rejected = engine.result("engine_newPayloadV4", sibling_child)
+    assert rejected["status"] == "INVALID" and "finalized" in rejected["validationError"], rejected
+
+    safe = accept(build_payload(engine, finalized, timestamp + 4))
     require_valid(forkchoice(engine, safe, safe, finalized)["result"])
 
     tx = json.loads((FIXTURES / "transactions.json").read_text())["transactions"][0]
-    block = build_payload(engine, safe, timestamp + 4, [tx["raw"]])
+    block = build_payload(engine, safe, timestamp + 5, [tx["raw"]])
     tip = accept(block)
     methods = ("eth_getTransactionByHash", "eth_getTransactionReceipt")
     for method in methods:
@@ -51,8 +60,10 @@ def run(args, processes):
 
     error = forkchoice(engine, genesis["hash"], genesis["hash"], genesis["hash"])["error"]
     assert error["code"] == -38002, error
-    rejected = engine.result("engine_newPayloadV4", sibling)
-    assert rejected["status"] == "INVALID" and "finalized" in rejected["validationError"], rejected
+    assert accept(final_payload) == finalized
+    for payload in (sibling, sibling_child):
+        rejected = engine.result("engine_newPayloadV4", payload)
+        assert rejected["status"] == "INVALID" and "finalized" in rejected["validationError"], rejected
 
     require_valid(forkchoice(engine, safe, safe, finalized)["result"])
     assert web.result("eth_getBlockByNumber", ["latest", False])["hash"] == safe

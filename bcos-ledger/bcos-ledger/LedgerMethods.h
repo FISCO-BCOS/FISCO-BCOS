@@ -788,9 +788,9 @@ task::Task<std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPt
 bcos::task::Task<bcos::crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber);
 
-task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
+task::Task<std::optional<crypto::HashType>> readStoredBlockHash(
     storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
-    protocol::BlockNumber blockNumber, FromStorage /*unused*/)
+    protocol::BlockNumber blockNumber, bool requireExactSize)
 {
     LEDGER_LOG(TRACE) << "GetBlockHashByNumber request" << LOG_KV("blockNumber", blockNumber);
     if (blockNumber < 0)
@@ -803,11 +803,25 @@ task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHas
             storage, executor_v1::StateKeyView{SYS_NUMBER_2_HASH, blockNumberString}))
     {
         auto hashStr = entry->get();
+        if (requireExactSize && hashStr.size() != crypto::HashType::SIZE)
+        {
+            LEDGER_LOG(ERROR) << "Invalid canonical block hash length"
+                              << LOG_KV("blockNumber", blockNumber)
+                              << LOG_KV("length", hashStr.size());
+            co_return std::nullopt;
+        }
         bcos::crypto::HashType hash(hashStr, bcos::crypto::HashType::FromBinary);
 
         co_return std::make_optional(hash);
     }
     co_return {};
+}
+
+auto tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
+    protocol::BlockNumber blockNumber, FromStorage /*unused*/)
+{
+    return readStoredBlockHash(storage, blockNumber, /*requireExactSize=*/false);
 }
 
 task::Task<std::optional<protocol::BlockNumber>> tag_invoke(

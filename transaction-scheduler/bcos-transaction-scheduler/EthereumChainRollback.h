@@ -217,6 +217,13 @@ task::Task<MutableStorage> buildRollbackBatch(auto& committed, ledger::BlockAnch
 
     MutableStorage batch;
     auto child = meta.diskTip;
+    auto current = co_await ledger::getCurrentBlockNumber(committed, ledger::fromStorage);
+    auto tipHash =
+        co_await ledger::readStoredBlockHash(committed, child.number, /*requireExactSize=*/true);
+    if (current != child.number || tipHash != child.hash)
+    {
+        throw RollbackRefused("Rollback disk tip does not match canonical chain");
+    }
     auto childHeader = co_await headerAt(child);
     while (child.number > ancestor.number)
     {
@@ -240,8 +247,8 @@ task::Task<MutableStorage> buildRollbackBatch(auto& committed, ledger::BlockAnch
         }
 
         auto parentNumber = child.number - 1;
-        auto parentHash =
-            co_await ledger::getBlockHash(committed, parentNumber, ledger::fromStorage);
+        auto parentHash = co_await ledger::readStoredBlockHash(
+            committed, parentNumber, /*requireExactSize=*/true);
         if (!parentHash)
         {
             throw RollbackRefused(

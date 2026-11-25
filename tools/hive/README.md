@@ -186,10 +186,8 @@ The entrypoint:
   answer is a fresh import with the fixed binary.
 - **The importer is strictly linear**: a block that does not extend the
   current import head is skipped (loudly) — side-chain placement is not
-  supported. The `reorg_window` comment in `clients/bcos/config.ini.tpl`
-  concerns the devp2p sync lane, not `--import-blocks`; hive fork tests that
-  rely on side-chain imports are out of scope. Verify-lane consolidation with
-  the sync lane is tracked in #5670.
+  supported. Hive fork tests that rely on side-chain imports are out of scope.
+  Verify-lane consolidation with the sync lane is tracked in #5670.
 - **`--import-blocks` holds the whole input in memory**: the file is loaded
   whole and every block is copied out into its own buffer, so peak memory is
   roughly TWICE the input file size; plan RAM accordingly for multi-GB chain

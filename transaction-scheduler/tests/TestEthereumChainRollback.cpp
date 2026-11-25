@@ -587,12 +587,21 @@ BOOST_FIXTURE_TEST_CASE(staleNonCanonicalParentStillThrows, RBFixture)
                 nonCanonicalParent, std::vector<bcos::bytes>{}, std::vector<bcos::bytes>{}, forks,
                 1, std::vector<bcos::bytes>{}, 0, decoder, stateRootCalc),
             StaleOrOutOfOrderBlock);
+
+        auto view = multiLayerStorage.forkCommitted();
+        auto meta = co_await ledger::loadEngineMeta(view);
+        auto finalized = meta;
+        finalized.safe = finalized.finalized = ledger::BlockAnchor{2, chain.hashes.at(2)};
+        RBMutableStorage finalization;
+        co_await stageFinalization(finalization, meta, finalized);
+        co_await multiLayerStorage.mergeToBackends(finalization);
+        BOOST_CHECK_THROW(
+            co_await verifier.verifyAndCommit(multiLayerStorage, chainLedger, bogus,
+                nonCanonicalParent, std::vector<bcos::bytes>{}, std::vector<bcos::bytes>{}, forks,
+                1, std::vector<bcos::bytes>{}, 0, decoder, stateRootCalc),
+            FinalizedRollbackRefused);
         BOOST_CHECK_EQUAL(co_await RBReadBalance(backendStorage, chain.recipient), u256(400));
-        {
-            auto view = multiLayerStorage.forkCommitted();
-            auto head = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-            BOOST_CHECK_EQUAL(head, 4);
-        }
+        BOOST_CHECK_EQUAL(co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage), 4);
     }());
 }
 
@@ -654,6 +663,22 @@ BOOST_FIXTURE_TEST_CASE(virtualUndoAndDiskUndoSharePreimages, RBFixture)
         BOOST_CHECK_EQUAL(co_await ledger::getCurrentBlockNumber(overlay, ledger::fromStorage), 2);
         BOOST_CHECK_EQUAL(
             co_await ledger::getCurrentBlockNumber(committed, ledger::fromStorage), 4);
+
+        auto staleMeta = meta;
+        staleMeta.diskTip = ledger::BlockAnchor{3, chain.hashes.at(3)};
+        BOOST_CHECK_THROW(
+            co_await forkRollbackView(multiLayerStorage, target, staleMeta, *blockFactory),
+            RollbackRefused);
+
+        auto const tipKey = StateKey{ledger::SYS_NUMBER_2_HASH, "4"};
+        auto tipRow = co_await storage2::readOne(committed, tipKey);
+        BOOST_REQUIRE(tipRow);
+        storage::Entry incorrectTip;
+        incorrectTip.set(chain.hashes.at(3).asBytes());
+        co_await storage2::writeOne(backendStorage, tipKey, std::move(incorrectTip));
+        BOOST_CHECK_THROW(co_await forkRollbackView(multiLayerStorage, target, meta, *blockFactory),
+            RollbackRefused);
+        co_await storage2::writeOne(backendStorage, tipKey, std::move(*tipRow));
 
         auto removed = co_await ledger::getBlockTransactionHashList(committed, 4, *blockFactory);
         BOOST_REQUIRE_EQUAL(removed.size(), 1);

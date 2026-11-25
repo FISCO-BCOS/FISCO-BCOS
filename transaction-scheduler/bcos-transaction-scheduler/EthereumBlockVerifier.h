@@ -1121,10 +1121,13 @@ public:
                     result.stateRoot = ethHeader.stateRoot;
                     co_return result;
                 }
-                if (ethHeader.number <= meta->finalizedNumber())
-                {
-                    throw FinalizedRollbackRefused("Payload would replace a finalized block");
-                }
+            }
+            if (meta->conflictsWithFinalized(ethHeader.number, ethHeader.parentInfo.blockHash))
+            {
+                throw FinalizedRollbackRefused("Payload would replace a finalized block");
+            }
+            if (ethHeader.number <= currentNumber)
+            {
                 auto canonicalParent = co_await ledger::getBlockHash(
                     committed, ethHeader.number - 1, ledger::fromStorage);
                 if (canonicalParent && *canonicalParent == ethHeader.parentInfo.blockHash)

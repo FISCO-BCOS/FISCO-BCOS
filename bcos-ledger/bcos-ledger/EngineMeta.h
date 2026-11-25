@@ -47,6 +47,14 @@ struct PersistedEngineMeta
     std::optional<BlockAnchor> finalized;
 
     protocol::BlockNumber finalizedNumber() const { return finalized ? finalized->number : 0; }
+
+    // A canonical redelivery is valid independently of this admission check.
+    bool conflictsWithFinalized(protocol::BlockNumber number, h256 const& parentHash) const
+    {
+        return number <= finalizedNumber() ||
+               (finalized && number - 1 == finalized->number && parentHash != finalized->hash);
+    }
+
     bool operator==(PersistedEngineMeta const&) const = default;
 };
 
@@ -111,7 +119,7 @@ task::Task<PersistedEngineMeta> loadEngineMeta(auto& storage)
     auto meta = co_await readEngineMeta(storage);
     if (!meta && number == 0)
     {
-        if (auto hash = co_await getBlockHash(storage, 0, fromStorage))
+        if (auto hash = co_await readStoredBlockHash(storage, 0, /*requireExactSize=*/true))
         {
             BlockAnchor genesis{0, *hash};
             co_return PersistedEngineMeta{genesis, genesis, genesis};
@@ -128,7 +136,8 @@ task::Task<PersistedEngineMeta> loadEngineMeta(auto& storage)
     {
         if (block)
         {
-            auto hash = co_await getBlockHash(storage, block->number, fromStorage);
+            auto hash =
+                co_await readStoredBlockHash(storage, block->number, /*requireExactSize=*/true);
             if (!hash || *hash != block->hash)
             {
                 throw std::runtime_error("Engine cursor does not match canonical hash at height " +

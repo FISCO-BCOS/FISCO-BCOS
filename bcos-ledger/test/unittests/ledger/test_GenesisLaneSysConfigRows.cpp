@@ -267,9 +267,6 @@ BOOST_AUTO_TEST_CASE(EthLanesReadLaneCompatibilityVersion)
     }
 }
 
-// The genesis [features] dependency check runs on first init only. A v1 chain initialized
-// before the rule existed (here: feature_evm_prague without feature_evm_cancun, simulated by
-// rewriting the pin in B0's extraData) must still restart with its unchanged config.
 BOOST_AUTO_TEST_CASE(EthStartupRejectsMissingAndInconsistentNonGenesisCursors)
 {
     auto storage = makeL2GenesisTestStorage();
@@ -286,6 +283,23 @@ BOOST_AUTO_TEST_CASE(EthStartupRejectsMissingAndInconsistentNonGenesisCursors)
         executor_v1::StateKey{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}, storage::Entry{"1"}));
     BOOST_CHECK_THROW(ledger.buildGenesisBlock(genesis, param), std::runtime_error);
 
+    meta->diskTip = BlockAnchor{1, h256(0x42)};
+    task::syncWait(writeEngineMeta(*storage, *meta));
+    auto hash = meta->diskTip.hash.asBytes();
+    auto writeHash = [&](bytes const& value) {
+        storage::Entry row;
+        row.set(value);
+        task::syncWait(storage2::writeOne(
+            *storage, executor_v1::StateKey{SYS_NUMBER_2_HASH, "1"}, std::move(row)));
+    };
+    writeHash(hash);
+    BOOST_REQUIRE(ledger.buildGenesisBlock(genesis, param));
+    hash.push_back(0);
+    writeHash(hash);
+    BOOST_CHECK_THROW(ledger.buildGenesisBlock(genesis, param), std::runtime_error);
+    hash.pop_back();
+    writeHash(hash);
+
     storage::Entry deleted;
     deleted.setStatus(storage::Entry::DELETED);
     task::syncWait(storage2::writeOne(
@@ -293,6 +307,9 @@ BOOST_AUTO_TEST_CASE(EthStartupRejectsMissingAndInconsistentNonGenesisCursors)
     BOOST_CHECK_THROW(ledger.buildGenesisBlock(genesis, param), std::runtime_error);
 }
 
+// The genesis [features] dependency check runs on first init only. A v1 chain initialized
+// before the rule existed (here: feature_evm_prague without feature_evm_cancun, simulated by
+// rewriting the pin in B0's extraData) must still restart with its unchanged config.
 BOOST_AUTO_TEST_CASE(V1RestartSkipsGenesisFeatureDependencyCheck)
 {
     auto storage = makeL2GenesisTestStorage();

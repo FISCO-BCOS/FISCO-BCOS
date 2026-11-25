@@ -644,7 +644,9 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             builtHere = guard.payloadIdForHash(request.executionPayload.blockHash).has_value();
         }
         auto meta = persistedEngineMeta();
-        if (!builtHere || (meta && request.executionPayload.blockNumber <= meta->finalizedNumber()))
+        auto const& payload = request.executionPayload;
+        if (!builtHere ||
+            (meta && meta->conflictsWithFinalized(payload.blockNumber, payload.parentHash)))
         {
             co_return co_await newPayloadExternal(request);
         }
@@ -835,11 +837,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                     co_return engine_common::makeStatus(
                         PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
                 }
-                if (payload.blockNumber <= meta->finalizedNumber())
-                {
-                    co_return engine_common::makeStatus(PayloadValidationStatus::Invalid,
-                        std::nullopt, "Payload would replace a finalized block");
-                }
+            }
+            if (meta->conflictsWithFinalized(payload.blockNumber, payload.parentHash))
+            {
+                co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                    "Payload would replace a finalized block");
             }
             if (payload.blockNumber != meta->diskTip.number + 1 ||
                 payload.parentHash != meta->diskTip.hash)
@@ -1082,7 +1084,8 @@ task::Task<PayloadStatus> EthEngineService<MemPoolType, GlobalStateStorageType, 
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
     }
-    if (auto meta = persistedEngineMeta(); meta && payload.blockNumber <= meta->finalizedNumber())
+    if (auto meta = persistedEngineMeta();
+        meta && meta->conflictsWithFinalized(payload.blockNumber, payload.parentHash))
     {
         co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
             "Payload would replace a finalized block");
@@ -1093,10 +1096,8 @@ task::Task<PayloadStatus> EthEngineService<MemPoolType, GlobalStateStorageType, 
     bcos::protocol::BlockNumber parentNumber = head;
     if (payload.blockNumber != head + 1)
     {
-        // Phase 3 shallow reorg (EthereumChainRollback.h): a payload AT/BELOW the tip whose
-        // parent resolves to the canonical block at number-1 is a competing fork head the
-        // CL wants validated — route it through the verifier, whose stale retry rewinds the
-        // committed chain to number-1 (reorg window permitting) and commits this payload.
+        // A competing payload at or below the tip can execute if its parent still resolves.
+        // The verifier validates it over an undo view before atomically replacing the suffix.
         bool reorgRoute = false;
         if (payload.blockNumber >= 1 && payload.blockNumber <= head)
         {

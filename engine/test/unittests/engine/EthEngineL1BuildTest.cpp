@@ -1331,12 +1331,13 @@ BOOST_FIXTURE_TEST_CASE(finalizedAndSafeSurviveServiceReconstruction, EL1BFaultF
 
     // Produce a different block at the finalized height with a second engine.
     nodeB.seedGenesis(el1bParentHeader(0, 0, 0), {});
+    auto ledgerB = std::make_shared<El1bPersistingLedger>(*nodeB.blockFactory);
     auto secondaryVerifier =
         std::make_shared<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>(
-            nodeB.verifier, nodeB.fakeLedger, nodeB.blockFactory, el1bCancunForks(), 1, 0);
+            nodeB.verifier, ledgerB, nodeB.blockFactory, el1bCancunForks(), 1, 0);
     decltype(serviceA) secondary(memPool, nodeB.storage, stubExecutor, stubScheduler,
-        nodeB.blockFactory, nodeB.fakeLedger, static_cast<std::uint32_t>(ApiVersion::V4), nullptr,
-        nullptr, secondaryVerifier);
+        nodeB.blockFactory, ledgerB, static_cast<std::uint32_t>(ApiVersion::V4), nullptr, nullptr,
+        secondaryVerifier);
     auto attributes = makePayloadAttributesV3(c_blockTimestampMs + 1000);
     auto fcu = task::syncWait(secondary.updateForkchoice(rewind, &attributes, 3));
     BOOST_REQUIRE(fcu.payloadId);
@@ -1346,6 +1347,21 @@ BOOST_FIXTURE_TEST_CASE(finalizedAndSafeSurviveServiceReconstruction, EL1BFaultF
     sibling.executionPayload = other->executionPayload;
     sibling.parentBeaconBlockRoot = other->parentBeaconBlockRoot;
     auto status = task::syncWait(restarted.newPayload(sibling, 3));
+    BOOST_CHECK(status.status == PayloadValidationStatus::Invalid);
+    BOOST_CHECK(status.validationError == "Payload would replace a finalized block");
+
+    BOOST_REQUIRE(
+        task::syncWait(secondary.newPayload(sibling, 3)).status == PayloadValidationStatus::Valid);
+    ForkchoiceState siblingHead{sibling.executionPayload.blockHash, {}, {}};
+    attributes.timestamp += 1000;
+    fcu = task::syncWait(secondary.updateForkchoice(siblingHead, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId);
+    auto child = task::syncWait(secondary.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(child);
+    NewPayloadRequest childOfSibling;
+    childOfSibling.executionPayload = child->executionPayload;
+    childOfSibling.parentBeaconBlockRoot = child->parentBeaconBlockRoot;
+    status = task::syncWait(restarted.newPayload(childOfSibling, 3));
     BOOST_CHECK(status.status == PayloadValidationStatus::Invalid);
     BOOST_CHECK(status.validationError == "Payload would replace a finalized block");
     BOOST_CHECK(restarted.getFinalizedBlockNumber() == 1);
