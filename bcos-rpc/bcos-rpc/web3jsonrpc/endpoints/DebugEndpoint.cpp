@@ -615,11 +615,17 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
             "Block " + std::to_string(blockNumber) + " has no Ethereum header: " + e.what()));
     }
-    // The served bytes must hash back to the block's published hash, the same invariant
-    // debug_getRawHeader enforces: on the fault-proof data plane a block whose header does not
-    // match the published block hash would be committed to a trace no one else can reproduce.
-    // `body.header` re-encodes to exactly these bytes (both paths delegate to the same
-    // EthBlockHeaderData codec), so verifying here covers the header embedded in the block RLP.
+    // The served bytes must be reproducible from the header's own fields. Two gates, because
+    // "reproducible" means something different per lane:
+    //   * encodeHeader must succeed at all: a native FISCO header (sub-second timestamp), or an
+    //     OP header missing fork fields, has no Ethereum RLP form and throws here. This is the
+    //     gate that actually rejects a non-Ethereum header.
+    //   * the recomputed bytes must reproduce the published identity. That comparison is a real
+    //     check on the eth lane (stored hash vs keccak of what we serve) but VACUOUS on the OP
+    //     lane, where canonicalBlockHash is defined as keccak(encodeHeader(header)) and
+    //     therefore compares those bytes with themselves. Keeping it costs one encode + keccak
+    //     and still guards the eth lane, so it stays -- but it is not what makes OP blocks safe;
+    //     the commitment re-check below is.
     bcos::bytes encodedHeader;
     try
     {
@@ -712,6 +718,67 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
                     items = items.getCroppedData(itemHeader.payloadLength);
                 }
             }
+        }
+    }
+
+    // The body must reproduce the header's own commitments. This is the check that actually
+    // proves the reconstruction is faithful -- a client rebuilds both tries from these bytes, so
+    // a mismatch means the envelopes or the withdrawals were assembled wrong and the served block
+    // could never be re-derived by anyone else. Cheap at these sizes (a handful of items), and it
+    // is what turns a silently-wrong body into a loud error.
+    auto const transactionsRoot = [&body] {
+        std::vector<bcos::bytesConstRef> refs;
+        refs.reserve(body.transactions.size());
+        for (auto const& tx : body.transactions)
+        {
+            refs.emplace_back(tx.data(), tx.size());
+        }
+        return bcos::ledger::mpt::calculateTransactionsRoot(refs);
+    }();
+    if (transactionsRoot != header.txsRoot()) [[unlikely]]
+    {
+        // The two likely causes are a transaction whose signing preimage was not spliceable back
+        // into its envelope, or a stored row whose payload does not match the committed trie.
+        // Either way the bytes cannot be trusted, so refuse rather than hand out a body whose
+        // transactionsRoot no client can recover from the header.
+        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+            "Block " + std::to_string(blockNumber) + " body does not reproduce the header's "
+                                                    "transactionsRoot"));
+    }
+    if (header.withdrawalsRoot().has_value())
+    {
+        std::vector<bcos::bytesConstRef> refs;
+        if (body.withdrawals)
+        {
+            std::vector<bcos::bytes> encodedWithdrawals;
+            encodedWithdrawals.reserve(body.withdrawals->size());
+            for (auto const& withdrawal : *body.withdrawals)
+            {
+                bcos::bytes item;
+                bcos::codec::rlp::encode(item, withdrawal);
+                encodedWithdrawals.push_back(std::move(item));
+            }
+            refs.reserve(encodedWithdrawals.size());
+            for (auto const& item : encodedWithdrawals)
+            {
+                refs.emplace_back(item.data(), item.size());
+            }
+            if (bcos::ledger::mpt::calculateWithdrawalsRoot(refs) != *header.withdrawalsRoot())
+            {
+                // The sidecar row was missing or did not decode to the committed list. Emitting an
+                // empty list for a block whose header commits to a non-empty root is the one case
+                // where being lenient produces a body that contradicts its own header.
+                BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                    "Block " + std::to_string(blockNumber) +
+                        " body does not reproduce the header's withdrawalsRoot"));
+            }
+        }
+        else
+        {
+            // withdrawalsRoot present but the body has no list cannot happen here (the branch
+            // above always emplaces one), kept explicit so the invariant is visible.
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                "Block " + std::to_string(blockNumber) + " is missing its withdrawals list"));
         }
     }
 

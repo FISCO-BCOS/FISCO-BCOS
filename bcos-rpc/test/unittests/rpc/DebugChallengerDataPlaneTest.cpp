@@ -26,6 +26,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-ledger/mpt/Account.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Proof.h>
@@ -73,6 +74,31 @@ public:
         auto header = block->blockHeader();
         header->setTimestamp(1'700'000'000'000);
         header->setBaseFee(7);
+        header->setWithdrawalsRoot(mpt::emptyRootHash());
+        BOOST_REQUIRE(bcos::protocol::isOpEthereumBlock(*header));
+        header->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*header));
+        m_ledger->indexBlockHash(header->hash(), header->number());
+        return header;
+    }
+
+    /// A self-consistent OP-lane block with no transactions.
+    ///
+    /// The generic fake block is not an Ethereum block: fakeAndCheckBlock stamps the header's
+    /// txsRoot with bcos's native Block::calculateTransactionRoot, which is not the Ethereum
+    /// indexed trie over raw envelopes that a real Eth/OP block carries (the engine writes that
+    /// one, see EngineStorageCommit / transactionsRootFromPayload). debug_getRawBlock verifies
+    /// exactly that commitment, so the happy path needs a header whose txsRoot really is
+    /// calculateTransactionsRoot of the body it will produce.
+    bcos::protocol::BlockHeader::Ptr makeEmptyOpBlock()
+    {
+        m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 0);
+        auto const& block = m_ledger->ledgerData().back();
+        auto header = block->blockHeader();
+        header->setTimestamp(1'700'000'000'000);
+        header->setBaseFee(7);
+        // An empty body commits to the empty transaction trie, and the OP lane's Canyon+ body
+        // carries an empty withdrawals list, i.e. also the empty root.
+        header->setTxsRoot(mpt::emptyRootHash());
         header->setWithdrawalsRoot(mpt::emptyRootHash());
         BOOST_REQUIRE(bcos::protocol::isOpEthereumBlock(*header));
         header->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*header));
@@ -526,10 +552,9 @@ BOOST_AUTO_TEST_CASE(RawBlockHeaderMatchesRawHeader)
 {
     setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
     // A fresh empty block: the fixture's genesis block already carries fake transactions, which
-    // are FISCO-native and therefore deliberate refused by the endpoint (see the negative test
+    // are FISCO-native and therefore deliberately refused by the endpoint (see the negative test
     // below), so the happy path needs a block whose transaction list is empty.
-    m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 0);
-    auto const headerPtr = makeLatestOpHeader();
+    auto const headerPtr = makeEmptyOpBlock();
     auto const& header = *headerPtr;
     auto const numberHex = toQuantity(header.number());
 
@@ -557,8 +582,7 @@ BOOST_AUTO_TEST_CASE(RawBlockHeaderMatchesRawHeader)
 BOOST_AUTO_TEST_CASE(RawBlockAcceptsBlockHashAndTag)
 {
     setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
-    m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 0);
-    auto const headerPtr = makeLatestOpHeader();
+    auto const headerPtr = makeEmptyOpBlock();
     auto const published = bcos::protocol::canonicalBlockHash(*headerPtr).hexPrefixed();
 
     auto const byNumber = resultBytes(call1("debug_getRawBlock", toQuantity(headerPtr->number())));
@@ -631,6 +655,65 @@ BOOST_AUTO_TEST_CASE(RawTransactionRejectsMalformedHash)
         BOOST_REQUIRE_MESSAGE(resp.isMember("error"), bad);
         BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InvalidParams);
     }
+}
+
+// The whole point of serving a block is that a client can rebuild its tries from the bytes and
+// land exactly on the roots the header commits to. Assert that end to end: decode the served
+// block and recompute both roots through the same helpers the engine commits with.
+BOOST_AUTO_TEST_CASE(RawBlockReproducesHeaderCommitments)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    auto const headerPtr = makeEmptyOpBlock();
+    auto const rawBlock =
+        resultBytes(call1("debug_getRawBlock", toQuantity(headerPtr->number())));
+
+    bcos::protocol::EthBlock decoded;
+    auto mutableBlock = rawBlock;
+    decoded.rlpDecode(bcos::bytesConstRef(mutableBlock.data(), mutableBlock.size()));
+
+    std::vector<bcos::bytesConstRef> txRefs;
+    for (auto const& tx : decoded.data().transactions)
+    {
+        txRefs.emplace_back(tx.data(), tx.size());
+    }
+    BOOST_CHECK(bcos::ledger::mpt::calculateTransactionsRoot(txRefs) ==
+                headerPtr->txsRoot());
+
+    BOOST_REQUIRE(decoded.data().withdrawals.has_value());
+    std::vector<bcos::bytes> encodedWithdrawals;
+    for (auto const& withdrawal : *decoded.data().withdrawals)
+    {
+        bcos::bytes item;
+        bcos::codec::rlp::encode(item, withdrawal);
+        encodedWithdrawals.push_back(std::move(item));
+    }
+    std::vector<bcos::bytesConstRef> withdrawalRefs;
+    for (auto const& item : encodedWithdrawals)
+    {
+        withdrawalRefs.emplace_back(item.data(), item.size());
+    }
+    BOOST_REQUIRE(headerPtr->withdrawalsRoot().has_value());
+    BOOST_CHECK(bcos::ledger::mpt::calculateWithdrawalsRoot(withdrawalRefs) ==
+                *headerPtr->withdrawalsRoot());
+}
+
+// Guard: a header whose txsRoot does not match its body must be refused, never served. This is
+// the check that keeps a mis-reassembled envelope from reaching a prover as a plausible block.
+BOOST_AUTO_TEST_CASE(RawBlockRefusesInconsistentTxsRoot)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    auto const headerPtr = makeEmptyOpBlock();
+    // Claim a non-empty transaction trie for a block whose body has none, then re-stamp the hash
+    // so the header is still internally consistent -- only the commitment is wrong.
+    headerPtr->setTxsRoot(h256(0x1234U));
+    headerPtr->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*headerPtr));
+    m_ledger->indexBlockHash(headerPtr->hash(), headerPtr->number());
+
+    auto const resp = call1("debug_getRawBlock", toQuantity(headerPtr->number()));
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InternalError);
+    BOOST_CHECK(resp["error"]["message"].asString().find("does not reproduce") !=
+                std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
