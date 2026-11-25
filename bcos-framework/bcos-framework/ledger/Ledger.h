@@ -56,10 +56,10 @@ inline constexpr struct PrewriteBlockToBuffer
     task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,
         bcos::protocol::Block::ConstPtr block, auto& storage,
         std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
-        bool writeNonces = true) const
+        bool writeNonces = true, bool reversible = false) const
     {
         co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block), storage,
-            blockHashOverride, writeNonces);
+            blockHashOverride, writeNonces, reversible);
     }
 } prewriteBlockToBuffer{};
 

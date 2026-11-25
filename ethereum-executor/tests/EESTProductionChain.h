@@ -405,7 +405,7 @@ public:
         m_checkpoint(m_backend),
         m_storage(m_checkpoint),
         m_verifier(std::make_shared<Verifier>(m_scheduler, m_executor, *m_blockFactory,
-            /*commitObserver=*/nullptr, /*reorgWindow=*/0)),
+            /*commitObserver=*/nullptr, /*reversible=*/false)),
         m_ledger(std::make_shared<PersistingLedger>())
     {}
 

@@ -101,10 +101,11 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     if (m_trackedHead.has_value())
     {
         auto const& trackedHeadBlock = *m_trackedHead;
-        if (headBlockNumber < trackedHeadBlock.blockNumber)
+        if (headBlockNumber < trackedHeadBlock.blockNumber &&
+            !(resolved.allowCanonicalHeadJump && resolved.headCanonical))
         {
-            // Match release EngineServiceImpl: any older head is swallowed (VALID without
-            // payloadId). Rebuild-on-parent is intentionally not supported on this branch.
+            // The legacy path swallows older heads. The EL path resolves and rewinds
+            // a canonical head before publishing it here.
             return ForkchoiceApplyResult::Swallowed;
         }
         else if (headBlockNumber == trackedHeadBlock.blockNumber)

@@ -450,6 +450,57 @@ BOOST_AUTO_TEST_CASE(ObsoletionToZeroQueuesDeletion)
     BOOST_CHECK(nodeRowExists(backend, h1) == false);  // this test never wrote a node row
 }
 
+BOOST_AUTO_TEST_CASE(FinalizedHorizonRetainsRollbackableNodes)
+{
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    Pruner pruner(backend, /*pruneWindow=*/2);
+    pruner.setFinalizedBlock(1);
+
+    auto const oldRoot = makeHash(0x01);
+    auto const liveRoot = makeHash(0x02);
+    task::syncWait(nodes.writeOne(oldRoot, bcos::bytes{0x11}));
+    task::syncWait(nodes.writeOne(liveRoot, bcos::bytes{0x22}));
+    MPTDeltaLayer first;
+    first.newNodes[oldRoot] = bcos::bytes{0x11};
+    first.refCountDeltas[oldRoot] = 1;
+    commitPruneBlock(backend, pruner, 1, first);
+
+    MPTDeltaLayer second;
+    second.newNodes[liveRoot] = bcos::bytes{0x22};
+    second.refCountDeltas[liveRoot] = 1;
+    second.obsoletedNodes.insert(oldRoot);
+    second.refCountDeltas[oldRoot] = -1;
+    commitPruneBlock(backend, pruner, 2, second);
+
+    for (int block = 3; block <= 12; ++block)
+    {
+        commitPruneBlock(backend, pruner, block, {});
+        BOOST_CHECK(nodeRowExists(backend, oldRoot));
+    }
+    pruner.setFinalizedBlock(2);
+    commitPruneBlock(backend, pruner, 13, {});
+    BOOST_CHECK(!nodeRowExists(backend, oldRoot));
+    BOOST_CHECK(nodeRowExists(backend, liveRoot));
+}
+
+BOOST_AUTO_TEST_CASE(FailedRollbackRebuildBlocksPruningUntilRecovered)
+{
+    PruneBackend backend;
+    Pruner pruner(backend, /*pruneWindow=*/2);
+    auto stateRootAt = [](protocol::BlockNumber) -> task::Task<std::optional<h256>> {
+        co_return emptyRootHash();
+    };
+    task::syncWait(pruner.init(0, ledger::ETHEREUM_EXECUTOR_VERSION, stateRootAt, false));
+    auto missingRoot = [](protocol::BlockNumber) -> task::Task<std::optional<h256>> {
+        co_return std::nullopt;
+    };
+    BOOST_CHECK_THROW(task::syncWait(pruner.coOnRollback(0, missingRoot)), MPTInvariantViolation);
+    BOOST_CHECK_THROW(task::syncWait(pruner.coPreparePruneRows(1, {})), std::runtime_error);
+    task::syncWait(pruner.coOnRollback(0, stateRootAt));
+    BOOST_CHECK_NO_THROW(task::syncWait(pruner.coPreparePruneRows(1, {})));
+}
+
 BOOST_AUTO_TEST_CASE(SharedRefCountSurvivesSingleObsoletion)
 {
     PruneBackend backend;

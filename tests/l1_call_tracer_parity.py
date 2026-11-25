@@ -253,21 +253,31 @@ def node_config(tool, binary, out, processes, chain, window=256):
     config = config.replace("[web3_rpc]", "[web3_rpc]\n    enable_trace_api=true")
     config = config.replace("[engine_rpc]", "[engine_rpc]\n    enable_trace_api=true")
     config = config.replace("[storage]", f"[storage]\n    mpt_prune_window={window}")
-    config = config.replace("reorg_window=256", f"reorg_window={window}")
     (work / "config.ini").write_text(config)
-    # Import canonical geth RLP through the production block verifier.
-    # Engine payload ingestion is outside this harness coverage; the current
-    # upstream L1 V4 decoder accepts withdrawalsRoot as an optional field.
-    with (out / "fisco-import.log").open("w") as log:
-        imported = subprocess.run([str(binary), "-c", "config.ini", "-g", "config.genesis",
-            "--import-blocks", str(chain)], cwd=work, stdout=log, stderr=subprocess.STDOUT, timeout=120)
-    if imported.returncode:
-        raise RuntimeError(f"Canonical block import failed: inspect {out / 'fisco-import.log'}")
+    if chain is not None:
+        with (out / "fisco-import.log").open("w") as log:
+            imported = subprocess.run([str(binary), "-c", "config.ini", "-g", "config.genesis",
+                "--import-blocks", str(chain)], cwd=work, stdout=log, stderr=subprocess.STDOUT, timeout=120)
+        if imported.returncode:
+            raise RuntimeError(f"Canonical block import failed: inspect {out / 'fisco-import.log'}")
     child = processes.start([binary, "-c", "config.ini", "-g", "config.genesis"], work, out / "fisco-process.log")
     web = Rpc(f"http://127.0.0.1:{web_port}", out / "fisco-web3.jsonl")
     engine = Rpc(f"http://127.0.0.1:{engine_port}", out / "fisco-engine.jsonl", bytes.fromhex("a1" * 32))
     ready(child, web)
     return web, engine
+
+
+def build_payload(engine, head, timestamp, transactions=()):
+    root = "0x" + "ab" * 32
+    attrs = {"timestamp": hex(timestamp), "prevRandao": ZERO,
+             "suggestedFeeRecipient": "0x" + "00" * 19 + "01", "withdrawals": [],
+             "parentBeaconBlockRoot": root, "noTxPool": True, "transactions": list(transactions)}
+    fcu = engine.result("engine_forkchoiceUpdatedV3", [choice(head), attrs])
+    require_valid(fcu)
+    envelope = engine.result("engine_getPayloadV3", [fcu["payloadId"]])
+    payload = envelope["executionPayload"]
+    assert payload["transactions"] == list(transactions)
+    return payload, [], root, envelope.get("executionRequests", [])
 
 
 def snapshot(web, sender):
@@ -387,6 +397,12 @@ def compare(corpus, binary, tool, out, processes):
     pruned_out = out / "pruned-profile"
     pruned_out.mkdir()
     pruned_web, pruned_engine = node_config(tool, binary, pruned_out, processes, corpus / "chain.rlp", window=1)
+    head = pruned_web.result("eth_getBlockByNumber", ["latest", False])
+    finalized = pruned_web.result("eth_getBlockByNumber", ["0x3", False])["hash"]
+    state = dict(choice(head["hash"]), safeBlockHash=finalized, finalizedBlockHash=finalized)
+    require_valid(pruned_engine.result("engine_forkchoiceUpdatedV3", [state, None]))
+    empty = build_payload(pruned_engine, head["hash"], int(head["timestamp"], 16) + 1)
+    require_valid(pruned_engine.result("engine_newPayloadV4", empty))
     # Prove the transaction still exists and that only its replay data is unavailable.
     old_receipt = pruned_web.result("eth_getTransactionReceipt", [good_hash])
     missing_state = pruned_web.raw("debug_traceTransaction", [good_hash, {"tracer": "callTracer"}])
@@ -394,7 +410,7 @@ def compare(corpus, binary, tool, out, processes):
         {"tracer": "callTracer", "tracerConfig": {"onlyTopCall": True}, "timeout": "30s"}])
     results.append({"case": "pruned_parent_state_is_explicit", "pass": old_receipt is not None
         and missing_state.get("error", {}).get("code") == -32004 and current_trace.get("result") == data["outputLimitTop"]
-        and pruned_web.result("eth_blockNumber") == "0x4", "response": missing_state,
+        and pruned_web.result("eth_blockNumber") == "0x5", "response": missing_state,
         "currentPositiveControl": current_trace, "oldReceipt": old_receipt})
     source_paths = set(command(["git", "diff", "--name-only", "HEAD"], ROOT).splitlines())
     added_prefixes = ("bcos-codec/bcos-codec/abi/", "bcos-framework/bcos-framework/dispatcher/",

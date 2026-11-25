@@ -468,6 +468,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // SWEEP_DELETE_CHUNK batches while scanning (MPTPruner.h Phase 3). Throws
         // MPTInvariantViolation on a missing reachable node row; fails loudly at boot.
         auto const currentBlock = task::syncWait(ledger::getCurrentBlockNumber(*ledger));
+        if (m_executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION)
+        {
+            auto meta = task::syncWait(ledger::loadEngineMeta(pruneBackend));
+            pruner->setFinalizedBlock(meta.finalizedNumber());
+        }
         task::syncWait(pruner->init(
             currentBlock, m_executorVersion,
             [ledger](BlockNumber number) -> task::Task<std::optional<h256>> {
@@ -559,7 +564,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
                 *m_ethereumSerialScheduler, *ethereumExecutor,
                 *m_protocolInitializer->blockFactory(), m_mptCommitObserver,
-                m_nodeConfig->ethereumReorgWindow());
+                /*reversible=*/true);
             std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
                 externalPayloadVerifier =
                     std::make_shared<ExternalPayloadVerifierImpl<GlobalStateStorage>>(
@@ -632,7 +637,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
                 *m_ethereumSerialScheduler, *ethereumExecutor,
                 *m_protocolInitializer->blockFactory(), m_mptCommitObserver,
-                m_nodeConfig->ethereumReorgWindow());
+                /*reversible=*/true);
             std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
                 externalPayloadVerifier =
                     std::make_shared<ExternalPayloadVerifierImpl<GlobalStateStorage>>(

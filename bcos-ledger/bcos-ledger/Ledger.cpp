@@ -22,6 +22,7 @@
  */
 
 #include "Ledger.h"
+#include "EngineMeta.h"
 #include "GenesisStateRoot.h"
 #include "LedgerMethods.h"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -1666,6 +1667,10 @@ bool Ledger::buildGenesisBlock(
 
             if (existsGenesisData == genesisData && ethLane)
             {
+                if (genesis.m_executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION)
+                {
+                    co_await ledger::loadEngineMeta(*m_stateStorage);
+                }
                 co_return true;
             }
             if (existsGenesisData == genesisData)
@@ -1884,7 +1889,46 @@ bool Ledger::buildGenesisBlock(
 
         auto block = m_blockFactory->createBlock();
         block->setBlockHeader(header);
-        co_await ledger::prewriteBlockToStorage(*this, nullptr, block, true, m_stateStorage);
+        if (ethLane)
+        {
+            BlockAnchor anchor{0, header->hash()};
+            PersistedEngineMeta meta{anchor, anchor, anchor};
+            auto transactional =
+                std::dynamic_pointer_cast<storage::TransactionalStorageInterface>(m_stateStorage);
+            if (transactional)
+            {
+                auto rows = std::make_shared<storage::StateStorage>(m_stateStorage, false);
+                co_await ledger::prewriteBlockToStorage(*this, nullptr, block, false, rows);
+                co_await writeEngineMeta(*rows, meta);
+                protocol::TwoPCParams params{};
+                std::promise<Error::Ptr> prepared;
+                transactional->asyncPrepare(
+                    params, *rows, [&](Error::Ptr error, uint64_t, std::string const&) {
+                        prepared.set_value(std::move(error));
+                    });
+                if (auto error = prepared.get_future().get())
+                {
+                    BOOST_THROW_EXCEPTION(*error);
+                }
+                std::promise<Error::Ptr> committed;
+                transactional->asyncCommit(params,
+                    [&](Error::Ptr error, uint64_t) { committed.set_value(std::move(error)); });
+                if (auto error = committed.get_future().get())
+                {
+                    BOOST_THROW_EXCEPTION(*error);
+                }
+            }
+            else
+            {
+                co_await ledger::prewriteBlockToStorage(
+                    *this, nullptr, block, true, m_stateStorage);
+                co_await writeEngineMeta(*m_stateStorage, meta);
+            }
+        }
+        else
+        {
+            co_await ledger::prewriteBlockToStorage(*this, nullptr, block, true, m_stateStorage);
+        }
 
         // write sys config
         std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> sysTablePromise;

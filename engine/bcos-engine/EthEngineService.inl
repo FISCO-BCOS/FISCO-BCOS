@@ -80,6 +80,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         }
     }
 
+    auto* chainMutex = reversibleCommitMutex();
+    std::unique_lock commitLock(chainMutex ? *chainMutex : m_commitMutex);
     auto view = m_globalStateStorage.fork();
     auto headBlockNumber = co_await bcos::ledger::getBlockNumber(
         view, forkchoiceState.headBlockHash, bcos::ledger::fromStorage);
@@ -144,53 +146,6 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         co_await bcos::ledger::getBlockHash(view, *headBlockNumber, bcos::ledger::fromStorage);
     bool const headCanonical =
         canonicalHeadHash.has_value() && *canonicalHeadHash == forkchoiceState.headBlockHash;
-    // EL mode: the CL's head may lag the committed tip (the devp2p sync loop commits
-    // blocks the CL has not voted on yet). Phase 3: rewind the committed chain to the CL's
-    // head (EthereumChainRollback.h). headCanonical is guaranteed here — a rollback deletes
-    // the orphan blocks' hash->number rows, so any head hash that RESOLVED above is
-    // canonical. The tip read doubles as the build guard's ground truth below.
-    bcos::protocol::BlockNumber ledgerTip = 0;
-    if (m_externalPayloadVerifier)
-    {
-        ledgerTip = co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-        if (*headBlockNumber < ledgerTip)
-        {
-            // Never rewind below a finalized height the tracker already accepted: finality
-            // is the CL's promise that the prefix is immutable.
-            auto const storedFinalized = m_tracker.finalizedBlockNumber();
-            if (storedFinalized.has_value() && *headBlockNumber < *storedFinalized)
-            {
-                BOOST_THROW_EXCEPTION(
-                    InvalidForkchoiceState{} << bcos::errinfo_comment{
-                        "forkchoice head is below the stored finalized block; refusing to "
-                        "rewind finalized state"});
-            }
-            auto rollback = co_await m_externalPayloadVerifier->rollbackToCommitted(
-                m_globalStateStorage, *headBlockNumber);
-            if (!rollback.rolledBack)
-            {
-                // Beyond the reorg window (or a journal row missing): local state cannot
-                // serve this head — the CL must backfill from the network, so answer
-                // SYNCING (and log loud: on a healthy chain this never fires).
-                BCOS_LOG(ERROR) << LOG_BADGE("EthEngineService")
-                                << LOG_DESC("forkchoice head rollback refused; answering SYNCING")
-                                << LOG_KV("head", forkchoiceState.headBlockHash.abridged())
-                                << LOG_KV("headNumber", *headBlockNumber)
-                                << LOG_KV("ledgerTip", ledgerTip)
-                                << LOG_KV("reason", rollback.error);
-                co_return ForkchoiceUpdatedResult{
-                    .payloadStatus = engine_common::makeStatus(
-                        PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
-                    .payloadId = std::nullopt,
-                };
-            }
-            BCOS_LOG(INFO) << LOG_BADGE("EthEngineService")
-                           << LOG_DESC("forkchoice head behind the tip: chain rewound")
-                           << LOG_KV("head", forkchoiceState.headBlockHash.abridged())
-                           << LOG_KV("newTip", *headBlockNumber) << LOG_KV("oldTip", ledgerTip);
-            ledgerTip = *headBlockNumber;
-        }
-    }
     // Same-number safe/finalized already resolved above: their canonical hash is the
     // head's (one NUMBER_2_HASH row per height), so reuse it instead of a second storage
     // read; zero (unset) fields skip resolution entirely. Heartbeat FCUs (all three
@@ -217,6 +172,80 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             forkchoiceState.finalizedBlockHash, canonicalFinalizedHash),
         .allowCanonicalHeadJump = m_externalPayloadVerifier != nullptr,
     };
+    bcos::protocol::BlockNumber ledgerTip = 0;
+    if (m_externalPayloadVerifier)
+    {
+        ledgerTip = co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+        std::optional<ledger::PersistedEngineMeta> updatedMeta;
+        if (chainMutex)
+        {
+            if (!resolved.headCanonical || (safeSet && !resolved.safeCanonical) ||
+                (finalizedSet && !resolved.finalizedCanonical))
+            {
+                BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                          "Forkchoice head, safe and finalized must be canonical"});
+            }
+            auto const meta = co_await ledger::loadEngineMeta(view);
+            auto next = meta;
+            if (finalizedBlockNumber)
+            {
+                next.finalized =
+                    ledger::BlockAnchor{*finalizedBlockNumber, forkchoiceState.finalizedBlockHash};
+            }
+            if (*headBlockNumber < meta.finalizedNumber() ||
+                next.finalizedNumber() < meta.finalizedNumber() ||
+                (safeBlockNumber && *safeBlockNumber < next.finalizedNumber()))
+            {
+                BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                          "Forkchoice would rewind finalized state"});
+            }
+            if (safeBlockNumber)
+            {
+                next.safe = ledger::BlockAnchor{*safeBlockNumber, forkchoiceState.safeBlockHash};
+            }
+            else if (next.safe && (next.safe->number > *headBlockNumber ||
+                                      next.safe->number < next.finalizedNumber()))
+            {
+                next.safe = next.finalized;
+            }
+            if (*headBlockNumber < ledgerTip)
+            {
+                updatedMeta = next;
+            }
+            else if (next != meta || ledgerTip == 0)
+            {
+                typename GlobalStateStorageType::MutableStorage batch;
+                co_await scheduler_v1::stageFinalization(batch, meta, next);
+                co_await m_globalStateStorage.mergeToBackends(batch);
+                m_commitObserver->setFinalizedBlock(next.finalizedNumber());
+            }
+        }
+        if (*headBlockNumber < ledgerTip)
+        {
+            if (!chainMutex && m_tracker.finalizedBlockNumber().value_or(0) > *headBlockNumber)
+            {
+                BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                          "Forkchoice would rewind finalized state"});
+            }
+            auto rollback = co_await m_externalPayloadVerifier->rollbackToCommitted(
+                m_globalStateStorage, *headBlockNumber, updatedMeta);
+            if (!rollback.rolledBack)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("EthEngineService")
+                                << LOG_DESC("forkchoice head rollback refused; answering SYNCING")
+                                << LOG_KV("head", forkchoiceState.headBlockHash.abridged())
+                                << LOG_KV("headNumber", *headBlockNumber)
+                                << LOG_KV("ledgerTip", ledgerTip)
+                                << LOG_KV("reason", rollback.error);
+                co_return ForkchoiceUpdatedResult{
+                    .payloadStatus = engine_common::makeStatus(
+                        PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
+                    .payloadId = std::nullopt,
+                };
+            }
+            ledgerTip = *headBlockNumber;
+        }
+    }
     if (m_tracker.applyForkchoice(resolved) == ForkchoiceApplyResult::Swallowed)
     {
         co_return ForkchoiceUpdatedResult{
@@ -225,6 +254,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             .payloadId = std::nullopt,
         };
     }
+
+    commitLock.unlock();
 
     ForkchoiceUpdatedResult result{
         .payloadStatus = engine_common::makeStatus(
@@ -612,7 +643,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             auto guard = m_tracker.lockExclusive();
             builtHere = guard.payloadIdForHash(request.executionPayload.blockHash).has_value();
         }
-        if (!builtHere)
+        auto meta = persistedEngineMeta();
+        auto const& payload = request.executionPayload;
+        if (!builtHere ||
+            (meta && meta->conflictsWithFinalized(payload.blockNumber, payload.parentHash)))
         {
             co_return co_await newPayloadExternal(request);
         }
@@ -621,15 +655,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     BuiltPayloadPtr cached;
     PayloadID payloadId;
     std::optional<EthPayloadArtifacts<ViewType>> localArtifact;
-    // The artifact's executed view, moved out of the artifact inside the m_commitMutex
-    // critical section (the take-out below) and pushed only after the rollback journal
-    // capture — capture reads pre-block values from the committed plane and must run
-    // BEFORE the view is queued. Restored into the artifact if capture throws.
     std::optional<ViewType> localView;
-    // The block's rollback journal (EthereumChainRollback.h), captured when the wiring
-    // reports a reorg window; written into the same prewrite buffer as the block data.
-    // Shared ownership: the artifact stash and the hydration below are refcount copies.
-    std::shared_ptr<const scheduler_v1::RollbackJournal> rollbackJournal;
     // Set when THIS block still owns a queued (or about-to-be-queued) state layer: either this
     // call pushes one, or a previous attempt pushed it and failed, leaving it queued for the
     // retry (commit_retry_without_ledger_drains_after_failed_merge). A payload whose artifact
@@ -743,34 +769,18 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         co_return engine_common::makeStatus(
             PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
     }
-    // MPT pruning (CommitObserver) serialization: m_commitMutex guards the whole commit
-    // section — the pruning hooks stage the block's counting work on one shared overlay
-    // between coPreparePruneRows and onCommit (BaselineSchedulerMPTHelpers.h's
-    // prepareMPTPruneRows contract), so [prepare -> merge -> onCommit] must be serialized
-    // against every other commit, exactly like BaselineScheduler::m_commitMutex (likewise
-    // held across co_await). The mutex is taken BEFORE the artifact take-out, so take-out
-    // -> rollback-journal capture -> pushView is one critical section (lock order
-    // m_commitMutex -> tracker, same as the commitRetainedPayload re-lock below): a
-    // concurrent duplicate newPayload sees either the full artifact (it commits) or none
-    // (commitRetainedPayload cleared it; the fail-closed ledger guard below answers the
-    // idempotent VALID) — never a header-only artifact it would commit without a state
-    // layer. The same mutual exclusion lets a capture failure hand the view back to the
-    // artifact for the CL's retry (see the catch below).
-    std::unique_lock commitLock(m_commitMutex);
+    auto* chainMutex = reversibleCommitMutex();
+    std::unique_lock commitLock(chainMutex ? *chainMutex : m_commitMutex);
     {
         auto guard = m_tracker.lockExclusive();
         auto artifactIt = m_artifacts.find(payloadId);
-        // Keep artifacts until the durable write succeeds so a retry can finish the block.
-        // The view is MOVED OUT here (not pushed) so the same view is never taken twice; it
-        // is pushed after the rollback journal capture — capture reads pre-block values
-        // from the committed plane and requires the view not yet queued. header/receipts
-        // are only read here and consumed after the I/O succeeds, so their presence is the
-        // retry discriminator.
+        // Keep the reversible execution view until the batch lands, so any retry
+        // can recreate its ledger rows and undo entries from the same executed state.
         if (artifactIt != m_artifacts.end() &&
             (artifactIt->second.view || artifactIt->second.header))
         {
             stateLayerQueued = true;
-            if (artifactIt->second.view)
+            if (artifactIt->second.view && !chainMutex)
             {
                 localView = std::move(*artifactIt->second.view);
                 artifactIt->second.view.reset();
@@ -782,78 +792,6 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
-    // Retry hydration: a previous attempt that threw AFTER pushView consumed the view
-    // left the artifact header-only but with the journal stashed (the stash below).
-    // The view is gone, so the capture cannot re-run — restore the stashed journal so
-    // its rows still land in the block's prewrite buffer.
-    if (localArtifact && localArtifact->rollbackJournal)
-    {
-        rollbackJournal = localArtifact->rollbackJournal;
-    }
-
-    // Rollback journal (the SAME shared implementation the external/devp2p lane uses,
-    // EthereumChainRollback.h — not a copy): capture the pre-block values of every
-    // flat-state row this block dirtied, so a later shallow reorg can rewind a block
-    // committed through the SELF-BUILT lane too. Captured under m_commitMutex (only the
-    // committing call journals) and BEFORE pushView — exactly the verifier's step 7a
-    // ordering. Disabled when the wiring reports a zero reorg window (the seam's single
-    // source is the shared verifier instance). The if-constexpr keeps storages without a
-    // committed-plane fork (unit-test stubs) compiling — they can never wire a reorg
-    // window, so there is nothing to capture.
-    auto const reorgWindow =
-        m_externalPayloadVerifier ? m_externalPayloadVerifier->reorgWindow() : 0;
-    if constexpr (requires { m_globalStateStorage.forkCommitted(); })
-    {
-        if (localArtifact && localView && reorgWindow > 0)
-        {
-            try
-            {
-                auto committed = m_globalStateStorage.forkCommitted();
-                rollbackJournal = std::make_shared<const scheduler_v1::RollbackJournal>(
-                    co_await scheduler_v1::captureRollbackJournal(*localView, committed));
-            }
-            catch (...)
-            {
-                // A capture failure (a committed-plane storage fault) must not leave a
-                // header-only artifact behind: localView would die with this coroutine
-                // frame and the CL's retry would commit the block WITHOUT its state layer.
-                // Hand the view back to the artifact so the retry re-runs take-out +
-                // capture from the intact artifact. m_artifacts cannot change underneath —
-                // m_commitMutex is held.
-                if (localView)
-                {
-                    auto guard = m_tracker.lockExclusive();
-                    if (auto artifactIt = m_artifacts.find(payloadId);
-                        artifactIt != m_artifacts.end())
-                    {
-                        artifactIt->second.view = std::make_shared<ViewType>(std::move(*localView));
-                        localView.reset();
-                    }
-                }
-                throw;
-            }
-
-            // Stash the journal in the artifact BEFORE pushView consumes the view: a
-            // throw in the commit section below (prewrite, sidecar writes, prune rows,
-            // merge) escapes with the artifact header-only, and the CL's retry cannot
-            // recapture — the view is gone. The retry restores the journal from the
-            // artifact (the hydration above), so the block always lands WITH its
-            // journal rows. m_artifacts cannot change underneath — m_commitMutex is
-            // held.
-            if (rollbackJournal)
-            {
-                auto guard = m_tracker.lockExclusive();
-                if (auto artifactIt = m_artifacts.find(payloadId); artifactIt != m_artifacts.end())
-                {
-                    // Refcount copy (nothrow): a deep copy here would be the one throwing
-                    // statement between the capture's catch and pushView, and a bad_alloc
-                    // would leave a header-only artifact without a journal — exactly the
-                    // state this stash exists to prevent.
-                    artifactIt->second.rollbackJournal = rollbackJournal;
-                }
-            }
-        }
-    }
     if (localView)
     {
         m_globalStateStorage.pushView(std::move(*localView));
@@ -884,7 +822,36 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             ::ranges::views::transform(
                 [](auto const& tx) { return protocol::Transaction::ConstPtr(tx.decoded); }) |
             ::ranges::to<std::vector>());
-        co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
+        auto committed = m_globalStateStorage.fork();
+        std::optional<ledger::PersistedEngineMeta> meta;
+        if (chainMutex)
+        {
+            meta = co_await ledger::loadEngineMeta(committed);
+            auto const& payload = cached->executionPayload;
+            if (payload.blockNumber <= meta->diskTip.number)
+            {
+                auto hash = co_await ledger::getBlockHash(
+                    committed, payload.blockNumber, ledger::fromStorage);
+                if (hash && *hash == payload.blockHash)
+                {
+                    co_return engine_common::makeStatus(
+                        PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+                }
+            }
+            if (meta->conflictsWithFinalized(payload.blockNumber, payload.parentHash))
+            {
+                co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                    "Payload would replace a finalized block");
+            }
+            if (payload.blockNumber != meta->diskTip.number + 1 ||
+                payload.parentHash != meta->diskTip.hash)
+            {
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            }
+        }
+        co_await ledger::prewriteBlockToBuffer(
+            *m_ledger, blockTxs, block, prewriteStorage, std::nullopt, true, bool(meta));
         // EL mode: persist the EIP-4895 withdrawals sidecar exactly like the external
         // verifier's commit (EthereumBlockVerifier step 8 — one number-keyed row holding
         // the RLP LIST of the per-item encodings), so engine_getPayloadBodies* can serve
@@ -947,14 +914,15 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                     std::to_string(cached->executionPayload.blockNumber)},
                 std::move(blobsEntry));
         }
-        // Rollback journal rows, written into the SAME prewrite buffer (=> the same
-        // WriteBatch) as the block data — the number-keyed journal plus the expiry of
-        // the row that fell out of the window, identical to the external lane's commit
-        // (EthereumBlockVerifier step 8, writeRollbackJournalRows).
-        if (rollbackJournal)
+        if (meta)
         {
-            co_await scheduler_v1::writeRollbackJournalRows(prewriteStorage,
-                cached->executionPayload.blockNumber, *rollbackJournal, reorgWindow);
+            auto parent = co_await ledger::getBlockData(
+                committed, meta->diskTip.number, ledger::HEADER, *m_blockFactory);
+            co_await scheduler_v1::stageReversibleBlock(committed,
+                mutableStorage(*localArtifact->view), prewriteStorage, *meta,
+                ledger::BlockAnchor{
+                    cached->executionPayload.blockNumber, block->blockHeader()->hash()},
+                cached->executionPayload.parentHash, parent->blockHeader()->stateRoot());
         }
         // MPT pruning: the observer turns the block's delta into the deletion keys of expired
         // node rows, applied to prewriteStorage so deletions land in the SAME WriteBatch as
@@ -967,33 +935,44 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             co_await scheduler_v1::prepareMPTPruneRows(*m_commitObserver,
                 cached->executionPayload.blockNumber, *localArtifact->mptDelta, prewriteStorage);
         }
-        // Land the prewritten rows together with the queued view layer, then let a
-        // later commit drain any layer a previously failed attempt left queued.
-        // mergeBackStorage throws NotExistsImmutableStorageError on an empty deque;
-        // the empty case is NOT an error — a concurrent duplicate may have drained
-        // the layer between the attempts, and its rows are identical to ours, so
-        // the prewritten rows land directly via mergeToBackends (idempotent) instead
-        // of surfacing a spurious internal error where the Engine API requires the
-        // idempotent VALID. Awaits stay OUT of the catch handlers (C++20 forbids
-        // them there) — the handler only records whether the rows still need landing.
-        bool rowsLanded = false;
-        try
+        if (meta)
         {
-            co_await m_globalStateStorage.mergeBackStorage(prewriteStorage);
-            rowsLanded = true;
+            if constexpr (requires { m_globalStateStorage.forkCommitted(); })
+            {
+                co_await m_globalStateStorage.mergeToBackends(
+                    mutableStorage(*localArtifact->view), prewriteStorage);
+            }
         }
-        catch (bcos::storage2::NotExistsImmutableStorageError const&)
+        else
         {
-            // Queue already empty — nothing to pair with; land the rows below.
+            // Land the prewritten rows together with the queued view layer, then let a
+            // later commit drain any layer a previously failed attempt left queued.
+            // mergeBackStorage throws NotExistsImmutableStorageError on an empty deque;
+            // the empty case is NOT an error — a concurrent duplicate may have drained
+            // the layer between the attempts, and its rows are identical to ours, so
+            // the prewritten rows land directly via mergeToBackends (idempotent) instead
+            // of surfacing a spurious internal error where the Engine API requires the
+            // idempotent VALID. Awaits stay OUT of the catch handlers (C++20 forbids
+            // them there) — the handler only records whether the rows still need landing.
+            bool rowsLanded = false;
+            try
+            {
+                co_await m_globalStateStorage.mergeBackStorage(prewriteStorage);
+                rowsLanded = true;
+            }
+            catch (bcos::storage2::NotExistsImmutableStorageError const&)
+            {
+                // Queue already empty — nothing to pair with; land the rows below.
+            }
+            if (!rowsLanded)
+            {
+                co_await m_globalStateStorage.mergeToBackends(prewriteStorage);
+            }
+            // Drain remaining queued layers. An abandoned failed merge would
+            // otherwise make every later commit merge one-behind, leaving the newest
+            // payload's state queued in-memory — lost on restart — though it answered VALID.
+            co_await engine_common::drainQueuedLayers(m_globalStateStorage);
         }
-        if (!rowsLanded)
-        {
-            co_await m_globalStateStorage.mergeToBackends(prewriteStorage);
-        }
-        // Drain remaining queued layers. An abandoned failed merge would
-        // otherwise make every later commit merge one-behind, leaving the newest
-        // payload's state queued in-memory — lost on restart — though it answered VALID.
-        co_await engine_common::drainQueuedLayers(m_globalStateStorage);
         // CommitObserver timing contract (CommitObserver.h): AFTER the block's WriteBatch
         // landed. Deliberately before commitRetainedPayload below and with no co_await in
         // between: if a retry ever re-ran the hooks for an already-counted block the
@@ -1085,6 +1064,11 @@ task::Task<PayloadStatus> EthEngineService<MemPoolType, GlobalStateStorageType, 
     }
     auto external = std::move(std::get<engine_common::ExternalPayloadBlock>(converted));
 
+    std::unique_lock<std::mutex> commitLock;
+    if (auto* mutex = reversibleCommitMutex())
+    {
+        commitLock = std::unique_lock(*mutex);
+    }
     auto view = m_globalStateStorage.fork();
     // Idempotent redelivery: the hash already maps to a committed number.
     auto const committedNumber =
@@ -1100,16 +1084,20 @@ task::Task<PayloadStatus> EthEngineService<MemPoolType, GlobalStateStorageType, 
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
     }
+    if (auto meta = persistedEngineMeta();
+        meta && meta->conflictsWithFinalized(payload.blockNumber, payload.parentHash))
+    {
+        co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            "Payload would replace a finalized block");
+    }
     auto const head = co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
     // The parent height this payload commits on: the tip for the common head+1 case; the
     // resolved canonical parent for the shallow-reorg route below.
     bcos::protocol::BlockNumber parentNumber = head;
     if (payload.blockNumber != head + 1)
     {
-        // Phase 3 shallow reorg (EthereumChainRollback.h): a payload AT/BELOW the tip whose
-        // parent resolves to the canonical block at number-1 is a competing fork head the
-        // CL wants validated — route it through the verifier, whose stale retry rewinds the
-        // committed chain to number-1 (reorg window permitting) and commits this payload.
+        // A competing payload at or below the tip can execute if its parent still resolves.
+        // The verifier validates it over an undo view before atomically replacing the suffix.
         bool reorgRoute = false;
         if (payload.blockNumber >= 1 && payload.blockNumber <= head)
         {
@@ -1161,6 +1149,10 @@ task::Task<PayloadStatus> EthEngineService<MemPoolType, GlobalStateStorageType, 
         view, parentNumber, bcos::ledger::HEADER, *m_blockFactory);
     external.parentHeader = bcos::protocol::EthBlockHeader(*parentBlock->blockHeader()).data();
 
+    if (commitLock.owns_lock())
+    {
+        commitLock.unlock();
+    }
     auto result =
         co_await m_externalPayloadVerifier->verifyAndCommit(m_globalStateStorage, external);
     switch (result.outcome)
@@ -1195,6 +1187,9 @@ task::Task<PayloadStatus> EthEngineService<MemPoolType, GlobalStateStorageType, 
         }
         co_return engine_common::makeStatus(
             PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+    case engine_common::ExternalPayloadOutcome::FinalizedConflict:
+        co_return engine_common::makeStatus(
+            PayloadValidationStatus::Invalid, std::nullopt, result.error);
     case engine_common::ExternalPayloadOutcome::Invalid:
     default:
         // The parent is the committed head, so it is the latest valid hash the CL

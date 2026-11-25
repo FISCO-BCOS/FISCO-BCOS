@@ -647,7 +647,7 @@ private:
         auto verifierHolder = m_sharedVerifier ? m_sharedVerifier :
                                                  std::make_shared<Verifier>(*m_scheduler,
                                                      *m_executor, *m_blockFactory, m_commitObserver,
-                                                     m_nodeConfig->ethereumReorgWindow());
+                                                     /*reversible=*/true);
         Verifier& verifier = *verifierHolder;
         auto forks = evmcForkSchedule(*m_nodeConfig);
         auto chainId = m_nodeConfig->ethereumChainId();
@@ -1280,7 +1280,7 @@ private:
                                     << LOG_KV("anchorNumber", streakAnchor)
                                     << LOG_KV("streak", mismatchStreak)
                                     << LOG_KV("action",
-                                           "the reorg exceeds [ethereum] reorg_window; the only "
+                                           "the rollback was refused; the only "
                                            "supported recovery is a full resync from scratch — "
                                            "verify the bootnode list / finalized_checkpoint "
                                            "setting, then restart");

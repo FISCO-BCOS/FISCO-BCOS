@@ -368,6 +368,13 @@ BOOST_AUTO_TEST_CASE(v3MptPruneWindowNeedsFollowDevp2p)
         starts(3, "[storage]\nmpt_prune_window=-1\n")->blockDriver() == BlockDriver::Engine);
 }
 
+BOOST_AUTO_TEST_CASE(separateBlockStateIsOnlySupportedOnTheFiscoLane)
+{
+    constexpr auto config = "[storage]\nenable_separate_block_state=true\n";
+    BOOST_CHECK(starts(1, config)->enableSeparateBlockAndState());
+    refuses(3, config, "storage.enable_separate_block_state must be false");
+}
+
 // enable_miner_api lives in [engine_rpc] and is read on the OP lane only; the [web3_rpc] key
 // stays scoped to the web3 listener.
 BOOST_AUTO_TEST_CASE(engineRpcMinerApiIsOpLaneOnly)

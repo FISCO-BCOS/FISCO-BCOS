@@ -20,6 +20,7 @@
 #include "L2GenesisTestStorage.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-ledger/EngineMeta.h"
 #include "bcos-ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
@@ -264,6 +265,46 @@ BOOST_AUTO_TEST_CASE(EthLanesReadLaneCompatibilityVersion)
             BOOST_CHECK_EQUAL(config.compatibilityVersion(), ETHEREUM_LANE_COMPATIBILITY_VERSION);
         }
     }
+}
+
+BOOST_AUTO_TEST_CASE(EthStartupRejectsMissingAndInconsistentNonGenesisCursors)
+{
+    auto storage = makeL2GenesisTestStorage();
+    Ledger ledger(m_blockFactory, storage, 1);
+    auto const genesis = makeEthLaneGenesis(ETHEREUM_EXECUTOR_VERSION);
+    auto const param = genesisParam();
+    BOOST_REQUIRE(ledger.buildGenesisBlock(genesis, param));
+
+    auto meta = task::syncWait(ledger::readEngineMeta(*storage));
+    BOOST_REQUIRE(meta);
+    BOOST_CHECK_EQUAL(meta->diskTip.number, 0);
+    BOOST_CHECK(meta->diskTip == meta->safe && meta->safe == meta->finalized);
+    task::syncWait(storage2::writeOne(*storage,
+        executor_v1::StateKey{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}, storage::Entry{"1"}));
+    BOOST_CHECK_THROW(ledger.buildGenesisBlock(genesis, param), std::runtime_error);
+
+    meta->diskTip = BlockAnchor{1, h256(0x42)};
+    task::syncWait(writeEngineMeta(*storage, *meta));
+    auto hash = meta->diskTip.hash.asBytes();
+    auto writeHash = [&](bytes const& value) {
+        storage::Entry row;
+        row.set(value);
+        task::syncWait(storage2::writeOne(
+            *storage, executor_v1::StateKey{SYS_NUMBER_2_HASH, "1"}, std::move(row)));
+    };
+    writeHash(hash);
+    BOOST_REQUIRE(ledger.buildGenesisBlock(genesis, param));
+    hash.push_back(0);
+    writeHash(hash);
+    BOOST_CHECK_THROW(ledger.buildGenesisBlock(genesis, param), std::runtime_error);
+    hash.pop_back();
+    writeHash(hash);
+
+    storage::Entry deleted;
+    deleted.setStatus(storage::Entry::DELETED);
+    task::syncWait(storage2::writeOne(
+        *storage, executor_v1::StateKey{SYS_CURRENT_STATE, ENGINE_META_KEY}, std::move(deleted)));
+    BOOST_CHECK_THROW(ledger.buildGenesisBlock(genesis, param), std::runtime_error);
 }
 
 // The genesis [features] dependency check runs on first init only. A v1 chain initialized

@@ -76,6 +76,8 @@ public:
         co_return {};
     }
 
+    virtual void setFinalizedBlock(bcos::protocol::BlockNumber /*number*/) {}
+
     /// Whether this observer consumes MPTDeltaLayer::refCountDeltas (the pruning reference
     /// tally). The execute path consults this at build time: when false, mergeNodeDelta skips
     /// the per-hash tally entirely and the delta's refCountDeltas arrives empty — so a

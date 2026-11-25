@@ -13,44 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file EthereumChainRollback.h
- * @brief EL-mode shallow-reorg support: a per-block rollback journal plus the executor
- *        that rewinds the committed state from head h back to a target r within the
- *        configured reorg window.
- *
- * Design (Phase 3 of the EL-mode reorg plan):
- *  - Journal: the commit of every block N writes ONE row into SYS_ROLLBACK_JOURNAL
- *    (key = block number) recording, for every flat-state row the block's executed view
- *    dirtied, the row's PRE-BLOCK value (absent = the row did not exist). The "/mpt/"
- *    node rows are content-addressed and shared across forks, so they are deliberately
- *    NOT journaled — rolling back flat state never requires touching them. The two
- *    SYS_CURRENT_STATE counters (total/failed transaction count) are bumped by the
- *    ledger prewrite OUTSIDE the executed view, so their pre-block values are appended
- *    to the journal unconditionally. The journal row lands in the block's own prewrite
- *    buffer — the SAME WriteBatch as the block data — so a crash can never leave a
- *    committed block without its journal (or the reverse).
- *  - Retention: the commit of block N deletes journal row N - reorgWindow. Rolling back
- *    to r needs journals r+1..head, so the deepest supported target is head - reorgWindow.
- *  - Rollback: a read-only preflight (depth within the window, every journal present —
- *    refusing LOUDLY otherwise, never a partial rewind) then ONE MutableStorage batch
- *    merged straight into the backends via mergeToBackends: restore the oldest journaled
- *    value of every touched row (lowest block first wins), restore the counters, set
- *    current_number = r, and delete the rolled-back blocks' number-keyed ledger rows
- *    (number->hash, hash->number, header, txs metadata, nonces, withdrawals, journal).
- *    The hash->number rows MUST go: the Engine API newPayload idempotence check resolves
- *    a payload's number through them, and a stale row would answer VALID for a block the
- *    canonical chain no longer contains, wedging the CL sync at the ledger hole.
- *    SYS_HASH_2_TX / SYS_HASH_2_RECEIPT stay: they are content-addressed and harmless
- *    for blocks that never become canonical (the same treatment reorgs get on every
- *    Ethereum client).
- *  - MPT pruning interaction: with the startup check mpt_prune_window >= reorg_window,
- *    every node reachable from a rollback target's state root is still on disk (a node
- *    deleted at block b was obsoleted at b - pruneWindow <= head - reorgWindow <= r, so
- *    root(r >= that) cannot reference it). The pruner rebuilds its in-memory counts from
- *    the new head after a rollback (CommitObserver::coOnRollback) — with pruning enabled
- *    that costs a full head-trie walk per reorg, the accepted trade-off for exact
- *    self-healing; with the default (pruning disabled, NoopCommitObserver) the hook is a
- *    no-op and rollback costs nothing beyond the batch itself.
+ * Shared per-block undo log for the execution lanes.
  */
 #pragma once
 
@@ -60,7 +23,7 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/EngineMeta.h"
 #include "bcos-storage/KeyPrefixes.h"
 #include "bcos-task/Task.h"
 #include <boost/throw_exception.hpp>
@@ -99,233 +62,254 @@ inline void decode(bcos::bytesRef& from, RollbackJournalEntry& entry)
     bcos::codec::rlp::decode(from, entry.table, entry.key, entry.oldValue);
 }
 
-/// One block's journal: every dirtied flat-state row's pre-block value, plus the two
-/// transaction counters' pre-block values (appended by the capture unconditionally).
 struct RollbackJournal
 {
+    static constexpr uint64_t VERSION = 2;
+    ledger::BlockAnchor block;
+    h256 parentHash;
+    h256 preBlockStateRoot;
     std::vector<RollbackJournalEntry> entries;
 };
 
-inline bcos::bytes encodeRollbackJournal(RollbackJournal const& journal)
+inline bytes encodeRollbackJournal(RollbackJournal const& journal)
 {
-    bcos::bytes out;
-    bcos::codec::rlp::encode(out, journal.entries);
+    bytes out;
+    codec::rlp::encode(out, RollbackJournal::VERSION, journal.block, journal.parentHash,
+        journal.preBlockStateRoot, journal.entries);
     return out;
 }
 
-/// @throws bcos::codec::rlp::RlpDecodeException on malformed input — a corrupted journal
-///         row is local disk corruption, surfaced to the rollback caller which refuses.
-inline RollbackJournal decodeRollbackJournal(bcos::bytesConstRef encoded)
-{
-    RollbackJournal journal;
-    bcos::codec::rlp::decodeExact(encoded, journal.entries);
-    return journal;
-}
-
-/// Capture the rollback journal of the block whose executed (but not yet pushed) view is
-/// @p view: every dirty row of the view's top mutable layer OUTSIDE the content-addressed
-/// "/mpt/" node table, plus the two ledger counters the commit's prewrite bumps outside
-/// the view. Pre-block values are batch-read from @p committed — a COMMITTED-plane view
-/// (MultiLayerStorage::forkCommitted), so in-flight layers of other blocks can never leak
-/// into the journal. The caller runs on the commit path under the commit mutex, so the
-/// committed plane is exactly the parent block's state.
-template <class ViewType, class CommittedStorage>
-task::Task<RollbackJournal> captureRollbackJournal(ViewType& view, CommittedStorage& committed)
-{
-    RollbackJournal journal;
-    auto iterator = co_await bcos::storage2::range(mutableStorage(view));
-    while (auto keyValue = co_await iterator.next())
-    {
-        auto const& [stateKey, dataValue] = *keyValue;
-        executor_v1::StateKeyView const keyView{stateKey};
-        if (keyView.m_table == bcos::storage2::kMPTTable)
-        {
-            continue;
-        }
-        journal.entries.push_back(RollbackJournalEntry{
-            std::string(keyView.m_table), std::string(keyView.m_key), std::nullopt});
-    }
-    // The counters are bumped by the ledger prewrite (into the prewrite buffer), never
-    // through the executed view — append them unconditionally so the rollback can restore
-    // them from the DEEPEST rolled-back block's journal.
-    journal.entries.push_back(RollbackJournalEntry{std::string(ledger::SYS_CURRENT_STATE),
-        std::string(ledger::SYS_KEY_TOTAL_TRANSACTION_COUNT), std::nullopt});
-    journal.entries.push_back(RollbackJournalEntry{std::string(ledger::SYS_CURRENT_STATE),
-        std::string(ledger::SYS_KEY_TOTAL_FAILED_TRANSACTION), std::nullopt});
-
-    std::vector<executor_v1::StateKey> keys;
-    keys.reserve(journal.entries.size());
-    for (auto const& entry : journal.entries)
-    {
-        keys.emplace_back(entry.table, entry.key);
-    }
-    auto oldEntries = co_await storage2::readSome(committed, keys);
-    for (size_t i = 0; i < oldEntries.size(); ++i)
-    {
-        if (oldEntries[i])
-        {
-            auto const value = oldEntries[i]->get();
-            journal.entries[i].oldValue = bcos::bytes(value.begin(), value.end());
-        }
-    }
-    co_return journal;
-}
-
-/// Persist @p journal as block @p blockNumber's row into the commit's prewrite buffer (the
-/// same WriteBatch as the block data — the crash-atomicity contract), and prune the row
-/// that just left the reorg window (block blockNumber - reorgWindow, when positive).
-template <class Storage>
-task::Task<void> writeRollbackJournalRows(Storage& prewriteStorage,
-    protocol::BlockNumber blockNumber, RollbackJournal const& journal, int64_t reorgWindow)
-{
-    storage::Entry journalEntry;
-    journalEntry.set(encodeRollbackJournal(journal));
-    co_await storage2::writeOne(prewriteStorage,
-        executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, std::to_string(blockNumber)},
-        std::move(journalEntry));
-    auto const expired = blockNumber - reorgWindow;
-    if (expired >= 1)
-    {
-        co_await storage2::removeOne(prewriteStorage,
-            executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, std::to_string(expired)});
-    }
-}
-
-/// Thrown when a rollback cannot be served: the target is not behind the head, the depth
-/// exceeds the reorg window, or a needed journal row is missing (pruned by the window, or
-/// never captured — e.g. blocks committed before journaling was wired into every commit
-/// lane). The caller classifies this as "reorg too deep — resync", never as a peer
-/// fault.
-struct RollbackRefused : public std::runtime_error
+struct RollbackRefused : std::runtime_error
 {
     using std::runtime_error::runtime_error;
 };
+
+struct FinalizedRollbackRefused : RollbackRefused
+{
+    using RollbackRefused::RollbackRefused;
+};
+
+inline void decode(bytesRef& in, RollbackJournal& journal)
+{
+    uint64_t version = 0;
+    codec::rlp::decode(
+        in, version, journal.block, journal.parentHash, journal.preBlockStateRoot, journal.entries);
+    if (version != RollbackJournal::VERSION)
+    {
+        throw RollbackRefused("Unsupported rollback journal version");
+    }
+}
+
+inline RollbackJournal decodeRollbackJournal(bytesConstRef encoded)
+{
+    RollbackJournal journal;
+    codec::rlp::decodeExact(encoded, journal);
+    return journal;
+}
+
+inline executor_v1::StateKey journalKey(protocol::BlockNumber number)
+{
+    return {ledger::SYS_ROLLBACK_JOURNAL, std::to_string(number)};
+}
+
+inline bool isJournaledTable(std::string_view table)
+{
+    return table != storage2::kMPTTable && table != ledger::SYS_CODE_BINARY &&
+           table != ledger::SYS_ROLLBACK_JOURNAL;
+}
+
+/// Stage undo and the new disk tip in the block's ledger layer, before adding prune rows.
+task::Task<void> stageReversibleBlock(auto& committed, auto& state, auto& ledgerRows,
+    ledger::PersistedEngineMeta meta, ledger::BlockAnchor block, h256 parentHash,
+    h256 preBlockStateRoot)
+{
+    if (meta.diskTip.number != block.number - 1 || meta.diskTip.hash != parentHash)
+    {
+        throw RollbackRefused("Block does not extend the committed engine tip");
+    }
+    RollbackJournal journal{block, parentHash, preBlockStateRoot, {}};
+    auto collect = [](auto& layer, std::set<executor_v1::StateKey>& keys) -> task::Task<void> {
+        auto rows = co_await storage2::range(layer);
+        while (auto row = co_await rows.next())
+        {
+            auto const& [key, value] = *row;
+            if (isJournaledTable(executor_v1::StateKeyView{key}.m_table))
+            {
+                keys.insert(key);
+            }
+        }
+    };
+    std::set<executor_v1::StateKey> keys;
+    co_await collect(state, keys);
+    co_await collect(ledgerRows, keys);
+    auto oldEntries = co_await storage2::readSome(committed, keys);
+    auto oldEntry = oldEntries.begin();
+    journal.entries.reserve(keys.size());
+    for (auto const& key : keys)
+    {
+        auto const keyView = executor_v1::StateKeyView{key};
+        auto& entry = journal.entries.emplace_back(
+            std::string(keyView.m_table), std::string(keyView.m_key), std::nullopt);
+        if (*oldEntry)
+        {
+            auto raw = (*oldEntry)->get();
+            entry.oldValue.emplace(raw.begin(), raw.end());
+        }
+        ++oldEntry;
+    }
+
+    storage::Entry row;
+    row.set(encodeRollbackJournal(journal));
+    co_await storage2::writeOne(ledgerRows, journalKey(block.number), std::move(row));
+    meta.diskTip = block;
+    co_await ledger::writeEngineMeta(ledgerRows, meta);
+}
+
+inline void rewindEngineMeta(ledger::PersistedEngineMeta& meta, ledger::BlockAnchor ancestor)
+{
+    meta.diskTip = ancestor;
+    if (meta.safe && meta.safe->number > ancestor.number)
+    {
+        meta.safe = meta.finalized;
+    }
+}
+
+task::Task<void> stageFinalization(auto& batch, ledger::PersistedEngineMeta const& before,
+    ledger::PersistedEngineMeta const& after)
+{
+    for (auto number = before.finalizedNumber(); number < after.finalizedNumber();)
+    {
+        co_await storage2::removeOne(batch, journalKey(++number));
+    }
+    co_await ledger::writeEngineMeta(batch, after);
+}
+
+/// Build an undo layer without writing to the committed plane. Descending traversal lets
+/// older preimages overwrite later ones and also validates each link before it is used.
+template <class MutableStorage>
+task::Task<MutableStorage> buildRollbackBatch(auto& committed, ledger::BlockAnchor ancestor,
+    ledger::PersistedEngineMeta const& meta, protocol::BlockFactory& blockFactory)
+{
+    if (ancestor.number < meta.finalizedNumber() || ancestor.number >= meta.diskTip.number)
+    {
+        throw RollbackRefused("Rollback target must be between finalized and the disk tip");
+    }
+
+    auto headerAt = [&](ledger::BlockAnchor anchor) -> task::Task<protocol::BlockHeader::Ptr> {
+        auto const number = anchor.number;
+        try
+        {
+            auto block =
+                co_await ledger::getBlockData(committed, number, ledger::HEADER, blockFactory);
+            if (block && block->blockHeader() && block->blockHeader()->number() == number &&
+                block->blockHeader()->hash() == anchor.hash)
+            {
+                co_return block->blockHeader();
+            }
+        }
+        catch (std::exception const& error)
+        {
+            throw RollbackRefused("Cannot read rollback header at height " +
+                                  std::to_string(number) + ": " + error.what());
+        }
+        throw RollbackRefused("Invalid rollback header at height " + std::to_string(number));
+    };
+
+    MutableStorage batch;
+    auto child = meta.diskTip;
+    auto current = co_await ledger::getCurrentBlockNumber(committed, ledger::fromStorage);
+    auto tipHash =
+        co_await ledger::readStoredBlockHash(committed, child.number, /*requireExactSize=*/true);
+    if (current != child.number || tipHash != child.hash)
+    {
+        throw RollbackRefused("Rollback disk tip does not match canonical chain");
+    }
+    auto childHeader = co_await headerAt(child);
+    while (child.number > ancestor.number)
+    {
+        auto entry = co_await storage2::readOne(committed, journalKey(child.number));
+        if (!entry)
+        {
+            throw RollbackRefused(
+                "Missing rollback journal at height " + std::to_string(child.number));
+        }
+        RollbackJournal journal;
+        try
+        {
+            auto raw = entry->get();
+            journal = decodeRollbackJournal(
+                bytesConstRef(reinterpret_cast<byte const*>(raw.data()), raw.size()));
+        }
+        catch (std::exception const& error)
+        {
+            throw RollbackRefused("Invalid rollback journal at height " +
+                                  std::to_string(child.number) + ": " + error.what());
+        }
+
+        auto parentNumber = child.number - 1;
+        auto parentHash = co_await ledger::readStoredBlockHash(
+            committed, parentNumber, /*requireExactSize=*/true);
+        if (!parentHash)
+        {
+            throw RollbackRefused(
+                "Missing canonical hash at height " + std::to_string(parentNumber));
+        }
+        auto parent = ledger::BlockAnchor{parentNumber, *parentHash};
+        auto parentHeader = co_await headerAt(parent);
+        if (journal.block != child || journal.parentHash != *parentHash ||
+            childHeader->parentInfo().blockHash != *parentHash ||
+            childHeader->parentInfo().blockNumber != parentNumber ||
+            journal.preBlockStateRoot != parentHeader->stateRoot())
+        {
+            throw RollbackRefused("Rollback journal does not match canonical chain at height " +
+                                  std::to_string(child.number));
+        }
+        for (auto const& row : journal.entries)
+        {
+            if (!isJournaledTable(row.table) ||
+                (row.table == ledger::SYS_CURRENT_STATE && row.key == ledger::ENGINE_META_KEY))
+            {
+                throw RollbackRefused("Rollback journal contains a reserved row");
+            }
+            executor_v1::StateKey key{row.table, row.key};
+            if (row.oldValue)
+            {
+                storage::Entry restore;
+                restore.set(*row.oldValue);
+                co_await storage2::writeOne(batch, std::move(key), std::move(restore));
+            }
+            else
+            {
+                co_await storage2::removeOne(batch, std::move(key));
+            }
+        }
+        co_await storage2::removeOne(batch, journalKey(child.number));
+        child = parent;
+        childHeader = std::move(parentHeader);
+    }
+    if (child != ancestor)
+    {
+        throw RollbackRefused("Rollback target hash does not match canonical chain");
+    }
+    co_return batch;
+}
+
+template <class GlobalStateStorage>
+task::Task<typename GlobalStateStorage::ViewType> forkRollbackView(GlobalStateStorage& storage,
+    ledger::BlockAnchor ancestor, ledger::PersistedEngineMeta const& meta,
+    protocol::BlockFactory& blockFactory)
+{
+    using MutableStorage = typename GlobalStateStorage::MutableStorage;
+    auto view = storage.forkCommitted();
+    auto batch = co_await buildRollbackBatch<MutableStorage>(view, ancestor, meta, blockFactory);
+    view.m_immutableStorages.push_front(std::make_shared<MutableStorage>(std::move(batch)));
+    co_return view;
+}
 
 struct RollbackResult
 {
     protocol::BlockNumber oldHead;
     protocol::BlockNumber newHead;
 };
-
-/// Rewind the committed chain from the current head to @p targetNumber (exclusive of the
-/// rolled-back range [targetNumber+1, head]).
-///
-/// Preflight is fully read-only and refuses LOUDLY (RollbackRefused) before any write;
-/// the apply is ONE MutableStorage batch merged via mergeToBackends (no interaction with
-/// the pending-layer deque — the caller guarantees it is empty, which the serialized
-/// commit path under the verifier's commit mutex provides).
-///
-/// @tparam GlobalStateStorage MultiLayerStorage-like: forkCommitted()/mergeToBackends()/
-///         MutableStorage
-template <class GlobalStateStorage>
-task::Task<RollbackResult> rollbackCommittedChain(
-    GlobalStateStorage& globalStateStorage, protocol::BlockNumber targetNumber, int64_t reorgWindow)
-{
-    auto committed = globalStateStorage.forkCommitted();
-    auto const head = co_await ledger::getCurrentBlockNumber(committed, ledger::fromStorage);
-    if (targetNumber < 0 || targetNumber >= head)
-    {
-        BOOST_THROW_EXCEPTION(RollbackRefused{"rollback target " + std::to_string(targetNumber) +
-                                              " is not behind the head " + std::to_string(head)});
-    }
-    auto const depth = head - targetNumber;
-    if (reorgWindow <= 0 || depth > reorgWindow)
-    {
-        BOOST_THROW_EXCEPTION(
-            RollbackRefused{"rollback depth " + std::to_string(depth) + " (head " +
-                            std::to_string(head) + " -> target " + std::to_string(targetNumber) +
-                            ") exceeds the reorg window " + std::to_string(reorgWindow)});
-    }
-
-    // Preflight + load: journals targetNumber+1 .. head, every row must be present.
-    std::vector<RollbackJournal> journals;
-    journals.reserve(static_cast<size_t>(depth));
-    for (auto block = targetNumber + 1; block <= head; ++block)
-    {
-        auto entry = co_await storage2::readOne(committed,
-            executor_v1::StateKeyView{ledger::SYS_ROLLBACK_JOURNAL, std::to_string(block)});
-        if (!entry)
-        {
-            BOOST_THROW_EXCEPTION(
-                RollbackRefused{"rollback journal missing for block " + std::to_string(block) +
-                                " (pruned by the window, or committed without journaling — "
-                                "cannot rewind safely)"});
-        }
-        auto const raw = entry->get();
-        journals.push_back(decodeRollbackJournal(
-            bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(raw.data()), raw.size())));
-    }
-
-    typename GlobalStateStorage::MutableStorage batch;
-
-    // Restore the journaled pre-block values, LOWEST block first: the first writer of a
-    // key in [target+1, head] order holds the value the target block's state had.
-    std::set<executor_v1::StateKey> restored;
-    for (auto const& journal : journals)
-    {
-        for (auto const& entry : journal.entries)
-        {
-            executor_v1::StateKey stateKey{entry.table, entry.key};
-            if (!restored.insert(stateKey).second)
-            {
-                continue;
-            }
-            if (entry.oldValue)
-            {
-                storage::Entry restoreEntry;
-                restoreEntry.set(*entry.oldValue);
-                co_await storage2::writeOne(batch, std::move(stateKey), std::move(restoreEntry));
-            }
-            else
-            {
-                co_await storage2::removeOne(batch, std::move(stateKey));
-            }
-        }
-    }
-
-    // Delete the rolled-back blocks' number-keyed ledger rows. The hash->number row goes
-    // too (read the hash first): the Engine API's newPayload idempotence check resolves a
-    // known payload through it and would otherwise report VALID for a block the canonical
-    // chain no longer contains.
-    for (auto block = targetNumber + 1; block <= head; ++block)
-    {
-        auto const numberStr = std::to_string(block);
-        if (auto hashEntry = co_await storage2::readOne(
-                committed, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_HASH, numberStr}))
-        {
-            auto const hashBinary = hashEntry->get();
-            co_await storage2::removeOne(
-                batch, executor_v1::StateKey{ledger::SYS_HASH_2_NUMBER,
-                           std::string_view(hashBinary.data(), hashBinary.size())});
-        }
-        co_await storage2::removeOne(
-            batch, executor_v1::StateKey{ledger::SYS_NUMBER_2_HASH, numberStr});
-        co_await storage2::removeOne(
-            batch, executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, numberStr});
-        co_await storage2::removeOne(
-            batch, executor_v1::StateKey{ledger::SYS_NUMBER_2_TXS, numberStr});
-        co_await storage2::removeOne(
-            batch, executor_v1::StateKey{ledger::SYS_BLOCK_NUMBER_2_NONCES, numberStr});
-        co_await storage2::removeOne(
-            batch, executor_v1::StateKey{ledger::SYS_NUMBER_2_WITHDRAWALS, numberStr});
-        // Locally built blob blocks carry a sidecar row (EthEngineService's commit);
-        // leaving it behind would let engine_getBlobsV* serve the orphaned block's
-        // blobs for this height after the reorg.
-        co_await storage2::removeOne(
-            batch, executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOBS, numberStr});
-        co_await storage2::removeOne(
-            batch, executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, numberStr});
-    }
-
-    // The head itself.
-    storage::Entry numberEntry;
-    numberEntry.set(std::to_string(targetNumber));
-    co_await storage2::writeOne(batch,
-        executor_v1::StateKey{ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER},
-        std::move(numberEntry));
-
-    co_await globalStateStorage.mergeToBackends(batch);
-    co_return RollbackResult{.oldHead = head, .newHead = targetNumber};
-}
 
 }  // namespace bcos::scheduler_v1

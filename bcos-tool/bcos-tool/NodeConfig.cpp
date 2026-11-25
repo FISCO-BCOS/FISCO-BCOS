@@ -299,6 +299,7 @@ constexpr std::array c_deadConfigKeys{
         "none: the Engine API listener runs whenever the block driver is Engine "
         "(v2/v3 without a [debug] driver)"},
     DeadKey{"ethereum", "mode", c_ethereumModeReplacement},
+    DeadKey{"ethereum", "reorg_window", ""},
     // [web3_rpc] enable_miner_api stays live: op-batcher's --l2-eth-rpc (no JWT) is the web3
     // listener, and it sends miner_setMaxDASize there.
 };
@@ -930,19 +931,11 @@ void NodeConfig::validateELModeInvariants() const
                                   "executor.eest_replay_mode requires executor.version=2 (the L1 "
                                   "EL lane) in config.genesis"));
     }
-    // Phase 3 shallow reorg (EthereumChainRollback.h) vs MPT pruning: a rollback target's
-    // state root must stay fully resolvable on disk. A node row deleted at block b was
-    // obsoleted at b - mpt_prune_window, so with prune_window >= reorg_window every node a
-    // rollback target (>= head - reorg_window) references is still present. Pruning
-    // disabled (-1) is always safe. Only EL mode rolls back, so only EL mode is gated.
-    if (ethereumELModeEnabled() && m_ethereumReorgWindow > 0 && m_mptPruneWindow != -1 &&
-        m_mptPruneWindow < m_ethereumReorgWindow)
+    if (lane != ChainLane::Fisco && m_enableSeparateBlockAndState)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "storage.mpt_prune_window (" + std::to_string(m_mptPruneWindow) +
-                                  ") must be -1 (disabled) or >= ethereum.reorg_window (" +
-                                  std::to_string(m_ethereumReorgWindow) +
-                                  "): an EL rollback target's trie nodes would already be pruned"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "storage.enable_separate_block_state must be false on the Eth and Op lanes"));
     }
     // The challenger data plane (debug_dbGet, gated by enable_debug_api on either listener)
     // reads MPT preimages straight out of the node store with no retention guarantee: a block
@@ -1635,21 +1628,6 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         m_ethereumDepositContractAddress = bcos::Address(depositContract);
     }
 
-    // Shallow-reorg window (Phase 3, EthereumChainRollback.h): how many committed blocks a
-    // reorg may rewind. Every commit journals its pre-block flat-state values into
-    // SYS_ROLLBACK_JOURNAL, so the knob trades per-commit journal cost for reorg depth.
-    // 0 disables journaling/rollback entirely; negative is a config error. The pairing
-    // with storage.mpt_prune_window (a rollback target's trie nodes must still be on disk)
-    // is checked in validateELModeInvariants — loadStorageConfig runs after this loader.
-    m_ethereumReorgWindow = _pt.get<int64_t>("ethereum.reorg_window", 256);
-    if (m_ethereumReorgWindow < 0 || m_ethereumReorgWindow > 100'000)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("ethereum.reorg_window must be 0 (disabled) or in "
-                                               "[1, 100000], got " +
-                                               std::to_string(m_ethereumReorgWindow)));
-    }
-
     // Engine mempool sizing (EL mode only): capacity in transactions and per-transaction
     // lifetime in minutes. Validated on the signed parse like the neighbours — a negative
     // or zero value is a config error at load time, not a pool that silently never holds
@@ -1689,7 +1667,6 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
-                         << LOG_KV("reorgWindow", m_ethereumReorgWindow)
                          << LOG_KV("mempoolCapacity", m_ethereumMempoolCapacity)
                          << LOG_KV("mempoolTxLifetimeMinutes", m_ethereumMempoolTxLifetimeMinutes)
                          << LOG_KV("mempoolMaxTxsPerSender", m_ethereumMempoolMaxTxsPerSender)
@@ -4081,10 +4058,6 @@ bcos::tool::NodeConfig::ethereumFinalizedCheckpoint() const
 bcos::Address const& bcos::tool::NodeConfig::ethereumDepositContractAddress() const
 {
     return m_ethereumDepositContractAddress;
-}
-std::int64_t bcos::tool::NodeConfig::ethereumReorgWindow() const
-{
-    return m_ethereumReorgWindow;
 }
 size_t bcos::tool::NodeConfig::ethereumMempoolCapacity() const
 {
