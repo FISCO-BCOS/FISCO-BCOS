@@ -1077,6 +1077,27 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     auto view = f.multiLayerStorage.fork();
     const auto expectedBlockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
 
+    auto pendingView = f.multiLayerStorage.fork();
+    pendingView.newMutable();
+    auto const pendingNumber = header->number() + 1;
+    bcos::task::syncWait(bcos::storage2::writeOne(pendingView,
+        StateKey{bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER},
+        bcos::storage::Entry{std::to_string(pendingNumber)}));
+    f.multiLayerStorage.pushView(std::move(pendingView));
+    auto uncommitted = f.multiLayerStorage.fork();
+    BOOST_REQUIRE_EQUAL(bcos::task::syncWait(bcos::ledger::getCurrentBlockNumber(
+                            uncommitted, bcos::ledger::fromStorage)),
+        pendingNumber);
+
+    auto committed = bcos::task::syncWait(f.scheduler->headViewWithRef());
+    BOOST_CHECK_EQUAL(committed.number, header->number());
+    BOOST_CHECK_EQUAL(committed.finalizedNumber, committed.number);
+    BOOST_CHECK_EQUAL(committed.hash.hex(), expectedBlockHash.hex());
+    auto const viewHash = bcos::task::syncWait(
+        bcos::ledger::getBlockHash(committed.view, committed.number, bcos::ledger::fromStorage));
+    BOOST_REQUIRE(viewHash);
+    BOOST_CHECK_EQUAL(viewHash->hex(), committed.hash.hex());
+
     // 1. SYS_NUMBER_2_HASH[number] = blockHash (announced header opHeaderHash, commit hook key).
     auto number2Hash = bcos::task::syncWait(
         bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_NUMBER_2_HASH, blockNumberStr}));
