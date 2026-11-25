@@ -30,6 +30,7 @@
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <bcos-rlp-protocol/EthBlockBody.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
@@ -514,6 +515,122 @@ BOOST_AUTO_TEST_CASE(GetProofAbsentAccountIsExclusionProof)
     }
     BOOST_CHECK(!proof.accountProof.empty());
     BOOST_CHECK(mpt::verifyProof(root, proof).accountValid);
+}
+
+// op-succinct's witness generator reads whole L2 blocks through debug_getRawBlock and has no
+// fallback, so the first requirement is that the endpoint exists on the OP lane at all.
+// The invariant that matters is that the header embedded in the block RLP is byte-identical to
+// what debug_getRawHeader serves: the preimage-oracle keys a block by the hash of that header,
+// so a body whose header re-encodes differently would derive a trace nobody else reproduces.
+BOOST_AUTO_TEST_CASE(RawBlockHeaderMatchesRawHeader)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    // A fresh empty block: the fixture's genesis block already carries fake transactions, which
+    // are FISCO-native and therefore deliberate refused by the endpoint (see the negative test
+    // below), so the happy path needs a block whose transaction list is empty.
+    m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 0);
+    auto const headerPtr = makeLatestOpHeader();
+    auto const& header = *headerPtr;
+    auto const numberHex = toQuantity(header.number());
+
+    auto const rawHeader = resultBytes(call1("debug_getRawHeader", numberHex));
+    auto const rawBlock = resultBytes(call1("debug_getRawBlock", numberHex));
+
+    // In Ethereum block RLP the header is an inner LIST, so debug_getRawHeader's bytes appear
+    // verbatim inside the block — not wrapped as an RLP string.
+    BOOST_CHECK(std::search(rawBlock.begin(), rawBlock.end(), rawHeader.begin(), rawHeader.end()) !=
+                rawBlock.end());
+
+    // The block decodes back to a block whose header carries the same identity.
+    bcos::protocol::EthBlock decoded;
+    auto mutableBlock = rawBlock;
+    decoded.rlpDecode(bcos::bytesConstRef(mutableBlock.data(), mutableBlock.size()));
+    BOOST_TEST(decoded.data().header.number == header.number());
+    BOOST_TEST(decoded.data().header.stateRoot == header.stateRoot());
+    BOOST_TEST(decoded.data().header.txsRoot == header.txsRoot());
+    // OP lane: Canyon+ bodies always carry the (empty) withdrawals list, so 4 elements decode.
+    BOOST_REQUIRE(decoded.data().withdrawals.has_value());
+    BOOST_TEST(decoded.data().withdrawals->empty());
+}
+
+// The hash form works the same way debug_getRawHeader's does, and both resolve to one answer.
+BOOST_AUTO_TEST_CASE(RawBlockAcceptsBlockHashAndTag)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 0);
+    auto const headerPtr = makeLatestOpHeader();
+    auto const published = bcos::protocol::canonicalBlockHash(*headerPtr).hexPrefixed();
+
+    auto const byNumber = resultBytes(call1("debug_getRawBlock", toQuantity(headerPtr->number())));
+    auto const byHash = resultBytes(call1("debug_getRawBlock", published));
+    auto const byTag = resultBytes(call1("debug_getRawBlock", "latest"));
+    BOOST_TEST(byHash == byNumber);
+    BOOST_TEST(byTag == byNumber);
+}
+
+BOOST_AUTO_TEST_CASE(RawBlockUnknownBlockIsError)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    makeLatestOpHeader();
+    auto const unknownHash = call1("debug_getRawBlock", h256{0xbeefU}.hexPrefixed());
+    BOOST_CHECK_EQUAL(unknownHash["error"]["code"].asInt(), InvalidParams);
+    BOOST_CHECK_EQUAL(unknownHash["error"]["message"].asString(), "Block not found");
+
+    auto const future = call1("debug_getRawBlock", "0x1000");
+    BOOST_CHECK_EQUAL(future["error"]["code"].asInt(), InvalidParams);
+    BOOST_CHECK_EQUAL(future["error"]["message"].asString(), "Block not found");
+}
+
+// A FISCO-native transaction has no EIP-2718 envelope at all — there is no byte string whose
+// keccak could serve as its transactions-trie key. Emitting an empty slot instead would produce
+// a block whose txsRoot no client can reproduce, so the endpoint fails closed with a diagnostic.
+BOOST_AUTO_TEST_CASE(RawBlockRefusesTransactionWithoutRawEnvelope)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    m_ledger->addNewBlock(nullptr, m_ledger->blockNumber() + 1, 1);
+    auto const headerPtr = makeLatestOpHeader();
+    BOOST_REQUIRE_GT(headerPtr->number(), 0);
+
+    auto const resp = call1("debug_getRawBlock", toQuantity(headerPtr->number()));
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InternalError);
+    BOOST_CHECK(resp["error"]["message"].asString().find("no raw envelope") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(RawBlockRejectsSafeFinalizedPendingTags)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    makeLatestOpHeader();
+    for (auto const* tag : {"safe", "finalized", "pending"})
+    {
+        auto const resp = call1("debug_getRawBlock", tag);
+        BOOST_REQUIRE_MESSAGE(resp.isMember("error"), tag);
+        BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InvalidParams);
+    }
+}
+
+// An unknown hash is geth's -32000 "not found", not InvalidParams: kona-host distinguishes a
+// miss (retry later) from a malformed request.
+BOOST_AUTO_TEST_CASE(RawTransactionUnknownHashIsNotFound)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    makeLatestOpHeader();
+    auto const resp = call1("debug_getRawTransaction", h256{0xbeefU}.hexPrefixed());
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), Web3DefaultError);
+    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), "not found");
+}
+
+BOOST_AUTO_TEST_CASE(RawTransactionRejectsMalformedHash)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    makeLatestOpHeader();
+    for (auto const* bad : {"0x1234", "nothex", "0xzz"})
+    {
+        auto const resp = call1("debug_getRawTransaction", bad);
+        BOOST_REQUIRE_MESSAGE(resp.isMember("error"), bad);
+        BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InvalidParams);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

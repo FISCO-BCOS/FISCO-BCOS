@@ -55,6 +55,19 @@ public:
     /// cumulativeGasUsed, logsBloom, logs]).
     task::Task<void> getRawReceipts(const Json::Value&, Json::Value&);
 
+    /// debug_getRawBlock: the RLP encoding of a whole block, i.e. geth's `types.Block`
+    /// rlp([header, transactions, ommers, withdrawals?]). op-succinct's witness generator reads
+    /// L2 blocks through this method (`get_l2_block_by_number` in utils/host/src/fetcher.rs) and
+    /// has no fallback, so without it proof generation cannot start at all. The optional fourth
+    /// element is fork-significant (EIP-4895): present iff the header carries a withdrawalsRoot,
+    /// which is what tells the decoder the block is Shanghai+.
+    task::Task<void> getRawBlock(const Json::Value&, Json::Value&);
+
+    /// debug_getRawTransaction: the raw EIP-2718 envelope of one transaction by hash — the same
+    /// bytes its transactions-trie leaf holds, so a client can rebuild the trie and get the
+    /// header's txsRoot back. Mirrors geth's DebugAPI.GetRawTransaction.
+    task::Task<void> getRawTransaction(const Json::Value&, Json::Value&);
+
     /// debug_executePayload: kona-host's high-level "execute a payload and return the whole
     /// stateless execution witness" hint. See the .cpp for why it answers MethodNotFound.
     task::Task<void> executePayload(const Json::Value&, Json::Value&);

@@ -28,13 +28,16 @@
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>  // encodeReceiptLeaf
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <bcos-rlp-protocol/EthBlockBody.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-task/FireAwaitable.h>
+#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 
@@ -47,6 +50,40 @@ namespace
 // contract code is stored under the 33-byte "c" + codeHash form that kona-host's L2Code hint
 // sends (CODE_PREFIX = 'c' in kona-bin/host/src/single/handler.rs).
 constexpr bcos::byte c_codeKeyPrefix = 'c';
+
+/// EIP-2718 type byte of an OP Stack deposit transaction (0x7e). Spelled here rather than through
+/// TransactionType because that enum name is declared in two headers with different members
+/// (bcos::protocol's framework enum has no Deposit), so the name alone is ambiguous in this TU.
+constexpr std::uint8_t c_depositTxType = 0x7e;
+
+/// The full signed wire form of one stored transaction — the value its transactions-trie leaf
+/// holds, so keccak256(result) is the canonical transaction hash.
+///
+/// Two storage shapes have to be told apart:
+///   * deposit (0x7e): the transaction has no signature at all; its signing preimage IS the full
+///     envelope (Web3TxHandler's DepositTxHandler::encodeForSign returns encode()), so it is
+///     served verbatim. Reassembling would fail on the missing 65-byte trailer, which would make
+///     every OP block unservable — every L2 block carries an L1-attributes deposit.
+///   * every other type: only the signing preimage is stored (extraTransactionBytes), so the
+///     65-byte r||s||yParity trailer from signatureData() has to be spliced back on.
+///
+/// Throws std::invalid_argument (from the reassembly helper) when the payload is not a decodable
+/// Web3 signing payload, and returns an empty vector for a FISCO-native transaction, which has no
+/// EIP-2718 envelope at all.
+bcos::bytes fullRawEnvelope(bcos::protocol::Transaction const& transaction)
+{
+    auto const payload = transaction.extraTransactionBytes();
+    if (payload.empty())
+    {
+        return {};
+    }
+    if (bcos::engine::rawTransactionTypeByte(payload) == c_depositTxType)
+    {
+        return bcos::bytes(payload.begin(), payload.end());
+    }
+    return bcostars::protocol::reassembleWeb3RawTransaction(payload, transaction.signatureData());
+}
+
 
 std::chrono::milliseconds traceTimeout(std::string_view text)
 {
@@ -535,6 +572,232 @@ task::Task<void> DebugEndpoint::getRawReceipts(const Json::Value& request, Json:
             bcos::ledger::mpt::encodeReceiptLeaf(*receipt, bcos::engine::receiptLeafTypeByte(tx))));
         ++index;
     }
+    buildJsonContent(result, response);
+    co_return;
+}
+
+task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Value& response)
+{
+    // params: blockNumberOrHash (QTY|TAG|DATA 32B)
+    // result: rlp([header, transactions, ommers, withdrawals?]) — geth's types.Block.
+    //
+    // op-succinct's witness generator (utils/host/src/fetcher.rs, get_l2_block_by_number) asks
+    // for this with a block number and decodes the answer with OpBlock::decode, which is
+    // rlp([header, txs, ommers]) for pre-Shanghai and the 4-element form once the header carries
+    // a withdrawalsRoot. There is no fallback path, so a MethodNotFound here stops proving.
+    co_await requireEthereumLane(*m_nodeService->ledger(), "debug_getRawBlock");
+    auto const ledger = m_nodeService->ledger();
+    auto const blockNumber = co_await resolveRawBlockParameter(request, "debug_getRawBlock");
+
+    // TRANSACTIONS is what the block body needs; RECEIPTS are not part of it.
+    auto const block = co_await ledger::getBlockData(*ledger, blockNumber, ledger::TRANSACTIONS);
+    if (!block) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+    }
+    auto const headerPtr = block->blockHeader();
+    if (!headerPtr) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+    }
+    auto const& header = *headerPtr;
+
+    protocol::EthBlockData body;
+    try
+    {
+        // The header codec is the single source of truth for field order; the constructor is
+        // what converts a bcos header into the RLP domain (internal ms -> RLP seconds, and it
+        // throws rather than silently truncating a sub-second timestamp).
+        body.header = protocol::EthBlockHeader(header).data();
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+            "Block " + std::to_string(blockNumber) + " has no Ethereum header: " + e.what()));
+    }
+    // The served bytes must hash back to the block's published hash, the same invariant
+    // debug_getRawHeader enforces: on the fault-proof data plane a block whose header does not
+    // match the published block hash would be committed to a trace no one else can reproduce.
+    // `body.header` re-encodes to exactly these bytes (both paths delegate to the same
+    // EthBlockHeaderData codec), so verifying here covers the header embedded in the block RLP.
+    bcos::bytes encodedHeader;
+    try
+    {
+        encodedHeader = protocol::EthBlockHeader::encodeHeader(header);
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+            "Block " + std::to_string(blockNumber) + " has no Ethereum header"));
+    }
+    if (protocol::canonicalBlockHash(header) != bcos::crypto::keccak256Hash(bcos::ref(encodedHeader)))
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InternalError, "Block " + std::to_string(blockNumber) + " has no Ethereum header"));
+    }
+
+    // Transactions are the full SIGNED envelopes, i.e. exactly the values keyed in the
+    // transactions trie, so a client can reassemble the trie from these bytes and recover
+    // txsRoot. The stored row only keeps the signing payload (extraTransactionBytes) plus the
+    // 65-byte r||s||yParity signature, so the envelope has to be spliced back together —
+    // emitting the bare payload would produce a block whose txsRoot cannot be reproduced.
+    body.transactions.reserve(block->transactionsSize());
+    for (auto anyTx : block->transactions())  // AnyTransaction::operator-> gives the Transaction
+    {
+        auto const& tx = *anyTx.operator->();
+        bcos::bytes envelope;
+        try
+        {
+            envelope = fullRawEnvelope(tx);
+        }
+        catch (std::exception const& e)
+        {
+            // A transaction whose stored bytes cannot be turned back into its wire form cannot
+            // enter the block RLP: a body with a hole in its transaction list is worse than no
+            // answer, because its txsRoot would not match the header.
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                "Block " + std::to_string(blockNumber) + " carries a transaction with no raw "
+                                                        "envelope: " + e.what()));
+        }
+        if (envelope.empty()) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                "Block " + std::to_string(blockNumber) +
+                    " carries a transaction with no raw envelope"));
+        }
+        body.transactions.push_back(std::move(envelope));
+    }
+
+    // Withdrawals are fork-significant: nullopt for pre-Shanghai (3-element block), an
+    // always-empty list on the OP lane (op-node never sends any, and the OP verifier writes no
+    // sidecar row — reading one would turn every OP body into an error).
+    if (!header.withdrawalsRoot().has_value())
+    {
+        body.withdrawals = std::nullopt;
+    }
+    else if (isOpStackLane(m_nodeService->executorVersion()))
+    {
+        body.withdrawals.emplace();
+    }
+    else
+    {
+        body.withdrawals.emplace();
+        if (auto const stateStorage = ledger->getStateStorage())
+        {
+            auto const entry = co_await storage2::readOne(*stateStorage,
+                executor_v1::StateKeyView{
+                    ledger::SYS_NUMBER_2_WITHDRAWALS, std::to_string(blockNumber)});
+            if (entry.has_value())
+            {
+                // The row holds the RLP LIST of per-item withdrawal encodings; decode each item
+                // so the re-encode below goes through the same codec as the body.
+                auto raw = bcos::bytes(entry->get().begin(), entry->get().end());
+                auto items = bcos::ref(raw);
+                auto const listHeader = bcos::codec::rlp::decodeHeader(items);
+                if (!listHeader.isList || listHeader.payloadLength != items.size())
+                {
+                    BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                        "Block " + std::to_string(blockNumber) +
+                            " carries a malformed withdrawals sidecar row"));
+                }
+                while (!items.empty())
+                {
+                    auto const itemStart = items;
+                    auto const itemHeader = bcos::codec::rlp::decodeHeader(items);
+                    auto const itemSize =
+                        (itemStart.size() - items.size()) + itemHeader.payloadLength;
+                    protocol::EthWithdrawal withdrawal;
+                    withdrawal.rlpDecode(bcos::bytesConstRef(itemStart.data(), itemSize));
+                    body.withdrawals->push_back(withdrawal.data());
+                    items = items.getCroppedData(itemHeader.payloadLength);
+                }
+            }
+        }
+    }
+
+    bcos::bytes encoded;
+    try
+    {
+        protocol::EthBlock(std::move(body)).rlpEncode(encoded);
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InternalError, std::string("Block RLP encode failed: ") + e.what()));
+    }
+    Json::Value result = toHexStringWithPrefix(encoded);
+    buildJsonContent(result, response);
+    co_return;
+}
+
+task::Task<void> DebugEndpoint::getRawTransaction(const Json::Value& request, Json::Value& response)
+{
+    // params: transaction hash (DATA 32B); result: the raw EIP-2718 envelope (DATA).
+    //
+    // The returned bytes are the transactions-trie value, so keccak(rlp(index)) -> these bytes
+    // is what the header's txsRoot commits to. geth answers -32000 "not found" for a hash it
+    // does not know; the same code keeps kona-host's retry semantics identical.
+    co_await requireEthereumLane(*m_nodeService->ledger(), "debug_getRawTransaction");
+    if (request.size() < 1 || !request[0U].isString())
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "debug_getRawTransaction expects one transaction hash"));
+    }
+    auto const hashText = toView(request[0U]);
+    if (!isBlockHashString(hashText))
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction hash"));
+    }
+    auto const hash = crypto::HashType(hashText, crypto::HashType::FromHex);
+    auto const ledger = m_nodeService->ledger();
+
+    protocol::Transaction::Ptr transaction;
+    // On the OP lane a hash can resolve to a transaction in a block that a reorg has already
+    // removed; the canonical reader is what tells the two apart, and it is the same source
+    // eth_getTransactionByHash answers from. Elsewhere the ledger row is the answer.
+    if (auto const& reader = m_nodeService->opCanonicalReader())
+    {
+        auto found = co_await reader->transactionOnHeadChain(hash, ledger::TRANSACTIONS_HASH);
+        if (found)
+        {
+            transaction = std::move(found->transaction);
+        }
+    }
+    else
+    {
+        auto hashList = std::make_shared<crypto::HashList>();
+        hashList->push_back(hash);
+        auto txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
+        if (txs && !txs->empty())
+        {
+            transaction = txs->at(0);
+        }
+    }
+    if (!transaction) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(Web3DefaultError, "not found"));
+    }
+    // Rebuild the full signed envelope: the stored row holds the signing payload plus the
+    // 65-byte r||s||yParity signature, and only the spliced form hashes to the transaction's
+    // canonical hash (keccak256 of these bytes), which is the key its trie leaf lives under.
+    bcos::bytes envelope;
+    try
+    {
+        envelope = fullRawEnvelope(*transaction);
+    }
+    catch (std::exception const& e)
+    {
+        // A transaction whose stored bytes cannot be turned back into its wire form has no
+        // bytes answer that could hash into an Ethereum transactions trie.
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            Web3DefaultError, std::string("transaction has no raw envelope: ") + e.what()));
+    }
+    if (envelope.empty()) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Web3DefaultError, "transaction has no raw envelope"));
+    }
+    Json::Value result = toHexStringWithPrefix(envelope);
     buildJsonContent(result, response);
     co_return;
 }

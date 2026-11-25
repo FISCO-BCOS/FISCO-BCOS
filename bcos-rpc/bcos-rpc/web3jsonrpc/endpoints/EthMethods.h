@@ -99,6 +99,8 @@ enum class EthMethod
     debug_dbGet,
     debug_getRawHeader,
     debug_getRawReceipts,
+    debug_getRawBlock,
+    debug_getRawTransaction,
     debug_executePayload,
     debug_traceTransaction
 };
