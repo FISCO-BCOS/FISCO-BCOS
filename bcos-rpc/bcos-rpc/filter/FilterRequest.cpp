@@ -28,41 +28,34 @@
 using namespace bcos;
 using namespace bcos::rpc;
 
+const Json::Value* FilterRequest::blockHashSelector(const Json::Value& params)
+{
+    // A "blockHash" key is read in both casings: the JSON-RPC field is blockHash, but older
+    // builds of this file only ever looked at the all-lowercase spelling, and the Web3 entry
+    // hands the request object over verbatim (no key normalisation), so clients written against
+    // that build send blockhash. Accept both rather than silently ignoring one.
+    for (char const* key : {"blockHash", "blockhash"})
+    {
+        if (params.isMember(key) && !params[key].isNull())
+        {
+            return std::addressof(params[key]);
+        }
+    }
+    return nullptr;
+}
+
 void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber latest,
     protocol::BlockNumber safeDepth, protocol::BlockNumber finalizedDepth,
     std::optional<protocol::BlockNumber> forkchoiceSafe,
     std::optional<protocol::BlockNumber> forkchoiceFinalized, bool failClosedOnMissingForkchoice)
 {
-    // Every criterion of an Ethereum filter is optional, and the two ways to bound a query are
-    // alternatives: either a {fromBlock, toBlock} range (each defaulting to "latest") or a
-    // single blockHash. The old code required fromBlock/toBlock, which rejected exactly what the
-    // common client shapes send — ethers' queryFilter(event) and web3.js'
-    // getPastLogs({address}) omit the range, and a blockHash-only request carries no range by
-    // definition, so the blockHash fast path in FilterSystem::getLogsImpl was unreachable from
-    // any spec-conformant caller.
-    //
-    // A "blockHash" key is read in both casings: the JSON-RPC field is blockHash, but older
-    // builds of this file only ever looked at the all-lowercase spelling, and the Web3 entry
-    // hands the request object over verbatim (no key normalisation), so clients written against
-    // that build send blockhash. Accept both rather than silently ignoring one.
-    auto const blockHashMember = [&jParams]() -> const Json::Value* {
-        for (char const* key : {"blockHash", "blockhash"})
-        {
-            if (jParams.isMember(key) && !jParams[key].isNull())
-            {
-                return std::addressof(jParams[key]);
-            }
-        }
-        return nullptr;
-    }();
-
     // A blockHash-only request needs no range; resolve it before the range defaults so that a
     // missing fromBlock/toBlock cannot reject it. EIP-234 makes blockHash an alternative to the
     // {fromBlock, toBlock} pair rather than an addition to it, so a request carrying both is
     // rejected. Resolving the range and then letting getLogsImpl prefer blockHash would answer a
     // single block's logs where the caller asked for a range -- a plausible-looking smaller
     // result with no error, which is the failure shape this PR exists to remove.
-    if (blockHashMember != nullptr)
+    if (auto const* blockHashMember = blockHashSelector(jParams))
     {
         auto const hasRangeField = [&jParams](char const* key) {
             return jParams.isMember(key) && !jParams[key].isNull();

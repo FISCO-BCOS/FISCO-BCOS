@@ -6,6 +6,7 @@
 #include "bcos-utilities/LogStream.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <charconv>
+#include <limits>
 
 #define MEMPOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("MEMPOOL")
 
@@ -181,9 +182,17 @@ bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::insertLocked(
     return TransactionStatus::None;
 }
 
-bcos::u512 bcos::txpool::MemPoolImpl::pendingCost(
-    std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis) const
+bcos::u512 bcos::txpool::MemPoolImpl::pendingCost(std::string_view sender,
+    std::string_view excludeNonce, protocol::CostBasis basis,
+    std::optional<u256> const& fromNonce) const
 {
+    if (fromNonce && *fromNonce > std::numeric_limits<int64_t>::max())
+    {
+        // Every nonce representable by this pool is below the caller's nonce.
+        return 0;
+    }
+    auto const minNonce =
+        fromNonce ? fromNonce->convert_to<int64_t>() : std::numeric_limits<int64_t>::min();
     // An unparsable exclusion excludes nothing: the caller's transaction is then refused by
     // the same nonce parse at insert, so over-counting here changes no admission verdict.
     auto const excluded = parseNonce(excludeNonce);
@@ -193,7 +202,8 @@ bcos::u512 bcos::txpool::MemPoolImpl::pendingCost(
     auto [it, end] = senderIndex.equal_range(sender);
     for (; it != end; ++it)
     {
-        if (excluded.has_value() && it->nonce() == *excluded)
+        auto const nonce = it->nonce();
+        if (nonce < minNonce || (excluded && nonce == *excluded))
         {
             continue;
         }

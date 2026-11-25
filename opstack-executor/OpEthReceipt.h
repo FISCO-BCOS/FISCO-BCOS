@@ -168,7 +168,7 @@ inline bcos::u256 intxToBcosU256(intx::uint256 const& val)
 }
 
 /// intxToBcosU256 at 512 bits: what the admission rollup cost is carried at (a 256-bit L1 fee
-/// plus a 256-bit operator fee, never saturated -- see TxValidator.h RollupCostFn).
+/// plus a 256-bit operator fee, never saturated -- see the admission chain state in TxValidator.h).
 inline bcos::u512 intxToBcosU512(intx::uint512 const& val)
 {
     std::array<bcos::byte, 64> be{};

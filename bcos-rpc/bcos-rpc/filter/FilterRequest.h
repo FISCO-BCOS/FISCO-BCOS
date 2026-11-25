@@ -78,6 +78,7 @@ public:
         m_topics[_index].insert(std::move(_topic));
     }
     void setBlockHash(const std::string& _hash) { m_blockHash = _hash; }
+    static const Json::Value* blockHashSelector(const Json::Value& params);
     // No default arguments on purpose: the caller must resolve "latest"/"safe"/"finalized"
     // against the real head + configured depths (the Web3 entry and the legacy entry both
     // thread them explicitly). A bare fromJson(jParams) would silently resolve "latest" to

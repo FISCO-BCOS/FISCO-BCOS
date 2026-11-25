@@ -14,6 +14,7 @@
 #include <boost/functional/hash.hpp>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -62,6 +63,7 @@ class FilterSystem : public std::enable_shared_from_this<FilterSystem>
 public:
     using Ptr = std::shared_ptr<FilterSystem>;
     using ConstPtr = std::shared_ptr<const FilterSystem>;
+    using HeadReadView = engine::OpCanonicalReader::HeadReadView;
 
     FilterSystem(boost::asio::io_context& _ioService, GroupManager::Ptr groupManager,
         std::string groupId, FilterRequestFactory::Ptr factory, int filterTimeout,
@@ -108,9 +110,10 @@ public:
     {
         co_return co_await getFilterLogs(m_group, filterID);
     }
-    task::Task<Json::Value> getLogs(FilterRequest::Ptr params)
+    task::Task<Json::Value> getLogs(
+        FilterRequest::Ptr params, std::optional<HeadReadView> view = std::nullopt)
     {
-        co_return co_await getLogs(m_group, params);
+        return getLogsImpl(m_group, std::move(params), /*needCheckRange=*/true, std::move(view));
     }
 
 public:
@@ -141,14 +144,14 @@ protected:
     task::Task<Json::Value> getPendingTxChangeImpl(std::string_view groupId, Filter::Ptr filter);
     task::Task<Json::Value> getLogChangeImpl(std::string_view groupId, Filter::Ptr filter);
     task::Task<Json::Value> getFilterLogsImpl(std::string_view groupId, u256 filterID);
-    task::Task<Json::Value> getLogsImpl(
-        std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange);
+    task::Task<Json::Value> getLogsImpl(std::string_view groupId, FilterRequest::Ptr params,
+        bool needCheckRange, std::optional<HeadReadView> view = std::nullopt);
     // @param enforceLogCountCap reject a result larger than MAX_RETURNED_LOGS_PER_QUERY. Set by
     //        the one-shot callers, which have no cursor and cannot resume past the overflow; the
     //        streaming path (getLogChangeImpl) leaves it off, because it pages by block and a
     //        rejected poll would be retried forever against the same blocks.
-    task::Task<Json::Value> getLogsInternal(
-        NodeService& nodeService, FilterRequest::Ptr params, bool enforceLogCountCap = false);
+    task::Task<Json::Value> getLogsInternal(NodeService& nodeService, FilterRequest::Ptr params,
+        bool enforceLogCountCap, HeadReadView const* view = nullptr);
 
     /// Throw when a one-shot match stopped on the response ceiling. Shared by the blockHash and
     /// the range branches so the ceiling cannot depend on the request selector.

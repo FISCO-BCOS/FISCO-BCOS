@@ -61,17 +61,8 @@ template <class ViewType>
 std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>
 forkLatestStateView(ViewType view)
 {
-    using AnyStateStorage =
-        bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>;
-    struct OwningView
-    {
-        ViewType view;
-        std::optional<AnyStateStorage> erased;
-
-        explicit OwningView(ViewType v) : view(std::move(v)) { erased.emplace(view); }
-    };
-    auto owner = std::make_shared<OwningView>(std::move(view));
-    return {owner, std::addressof(*owner->erased)};
+    return bcos::storage2::makeOwningAnyStorage<executor_v1::StateKey, executor_v1::StateValue>(
+        std::move(view));
 }
 
 /// Fork a fresh COMMITTED view of a GlobalStateStorage (cache -> committed backend, NO
