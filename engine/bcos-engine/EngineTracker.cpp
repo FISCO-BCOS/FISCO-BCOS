@@ -29,7 +29,15 @@
 namespace bcos::engine
 {
 
-ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& resolved)
+namespace
+{
+bool requiresCanonical(h256 const& hash, std::optional<bcos::protocol::BlockNumber> const& number)
+{
+    return hash != bcos::h256{} && number.has_value();
+}
+}  // namespace
+
+void EngineTracker::validateForkchoice(const ResolvedForkchoice& resolved)
 {
     const auto& headBlockNumber = resolved.headNumber;
     const auto& safeBlockNumber = resolved.safeNumber;
@@ -61,10 +69,6 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     // The gate and the store below share this one predicate: a hash that is set but
     // whose number the resolver could not resolve is rejected here, so the store can
     // never observe that state and silently wipe a stored height.
-    auto requiresCanonical = [](h256 const& hash,
-                                 std::optional<bcos::protocol::BlockNumber> const& number) {
-        return hash != bcos::h256{} && number.has_value();
-    };
     if (resolved.state.safeBlockHash != bcos::h256{} && !safeBlockNumber.has_value())
     {
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
@@ -96,16 +100,32 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
                                   "Forkchoice finalized block not in canonical chain"});
     }
+}
+
+ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& resolved)
+{
+    validateForkchoice(resolved);
+    const auto& headBlockNumber = resolved.headNumber;
+    const auto& safeBlockNumber = resolved.safeNumber;
+    const auto& finalizedBlockNumber = resolved.finalizedNumber;
 
     std::unique_lock lock(m_mutex);
+    bool rewind = false;
     if (m_trackedHead.has_value())
     {
         auto const& trackedHeadBlock = *m_trackedHead;
-        if (headBlockNumber < trackedHeadBlock.blockNumber)
+        if (resolved.headKnown)
         {
-            // Match release EngineServiceImpl: any older head is swallowed (VALID without
-            // payloadId). Rebuild-on-parent is intentionally not supported on this branch.
-            return ForkchoiceApplyResult::Swallowed;
+            // Window lane: the caller resolved the head in its unfinalized window (or as the
+            // finalized tip) and checked safe/finalized against that chain. Any known block
+            // may become the head — sibling, ancestor or a further descendant; a rewind is
+            // applied and reported so the caller can build on the new head (D1 §11.3).
+            rewind = headBlockNumber < trackedHeadBlock.blockNumber;
+        }
+        else if (headBlockNumber < trackedHeadBlock.blockNumber)
+        {
+            // No window to rewind in: leave the tracker alone and let the caller decide.
+            return ForkchoiceApplyResult::Rewind;
         }
         else if (headBlockNumber == trackedHeadBlock.blockNumber)
         {
@@ -136,10 +156,11 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
                                       "Forkchoice head block number must increase by exactly 1"});
         }
     }
-    else if (!resolved.headCanonical)
+    else if (!resolved.headCanonical && !resolved.headKnown)
     {
         // First apply: same fail-closed rule — an unconfirmed head must not seed the
-        // tracker, or every later +1/conflict check runs against a bogus tip.
+        // tracker, or every later +1/conflict check runs against a bogus tip. A window
+        // block after a restart is confirmed by its window membership (headKnown).
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{}
                               << bcos::errinfo_comment{"Forkchoice head block is not canonical"});
     }
@@ -153,17 +174,18 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     // all-zero (Engine-API "not set") safe/finalized hash must NOT clear the stored
     // value: op-geth only calls SetSafe/SetFinalized for non-zero hashes.
     // Same requiresCanonical predicate as the gate above: only a fully resolved
-    // (non-zero hash + present number) pair overwrites the stored height, so a
+    // (non-zero hash + present number) pair overwrites the stored block, so a
     // set-but-unresolved hash can never wipe it.
     if (requiresCanonical(resolved.state.safeBlockHash, safeBlockNumber))
     {
-        m_safe = safeBlockNumber;
+        m_safe =
+            TrackedHeadBlock{.hash = resolved.state.safeBlockHash, .blockNumber = *safeBlockNumber};
     }
     if (requiresCanonical(resolved.state.finalizedBlockHash, finalizedBlockNumber))
     {
         m_finalized = finalizedBlockNumber;
     }
-    return ForkchoiceApplyResult::Applied;
+    return rewind ? ForkchoiceApplyResult::Rewind : ForkchoiceApplyResult::Applied;
 }
 
 GetPayloadResult EngineTracker::getPayload(const PayloadID& payloadId, std::uint32_t version) const
@@ -198,10 +220,17 @@ std::optional<TrackedHeadBlock> EngineTracker::trackedHead() const
     return m_trackedHead;
 }
 
+std::pair<std::optional<TrackedHeadBlock>, std::optional<TrackedHeadBlock>>
+EngineTracker::headAndSafe() const
+{
+    std::shared_lock lock(m_mutex);
+    return {m_trackedHead, m_safe};
+}
+
 std::optional<bcos::protocol::BlockNumber> EngineTracker::safeBlockNumber() const
 {
     std::shared_lock lock(m_mutex);
-    return m_safe;
+    return m_safe ? std::optional(m_safe->blockNumber) : std::nullopt;
 }
 
 std::optional<bcos::protocol::BlockNumber> EngineTracker::finalizedBlockNumber() const

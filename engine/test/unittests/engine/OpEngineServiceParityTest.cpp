@@ -183,8 +183,20 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
     int commitCalls = 0;
     bcos::h256 executedWithdrawalsRoot = bcos::ledger::mpt::emptyRootHash();
     bcos::protocol::BlockHeaderFactory::Ptr headerFactory;
+    /// Minimal unfinalized window: an executed block is remembered by its announced hash and
+    /// becomes visible through unfinalizedBlock() once commitBlock (= admit) succeeds, the
+    /// way OpScheduler's window does. Tests that model "the ledger already knows this block"
+    /// keep registering rows in storage as before; both resolve.
+    struct Recorded
+    {
+        bcos::protocol::BlockNumber number = 0;
+        bcos::h256 parentHash;
+        bcos::protocol::BlockHeader::Ptr header;
+    };
+    std::unordered_map<bcos::h256, Recorded> executed;
+    std::unordered_map<bcos::h256, Recorded> admitted;
 
-    void executeBlock(bcos::protocol::Block::Ptr, bool,
+    void executeBlock(bcos::protocol::Block::Ptr block, bool,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> callback)
         override
     {
@@ -209,9 +221,20 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
             header->setWithdrawalsRoot(executedWithdrawalsRoot);
         }
         header->setBlobGasUsed(0);
+        if (block && block->blockHeader())
+        {
+            auto const announced = block->blockHeader();
+            // The real scheduler's executed header carries the announced height; the height
+            // is also what commitBlock's fallback match below keys on.
+            header->setNumber(announced->number());
+            executed[bcos::protocol::EthBlockHeader::computeHash(*announced)] =
+                Recorded{.number = announced->number(),
+                    .parentHash = announced->parentInfo().blockHash,
+                    .header = header};
+        }
         callback(nullptr, std::move(header), false);
     }
-    void commitBlock(bcos::protocol::BlockHeader::Ptr,
+    void commitBlock(bcos::protocol::BlockHeader::Ptr header,
         std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback) override
     {
         ++commitCalls;
@@ -232,7 +255,47 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
             callback(error, nullptr);
             return;
         }
+        // Match the executed block by header identity first; a payload re-executed after a
+        // dropped-staged fall-through carries a NEWER recorded header than the artifact's
+        // builtHeader, so fall back to the height the way OpScheduler matches by the executed
+        // header's canonical hash (the stub's headers are not hashable).
+        auto matched = executed.end();
+        for (auto it = executed.begin(); it != executed.end(); ++it)
+        {
+            if (it->second.header == header)
+            {
+                matched = it;
+                break;
+            }
+            if (matched == executed.end() && header && it->second.number == header->number())
+            {
+                matched = it;
+            }
+        }
+        if (matched != executed.end())
+        {
+            admitted[matched->first] = matched->second;
+        }
         callback(nullptr, nullptr);
+    }
+    std::optional<UnfinalizedBlock> unfinalizedBlock(
+        bcos::crypto::HashType const& blockHash) const override
+    {
+        auto it = admitted.find(blockHash);
+        if (it == admitted.end())
+        {
+            return std::nullopt;
+        }
+        return UnfinalizedBlock{.number = it->second.number,
+            .hash = blockHash,
+            .parentHash = it->second.parentHash,
+            .header = it->second.header};
+    }
+    void finalizeUpTo(bcos::crypto::HashType const& blockHash,
+        std::function<void(bcos::Error::Ptr)> callback) override
+    {
+        BOOST_CHECK_EQUAL(admitted.erase(blockHash), 1U);
+        callback(nullptr);
     }
     void status(std::function<void(bcos::Error::Ptr, bcos::protocol::Session::ConstPtr)>) override
     {}
@@ -1543,18 +1606,23 @@ BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip)
     auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
     BOOST_CHECK_EQUAL(static_cast<int>(status.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
-    BOOST_REQUIRE(pair.service.lastExecutedHeader());
-    // Committing the built payload prunes the pool: its transactions are executed now and
-    // must stop counting against the sender's pending budget before the next build.
+    auto const blockHash = request.executionPayload.blockHash;
+    BOOST_REQUIRE(pair.service.executedHeader(blockHash));
+    BOOST_CHECK_EQUAL(pair.memPool.removeCalls, 0);
+
+    bcos::engine::ForkchoiceState const finality{blockHash, blockHash, blockHash};
+    auto finalized = bcos::task::syncWait(pair.service.updateForkchoice(finality, nullptr, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(finalized.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_CHECK_EQUAL(pair.memPool.removeCalls, 1);
 }
 
 BOOST_AUTO_TEST_CASE(op_newpayload_failure_keeps_last_executed_header)
 {
-    // runOpNewPayloadSteps must not reset m_lastExecutedHeader on entry.
-    // A duplicate newPayload arriving while another one is mid-flight used to clear a
-    // header the concurrent success had just published; with assign-only-on-success
-    // the previous payload's header survives any failed run.
+    // The executed header of a VALID payload is its window entry, keyed by the CL hash. A
+    // duplicate newPayload arriving while another one is mid-flight used to clear a header
+    // the concurrent success had just published; a failed run must leave the registered
+    // payload's header exactly where it was.
     auto delegate = std::make_shared<RecordingScheduler>();
     delegate->failFirst = false;
     OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
@@ -1587,7 +1655,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_failure_keeps_last_executed_header)
     auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
     BOOST_REQUIRE_EQUAL(static_cast<int>(status.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
-    auto const published = pair.service.lastExecutedHeader();
+    auto const published = pair.service.executedHeader(request.executionPayload.blockHash);
     BOOST_REQUIRE(published);
 
     // A failing submission (tampered blockHash) must leave the published header intact.
@@ -1600,7 +1668,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_failure_keeps_last_executed_header)
     BOOST_REQUIRE(badStatus.validationError.has_value());
     BOOST_CHECK(badStatus.validationError->find("blockHash does not match") != std::string::npos);
 
-    auto after = pair.service.lastExecutedHeader();
+    auto after = pair.service.executedHeader(request.executionPayload.blockHash);
     BOOST_REQUIRE(after);
     BOOST_CHECK(after.get() == published.get());
 }
@@ -1648,7 +1716,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_wire_roundtrip_survives_engine_helper_v4)
     auto status = bcos::task::syncWait(pair.service.newPayload(parsed, 4));
     BOOST_CHECK_EQUAL(static_cast<int>(status.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
-    BOOST_REQUIRE(pair.service.lastExecutedHeader());
+    BOOST_REQUIRE(pair.service.executedHeader(parsed.executionPayload.blockHash));
 }
 
 /// Honest-retry twin of the legacy new_payload_honest_retry_does_not_recommit: after the
@@ -1694,10 +1762,8 @@ BOOST_AUTO_TEST_CASE(op_newpayload_honest_retry_does_not_recommit)
     BOOST_CHECK_EQUAL(delegate->commitCalls, 1);  // ledger-known idempotency, no re-commit
 }
 
-/// A transient commit failure must not strand the payload: the first newPayload THROWS,
-/// the retained artifacts survive, and the retry re-attempts the commit and completes it.
-/// The fault is the dropped-pending tag (bcos::engine::OpPendingDropped), the only one
-/// that may fall through to execute+commit; any other commit error is reported immediately.
+/// When both the built and re-executed stages are dropped, newPayload returns SYNCING.
+/// The retained artifacts let a later retry complete admission.
 BOOST_AUTO_TEST_CASE(op_newpayload_retry_after_failed_commit_recommits)
 {
     auto delegate = std::make_shared<RecordingScheduler>();
@@ -1727,9 +1793,10 @@ BOOST_AUTO_TEST_CASE(op_newpayload_retry_after_failed_commit_recommits)
     request.executionPayload = payload->executionPayload;
     request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
     request.expectedBlobVersionedHashes = {};
-    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
-        bcos::engine::OpExecutionInternalError);
-    // Fast-path commit fails, then execute+commit also fails (failCommit stays on).
+    auto first = bcos::task::syncWait(pair.service.newPayload(request, 4));
+    BOOST_CHECK(first.status == bcos::engine::PayloadValidationStatus::Syncing);
+    BOOST_CHECK(!first.latestValidHash.has_value());
+    // Both the fast path and the re-executed stage are dropped.
     BOOST_CHECK_EQUAL(delegate->commitCalls, 2);
 
     delegate->failCommit = false;
@@ -1737,7 +1804,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_retry_after_failed_commit_recommits)
     BOOST_REQUIRE_EQUAL(static_cast<int>(retry.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_CHECK_EQUAL(delegate->commitCalls, 3);  // the retry completed a commit
-    BOOST_REQUIRE(pair.service.lastExecutedHeader());
+    BOOST_REQUIRE(pair.service.executedHeader(request.executionPayload.blockHash));
 }
 
 BOOST_AUTO_TEST_CASE(op_newpayload_built_header_commit_failure_falls_through_to_execute)
@@ -1776,9 +1843,8 @@ BOOST_AUTO_TEST_CASE(op_newpayload_built_header_commit_failure_falls_through_to_
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_CHECK_EQUAL(delegate->commitCalls, 2);
     BOOST_CHECK_GE(delegate->executeCalls, 1);
-    // The failed built-header commit pruned nothing; the full execute+commit lane (the
-    // verifier's path for blocks it did not build) pruned once after its commit.
-    BOOST_CHECK_EQUAL(pair.memPool.removeCalls, 1);
+    // The verifier admitted the block. Its transactions remain in the pool until finality.
+    BOOST_CHECK_EQUAL(pair.memPool.removeCalls, 0);
 }
 
 BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal_error)
@@ -1819,15 +1885,9 @@ BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal
         bcos::engine::OpExecutionInternalError);
 }
 
-/// mapDelegateError's routing is the load-bearing half of the delegate-concurrency
-/// rationale: a commitBlock whose pending was dropped by a concurrent reset
-/// carries the bcos::engine::OpPendingDropped tag ("Unexpected empty results!", OpScheduler.h) —
-/// that must surface as -32603 (OpExecutionInternalError), NEVER as a consensus INVALID for
-/// a valid payload. OpConsensusRejected is the ONLY code the service may answer INVALID for;
-/// pin both routes so a future change to either side cannot silently flip them. The
-/// dropped-pending case is also the only one allowed to fall through to execute+commit, and
-/// UnknownError — the catch-all bucket classifyException fills for unclassified commit
-/// faults — must NOT, or a real fault takes that path.
+/// Pin the routing of real commit failures, consensus rejection, and retryable stage loss.
+/// Only the OpPendingDropped tag permits re-executing a locally built payload. If a newly
+/// executed stage is also dropped, op-node can resubmit after SYNCING.
 BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
 {
     auto makeRequest = [](OpServicePair& pair, RecordingScheduler& delegate) {
@@ -1872,7 +1932,7 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
         BOOST_CHECK_EQUAL(delegate->executeCalls, executesAfterBuild);
     }
 
-    // The dropped-pending shape: same answer, but reached through execute+commit.
+    // Re-execute a lost local build once. If that stage is lost too, ask op-node to retry.
     {
         auto delegate = std::make_shared<RecordingScheduler>();
         delegate->failFirst = false;
@@ -1882,8 +1942,9 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
         delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
         auto request = makeRequest(pair, *delegate);
         int const executesAfterBuild = delegate->executeCalls;
-        BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
-            bcos::engine::OpExecutionInternalError);
+        auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
+        BOOST_CHECK(status.status == bcos::engine::PayloadValidationStatus::Syncing);
+        BOOST_CHECK(!status.latestValidHash.has_value());
         BOOST_CHECK_EQUAL(delegate->commitCalls, 2);  // fast path, then the re-execute
         BOOST_CHECK_GT(delegate->executeCalls, executesAfterBuild);  // it did re-execute
     }
@@ -1901,6 +1962,23 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
         auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
         BOOST_REQUIRE_EQUAL(static_cast<int>(status.status),
             static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    }
+
+    // Window pressure is retryable and must not trigger immediate re-execution.
+    {
+        auto delegate = std::make_shared<RecordingScheduler>();
+        delegate->failFirst = false;
+        delegate->failCommit = true;
+        delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::OpWindowFull);
+        OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+        delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+        auto request = makeRequest(pair, *delegate);
+        int const executesAfterBuild = delegate->executeCalls;
+        auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
+        BOOST_CHECK(status.status == bcos::engine::PayloadValidationStatus::Syncing);
+        BOOST_CHECK(!status.latestValidHash.has_value());
+        BOOST_CHECK_EQUAL(delegate->commitCalls, 1);
+        BOOST_CHECK_EQUAL(delegate->executeCalls, executesAfterBuild);
     }
 }
 
@@ -2212,8 +2290,11 @@ BOOST_AUTO_TEST_CASE(op_getpayload_v5_response_json_shape)
 
 BOOST_AUTO_TEST_CASE(op_newpayload_occupied_nontip_height_is_syncing)
 {
-    // Matrix: A2 — height N already has hash A, payload is hash B, tip is past N.
-    // Engine API answers SYNCING; must not throw OpExecutionInternalError (-32603).
+    // Matrix: A2 — height N already has hash A, payload is hash B, tip is past N. Under the
+    // unfinalized window the ledger holds FINALIZED blocks only, so this is a payload at or
+    // below the finalized tip with an unknown hash (D1 §12.3 row 2): SYNCING, never INVALID
+    // and never OpExecutionInternalError (-32603). A sibling ABOVE the finalized tip is a
+    // window block and executes (OpEngineReorgTest row 8).
     OpServicePair pair;
     auto const parent =
         bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
@@ -2291,7 +2372,7 @@ BOOST_AUTO_TEST_CASE(op_fcu_getpayload_newpayload_roundtrip_messagepasser_root)
     auto status = bcos::task::syncWait(pair.service.newPayload(request, 4));
     BOOST_CHECK_EQUAL(static_cast<int>(status.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
-    BOOST_REQUIRE(pair.service.lastExecutedHeader());
+    BOOST_REQUIRE(pair.service.executedHeader(request.executionPayload.blockHash));
 }
 
 BOOST_AUTO_TEST_CASE(op_newpayload_rejects_executed_withdrawals_root_mismatch)

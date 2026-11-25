@@ -1422,7 +1422,7 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; It is independent of enable_debug_api and only applies to this listener.
         ; enable_trace_api=false
         ; OP lane only: how many blocks newPayload may run ahead of the finalized (backend)
-        ; tip before answering SYNCING, in [16, 100000]. The admitted window holds at most twice
+        ; tip before answering SYNCING, in [16, 4096]. The admitted window holds at most twice
         ; this many blocks across all branches. At capacity it can evict unused side leaves.
         ; unfinalized_window=1024
     */
@@ -1438,15 +1438,20 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
     m_engineRpc.enableTraceApi = _pt.get<bool>("engine_rpc.enable_trace_api", false);
     // Unfinalized window (D1 方案 A). Default 1024 ≈ 34 min at 2 s/block, covering op-node's
     // ~12.8 min L1 finality delay plus batcher lag. Below 16 a healthy op-node could never keep
-    // its unsafe head ahead of finalized; above 100000 the window is no bound at all.
-    auto const windowConfig = _pt.get_child_optional("engine_rpc.unfinalized_window");
-    m_engineRpc.unfinalizedWindow =
-        windowConfig ? windowConfig->get_value<int64_t>() : engine::c_defaultUnfinalizedWindow;
-    if (m_engineRpc.unfinalizedWindow < 16 || m_engineRpc.unfinalizedWindow > 100'000)
+    // its unsafe head ahead of finalized; 4096 (~2.3 h at 2 s/block) bounds in-memory state.
+    m_engineRpc.unfinalizedWindow = engine::c_defaultUnfinalizedWindow;
+    if (laneForExecutorVersion(m_genesisConfig.m_executorVersion) == ChainLane::Op)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "engine_rpc.unfinalized_window must be in [16, 100000], got " +
-                                  std::to_string(m_engineRpc.unfinalizedWindow)));
+        if (auto const window = _pt.get_child_optional("engine_rpc.unfinalized_window"))
+        {
+            m_engineRpc.unfinalizedWindow = window->get_value<int64_t>();
+        }
+        if (m_engineRpc.unfinalizedWindow < 16 || m_engineRpc.unfinalizedWindow > 4096)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "engine_rpc.unfinalized_window must be in [16, 4096], got " +
+                                      std::to_string(m_engineRpc.unfinalizedWindow)));
+        }
     }
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadEngineRpcConfig")

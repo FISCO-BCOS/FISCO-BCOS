@@ -31,6 +31,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <thread>
+#include <utility>
 
 namespace bcos::engine
 {
@@ -75,12 +76,22 @@ struct ResolvedForkchoice
     /// +1 rule the block-producing lanes rely on; the jump still requires
     /// headCanonical, so a non-canonical head is rejected on every lane.
     bool allowCanonicalHeadJump = false;
+    /// Unfinalized-window lane (OP): the caller vouches the head EXISTS on its side — a block
+    /// of its in-memory window or the finalized tip — and that safe/finalized were checked
+    /// against that block's ancestor chain. With it set, the head may move to ANY known block:
+    /// a same-height sibling (reorg), an ancestor (rewind, applied) or a descendant further
+    /// than +1 (every intermediate block is in the window by construction). Default false
+    /// keeps the linear-ledger rules for lanes without a window (L1 EL, PBFT).
+    bool headKnown = false;
 };
 
 enum class ForkchoiceApplyResult
 {
     Applied,
-    Swallowed
+    /// The head number went BELOW the tracked head. With resolved.headKnown the tracker has
+    /// already moved to it (a real rewind); without it the tracker is untouched and the caller
+    /// decides (the L1 lane answers VALID without a payloadId — it has no window to rewind in).
+    Rewind
 };
 
 class EngineTracker
@@ -89,9 +100,11 @@ public:
     class ExclusiveAccess;
     class SharedAccess;
 
+    static void validateForkchoice(const ResolvedForkchoice& resolved);
     ForkchoiceApplyResult applyForkchoice(const ResolvedForkchoice& resolved);
     GetPayloadResult getPayload(const PayloadID& payloadId, std::uint32_t version) const;
     std::optional<TrackedHeadBlock> trackedHead() const;
+    std::pair<std::optional<TrackedHeadBlock>, std::optional<TrackedHeadBlock>> headAndSafe() const;
     std::optional<bcos::protocol::BlockNumber> safeBlockNumber() const;
     std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber() const;
     /// RAII guards over m_mutex. Unlock must run on the locking thread
@@ -106,7 +119,7 @@ private:
     mutable std::shared_mutex m_mutex;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHead;
-    std::optional<bcos::protocol::BlockNumber> m_safe;
+    std::optional<TrackedHeadBlock> m_safe;
     std::optional<bcos::protocol::BlockNumber> m_finalized;
     PayloadCache m_payloads;
 };

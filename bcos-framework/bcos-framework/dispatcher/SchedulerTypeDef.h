@@ -79,6 +79,8 @@ enum SchedulerError
     // MPT pruning enabled that is the retention window, so the RPC layer maps it to the
     // -32004 historical-state-unavailable answer rather than a generic internal error.
     MPTStateUnavailable,
+    // The OP window cannot retain another block right now (engine -> SYNCING).
+    OpWindowFull,
 };
 }
 }  // namespace bcos

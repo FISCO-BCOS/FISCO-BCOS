@@ -739,5 +739,43 @@ BOOST_AUTO_TEST_CASE(blobs_by_versioned_hashes)
         bcos::ref(items[0]->blob), bcos::ref(items[0]->commitment), bcos::ref(items[0]->proof)));
 }
 
+BOOST_AUTO_TEST_CASE(l2_mempool_enforces_capacity_sender_limit_and_lifetime)
+{
+    MemPoolImpl pool{MemPoolConfig{
+        .chainKind = ChainKind::L2, .capacity = 3, .txLifetimeMs = 60'000, .maxTxsPerSender = 2}};
+    std::string senderA("11111111111111111111", 20);
+    std::string senderB("22222222222222222222", 20);
+    std::string senderC("33333333333333333333", 20);
+    BOOST_CHECK_THROW(pool.tryAdd(makeBlobTx(senderA, 0, 1)), InvalidBlobTransaction);
+    auto a0 = makeFeeTx(senderA, 0, 10, 100);
+    auto a1 = makeFeeTx(senderA, 1, 20, 100);
+    auto b0 = makeFeeTx(senderB, 0, 40, 100);
+    auto b1 = makeFeeTx(senderB, 1, 50, 100);
+    BOOST_CHECK(pool.tryAdd(a0) == TransactionStatus::None);
+    BOOST_CHECK(pool.tryAdd(a1) == TransactionStatus::None);
+    BOOST_CHECK(
+        pool.tryAdd(makeFeeTx(senderA, 2, 30, 100)) == TransactionStatus::SenderTxLimitExceeded);
+    BOOST_CHECK(pool.tryAdd(b0) == TransactionStatus::None);
+    BOOST_CHECK(pool.tryAdd(b1) == TransactionStatus::None);
+    auto fetched = pool.get(std::vector{a0->hash(), a1->hash(), b0->hash(), b1->hash()});
+    BOOST_CHECK(!fetched[0]);  // cheapest evicted at capacity 3
+    BOOST_CHECK(fetched[1]);
+    BOOST_CHECK(fetched[2]);
+    BOOST_CHECK(fetched[3]);
+
+    MemPoolImpl expiryPool{MemPoolConfig{.chainKind = ChainKind::L2, .txLifetimeMs = 60'000}};
+    auto stale = makeFeeTx(senderC, 0, 100, 100);
+    stale->setImportTime(static_cast<int64_t>(utcTime()) - 10 * 60 * 1000);
+    auto fresh = makeFeeTx(senderB, 0, 1, 100);
+    BOOST_CHECK(expiryPool.tryAdd(stale) == TransactionStatus::None);
+    BOOST_CHECK(expiryPool.tryAdd(fresh) == TransactionStatus::None);
+    FeeMarketStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> sealed;
+    expiryPool.seal(100 * kFeeTxGas, state, std::back_inserter(sealed));
+    BOOST_REQUIRE_EQUAL(sealed.size(), 1U);
+    BOOST_CHECK_EQUAL(sealed[0]->hash(), fresh->hash());
+    BOOST_CHECK(!expiryPool.get(std::vector{stale->hash()})[0]);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

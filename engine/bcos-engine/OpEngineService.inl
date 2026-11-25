@@ -123,75 +123,159 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         };
     }
 
-    auto view = m_globalStateStorage.fork();
-    auto headBlockNumber = co_await bcos::ledger::getBlockNumber(
-        view, forkchoiceState.headBlockHash, bcos::ledger::fromStorage);
-    // All-zero safe/finalized hashes are the Engine-API "not set" value: skip number
-    // resolution and canonical checks for that field (op-geth SetSafe/SetFinalized are
-    // only called for non-zero hashes). A missing non-zero HEAD is SYNCING; a
-    // zero HEAD is INVALID. A non-zero unresolvable safe/finalized is
-    // InvalidForkchoiceState (op-geth).
-    bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
-    bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
-    auto safeBlockNumber = safeSet ? co_await bcos::ledger::getBlockNumber(view,
-                                         forkchoiceState.safeBlockHash, bcos::ledger::fromStorage) :
-                                     std::nullopt;
-    auto finalizedBlockNumber =
-        finalizedSet ? co_await bcos::ledger::getBlockNumber(
-                           view, forkchoiceState.finalizedBlockHash, bcos::ledger::fromStorage) :
-                       std::nullopt;
-
-    if (!headBlockNumber.has_value())
-    {
-        co_return ForkchoiceUpdatedResult{
-            .payloadStatus =
-                makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
+    auto const syncingFcu = [] {
+        return ForkchoiceUpdatedResult{
+            .payloadStatus = makeStatus(PayloadValidationStatus::Syncing),
             .payloadId = std::nullopt,
         };
-    }
-    if ((safeSet && !safeBlockNumber.has_value()) ||
-        (finalizedSet && !finalizedBlockNumber.has_value()))
-    {
-        BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
-                                  "Forkchoice safe or finalized block is unknown"});
-    }
-
-    auto canonicalHeadHash =
-        co_await bcos::ledger::getBlockHash(view, *headBlockNumber, bcos::ledger::fromStorage);
-    bool const headCanonical =
-        canonicalHeadHash.has_value() && *canonicalHeadHash == forkchoiceState.headBlockHash;
-    // Same-number safe/finalized already resolved above: their canonical hash is the
-    // head's (one NUMBER_2_HASH row per height), so reuse it instead of a second storage
-    // read; zero (unset) fields skip resolution entirely. Heartbeat FCUs (all three
-    // hashes equal) drop from 3 to 1 sequential reads.
-    auto canonicalSafeHash =
-        (!safeSet || *safeBlockNumber == *headBlockNumber) ?
-            canonicalHeadHash :
-            co_await bcos::ledger::getBlockHash(view, *safeBlockNumber, bcos::ledger::fromStorage);
-    auto canonicalFinalizedHash = (!finalizedSet || *finalizedBlockNumber == *headBlockNumber) ?
-                                      canonicalHeadHash :
-                                      co_await bcos::ledger::getBlockHash(
-                                          view, *finalizedBlockNumber, bcos::ledger::fromStorage);
-
-    ResolvedForkchoice resolved{
-        .state = forkchoiceState,
-        .headNumber = *headBlockNumber,
-        .safeNumber = safeBlockNumber,
-        .finalizedNumber = finalizedBlockNumber,
-        .headCanonical = headCanonical,
-        .payloadAttributesPresent = payloadAttributes != nullptr,
-        .safeCanonical = engine_common::forkchoiceHashIsCanonical(
-            forkchoiceState.safeBlockHash, canonicalSafeHash),
-        .finalizedCanonical = engine_common::forkchoiceHashIsCanonical(
-            forkchoiceState.finalizedBlockHash, canonicalFinalizedHash),
     };
-    if (m_tracker.applyForkchoice(resolved) == ForkchoiceApplyResult::Swallowed)
+    std::optional<ResolvedBlock> head;
+    bool didFinalize = false;
+    for (std::size_t attempt = 0; attempt < 8; ++attempt)
     {
-        co_return ForkchoiceUpdatedResult{
-            .payloadStatus = makeStatus(
-                PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt),
-            .payloadId = std::nullopt,
+        auto const canRetry = attempt + 1 < 8;
+        auto const epochBefore = m_windowEpoch.load(std::memory_order_acquire);
+        auto const finalizeEpochBefore = m_finalizeEpoch.load(std::memory_order_acquire);
+        // Odd epoch means admission or finalization is in flight. Wait for the mutation
+        // before retrying a lookup that could have lost a window block.
+        auto windowChangedConcurrently = [&]() {
+            if ((epochBefore & 1U) == 0U &&
+                m_windowEpoch.load(std::memory_order_acquire) == epochBefore)
+            {
+                return false;
+            }
+            if (canRetry)
+            {
+                std::scoped_lock waitLock(m_fcuMutex);
+            }
+            return true;
         };
+
+        // Head: any block of the unfinalized window or of the finalized ledger. Unknown → SYNCING
+        // (zero was INVALID above). A ledger block strictly below the finalized tip is a request
+        // to rewind finalized state, which the OP lane never does (D7): -38002. The tip itself is
+        // a legal head (restart: FCU(head=safe=finalized=tip), D1 §13.2).
+        head = co_await resolveBlock(forkchoiceState.headBlockHash);
+        if (!head.has_value())
+        {
+            if (canRetry && windowChangedConcurrently())
+            {
+                continue;
+            }
+            co_return syncingFcu();
+        }
+        auto const finalizedTip = co_await finalizedTipNumber();
+        if (!head->inWindow && head->number < finalizedTip)
+        {
+            BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                      "Forkchoice head is below the finalized block; the finalized "
+                                      "chain does not rewind"});
+        }
+        // All-zero safe/finalized hashes are the Engine-API "not set" value: skip resolution and
+        // ancestry checks for that field (op-geth SetSafe/SetFinalized are only called for
+        // non-zero hashes). A non-zero unresolvable safe/finalized is InvalidForkchoiceState
+        // (op-geth); "canonical" for them means "on the head's ancestor chain", which for a
+        // window head walks the window and for the finalized part reads NUMBER_2_HASH.
+        bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
+        bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
+        auto safe = safeSet ? co_await resolveBlock(forkchoiceState.safeBlockHash) : std::nullopt;
+        auto finalized =
+            finalizedSet ? co_await resolveBlock(forkchoiceState.finalizedBlockHash) : std::nullopt;
+        auto const missing =
+            (safeSet && !safe.has_value()) || (finalizedSet && !finalized.has_value());
+        bool const safeCanonical = missing || !safeSet || co_await isOnChainOf(*head, *safe);
+        bool const finalizedCanonical =
+            missing || !finalizedSet || co_await isOnChainOf(*head, *finalized);
+        // A concurrent window mutation can move safe/finalized between resolveBlock and
+        // isOnChainOf; re-resolve cleanly (or answer SYNCING if retries exhaust) instead of -38002.
+        if ((missing || !safeCanonical || !finalizedCanonical) && windowChangedConcurrently())
+        {
+            if (canRetry)
+            {
+                continue;
+            }
+            co_return syncingFcu();
+        }
+        if (missing)
+        {
+            BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                      "Forkchoice safe or finalized block is unknown"});
+        }
+
+        ResolvedForkchoice resolved{
+            .state = forkchoiceState,
+            .headNumber = head->number,
+            .safeNumber = safe ? std::optional(safe->number) : std::nullopt,
+            .finalizedNumber = finalized ? std::optional(finalized->number) : std::nullopt,
+            // A ledger block is canonical by construction (the backend holds finalized blocks
+            // only); a window block is vouched for by headKnown instead.
+            .headCanonical = !head->inWindow,
+            .payloadAttributesPresent = payloadAttributes != nullptr,
+            .safeCanonical = safeCanonical,
+            .finalizedCanonical = finalizedCanonical,
+            .headKnown = true,
+        };
+        // Throws InvalidForkchoiceState (-38002) on ordering / ancestry violations before
+        // touching disk or the tracker.
+        EngineTracker::validateForkchoice(resolved);
+
+        // Serialize the synchronous finalize + tracker commit step (never held across co_await).
+        // Pure-append admissions cannot invalidate immutable window ancestry; only finalization
+        // or eviction of head/safe/finalized requires re-resolving.
+        ForkchoiceApplyResult outcome = ForkchoiceApplyResult::Applied;
+        {
+            std::unique_lock fcuLock(m_fcuMutex);
+            auto const windowMissing = [&](std::optional<ResolvedBlock> const& blk) {
+                return blk && blk->inWindow && m_delegate &&
+                       !m_delegate->unfinalizedBlock(blk->hash).has_value();
+            };
+            if ((finalizeEpochBefore & 1U) != 0U ||
+                m_finalizeEpoch.load(std::memory_order_acquire) != finalizeEpochBefore ||
+                windowMissing(head) || windowMissing(safe) || windowMissing(finalized))
+            {
+                if (canRetry)
+                {
+                    continue;
+                }
+                co_return syncingFcu();
+            }
+            // Finalized advancing into the window: merge tip..F and prune side branches BEFORE
+            // updating the tracker. Older canonical safe/finalized markers only update it.
+            if (finalized && finalized->inWindow)
+            {
+                requireDelegate();
+                // Odd on entry, even on exit (including partial mid-chain failure) so concurrent
+                // FCUs that started before or during finalizeUpTo re-resolve cleanly.
+                WindowMutationGuard epochGuard{m_windowEpoch};
+                WindowMutationGuard finalizeGuard{m_finalizeEpoch};
+                bcos::Error::Ptr finalizeError;
+                m_delegate->finalizeUpTo(finalized->hash,
+                    [&](bcos::Error::Ptr error) { finalizeError = std::move(error); });
+                if (finalizeError)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        OpExecutionInternalError{} << bcos::errinfo_comment{
+                            std::string("finalizing the unfinalized window failed: ") +
+                            finalizeError->errorMessage()});
+                }
+                didFinalize = true;
+            }
+            outcome = m_tracker.applyForkchoice(resolved);
+        }
+        if (outcome == ForkchoiceApplyResult::Rewind)
+        {
+            BCOS_LOG(INFO) << LOG_BADGE("OpEngineService") << LOG_DESC("forkchoice head rewound")
+                           << LOG_KV("head", forkchoiceState.headBlockHash.abridged())
+                           << LOG_KV("number", head->number);
+        }
+        break;
+    }
+
+    if (didFinalize)
+    {
+        // Finalized transactions no longer count against the sender's pending budget.
+        auto committed = m_globalStateStorage.forkCommitted();
+        m_memPool.remove(committed);
     }
 
     ForkchoiceUpdatedResult result{
@@ -204,17 +288,151 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         co_return result;
     }
 
+    auto parentHeader = co_await loadHeaderOf(*head);
+    if (!parentHeader)
+    {
+        // Head hash resolved (window or ledger) but its header row is gone: local-state
+        // corruption — fail closed rather than pricing the block at 1 gwei.
+        co_return ForkchoiceUpdatedResult{
+            .payloadStatus =
+                makeStatus(PayloadValidationStatus::Invalid, forkchoiceState.headBlockHash,
+                    std::string("parent block header is missing from storage")),
+            .payloadId = std::nullopt,
+        };
+    }
     co_return co_await buildOpPayload(forkchoiceState, *payloadAttributes, version,
-        *headBlockNumber + 1, std::move(decodedForcedTxs));
+        std::move(parentHeader), std::move(decodedForcedTxs));
+}
+
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
+task::Task<std::optional<
+    typename OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::ResolvedBlock>>
+OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::resolveBlock(
+    h256 const& blockHash)
+{
+    if (blockHash == bcos::h256{})
+    {
+        co_return std::nullopt;
+    }
+    if (m_delegate)
+    {
+        if (auto entry = m_delegate->unfinalizedBlock(blockHash))
+        {
+            co_return ResolvedBlock{.number = entry->number,
+                .hash = entry->hash,
+                .parentHash = entry->parentHash,
+                .header = entry->header,
+                .inWindow = true};
+        }
+    }
+    // The finalized plane only: no anonymous pending layers exist on this lane any more.
+    auto view = m_globalStateStorage.forkCommitted();
+    auto number = co_await bcos::ledger::getBlockNumber(view, blockHash, bcos::ledger::fromStorage);
+    if (!number.has_value())
+    {
+        co_return std::nullopt;
+    }
+    co_return ResolvedBlock{.number = *number,
+        .hash = blockHash,
+        .parentHash = {},
+        .header = nullptr,
+        .inWindow = false};
+}
+
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
+task::Task<bcos::protocol::BlockHeader::Ptr>
+OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::loadHeaderOf(
+    ResolvedBlock const& block)
+{
+    if (block.header)
+    {
+        co_return block.header;
+    }
+    auto view = m_globalStateStorage.forkCommitted();
+    auto const numberStr = boost::lexical_cast<std::string>(block.number);
+    auto entry = co_await storage2::readOne(
+        view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, numberStr});
+    if (!entry.has_value())
+    {
+        co_return nullptr;
+    }
+    bcos::protocol::BlockHeader::Ptr header;
+    try
+    {
+        auto stored = entry->get();
+        header = m_blockFactory->blockHeaderFactory()->createBlockHeader(
+            bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(stored.data()), stored.size()));
+    }
+    catch (const std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            OpExecutionInternalError{} << bcos::errinfo_comment{
+                std::string("stored parent block header is undecodable: ") + e.what()});
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "stored parent block header is undecodable"});
+    }
+    if (header->number() != block.number)
+    {
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "stored parent block header height mismatch"});
+    }
+    co_return header;
+}
+
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
+task::Task<bool> OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::isOnChainOf(
+    ResolvedBlock const& head, ResolvedBlock const& target)
+{
+    if (target.number > head.number)
+    {
+        co_return false;
+    }
+    if (target.inWindow)
+    {
+        // Walk the window synchronously from head; stop as soon as we reach target's height.
+        if (head.hash == target.hash)
+        {
+            co_return head.inWindow;
+        }
+        auto cur = (head.inWindow && head.number > target.number && m_delegate) ?
+                       m_delegate->unfinalizedBlock(head.parentHash) :
+                       std::nullopt;
+        while (cur && cur->hash != target.hash)
+        {
+            cur = cur->number > target.number ? m_delegate->unfinalizedBlock(cur->parentHash) :
+                                                std::nullopt;
+        }
+        co_return cur.has_value();
+    }
+    // A ledger target is on every chain that reaches the finalized tip, i.e. every resolvable
+    // head's, when the ledger's own number→hash row names it (the backend holds finalized
+    // blocks only, so that row IS canonicality; the current-number row is not consulted —
+    // fixtures and freshly imported ledgers may lack it).
+    auto view = m_globalStateStorage.forkCommitted();
+    auto canonical =
+        co_await bcos::ledger::getBlockHash(view, target.number, bcos::ledger::fromStorage);
+    co_return canonical.has_value() && *canonical == target.hash;
+}
+
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
+task::Task<bcos::protocol::BlockNumber>
+OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::finalizedTipNumber()
+{
+    auto view = m_globalStateStorage.forkCommitted();
+    co_return co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
 }
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 task::Task<ForkchoiceUpdatedResult>
 OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayload(
     const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
-    std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
+    std::uint32_t version, bcos::protocol::BlockHeader::Ptr parentHeader,
     std::vector<bcos::bytes> decodedForcedTxs)
 {
+    const bcos::protocol::BlockNumber nextBlockNumber = parentHeader->number() + 1;
     // Same policy as EthEngineService: deterministic derivePayloadId, not a process-local
     // sequence counter. Reuse validate's decoded forced txs.
     // The id's version byte is the PAYLOAD SHAPE version (V3/V4-method → PayloadV3),
@@ -234,36 +452,15 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     }
     auto payloadId = *payloadIdOpt;
 
-    u256 baseFee;
-    // Hoisted out of the block below: the L1-attributes layout needs the parent's time too
+    // PARENT time, not the child's: op-geth's CalcBaseFee(config, parent, time) keys both the
+    // Holocene extraData decode and the Jovian DA-footprint branch on parent.Time
+    // (consensus/misc/eip1559/eip1559.go:64-110). The L1-attributes layout needs it too
     // (op-node's isJovianButNotFirstBlock — see OpSchedulerSeam::synthesizeL1AttributesEnvelope).
-    int64_t parentTimestampMs = 0;
-    {
-        auto view = m_globalStateStorage.fork();
-        auto parentNumberStr = boost::lexical_cast<std::string>(nextBlockNumber - 1);
-        auto parentHeaderEntry = co_await storage2::readOne(
-            view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
-        if (!parentHeaderEntry.has_value())
-        {
-            // Parent hash already resolved (canonical). Missing header is local-state
-            // corruption — fail closed rather than pricing the block at 1 gwei.
-            co_return ForkchoiceUpdatedResult{
-                .payloadStatus =
-                    makeStatus(PayloadValidationStatus::Invalid, forkchoiceState.headBlockHash,
-                        std::string("parent block header is missing from storage")),
-                .payloadId = std::nullopt,
-            };
-        }
-        auto stored = parentHeaderEntry->get();
-        bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
-        auto parentHeader =
-            m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
-        // PARENT time, not the child's: op-geth's CalcBaseFee(config, parent, time) keys both
-        // the Holocene extraData decode and the Jovian DA-footprint branch on parent.Time
-        // (consensus/misc/eip1559/eip1559.go:64-110).
-        parentTimestampMs = parentHeader->timestamp();
-        baseFee = calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive(parentTimestampMs));
-    }
+    // The parent header is the resolved head's: a window entry when the head is unfinalized
+    // (the derivation-reorg build on B1 while B2a is tracked, D1 §11.3), else the ledger row.
+    const int64_t parentTimestampMs = parentHeader->timestamp();
+    const u256 baseFee =
+        calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive(parentTimestampMs));
 
     requireDelegate();
 
@@ -285,17 +482,24 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             std::make_move_iterator(decodedForcedTxs.end()));
     }
 
-    auto sealView = m_globalStateStorage.fork();
     std::vector<protocol::Transaction::Ptr> sealedTxs;
     if (!payloadAttributes.noTxPool.value_or(false))
     {
+        // Seal against the selected parent's state, including its unfinalized layers.
+        std::optional<ViewType> chainView;
+        if (m_chainViewProvider)
+        {
+            chainView = co_await m_chainViewProvider(forkchoiceState.headBlockHash);
+        }
+        auto sealView = chainView ? std::move(*chainView) : m_globalStateStorage.fork();
         // The pool fills what the forced transactions leave of the attributes' gasLimit
         // (the header field); see engine_common::poolGasBudget for the op-geth gasPool
         // rule and the system-deposit exemption. Undecodable forced envelopes take
         // nothing here; the candidate execution below rejects them.
         auto const blockGasLimit = static_cast<int64_t>(payloadAttributes.gasLimit.value());
         sealView.newMutable();
-        m_memPool.remove(sealView);
+        // Keep pooled transactions through finality so a rewind can select them again. Sealing
+        // and admission's pending budget skip nonces already consumed on their selected chain.
         m_memPool.seal(engine_common::poolGasBudget(blockGasLimit, forcedEnvelopes,
                            *m_blockFactory->cryptoSuite()->hashImpl(), /*allowDeposit=*/true),
             sealView, std::back_inserter(sealedTxs));
@@ -414,6 +618,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
 
     ExecutionPayload payload;
     bcos::protocol::BlockHeader::Ptr executedHeader;
+    // Serialize the synchronous delegate build+publish phase with concurrent FCU/newPayload
+    // (zero co_await below) so buildOpPayload cannot collide on OpScheduler's try-locks.
+    std::unique_lock fcuLock(m_fcuMutex);
     // Retry loop: each evicted culprit re-executes the whole candidate block from scratch
     // (no incremental prefix reuse), so k failing pool txs cost up to k+1 full build+execute
     // passes plus the always-on canonical verify pass. Bounded by the sealed-envelope count;
@@ -641,11 +848,9 @@ task::Task<PayloadStatus>
 OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPayloadSteps(
     const NewPayloadRequest& request)
 {
-    // No reset of m_lastExecutedHeader here: a duplicate newPayload
-    // arriving while another one is mid-flight must not clear a header the
-    // concurrent success just published. Assignment happens only on the success
-    // paths, so a failed run simply leaves the previous payload's header — the
-    // "last executed" semantics the accessor documents.
+    // This service keeps no per-payload state: the executed header of a VALID payload is its
+    // window entry in the delegate (executedHeader(hash)), so a failing duplicate submission
+    // cannot clobber a header a concurrent success just registered.
     auto const& payload = request.executionPayload;
 
     // The payload's OWN time decides which shape it must have. Isthmus is stated, not
@@ -669,7 +874,45 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             std::string("blockHash does not match the reconstructed block header"));
     }
 
+    // Already known (window or finalized ledger): VALID without re-execution. Covers the honest
+    // retry of an admitted payload and a resend of a finalized block.
+    if (auto known = co_await resolveBlock(payload.blockHash); known.has_value())
     {
+        co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+    }
+
+    // Window depth (D1 §12.4, [engine_rpc] unfinalized_window): the block would sit more
+    // than the configured distance above the finalized tip. Backpressure, not a rejection —
+    // SYNCING makes op-node retry once its finalized signal catches up; nothing is lost.
+    // Applies to built-here payloads too (their staged block simply waits). Throttle repeated
+    // warnings by time, including retries of the same payload at an unchanged depth.
+    auto const finalizedTip = co_await finalizedTipNumber();
+    if (auto const heightMinusWindow = payload.blockNumber - m_unfinalizedWindow;
+        heightMinusWindow > finalizedTip)
+    {
+        if (shouldLogWindowPressure())
+        {
+            BCOS_LOG(WARNING) << LOG_BADGE("OpEngineService")
+                              << LOG_DESC("unfinalized window full; answering SYNCING")
+                              << LOG_KV("blockNumber", payload.blockNumber)
+                              << LOG_KV("finalized", finalizedTip)
+                              << LOG_KV("unfinalizedWindow", m_unfinalizedWindow)
+                              << LOG_KV("blocksOver", heightMinusWindow - finalizedTip);
+        }
+        co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+    }
+
+    auto validOrSyncing = [&]() -> task::Task<PayloadStatus> {
+        co_return (co_await resolveBlock(payload.blockHash)).has_value() ?
+            makeStatus(PayloadValidationStatus::Valid, payload.blockHash) :
+            makeStatus(PayloadValidationStatus::Syncing);
+    };
+
+    {
+        // Built here (FCU+attrs → getPayload → this newPayload): the canonical build pass
+        // left the executed block STAGED in the delegate, so admit it as-is instead of
+        // re-executing. The staged layer is reused, not the artifact — the artifact holds only
+        // the canonical header; the executed view lives in the scheduler's staging slot.
         bcos::protocol::BlockHeader::Ptr builtHeader;
         {
             auto shared = m_tracker.lockShared();
@@ -677,112 +920,77 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
         }
         if (builtHeader)
         {
-            auto knownView = m_globalStateStorage.fork();
-            if (auto known = co_await bcos::ledger::getBlockNumber(
-                    knownView, payload.blockHash, bcos::ledger::fromStorage);
-                known.has_value())
-            {
-                co_return makeStatus(
-                    PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
-            }
             requireDelegate();
-            bcos::Error::Ptr commitError;
-            // The callback's LedgerConfig is deliberately dropped rather than published into
-            // the admission holder: the delegate is an OpScheduler, whose
-            // loadCommitLedgerConfig carries only number + timestamp -- chainId nullopt and
-            // features empty -- and TxValidator reads chainId from the holder, so publishing it
-            // fail-closes EIP-155 admission from the first committed block on. The holder is
-            // republished from the ledger after every commit instead; see
-            // OpLedgerConfigRepublish.h.
-            m_delegate->commitBlock(builtHeader,
-                [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr /*ledgerConfig*/) {
-                    commitError = std::move(error);
-                });
+            // admitBlock discards the delegate's partial LedgerConfig (number and timestamp).
+            // OP transaction admission reads the canonical view through its admission callback.
+            // The shared finalized config is republished from the ledger after finalization.
+            auto commitError = admitBlock(builtHeader);
             if (!commitError)
             {
-                // The block's transactions are executed now: drop them from the pool so
-                // the sender's pending-cost budget stops charging for them before the
-                // next build (which would prune them itself).
-                {
-                    auto committed = m_globalStateStorage.fork();
-                    m_memPool.remove(committed);
-                }
-                std::lock_guard lock(m_lastExecutedHeaderMutex);
-                m_lastExecutedHeader = builtHeader;
                 co_return makeStatus(
                     PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
             }
-            // Only the "built pending was dropped or replaced" fault may fall through to a
-            // full execute+commit: OpScheduler tags it as bcos::engine::OpPendingDropped
-            // ("Unexpected empty results!"), and answering -32603 on every retry of a
-            // still-valid payload would wedge the CL. Every other commit failure is a real
-            // error and keeps its documented routing (INVALID for OpConsensusRejected,
-            // internal error otherwise) — falling through on one would hide storage faults.
-            // Keyed on the tag, not on SchedulerError::UnknownError: classifyException's
-            // catch-all maps every unclassified commit fault to that code, so a code test
-            // cannot separate a dropped pending from a RocksDB or merge fault.
-            bool const pendingDropped =
-                boost::get_error_info<bcos::engine::OpPendingDropped>(*commitError) != nullptr;
-            if (!pendingDropped)
+            // Only the "built staged block was dropped" fault may fall through to a full
+            // execute+admit: OpScheduler tags it as bcos::engine::OpPendingDropped
+            // ("Unexpected empty results!" — a reset for a later build ran in between), and
+            // answering -32603 on every retry of a still-valid payload would wedge the CL.
+            // Every other admit failure is a real error and keeps its documented routing
+            // (including SYNCING for temporary window pressure) — falling through
+            // on one would hide storage faults. Keyed on the tag, not on
+            // SchedulerError::UnknownError: classifyException's catch-all maps every
+            // unclassified fault to that code, so a code test cannot separate a dropped
+            // staged block from a RocksDB or merge fault.
+            if (commitError->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber)
+            {
+                co_return co_await validOrSyncing();
+            }
+            if (!boost::get_error_info<bcos::engine::OpPendingDropped>(*commitError))
             {
                 co_return mapDelegateError(*commitError, std::nullopt);
             }
+            if ((co_await resolveBlock(payload.blockHash)).has_value())
+            {
+                co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash);
+            }
             BCOS_LOG(WARNING) << LOG_BADGE("OpEngineService")
-                              << LOG_DESC("newPayload: built pending dropped; re-executing")
+                              << LOG_DESC("newPayload: built staged block dropped; re-executing")
                               << LOG_KV("blockHash", payload.blockHash.hex())
                               << LOG_KV("commitError", commitError->errorMessage());
         }
     }
 
-    auto view = m_globalStateStorage.fork();
-    auto parentBlockNumber =
-        co_await bcos::ledger::getBlockNumber(view, payload.parentHash, bcos::ledger::fromStorage);
-    if (!parentBlockNumber.has_value())
+    // Parent: a window block or a ledger block. It may be unknown after restart or eviction;
+    // answer SYNCING so the rollup node can retry. A ledger parent below the finalized tip means
+    // the payload itself sits at or below finalized with an unknown hash: an L1 reorg deeper
+    // than finality, outside D7 — SYNCING too (D1 §12.3 row 2), never INVALID.
+    auto parent = co_await resolveBlock(payload.parentHash);
+    if (!parent.has_value())
     {
+        co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+    }
+    if (!parent->inWindow && parent->number < finalizedTip)
+    {
+        BCOS_LOG(WARNING) << LOG_BADGE("OpEngineService")
+                          << LOG_DESC("newPayload below the finalized tip; answering SYNCING")
+                          << LOG_KV("blockNumber", payload.blockNumber)
+                          << LOG_KV("finalized", finalizedTip);
         co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
     }
     const auto latestValidHash = std::make_optional(payload.parentHash);
 
-    if (payload.blockNumber != *parentBlockNumber + 1)
+    if (payload.blockNumber != parent->number + 1)
     {
         co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
             std::string("blockNumber must be exactly one greater than the parent's"));
     }
 
-    if (auto canonicalParent = co_await bcos::ledger::getBlockHash(
-            view, *parentBlockNumber, bcos::ledger::fromStorage);
-        !canonicalParent.has_value() || *canonicalParent != payload.parentHash)
+    auto parentHeader = co_await loadHeaderOf(*parent);
+    if (!parentHeader)
     {
-        co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-    }
-
-    const auto parentNumberStr = boost::lexical_cast<std::string>(*parentBlockNumber);
-    auto parentHeaderEntry = co_await storage2::readOne(
-        view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
-    if (!parentHeaderEntry.has_value())
-    {
-        // Parent hash already resolved and is canonical. Skipping timestamp / baseFee
-        // here would accept a payload we cannot price — fail closed.
+        // Parent hash resolved. Skipping timestamp / baseFee here would accept a payload we
+        // cannot price — fail closed.
         co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
             std::string("parent block header is missing from storage"));
-    }
-    const auto storedHeader = parentHeaderEntry->get();
-    bcos::protocol::BlockHeader::Ptr parentHeader;
-    try
-    {
-        bcos::bytes parentHeaderBytes(storedHeader.begin(), storedHeader.end());
-        parentHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
-    }
-    catch (const std::exception& e)
-    {
-        BOOST_THROW_EXCEPTION(
-            OpExecutionInternalError{} << bcos::errinfo_comment{
-                std::string("stored parent block header is undecodable: ") + e.what()});
-    }
-    if (parentHeader->number() != static_cast<int64_t>(*parentBlockNumber))
-    {
-        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                  "stored parent block header height mismatch"});
     }
     if (static_cast<uint64_t>(payload.timestamp) <=
         static_cast<uint64_t>(parentHeader->timestamp()))
@@ -799,38 +1007,6 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                 std::string("baseFeePerGas does not match the value computed "
                             "from the parent"));
-        }
-    }
-
-    if (auto knownBlockNumber = co_await bcos::ledger::getBlockNumber(
-            view, payload.blockHash, bcos::ledger::fromStorage);
-        knownBlockNumber.has_value())
-    {
-        co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
-    }
-
-    const auto childNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
-    if (auto occupiedHeight = co_await storage2::readOne(
-            view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_HASH, childNumberStr});
-        occupiedHeight.has_value())
-    {
-        bool siblingOfTip = false;
-        if (payload.blockNumber > 0)
-        {
-            auto currentNumber =
-                co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-            auto canonicalParent = co_await bcos::ledger::getBlockHash(
-                view, payload.blockNumber - 1, bcos::ledger::fromStorage);
-            siblingOfTip = currentNumber == payload.blockNumber && canonicalParent.has_value() &&
-                           *canonicalParent == payload.parentHash;
-        }
-        if (!siblingOfTip)
-        {
-            // Occupied height that is not a tip sibling: the forked view cannot
-            // apply this payload. Engine API answers SYNCING (CL retries), not
-            // -32603 OpExecutionInternalError. op-geth would InsertBlockWithoutSetHead
-            // and return VALID; this node has no side-chain store.
-            co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
     }
 
@@ -861,15 +1037,40 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             std::string("undecodable payload transaction envelope"));
     }
 
+    // Execute on the parent's chain view (the delegate stacks the window layers itself),
+    // then ADMIT into the window under one m_fcuMutex section (never held across co_await).
     bcos::Error::Ptr executeError;
     bcos::protocol::BlockHeader::Ptr executedHeader;
-    m_delegate->executeBlock(block, /*verify=*/true,
-        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
-            executeError = std::move(error);
-            executedHeader = std::move(header);
-        });
+    bcos::Error::Ptr commitError;
+    {
+        std::unique_lock fcuLock(m_fcuMutex);
+        m_delegate->executeBlock(block, /*verify=*/true,
+            [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
+                executeError = std::move(error);
+                executedHeader = std::move(header);
+            });
+        // validateOpNewPayloadRequest(..., isthmusActive=true) guarantees withdrawalsRoot is set.
+        if (!executeError && executedHeader &&
+            executedHeader->withdrawalsRoot() == payload.withdrawalsRoot)
+        {
+            commitError = admitBlockLocked(executedHeader);
+        }
+    }
     if (executeError)
     {
+        // The parent can be evicted or superseded by finalization after our initial lookup.
+        if (executeError->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber)
+        {
+            if ((co_await resolveBlock(payload.blockHash)).has_value())
+            {
+                co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash);
+            }
+            if ((parent->inWindow && !m_delegate->unfinalizedBlock(parent->hash)) ||
+                (!parent->inWindow && parent->number < co_await finalizedTipNumber()))
+            {
+                co_return makeStatus(PayloadValidationStatus::Syncing);
+            }
+        }
         co_return mapDelegateError(*executeError, latestValidHash);
     }
     if (!executedHeader || !executedHeader->withdrawalsRoot().has_value())
@@ -885,29 +1086,14 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
         co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
             std::string("withdrawalsRoot does not match the executed header"));
     }
-
-    bcos::Error::Ptr commitError;
-    // Not published: see the built-pending commit above (the delegate's LedgerConfig is the
-    // number+timestamp stub; the holder is republished from the ledger by the notifier).
-    m_delegate->commitBlock(executedHeader,
-        [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr /*ledgerConfig*/) {
-            commitError = std::move(error);
-        });
     if (commitError)
     {
+        if (boost::get_error_info<bcos::engine::OpPendingDropped>(*commitError))
+        {
+            // A concurrent submission can finalize the block after our initial lookup.
+            co_return co_await validOrSyncing();
+        }
         co_return mapDelegateError(*commitError, latestValidHash);
-    }
-    // The committed block's transactions leave the pool here as they do after a build:
-    // a verifier node never builds, and without this its pool would keep charging the
-    // sender (pending-cost budget) for transactions the sequencer already executed.
-    {
-        auto committed = m_globalStateStorage.fork();
-        m_memPool.remove(committed);
-    }
-
-    {
-        std::lock_guard lock(m_lastExecutedHeaderMutex);
-        m_lastExecutedHeader = executedHeader;
     }
     co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
 }

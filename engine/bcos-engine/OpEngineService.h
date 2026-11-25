@@ -24,6 +24,7 @@
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/engine/EngineService.h>
 #include <bcos-framework/engine/Errors.h>
@@ -49,7 +50,10 @@
 #include <boost/lexical_cast.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -130,19 +134,26 @@ public:
     OpEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
+        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false,
+        int64_t unfinalizedWindow = c_defaultUnfinalizedWindow)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_scheduler(scheduler),
         m_blockFactory(std::move(blockFactory)),
         m_delegate(std::move(delegate)),
         m_daCaps(std::move(daCaps)),
-        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes)
+        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes),
+        m_unfinalizedWindow(unfinalizedWindow)
     {
         if (!m_blockFactory)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidEngineConfig{} << bcos::errinfo_comment{"blockFactory must not be null"});
+        }
+        if (m_unfinalizedWindow <= 0)
+        {
+            BOOST_THROW_EXCEPTION(InvalidEngineConfig{} << bcos::errinfo_comment{
+                                      "unfinalizedWindow must be a positive block count"});
         }
     }
     ~OpEngineService() = default;
@@ -206,15 +217,63 @@ public:
         return head ? std::optional(head->blockNumber) : std::nullopt;
     }
 
-    /// Header returned by the last successful newPayload execute/commit (not the
-    /// request-rebuilt announcement). Null if this call did not run or persist execution.
-    bcos::protocol::BlockHeader::Ptr lastExecutedHeader() const
+    /// The Engine tracker's head (hash + number): what the RPC read plane maps `latest` to
+    /// (D1 §10.2). Empty until the first forkchoiceUpdated after start.
+    std::optional<TrackedHeadBlock> trackedHead() const { return m_tracker.trackedHead(); }
+
+    auto trackedHeadAndSafe() const { return m_tracker.headAndSafe(); }
+
+    /// The execution-stamped header of an UNFINALIZED block (window entry of the delegate),
+    /// null once finalized or when unknown. Replaces the former lastExecutedHeader(): the
+    /// header of a newPayload'ed block is now read from its window entry, keyed by the CL
+    /// hash, so concurrent submissions cannot clobber each other.
+    bcos::protocol::BlockHeader::Ptr executedHeader(h256 const& blockHash) const
     {
-        std::lock_guard lock(m_lastExecutedHeaderMutex);
-        return m_lastExecutedHeader;
+        auto entry = m_delegate ? m_delegate->unfinalizedBlock(blockHash) : std::nullopt;
+        return entry ? entry->header : nullptr;
+    }
+
+    /// Configured newPayload run-ahead bound over the finalized tip, in blocks.
+    int64_t unfinalizedWindow() const { return m_unfinalizedWindow; }
+
+    /// The chain view of a block hash (OpScheduler::viewAt): a window block's ancestor chain
+    /// or the finalized tip, nullopt for anything else. buildOpPayload seals the mempool
+    /// against the PARENT's chain through it (D1 §10.2: the seal view follows the head, not
+    /// the finalized plane), so MemPoolImpl::seal filters already-executed nonces against the
+    /// unfinalized head chain without evicting transactions before finality. Unset = the
+    /// finalized plane (test stubs).
+    using ChainViewProvider = std::function<task::Task<std::optional<ViewType>>(h256 const&)>;
+    void setChainViewProvider(ChainViewProvider provider)
+    {
+        m_chainViewProvider = std::move(provider);
     }
 
 private:
+    /// A block the engine could resolve: in the delegate's unfinalized window, or in the
+    /// finalized ledger (then `header` is null until loadHeaderOf reads it).
+    struct ResolvedBlock
+    {
+        bcos::protocol::BlockNumber number = 0;
+        h256 hash;
+        h256 parentHash;  // zero for a ledger block (not needed there)
+        bcos::protocol::BlockHeader::Ptr header;
+        bool inWindow = false;
+    };
+
+    /// Window first, then the ledger's SYS_HASH_2_NUMBER (which under the window model holds
+    /// finalized blocks only). nullopt = unknown.
+    task::Task<std::optional<ResolvedBlock>> resolveBlock(h256 const& blockHash);
+
+    /// The block's header: the window entry's, or SYS_NUMBER_2_BLOCK_HEADER decoded. Null when
+    /// the ledger row is missing.
+    task::Task<bcos::protocol::BlockHeader::Ptr> loadHeaderOf(ResolvedBlock const& block);
+
+    /// True when @p target is @p head itself or one of its ancestors: walks the window from
+    /// the head, then requires a finalized target to be at or below the finalized tip.
+    task::Task<bool> isOnChainOf(ResolvedBlock const& head, ResolvedBlock const& target);
+
+    /// The finalized (backend) tip height: SYS_CURRENT_STATE/current_number.
+    task::Task<bcos::protocol::BlockNumber> finalizedTipNumber();
     static PayloadStatus makeStatus(PayloadValidationStatus status,
         std::optional<h256> latestValidHash = std::nullopt,
         std::optional<std::string> validationError = std::nullopt)
@@ -222,11 +281,20 @@ private:
         return engine_common::makeStatus(status, latestValidHash, validationError);
     }
 
-    static PayloadStatus mapDelegateError(
-        bcos::Error const& error, std::optional<h256> latestValidHash)
+    PayloadStatus mapDelegateError(bcos::Error const& error, std::optional<h256> latestValidHash)
     {
-        if (static_cast<bcos::scheduler::SchedulerError>(error.errorCode()) ==
-            bcos::scheduler::SchedulerError::OpConsensusRejected)
+        auto const code = static_cast<bcos::scheduler::SchedulerError>(error.errorCode());
+        if (code == bcos::scheduler::SchedulerError::OpWindowFull)
+        {
+            if (shouldLogWindowPressure())
+            {
+                BCOS_LOG(WARNING) << LOG_BADGE("OpEngineService")
+                                  << LOG_DESC("OP window capacity reached; answering SYNCING")
+                                  << LOG_KV("reason", error.errorMessage());
+            }
+            return makeStatus(PayloadValidationStatus::Syncing);
+        }
+        if (code == bcos::scheduler::SchedulerError::OpConsensusRejected)
         {
             return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                 std::string("OP block execution rejected the payload: ") + error.errorMessage());
@@ -235,6 +303,46 @@ private:
             OpExecutionInternalError{} << bcos::errinfo_comment{
                 std::string("OP block execution failed (SchedulerError ") +
                 std::to_string(error.errorCode()) + "): " + error.errorMessage()});
+    }
+
+    using WindowClock = std::chrono::steady_clock;
+
+    bool shouldLogWindowPressure()
+    {
+        auto const now = WindowClock::now();
+        auto next = m_nextWindowWarning.load(std::memory_order_relaxed);
+        return now >= next && m_nextWindowWarning.compare_exchange_strong(
+                                  next, now + std::chrono::seconds(30), std::memory_order_relaxed);
+    }
+
+    struct WindowMutationGuard
+    {
+        std::atomic<std::uint64_t>& m_epoch;
+
+        explicit WindowMutationGuard(std::atomic<std::uint64_t>& epoch) : m_epoch(epoch)
+        {
+            m_epoch.fetch_add(1, std::memory_order_acq_rel);
+        }
+        ~WindowMutationGuard() { m_epoch.fetch_add(1, std::memory_order_release); }
+    };
+
+    bcos::Error::Ptr admitBlockLocked(bcos::protocol::BlockHeader::Ptr header)
+    {
+        WindowMutationGuard guard{m_windowEpoch};
+        bcos::Error::Ptr error;
+        m_delegate->commitBlock(
+            std::move(header), [&](bcos::Error::Ptr result, bcos::ledger::LedgerConfig::Ptr) {
+                error = std::move(result);
+            });
+        return error;
+    }
+
+    bcos::Error::Ptr admitBlock(bcos::protocol::BlockHeader::Ptr header)
+    {
+        // Admission can evict a side branch. Serialize with forkchoice's membership check
+        // and tracker update so an FCU cannot select a block that just left the window.
+        std::scoped_lock lock(m_fcuMutex);
+        return admitBlockLocked(std::move(header));
     }
 
     /// FCU method-version window for the OP lane: V1-V3 exactly (Isthmus/Jovian —
@@ -259,9 +367,10 @@ private:
         return version == static_cast<std::uint32_t>(ApiVersion::V4);
     }
 
+    /// @p parentHeader is the resolved head's header (window entry or ledger row).
     task::Task<ForkchoiceUpdatedResult> buildOpPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, std::uint32_t version,
-        bcos::protocol::BlockNumber nextBlockNumber, std::vector<bcos::bytes> decodedForcedTxs);
+        bcos::protocol::BlockHeader::Ptr parentHeader, std::vector<bcos::bytes> decodedForcedTxs);
 
     task::Task<PayloadStatus> handleOpNewPayload(
         const NewPayloadRequest& request, std::uint32_t version);
@@ -299,26 +408,21 @@ private:
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     std::shared_ptr<DACaps> m_daCaps;
     bool m_allowSynthesizedL1Attributes;
-    /// Guards m_lastExecutedHeader: newPayload requests can run concurrently on RPC
-    /// threads (no serial executor), so the shared_ptr write/read must be synchronized.
-    ///
-    /// The m_delegate (an OpScheduler) sequences (reset → executeBlock, executeBlock →
-    /// commitBlock) need no extra serialization of their own — the reasoning, precisely:
-    /// OpScheduler::executeBlock try-locks m_executeMutex AND m_commitMutex ("Another
-    /// block is executing/committing!" — a concurrent second caller fails closed), and
-    /// executeBlock/commitBlock drive their task via task::syncWait, so a sequence's calls
-    /// are ordered within the calling thread. OpScheduler::reset is NOT a no-op: it takes
-    /// all three mutexes (scoped_lock, so it cannot interleave with an in-flight execute
-    /// or commit), then drops any uncommitted pending block (popping its verified storage
-    /// layer) and restores the continuity watermark to the committed tip. A reset landing
-    /// between another caller's executeBlock and commitBlock therefore makes that caller's
-    /// commitBlock fail CLOSED ("Unexpected empty results!" — the pending it needs was
-    /// dropped/replaced), which the OP service reports as an error and the sequencer
-    /// retries — convergent, never corrupt. Out-of-order parents cannot interleave: the
-    /// sequencer advances height n+1 only after height n's canonical status, and the
-    /// delegate's continuity check rejects anything else.
-    mutable std::mutex m_lastExecutedHeaderMutex;
-    bcos::protocol::BlockHeader::Ptr m_lastExecutedHeader;
+    /// Engine RPC handlers may run concurrently on RPC threads. Synchronous delegate write phases
+    /// (finalize + tracker commit, payload build reset/execute/publish, and newPayload
+    /// execute/admit) serialize on m_fcuMutex (never held across co_await) so concurrent FCU and
+    /// newPayload calls wait instead of colliding on OpScheduler's try-locks (-32603).
+    /// newPayload run-ahead bound over the finalized tip (blocks); beyond it newPayload
+    /// answers SYNCING (backpressure: op-node retries, nothing is lost).
+    int64_t m_unfinalizedWindow;
+    std::atomic<WindowClock::time_point> m_nextWindowWarning{WindowClock::time_point::min()};
+    /// Serializes synchronous delegate write phases and forkchoice publication (never across
+    /// co_await).
+    std::mutex m_fcuMutex;
+    std::atomic<std::uint64_t> m_windowEpoch{0};
+    std::atomic<std::uint64_t> m_finalizeEpoch{0};
+    /// See setChainViewProvider. Set once at wiring, before any request is served.
+    ChainViewProvider m_chainViewProvider;
 };
 
 }  // namespace bcos::engine

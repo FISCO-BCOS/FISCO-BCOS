@@ -4,15 +4,26 @@
 
 // OpScheduler — SchedulerInterface for OP. Linear only: blockGasLeft, state-diff
 // visibility, and deposit order forbid a parallel scheduler.
-// executeBlock: preBlockOpEthSteps → SchedulerSerialImpl(serial=true) →
-// finalizeOpEthBlockResult → commitment check → stash m_pending only if verify=true.
-// One pending slot: commit (or same-height replace) before execute of another height —
-// MLS mergeBackStorage is FIFO oldest, not the just-pushed layer.
-// commitBlock: prewriteBlockToBuffer(announcedHash) → mergeBackStorage.
-// Committed-tip sibling reorg (ReorgUndo / one-level rollback) is a follow-up.
+//
+// Unfinalized window (D1 方案 A, docs/superpowers/plans/op-stack-l2/2026-08-19-d1-reorg-design.md
+// §8-§13). The backend holds exactly the FINALIZED chain; every executed-but-unfinalized block
+// lives in memory as one BlockLayer {state, ledger} keyed by its CL-announced hash, in a tree
+// rooted at the backend tip. Same-height siblings coexist; the Engine tracker decides which is
+// canonical, this class never does.
+//   executeBlock(verify=true): view = forkChain(ancestor layers of parent) + newMutable →
+//     preBlockOpEthSteps → SchedulerSerialImpl(serial=true) → finalizeOpEthBlockResult →
+//     commitment check → ledger rows (prewriteBlockToBuffer) → STAGED (m_staged).
+//   commitBlock (= admit): staged → m_window. Nothing is written to the backend.
+//   finalizeUpTo(F): merge the window chain tip..F oldest-first (mergeToBackends per block),
+//     then prune every window block not descending from F. Only here does the backend advance
+//     and only here do the block-number notifiers fire.
+//   reset(): drops staged blocks and the retained probe; the window survives.
+// Parent unknown (not in window, not the finalized tip) → InvalidBlockNumber; the engine
+// resolves parents itself first and answers SYNCING, so this is defense in depth.
 
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
+#include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/EVMAccount.h>
@@ -52,7 +63,6 @@
 #include <opstack-executor/OpEthExecutor.h>     // OpEthExecutor / OpEthBlockContext
 #include <opstack-executor/OpForkSpec.h>        // opForkSpecAt / opForkTimestampSec
 #include <opstack-executor/OpRecentBlockHashes.h>  // per-block BLOCKHASH source
-#include <opstack-executor/OpSchedulerPolicy.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -63,6 +73,7 @@
 #include <cstdint>
 #include <exception>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -73,6 +84,8 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -80,60 +93,59 @@ namespace bcos::executor_v1::opstack
 {
 #define OP_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("OP_SCHEDULER")
 
-/// executeBlock → commitBlock payload. announcedBlockHash is the CL hash; do not
-/// recompute it from executedHeader (optional fields are incomplete).
+/// executeBlock → commitBlock(admit) → finalizeUpTo. The window key is the CL-announced hash
+/// (canonicalBlockHash of the announced header). Admission matches the executed header to
+/// its staged entry; adopting a probe additionally requires its hash to match the announcement.
 template <class MultiLayerStorage>
 class OpScheduler : public scheduler::SchedulerInterface
 {
 public:
     using ViewType = typename MultiLayerStorage::ViewType;
+    using MutableStorage = typename MultiLayerStorage::MutableStorage;
+    using LayerPtr = std::shared_ptr<MutableStorage>;
     using Ptr = std::shared_ptr<OpScheduler>;
 
-    struct PendingBlock
+    /// One executed block held in memory (D1 §8.2). `state` is the execution view's mutable
+    /// layer (account KV + MPT nodes), `ledger` this block's own ledger rows
+    /// (prewriteBlockToBuffer output, D1 §9). Neither is written after the block is staged.
+    struct BlockLayer
     {
-        protocol::Block::Ptr block;                 // receipts attached at commit time
-        OpEthExecuteBlockResult result;             // commitments + receipts
-        bcos::crypto::HashType announcedBlockHash;  // keyed by the CL-announced hash
+        protocol::BlockNumber number = 0;
+        bcos::crypto::HashType hash;          // CL-announced hash (window key)
+        bcos::crypto::HashType executedHash;  // canonicalBlockHash(*executedHeader)
+        bcos::crypto::HashType parentHash;    // window block or the finalized tip
+        LayerPtr state;
+        LayerPtr ledger;  // null on execute-only construction (no ledger); coAdmit rejects
+                          // !m_ledger
         protocol::BlockHeader::Ptr executedHeader;  // commitment-filled header
-        bool verified = false;                      // true only after verify=true + pushView
+        protocol::Block::Ptr block;                 // receipts attached
     };
 
-    /// execute() result before it is wrapped as PendingBlock.
+    using BlockMap = std::unordered_map<bcos::crypto::HashType, BlockLayer>;
+    using BlockNode = typename BlockMap::node_type;
+
+    /// execute() result before it is wrapped as a BlockLayer.
     struct ExecuteOutcome
     {
         OpEthExecuteBlockResult result;
-        bcos::crypto::HashType announcedBlockHash;
     };
 
     /// verify=false probe retained for adoptProbeAsPending.
     struct ProbeSlot
     {
-        ViewType view;                              // forkCommitted()+newMutable execution view
-        OpEthExecuteBlockResult result;             // commitments + receipts
+        ViewType view;                   // forkChain(parent chain)+newMutable execution view
+        OpEthExecuteBlockResult result;  // commitments + receipts
         protocol::BlockHeader::Ptr executedHeader;  // commitment-filled header
+        std::vector<LayerPtr> parentLayers;         // the chain the probe ran on
     };
 
-    struct HeadView
+    /// Ancestor layers of a parent hash, oldest first (state, ledger per window block).
+    /// `error` non-empty = the parent is neither in the window nor the finalized tip.
+    struct ParentChain
     {
-        protocol::BlockNumber number;
-        bcos::crypto::HashType hash;
-        ViewType view;
-        protocol::BlockNumber finalizedNumber;
+        std::vector<LayerPtr> layers;
+        std::string error;
     };
-
-    /// Capture the committed head identity and state from the same storage snapshot.
-    task::Task<HeadView> headViewWithRef()
-    {
-        auto view = m_multiLayerStorage->forkCommittedSnapshot();
-        auto const number = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-        bcos::crypto::HashType hash{};
-        if (number >= 0)
-        {
-            hash = (co_await ledger::getBlockHash(view, number, ledger::fromStorage))
-                       .value_or(bcos::crypto::HashType{});
-        }
-        co_return {number, hash, std::move(view), number};
-    }
 
     // ---- SchedulerInterface overrides ----
 
@@ -166,6 +178,9 @@ public:
         }(this, std::move(block), std::move(callback)));
     }
 
+    /// ADMIT: move the staged block whose executed header is @p header into the window.
+    /// Nothing reaches the backend here (see finalizeUpTo). The callback's LedgerConfig is the
+    /// number+timestamp stub (loadCommitLedgerConfig); nobody may publish it.
     void commitBlock(bcos::protocol::BlockHeader::Ptr header,
         std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback) override
     {
@@ -173,8 +188,256 @@ public:
             [](decltype(this) self, bcos::protocol::BlockHeader::Ptr header,
                 std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback)
                 -> task::Task<void> {
-                std::apply(callback, co_await self->coCommitBlock(std::move(header)));
+                std::apply(callback, co_await self->coAdmit(std::move(header)));
             }(this, std::move(header), std::move(callback)));
+    }
+
+    /// FINALIZE: merge the window chain (finalized tip, @p blockHash] into the backend oldest
+    /// first, one mergeToBackends(state, ledger) per block, then prune every window block not
+    /// descending from @p blockHash (D1 §12.2). Fires the block-number notifier once per batch
+    /// with the highest merged block. Idempotent on the current finalized tip.
+    void finalizeUpTo(
+        bcos::crypto::HashType const& blockHash, std::function<void(Error::Ptr)> callback) override
+    {
+        task::syncWait([](decltype(this) self, bcos::crypto::HashType blockHash,
+                           std::function<void(Error::Ptr)> callback) -> task::Task<void> {
+            callback(co_await self->coFinalizeUpTo(blockHash));
+        }(this, blockHash, std::move(callback)));
+    }
+
+    std::optional<UnfinalizedBlock> unfinalizedBlock(
+        bcos::crypto::HashType const& blockHash) const override
+    {
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        auto it = m_window.find(blockHash);
+        if (it == m_window.end())
+        {
+            return std::nullopt;
+        }
+        return UnfinalizedBlock{.number = it->second.number,
+            .hash = it->second.hash,
+            .parentHash = it->second.parentHash,
+            .header = it->second.executedHeader};
+    }
+
+    // ---- Read plane for the RPC side (D1 §10.2) ----
+    // Rule 1: views come from here. viewAt(hash) is the chain view of one window block (or the
+    // finalized tip); hashAtHeightOnChain maps a height on one chain to its block. Rule 2:
+    // heights come from the Engine tracker — this scheduler never decides which branch is
+    // canonical, it is TOLD the head through setCanonicalHeadProvider, and call()/
+    // callAtBlock()/getCode()/getABI()/getPendingStorageAt() read that head's chain
+    // (headView). The type-erased facade EthEndpoint consumes is
+    // bcos::engine::OpCanonicalReader (engine/bcos-engine/OpCanonicalReaderImpl.h).
+
+    /// The read view of @p blockHash's chain: forkChain(ancestors incl. the block itself) for
+    /// a window block, forkCommitted() for the finalized tip, nullopt for anything else
+    /// (finalized blocks below the tip are the ledger's, read them through forkCommitted()).
+    task::Task<std::optional<ViewType>> viewAt(bcos::crypto::HashType blockHash)
+    {
+        co_await hydrateFinalized();
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        auto selected = blockViewLocked(blockHash);
+        co_return selected ? std::optional(std::move(selected->view)) : std::nullopt;
+    }
+
+    /// Chain view for content-addressed MPT reads: window block, finalized tip, or any canonical
+    /// finalized block on disk (whose trie nodes live in the committed backend).
+    task::Task<std::optional<ViewType>> mptViewAt(bcos::crypto::HashType blockHash)
+    {
+        if (auto view = co_await viewAt(blockHash))
+        {
+            co_return view;
+        }
+        if (blockHash == bcos::crypto::HashType{})
+        {
+            co_return std::nullopt;
+        }
+        auto committed = [&] {
+            std::lock_guard<std::mutex> lock(m_windowMutex);
+            return readViewLocked();
+        }();
+        auto number = co_await ledger::getBlockNumber(committed, blockHash, ledger::fromStorage);
+        if (!number || *number < 0 || *number > m_finalizedNumber.load())
+        {
+            co_return std::nullopt;
+        }
+        auto canonical = co_await ledger::getBlockHash(committed, *number, ledger::fromStorage);
+        co_return (canonical && *canonical == blockHash) ? std::optional(std::move(committed)) :
+                                                           std::nullopt;
+    }
+
+    struct WindowBlockView
+    {
+        protocol::BlockNumber number;
+        ViewType view;
+
+        MutableStorage& ledgerAt(protocol::BlockNumber height) const
+        {
+            if (height > number)
+            {
+                throw std::out_of_range("WindowBlockView::ledgerAt: height exceeds tip");
+            }
+            // forkChain reverses the oldest-first (state, ledger) pairs from chainLayersLocked.
+            // Every admitted block has both layers, starting with this tip's ledger at index 0.
+            auto const depth = static_cast<std::size_t>(number - height);
+            return *view.m_immutableStorages.at(depth * 2);
+        }
+    };
+
+    /// Capture an admitted block's height and its view under the same window lock.
+    task::Task<std::optional<WindowBlockView>> windowBlockView(bcos::crypto::HashType blockHash)
+    {
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        auto it = m_window.find(blockHash);
+        if (it == m_window.end())
+        {
+            co_return std::nullopt;
+        }
+        co_return WindowBlockView{it->second.number, readViewLocked(chainLayersLocked(it->second))};
+    }
+
+    task::Task<std::optional<std::pair<protocol::BlockNumber, LayerPtr>>> windowBlockLedger(
+        bcos::crypto::HashType blockHash)
+    {
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        auto it = m_window.find(blockHash);
+        if (it == m_window.end())
+        {
+            co_return std::nullopt;
+        }
+        co_return std::pair{it->second.number, it->second.ledger};
+    }
+
+    /// The hash at height @p number on the chain whose tip is @p tipHash: walks the window
+    /// from the tip, then the ledger's SYS_NUMBER_2_HASH once the height is finalized.
+    /// nullopt when @p tipHash is unknown or @p number is above it.
+    task::Task<std::optional<bcos::crypto::HashType>> hashAtHeightOnChain(
+        bcos::crypto::HashType tipHash, protocol::BlockNumber number)
+    {
+        co_await hydrateFinalized();
+        {
+            std::lock_guard<std::mutex> lock(m_windowMutex);
+            auto cursor = tipHash;
+            for (auto it = m_window.find(cursor); it != m_window.end(); it = m_window.find(cursor))
+            {
+                if (it->second.number == number)
+                {
+                    co_return cursor;
+                }
+                if (it->second.number < number)
+                {
+                    co_return std::nullopt;
+                }
+                cursor = it->second.parentHash;
+            }
+            // Left the window: the cursor must be the finalized tip (or the tip was asked for).
+            if (cursor != m_finalizedHash || cursor == bcos::crypto::HashType{} ||
+                number > m_finalizedNumber.load())
+            {
+                co_return std::nullopt;
+            }
+        }
+        auto view = m_multiLayerStorage->forkCommitted();
+        co_return co_await ledger::getBlockHash(view, number, ledger::fromStorage);
+    }
+
+    /// Height of the finalized (backend) tip; -1 before any block is on disk.
+    protocol::BlockNumber finalizedNumber() const { return m_finalizedNumber.load(); }
+    /// Hash of the finalized tip; zero when the ledger has no SYS_NUMBER_2_HASH row for it.
+    bcos::crypto::HashType finalizedHash() const
+    {
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        return m_finalizedHash;
+    }
+    /// Number of blocks in the unfinalized window (all branches).
+    std::size_t windowSize() const
+    {
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        return m_window.size();
+    }
+
+    /// The finalized tip as (number, hash), hydrated from the backend on first use (restart,
+    /// D1 §13.2). number == -1 and a zero hash when the ledger is empty.
+    task::Task<std::pair<protocol::BlockNumber, bcos::crypto::HashType>> finalizedTip()
+    {
+        co_await hydrateFinalized();
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        co_return std::pair{
+            static_cast<protocol::BlockNumber>(m_finalizedNumber.load()), m_finalizedHash};
+    }
+
+    /// The Engine tracker's head as seen by this scheduler's own reads (D1 §10.2 rule 2):
+    /// call()/callAtBlock()/getCode()/getABI()/getPendingStorageAt() evaluate against the
+    /// chain of the hash this returns. nullopt (or unset) = the finalized plane. The
+    /// composition root wires OpEngineService::trackedHead(); the provider must be cheap and
+    /// non-blocking (it is called on every RPC read).
+    using CanonicalHeadProvider = std::function<std::optional<bcos::crypto::HashType>()>;
+    void setCanonicalHeadProvider(CanonicalHeadProvider provider)
+    {
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        m_headProvider = std::move(provider);
+    }
+
+    struct HeadView
+    {
+        protocol::BlockNumber number;
+        bcos::crypto::HashType hash;
+        ViewType view;
+        protocol::BlockNumber finalizedNumber;
+    };
+
+    task::Task<HeadView> headViewWithRef(std::optional<bcos::crypto::HashType> tracked)
+    {
+        co_await hydrateFinalized();
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        if (tracked)
+        {
+            if (auto selected = blockViewLocked(*tracked))
+            {
+                co_return std::move(*selected);
+            }
+        }
+        co_return finalizedViewLocked();
+    }
+
+    /// Capture the head's identity with its view. If pruning races the lookup, try the
+    /// replacement head before falling back to the finalized tip.
+    task::Task<HeadView> headViewWithRef()
+    {
+        co_await hydrateFinalized();
+        CanonicalHeadProvider provider;
+        {
+            std::lock_guard<std::mutex> lock(m_windowMutex);
+            provider = m_headProvider;
+        }
+        if (provider)
+        {
+            auto head = provider();
+            while (head)
+            {
+                {
+                    std::lock_guard<std::mutex> lock(m_windowMutex);
+                    if (auto selected = blockViewLocked(*head))
+                    {
+                        co_return std::move(*selected);
+                    }
+                }
+                auto next = provider();
+                if (next == head)
+                {
+                    break;
+                }
+                head = std::move(next);
+            }
+        }
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        co_return finalizedViewLocked();
+    }
+
+    task::Task<ViewType> headView()
+    {
+        auto head = co_await headViewWithRef();
+        co_return std::move(head.view);
     }
 
     void status(
@@ -183,23 +446,18 @@ public:
         callback({}, {});
     }
 
+    /// Drop staged (executed, not admitted) blocks and the retained probe. The window is NOT
+    /// touched: the engine calls reset before every payload build, and admitted blocks must
+    /// survive a build.
     void reset(std::function<void(Error::Ptr)> callback) override
     {
-        std::scoped_lock lock(m_executeMutex, m_commitMutex, m_pendingMutex);
-        if (m_pending)
+        std::scoped_lock lock(m_executeMutex, m_commitMutex, m_windowMutex);
+        if (!m_staged.empty())
         {
-            OP_SCHEDULER_LOG(INFO) << "reset: dropping uncommitted pending block "
-                                   << m_pending->executedHeader->number();
-            if (m_pending->verified)
-            {
-                m_multiLayerStorage->popFrontStorage();
-            }
-            m_pending.reset();
-            // Continuity keys off lastExecuted; hydrateCommittedTip is a no-op once
-            // lastCommitted is set. Restore the watermark to the committed tip.
-            m_lastExecutedBlockNumber.store(m_lastCommittedBlockNumber.load());
+            OP_SCHEDULER_LOG(INFO) << "reset: dropping " << m_staged.size()
+                                   << " staged (executed, unadmitted) block(s)";
+            m_staged.clear();
         }
-        // Always drop a leftover probe; verify=false does not populate m_pending.
         m_lastProbe.reset();
         callback(nullptr);
     }
@@ -210,8 +468,8 @@ public:
         callback(nullptr);
     }
 
-    /// eth_call on the latest committed state. Failures return an RPC Error, not a status-0
-    /// receipt.
+    /// eth_call on the canonical head's state (headView). Failures return an RPC Error, not a
+    /// status-0 receipt.
     void call(protocol::Transaction::Ptr transaction,
         std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
@@ -249,7 +507,7 @@ public:
             }(this, std::move(transaction), std::move(callback)));
     }
 
-    /// eth_call against the committed MPT at @p blockNumber.
+    /// eth_call against the MPT at @p blockNumber on the canonical head's chain.
     void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
         std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
@@ -290,8 +548,8 @@ public:
             }(this, std::move(transaction), blockNumber, std::move(callback)));
     }
 
-    /// Contract code at the latest committed height. Do not use getLedgerConfig (header.hash()
-    /// throws).
+    /// Contract code at the canonical head (headView). Do not use getLedgerConfig
+    /// (header.hash() throws).
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
@@ -300,7 +558,7 @@ public:
                 std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) -> task::Task<void> {
                 try
                 {
-                    auto view = self->m_multiLayerStorage->forkCommitted();
+                    auto view = co_await self->headView();
                     // The OP lane's naming rule (no /sys/ routing, re-encoded to the node
                     // layout), NOT the v1-rule constructor — the bridge writes every
                     // address, system-tx ones included, under its /apps/ logical name.
@@ -346,7 +604,7 @@ public:
                 std::function<void(bcos::Error::Ptr, std::string)> callback) -> task::Task<void> {
                 try
                 {
-                    auto view = self->m_multiLayerStorage->forkCommitted();
+                    auto view = co_await self->headView();
                     // Lane rule, as in getCode above.
                     bcos::ledger::account::EVMAccount account(view,
                         bcos::ledger::account::FromTableName{},
@@ -382,13 +640,18 @@ public:
     }
 
     // `number` discarded: pending has no historical block context. See
-    // SchedulerInterface::getPendingStorageAt.
+    // SchedulerInterface::getPendingStorageAt. The "pending plane" on the OP lane is the
+    // canonical head's chain (D1 §10.2: same as `latest`, headView) — a block that is
+    // executed or admitted but not yet the tracker's head is not visible, exactly as op-geth
+    // keeps the pending state at the last forkchoice head. Nonce checks for tx admission read
+    // this, so a sender whose tx sits in an unfinalized head-chain block sees the advanced
+    // nonce, while a side branch's inclusion does not count.
     task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(std::string_view address,
         std::string_view key, bcos::protocol::BlockNumber /*number*/) override
     {
         auto const addressOwned = std::string(address);
         auto const keyOwned = std::string(key);
-        auto view = this->m_multiLayerStorage->fork();
+        auto view = co_await headView();
         // The OP lane is scenario B by construction (executor_version >= OPSTACK_EXECUTOR_VERSION
         // is genesis-fixed), so no feature read decides the routing below. The tip number is
         // still needed for the committed-MPT fallback. (The account-table mode itself needs no
@@ -397,9 +660,9 @@ public:
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
         if (keyOwned == bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE)
         {
-            // Pending first: the caller uses this value as the transaction nonce, and a sealed
-            // but uncommitted block may already have advanced it (the sibling note above: fork()
-            // "can read the pending slot"). Scenario B keeps account fields in the committed
+            // Pending first: the caller uses this value as the transaction nonce, and an
+            // unfinalized head-chain block may already have advanced it in its own window
+            // layer. Scenario B keeps account fields in the committed
             // MPT, so when the pending/flat plane has no row, fall back to the committed tip's
             // MPT state. The OP lane's naming rule (verbatim /apps/ logical name, no /sys/
             // routing, re-encoded to the node layout) is legacyAppsAccountTableName — the
@@ -444,21 +707,13 @@ public:
         co_return co_await account.storageEntry(keyOwned);
     }
 
-    /// Pending execute result, if any.
-    std::optional<OpEthExecuteBlockResult> peekExecuteResult()
-    {
-        std::lock_guard<std::mutex> lock(m_pendingMutex);
-        if (!m_pending)
-            return std::nullopt;
-        return m_pending->result;
-    }
-
     /// ledger may be null (execute only). ioServicePool is required (SchedulerSerialImpl GC).
     OpScheduler(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
         bcos::ledger::OpForkSchedule forkSchedule, bcos::protocol::BlockFactory::Ptr blockFactory,
         MultiLayerStorage& multiLayerStorage, bcos::ledger::LedgerInterface::Ptr ledger,
-        bcos::IOServicePool::Ptr ioServicePool)
+        bcos::IOServicePool::Ptr ioServicePool,
+        int64_t unfinalizedWindow = bcos::engine::c_defaultUnfinalizedWindow)
       : m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_chainId(chainId),
@@ -466,9 +721,16 @@ public:
         m_multiLayerStorage(&multiLayerStorage),
         m_blockFactory(std::move(blockFactory)),
         m_ledger(std::move(ledger)),
-        m_ioServicePool(std::move(ioServicePool))
+        m_ioServicePool(std::move(ioServicePool)),
+        m_windowCapacity(2 * static_cast<std::size_t>(unfinalizedWindow)),
+        m_stagedCapacity((std::min)(m_windowCapacity, c_maxStagedBlocks))
     {
-        // execute() tolerates a null ledger; commit does not (see coCommitBlock).
+        if (unfinalizedWindow <= 0 ||
+            std::cmp_greater(unfinalizedWindow, std::numeric_limits<std::size_t>::max() / 2))
+        {
+            throw std::invalid_argument("invalid OP unfinalized window depth");
+        }
+        // execute() tolerates a null ledger; admit does not (see coAdmit).
         // Default no-op notifiers. An empty std::function would throw inside the async task.
         m_blockNumberNotifier = [](bcos::protocol::BlockNumber) {};
         m_transactionNotifier = [](bcos::protocol::BlockNumber,
@@ -479,22 +741,37 @@ public:
     OpScheduler& operator=(const OpScheduler&) = delete;
     ~OpScheduler() noexcept override = default;
 
-    /// Optional RPC block-number callback; commitBlock invokes it after a successful merge.
+    /// Clear external callbacks on shutdown so RPC/engine references cannot retain this scheduler.
+    void stop() override
+    {
+        auto blockNotifier = decltype(m_blockNumberNotifier)([](protocol::BlockNumber) {});
+        auto txNotifier = decltype(m_transactionNotifier)([](auto, auto, auto cb) { cb(nullptr); });
+        CanonicalHeadProvider headProvider;
+        std::lock_guard lock(m_windowMutex);
+        m_blockNumberNotifier.swap(blockNotifier);
+        m_transactionNotifier.swap(txNotifier);
+        m_headProvider.swap(headProvider);
+    }
+
+    /// Optional RPC block-number callback; finalizeUpTo invokes it once per finalize batch
+    /// (admit fires nothing: the ledger has not advanced). Head changes are the Engine tracker's.
     void setBlockNumberNotifier(std::function<void(bcos::protocol::BlockNumber)> notifier)
     {
         if (notifier)  // symmetric with setTransactionNotifier: an empty std::function would
-        {              // throw bad_function_call inside the commit task's try block.
+        {              // throw bad_function_call inside the finalize task's try block.
+            std::lock_guard<std::mutex> lock(m_windowMutex);
             m_blockNumberNotifier = std::move(notifier);
         }
     }
 
-    /// Optional txpool eviction callback; commitBlock invokes it after a successful merge.
+    /// Optional txpool eviction callback; finalizeUpTo invokes it per finalize batch.
     void setTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(bcos::Error::Ptr)>)>
             notifier)
     {
         if (notifier)
         {
+            std::lock_guard<std::mutex> lock(m_windowMutex);
             m_transactionNotifier = std::move(notifier);
         }
     }
@@ -505,6 +782,33 @@ public:
     void setCrossCheckIncrementalRoot(bool enable) { m_crossCheckIncrementalRoot = enable; }
 
 private:
+    ViewType readViewLocked(std::vector<LayerPtr> layers = {})
+    {
+        return m_multiLayerStorage->forkChainSnapshot(
+            std::move(layers), m_preFinalizeView ? std::addressof(*m_preFinalizeView) : nullptr);
+    }
+
+    HeadView finalizedViewLocked()
+    {
+        auto const number = m_finalizedNumber.load();
+        return {number, m_finalizedHash, readViewLocked(), number};
+    }
+
+    std::optional<HeadView> blockViewLocked(bcos::crypto::HashType const& blockHash)
+    {
+        if (blockHash != bcos::crypto::HashType{} && blockHash == m_finalizedHash)
+        {
+            return finalizedViewLocked();
+        }
+        auto it = m_window.find(blockHash);
+        if (it == m_window.end())
+        {
+            return std::nullopt;
+        }
+        return HeadView{it->second.number, blockHash, readViewLocked(chainLayersLocked(it->second)),
+            m_finalizedNumber.load()};
+    }
+
     // ---- execute / commit ----
 
     task::Task<std::tuple<Error::Ptr, protocol::BlockHeader::Ptr, bool>> coExecuteBlock(
@@ -518,18 +822,18 @@ private:
                 << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
             auto number = blockHeader->number();
 
-            // Resend of the same announced hash at this height: reuse the cached header.
-            if (auto cached = fastPathHit(number, *blockHeader))
+            // Resend of a block already executed (staged or in the window): reuse its header.
+            auto const announcedBlockHash = bcos::protocol::canonicalBlockHash(*blockHeader);
+            if (auto cached = knownExecutedHeader(number, announcedBlockHash))
             {
-                co_return {nullptr, cached->first, cached->second};
+                co_return {nullptr, std::move(cached), false};
             }
 
-            // One execute at a time. Also take m_commitMutex so pushView / popFrontStorage
-            // cannot race mergeBackStorage (reset() already takes all three). NOTE: these
-            // std::unique_lock objects span the co_awaits below. executeBlock/commitBlock
-            // now use task::syncWait, so the EngineServiceImpl caller does not proceed
-            // until this task finishes. If a future awaitable resumes on another thread,
-            // these locks must be narrowed or replaced with a coroutine-aware lock.
+            // One execute at a time. Also take m_commitMutex so staging cannot race admit or
+            // mergeFinalized (reset() takes all three). NOTE: these std::unique_lock objects span
+            // the co_awaits below. executeBlock/commitBlock use task::syncWait, so the caller
+            // does not proceed until this task finishes. If a future awaitable resumes on another
+            // thread, these locks must be narrowed or replaced with a coroutine-aware lock.
             std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
@@ -551,93 +855,53 @@ private:
             // the previous build's retained view behind (covers the ledgerGas re-probe too).
             if (!verify)
             {
+                std::lock_guard<std::mutex> lock(m_windowMutex);
                 m_lastProbe.reset();
             }
 
-            // One pending slot: refuse another height, replace only verify=true at this height.
-            auto conflict = PendingConflict::None;
-            if (number > 0)
-            {
-                std::lock_guard<std::mutex> lock(m_pendingMutex);
-                if (m_pending)
-                {
-                    conflict = classifyPendingConflict(
-                        true, m_pending->executedHeader->number(), number, verify);
-                    if (conflict == PendingConflict::RefuseOtherHeight)
-                    {
-                        auto const pendingHeight = m_pending->executedHeader->number();
-                        auto message = fmt::format(
-                            "Uncommitted pending block {}; commit or replace at that height "
-                            "before execute {}",
-                            pendingHeight, number);
-                        OP_SCHEDULER_LOG(INFO) << message;
-                        co_return {BCOS_ERROR_UNIQUE_PTR(
-                                       scheduler::SchedulerError::InvalidStatus, message),
-                            nullptr, false};
-                    }
-                    if (conflict == PendingConflict::ReplaceSameHeight)
-                    {
-                        OP_SCHEDULER_LOG(WARNING)
-                            << "Replacing uncommitted pending block " << number
-                            << " with a divergent block at the same height";
-                        auto const pushed = m_pending->verified;
-                        m_pending.reset();
-                        m_lastExecutedBlockNumber.store(number - 1);
-                        if (pushed)
-                        {
-                            m_multiLayerStorage->popFrontStorage();
-                        }
-                    }
-                }
-            }
+            co_await hydrateFinalized();
 
-            co_await hydrateCommittedTip();
-
-            // Continuity vs last executed number. A verify=false probe at the pending
-            // height keeps the stash and runs on a throwaway view.
-            auto const lastExecuted = m_lastExecutedBlockNumber.load();
-            auto const lastCommitted = m_lastCommittedBlockNumber.load();
-            bool const probeAtPending = conflict == PendingConflict::KeepProbe;
-            if (number > 0 && number == lastCommitted)
+            // A block at the finalized height: the finalized tip itself is served without
+            // re-execution; anything else at or below that height is a rewind of finalized
+            // state, which the OP lane never does (D7).
+            auto const finalized = m_finalizedNumber.load();
+            if (number > 0 && number <= finalized)
             {
                 auto tipView = m_multiLayerStorage->forkCommitted();
                 auto const canonicalAtHeight =
                     co_await ledger::getBlockHash(tipView, number, ledger::fromStorage);
-                if (canonicalAtHeight.has_value() &&
-                    *canonicalAtHeight == bcos::protocol::canonicalBlockHash(*blockHeader))
+                if (number == finalized && canonicalAtHeight.has_value() &&
+                    *canonicalAtHeight == announcedBlockHash)
                 {
                     OP_SCHEDULER_LOG(INFO)
                         << "Block " << number
-                        << " is already the committed canonical tip; serving without re-execution";
-                    auto served = m_blockFactory->blockHeaderFactory()->populateBlockHeader(
-                        protocol::BlockHeader::ConstPtr{
-                            blockHeader.get(), [](protocol::BlockHeader const*) {}});
-                    co_return {nullptr, std::move(served), false};
+                        << " is already the finalized tip; serving without re-execution";
+                    auto stored = co_await ledger::getBlockData(
+                        tipView, number, ledger::HEADER, *m_blockFactory);
+                    co_return {nullptr, stored->blockHeader(), false};
                 }
                 auto message = fmt::format(
-                    "Block {} is a sibling of the committed tip; one-level tip reorg "
-                    "is not in this scheduler slice",
-                    number);
+                    "Block {} is at or below the finalized height {} with a different hash; "
+                    "the finalized chain does not rewind",
+                    number, finalized);
                 OP_SCHEDULER_LOG(WARNING) << message;
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
             }
-            if (lastExecuted != -1 && number - lastExecuted != 1 && !probeAtPending)
+
+            // The execution view is the parent's ancestor chain (window layers, oldest first)
+            // over the finalized backend, plus a fresh mutable for this block. A sibling
+            // branch's layers are not in the chain, so they are invisible here (D1 §8.3).
+            auto chain = resolveParentChain(blockHeader->parentInfo().blockHash, number);
+            if (!chain.error.empty())
             {
-                auto message =
-                    fmt::format("Discontinuous execute block number! expect: {} input: {}",
-                        lastExecuted + 1, number);
-                OP_SCHEDULER_LOG(INFO) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                OP_SCHEDULER_LOG(INFO) << chain.error;
+                co_return {BCOS_ERROR_UNIQUE_PTR(
+                               scheduler::SchedulerError::InvalidBlockNumber, chain.error),
                     nullptr, false};
             }
-
-            // Writes go to a committed-parent view. KeepProbe must not see the uncommitted
-            // pending layer; after ReplaceSameHeight popFront (or with no pending) this equals
-            // fork(). getPendingStorageAt still uses fork() so it can read the pending slot.
-            auto view = m_multiLayerStorage->forkCommitted();
+            auto view = m_multiLayerStorage->forkChain(chain.layers);
             view.newMutable();
 
             auto transactions = co_await getTransactions(*block, view);
@@ -681,22 +945,18 @@ private:
                 }
             }
 
-            // Push and stash only when verify is true. Probe results are returned, not committed.
+            // Stage only when verify is true. Probe results are returned, not staged.
             if (verify)
             {
-                m_multiLayerStorage->pushView(std::move(view));
-                {
-                    std::lock_guard<std::mutex> lock(m_pendingMutex);
-                    m_pending = PendingBlock{std::move(block), std::move(outcome.result),
-                        outcome.announcedBlockHash, executedHeader, true};
-                }
-                m_lastExecutedBlockNumber.store(number);
-                m_lastProbe.reset();
+                co_await coStageBlock(chain.layers, view.m_mutableStorage, std::move(block),
+                    outcome.result, announcedBlockHash, executedHeader, /*clearProbe=*/true);
             }
             else
             {
-                // Keep the probe so adoptProbeAsPending can push this view.
-                m_lastProbe = ProbeSlot{std::move(view), std::move(outcome.result), executedHeader};
+                // Keep the probe so adoptProbeAsPending can stage this view.
+                std::lock_guard<std::mutex> lock(m_windowMutex);
+                m_lastProbe = ProbeSlot{std::move(view), std::move(outcome.result), executedHeader,
+                    std::move(chain.layers)};
             }
 
             co_return {nullptr, std::move(executedHeader), sysBlock};
@@ -748,95 +1008,66 @@ private:
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr, false};
             }
-            if (!m_lastProbe)
+            // Take the probe out of the slot; every exit below either stages it or drops it.
+            std::optional<ProbeSlot> probe;
+            {
+                std::lock_guard<std::mutex> lock(m_windowMutex);
+                probe.swap(m_lastProbe);
+            }
+            if (!probe)
             {
                 auto message = std::string{"adoptProbeAsPending: no retained probe"};
                 OP_SCHEDULER_LOG(INFO) << message;
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false};
             }
-            if (m_lastProbe->executedHeader->number() != number)
+            if (probe->executedHeader->number() != number)
             {
                 auto message = fmt::format(
                     "adoptProbeAsPending: retained probe is at height {}, "
                     "adopt input is at height {}",
-                    m_lastProbe->executedHeader->number(), number);
+                    probe->executedHeader->number(), number);
                 OP_SCHEDULER_LOG(INFO) << message;
-                m_lastProbe.reset();
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
             }
-
-            auto const lastExecuted = m_lastExecutedBlockNumber.load();
-            auto const lastCommitted = m_lastCommittedBlockNumber.load();
-            if (number > 0 && number == lastCommitted)
+            co_await hydrateFinalized();
+            if (number > 0 && number <= m_finalizedNumber.load())
             {
                 auto message =
-                    std::string{"adoptProbeAsPending: block is already the committed tip"};
+                    std::string{"adoptProbeAsPending: block is at or below the finalized tip"};
                 OP_SCHEDULER_LOG(INFO) << message;
-                m_lastProbe.reset();
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
-            }
-            if (lastExecuted != -1 && number - lastExecuted != 1)
-            {
-                auto message = fmt::format(
-                    "Discontinuous adopt! expect: {} input: {}", lastExecuted + 1, number);
-                OP_SCHEDULER_LOG(INFO) << message;
-                m_lastProbe.reset();
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr, false};
-            }
-            {
-                std::lock_guard<std::mutex> lock(m_pendingMutex);
-                if (m_pending)
-                {
-                    auto message =
-                        fmt::format("adoptProbeAsPending: unexpected live pending block at {}",
-                            m_pending->executedHeader->number());
-                    OP_SCHEDULER_LOG(INFO) << message;
-                    m_lastProbe.reset();
-                    co_return {
-                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                        nullptr, false};
-                }
             }
 
-            if (auto mismatch =
-                    opEthMismatchedFieldOf(headerCommitments(*m_lastProbe->executedHeader),
-                        headerCommitments(*blockHeader)))
+            if (auto mismatch = opEthMismatchedFieldOf(
+                    headerCommitments(*probe->executedHeader), headerCommitments(*blockHeader)))
             {
                 auto message =
                     fmt::format("adoptProbeAsPending: commitment mismatch on field {}", *mismatch);
                 OP_SCHEDULER_LOG(INFO) << message;
-                m_lastProbe.reset();
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false};
             }
             auto const announcedBlockHash = bcos::protocol::canonicalBlockHash(*blockHeader);
-            auto const probeHash = bcos::protocol::canonicalBlockHash(*m_lastProbe->executedHeader);
+            auto const probeHash = bcos::protocol::canonicalBlockHash(*probe->executedHeader);
             if (probeHash != announcedBlockHash)
             {
                 auto message = std::string{
                     "adoptProbeAsPending: executed header hash does not match the announced hash"};
                 OP_SCHEDULER_LOG(INFO) << message;
-                m_lastProbe.reset();
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false};
             }
-            m_multiLayerStorage->pushView(std::move(m_lastProbe->view));
-            auto executedHeader = m_lastProbe->executedHeader;
-            {
-                std::lock_guard<std::mutex> lock(m_pendingMutex);
-                m_pending = PendingBlock{std::move(block), std::move(m_lastProbe->result),
-                    announcedBlockHash, executedHeader, true};
-            }
-            m_lastExecutedBlockNumber.store(number);
-            m_lastProbe.reset();
-            OP_SCHEDULER_LOG(INFO) << "Adopted probe as pending: " << number;
+            // The probe ran with a provisional header; build ledger rows for the final block now.
+            auto executedHeader = probe->executedHeader;
+            co_await coStageBlock(probe->parentLayers, probe->view.m_mutableStorage,
+                std::move(block), probe->result, announcedBlockHash, executedHeader,
+                /*clearProbe=*/false);
+            OP_SCHEDULER_LOG(INFO) << "Adopted probe as staged block: " << number;
             co_return {nullptr, std::move(executedHeader), false};
         }
         catch (std::exception& e)
@@ -856,13 +1087,15 @@ private:
         }
     }
 
-    task::Task<std::tuple<Error::Ptr, ledger::LedgerConfig::Ptr>> coCommitBlock(
+    /// ADMIT (SchedulerInterface::commitBlock). Moves the staged block whose executed header
+    /// is @p header into the window. Nothing is written to the backend.
+    task::Task<std::tuple<Error::Ptr, ledger::LedgerConfig::Ptr>> coAdmit(
         protocol::BlockHeader::Ptr header)
     {
         try
         {
-            OP_SCHEDULER_LOG(INFO) << "Commit block: " << header->number();
-            auto number = header->number();
+            auto const number = header->number();
+            OP_SCHEDULER_LOG(INFO) << "Admit block: " << number;
 
             std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
             if (!commitLock.owns_lock())
@@ -881,84 +1114,148 @@ private:
                     nullptr};
             }
 
-            // Copy pending under the lock so later awaits do not race a replacing execute.
-            PendingBlock pending;
+            // Match the executed header passed back by the engine to the staged execution.
+            // The window index still uses the original CL-announced hash.
+            auto const executedHash = bcos::protocol::canonicalBlockHash(*header);
+            std::optional<BlockLayer> staged;
+            bool alreadyAdmitted = false;
+            CanonicalHeadProvider headProvider;
             {
-                std::lock_guard<std::mutex> lock(m_pendingMutex);
-                if (!m_pending || !m_pending->verified ||
-                    m_pending->executedHeader->number() != number)
+                std::lock_guard<std::mutex> lock(m_windowMutex);
+                for (auto const& [hash, layer] : m_staged)
                 {
-                    // Carries the OpPendingDropped tag on top of the code: the engine may
-                    // re-execute a payload whose pending was dropped, and the code alone
-                    // cannot say so (classifyException's catch-all also reports
-                    // UnknownError — bcos-framework/engine/Errors.h).
-                    auto pendingDropped = BCOS_ERROR_UNIQUE_PTR(
-                        scheduler::SchedulerError::UnknownError, "Unexpected empty results!");
-                    *pendingDropped << bcos::engine::OpPendingDropped{true};
-                    co_return {std::move(pendingDropped), nullptr};
+                    if (layer.number == number && layer.executedHash == executedHash)
+                    {
+                        staged = layer;
+                        break;
+                    }
                 }
-                pending = *m_pending;
+                if (!staged)
+                {
+                    auto byExec = m_windowByExecutedHash.find(executedHash);
+                    auto winIt = byExec != m_windowByExecutedHash.end() ?
+                                     m_window.find(byExec->second) :
+                                     m_window.end();
+                    alreadyAdmitted = (winIt != m_window.end() && winIt->second.number == number);
+                }
+                else if (m_window.size() >= m_windowCapacity)
+                {
+                    headProvider = m_headProvider;
+                }
             }
-
-            // Bind the commit to the exact block that was executed: a replace at this height
-            // swaps m_pending for a divergent block, and committing its layer under the old
-            // header would silently persist a different payload than the caller believes.
-            // Compare the executed headers directly — announcedBlockHash is the CL hash of the
-            // announced header and cannot be recomputed from the executed header (engine wiring
-            // passes the executed header back into commitBlock).
-            if (bcos::protocol::canonicalBlockHash(*header) !=
-                bcos::protocol::canonicalBlockHash(*pending.executedHeader))
+            if (alreadyAdmitted)
             {
-                auto message = fmt::format(
-                    "Commit block {} does not match the announced block being committed", number);
-                OP_SCHEDULER_LOG(ERROR) << message;
+                OP_SCHEDULER_LOG(INFO) << "Block " << number << " is already in the window";
+                co_return {nullptr, co_await loadCommitLedgerConfig(header)};
+            }
+            if (!staged)
+            {
+                // Carries the OpPendingDropped tag on top of the code: the engine may
+                // re-execute a payload whose staged block was reset or evicted, and the code
+                // alone cannot say so (classifyException's catch-all also reports
+                // UnknownError — bcos-framework/engine/Errors.h).
+                auto pendingDropped = BCOS_ERROR_UNIQUE_PTR(
+                    scheduler::SchedulerError::UnknownError, "Unexpected empty results!");
+                *pendingDropped << bcos::engine::OpPendingDropped{true};
+                co_return {std::move(pendingDropped), nullptr};
+            }
+            // Recheck the parent and height after execution: finalization may have pruned it.
+            co_await hydrateFinalized();
+            if (auto chain = resolveParentChain(staged->parentHash, number); !chain.error.empty())
+            {
+                BlockNode dropped;
+                {
+                    std::lock_guard lock(m_windowMutex);
+                    dropped = m_staged.extract(staged->hash);
+                }
+                auto message = fmt::format("Admit block {}: {}", number, chain.error);
+                OP_SCHEDULER_LOG(WARNING) << message;
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr};
             }
 
-            if (!co_await commitContinuityCheck(number))
+            // The engine serializes this admission with forkchoice publication. Read the
+            // tracked head outside the window mutex before selecting an eviction victim.
+            auto const head = headProvider ? headProvider() : std::nullopt;
+            std::size_t depth = 0;
+            BlockNode evicted;
+            std::vector<BlockNode> droppedStages;
+            droppedStages.reserve(1 + m_stagedCapacity);
+            std::optional<ProbeSlot> droppedProbe;
             {
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
-                               "Commit block continuity check failed!"),
-                    nullptr};
-            }
-
-            auto storage = co_await commitPersist(pending);
-
-            // Single merge: all-or-nothing.
-            co_await m_multiLayerStorage->mergeBackStorage(*storage);
-
-            // Drop the slot only after merge succeeds, and only if it is still this block.
-            {
-                std::lock_guard<std::mutex> lock(m_pendingMutex);
-                if (m_pending && m_pending->verified &&
-                    m_pending->executedHeader->number() == number &&
-                    m_pending->announcedBlockHash == pending.announcedBlockHash)
+                std::lock_guard<std::mutex> lock(m_windowMutex);
+                auto const hash = staged->hash;
+                auto oldIt = m_window.find(hash);
+                std::optional<bcos::crypto::HashType> victim;
+                if (m_window.size() >= m_windowCapacity && oldIt == m_window.end())
                 {
-                    m_pending.reset();
+                    victim = windowEvictionCandidateLocked(head, staged->parentHash);
+                    if (!victim)
+                    {
+                        droppedStages.push_back(m_staged.extract(hash));
+                        co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::OpWindowFull,
+                                       "OP window capacity reached; all branches are in use"),
+                            nullptr};
+                    }
                 }
+                // Publish before removing the victim so an allocation failure leaves the old
+                // window intact. The mutex keeps the transient extra entry unobservable.
+                auto const stagedExecHash = staged->executedHash;
+                if (oldIt != m_window.end())
+                {
+                    auto const oldExecHash = oldIt->second.executedHash;
+                    m_windowByExecutedHash.insert_or_assign(stagedExecHash, hash);
+                    oldIt->second = std::move(*staged);
+                    if (oldExecHash != stagedExecHash)
+                    {
+                        eraseExecutedHashLocked(oldExecHash, hash);
+                    }
+                }
+                else
+                {
+                    auto [winIt, _] = m_window.emplace(hash, std::move(*staged));
+                    try
+                    {
+                        m_windowByExecutedHash.insert_or_assign(stagedExecHash, hash);
+                    }
+                    catch (...)
+                    {
+                        m_window.erase(winIt);
+                        throw;
+                    }
+                }
+                droppedStages.push_back(m_staged.extract(hash));
+                if (victim && (evicted = m_window.extract(*victim)))
+                {
+                    eraseExecutedHashLocked(evicted.mapped().executedHash, evicted.key());
+                    dropOrphanStagesLocked(m_finalizedHash, droppedStages, droppedProbe);
+                }
+                depth = m_window.size();
             }
-
+            if (evicted)
+            {
+                OP_SCHEDULER_LOG(INFO)
+                    << "Evicted side-branch leaf at window capacity"
+                    << LOG_KV("number", evicted.mapped().number)
+                    << LOG_KV("hash", evicted.key().abridged()) << LOG_KV("windowBlocks", depth);
+            }
             auto ledgerConfig = co_await loadCommitLedgerConfig(header);
-            m_lastCommittedBlockNumber.store(number);
-            commitLock.unlock();
-
-            OP_SCHEDULER_LOG(INFO) << "Commit block finished: " << number;
-            notifyBlockNumber(number);
-
+            OP_SCHEDULER_LOG(INFO)
+                << "Admit block finished: " << number << LOG_KV("windowBlocks", depth)
+                << LOG_KV("finalized", m_finalizedNumber.load());
             co_return {nullptr, ledgerConfig};
         }
         catch (std::exception& e)
         {
-            auto message = fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
+            auto message = fmt::format("Admit block failed! {}", boost::diagnostic_information(e));
             OP_SCHEDULER_LOG(ERROR) << message;
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
                 nullptr};
         }
         catch (...)
         {
-            auto message = std::string{"Commit block failed! ("} +
+            auto message = std::string{"Admit block failed! ("} +
                            describeException(std::current_exception()) + ")";
             OP_SCHEDULER_LOG(ERROR) << message;
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
@@ -966,23 +1263,403 @@ private:
         }
     }
 
-    /// Hit only when height and announced hash both match a verified pending.
-    std::optional<std::pair<protocol::BlockHeader::Ptr, bool>> fastPathHit(
-        protocol::BlockNumber number, protocol::BlockHeader const& announcedHeader)
+    /// FINALIZE (D1 §12.2). Block-atomic, not chain-atomic: a failure between two merges
+    /// leaves the backend at the last merged block with the window still consistent, and the
+    /// next FCU(finalized=F) resumes from there.
+    task::Task<Error::Ptr> coFinalizeUpTo(bcos::crypto::HashType target)
     {
-        std::lock_guard<std::mutex> lock(m_pendingMutex);
-        if (!m_pending || !m_pending->verified || m_pending->executedHeader->number() != number)
+        protocol::BlockNumber lastFinalized = -1;
+        Error::Ptr error;
+        auto captureError = [&](std::string_view prefix) {
+            auto eptr = std::current_exception();
+            std::string detail;
+            try
+            {
+                std::rethrow_exception(eptr);
+            }
+            catch (std::exception const& e)
+            {
+                detail = boost::diagnostic_information(e);
+            }
+            catch (...)
+            {
+                detail = "(" + describeException(eptr) + ")";
+            }
+            auto message = fmt::format("{} {}", prefix, detail);
+            OP_SCHEDULER_LOG(ERROR) << message;
+            if (!error)
+            {
+                error = BCOS_ERROR_UNIQUE_PTR(classifyException(eptr), message);
+            }
+        };
+        try
         {
-            return std::nullopt;
+            // Blocking: an FCU waits for an in-flight admit rather than failing; an execute
+            // arriving meanwhile fails closed on its try-lock ("Another block is committing").
+            std::unique_lock commitLock(m_commitMutex);
+            if (!m_ledger)
+            {
+                co_return BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                    "OpScheduler: finalize requires a ledger (execute-only construction)");
+            }
+            co_await hydrateFinalized();
+
+            std::vector<BlockLayer> chain;  // oldest first after the reverse below
+            std::vector<std::size_t> entriesAtHeight;
+            protocol::BlockNumber baseHeight = 0;
+            {
+                std::lock_guard<std::mutex> lock(m_windowMutex);
+                if (target != bcos::crypto::HashType{} && target == m_finalizedHash)
+                {
+                    co_return nullptr;
+                }
+                auto cursor = target;
+                for (auto it = m_window.find(cursor); it != m_window.end();
+                    it = m_window.find(cursor))
+                {
+                    chain.push_back(it->second);
+                    cursor = it->second.parentHash;
+                }
+                if (chain.empty())
+                {
+                    co_return BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
+                        fmt::format("finalizeUpTo: block {} is not in the unfinalized window",
+                            target.abridged()));
+                }
+                if (!isFinalizedTipLocked(cursor, chain.back().number))
+                {
+                    co_return BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
+                        fmt::format("finalizeUpTo: block {} does not descend from the finalized "
+                                    "tip {} (chain breaks at parent {})",
+                            target.abridged(), m_finalizedHash.abridged(), cursor.abridged()));
+                }
+                std::reverse(chain.begin(), chain.end());
+                baseHeight = chain.front().number;
+                entriesAtHeight.resize(chain.size());
+                for (auto const& [_, layer] : m_window)
+                {
+                    if (auto const idx = static_cast<std::size_t>(layer.number - baseHeight);
+                        idx < chain.size())
+                    {
+                        ++entriesAtHeight[idx];
+                    }
+                }
+            }
+
+            std::size_t pruned = 0;
+            std::size_t remaining = 0;
+            for (auto& block : chain)
+            {
+                std::vector<bcos::crypto::HashType> losingBlocks;
+                std::vector<BlockNode> droppedNodes;
+                std::optional<ProbeSlot> droppedProbe;
+                std::optional<ViewType> droppedSnapshot;
+                auto preFinalizeView = m_multiLayerStorage->forkCommittedSnapshot();
+                {
+                    std::lock_guard<std::mutex> lock(m_windowMutex);
+                    if (entriesAtHeight[static_cast<std::size_t>(block.number - baseHeight)] > 1)
+                    {
+                        losingBlocks = losingWindowBlocksLocked(block.hash);
+                    }
+                    losingBlocks.push_back(block.hash);
+                    // Prepare all allocations before the durable write. Readers selecting the
+                    // old window while the backend is updated still use its old disk version.
+                    droppedNodes.reserve(losingBlocks.size() + m_stagedCapacity);
+                    m_preFinalizeView.emplace(std::move(preFinalizeView));
+                }
+                try
+                {
+                    co_await m_multiLayerStorage->mergeFinalized(*block.state, *block.ledger);
+                }
+                catch (...)
+                {
+                    std::lock_guard<std::mutex> lock(m_windowMutex);
+                    droppedSnapshot.swap(m_preFinalizeView);
+                    throw;
+                }
+                pruned += losingBlocks.size() - 1;
+                {
+                    std::lock_guard<std::mutex> lock(m_windowMutex);
+                    for (auto const& hash : losingBlocks)
+                    {
+                        if (auto node = m_window.extract(hash))
+                        {
+                            if (auto const idx =
+                                    static_cast<std::size_t>(node.mapped().number - baseHeight);
+                                hash != block.hash && idx < chain.size())
+                            {
+                                --entriesAtHeight[idx];
+                            }
+                            eraseExecutedHashLocked(node.mapped().executedHash, node.key());
+                            droppedNodes.push_back(std::move(node));
+                        }
+                    }
+                    m_finalizedNumber.store(block.number);
+                    m_finalizedHash = block.hash;
+                    droppedSnapshot.swap(m_preFinalizeView);
+                    dropOrphanStagesLocked(block.hash, droppedNodes, droppedProbe);
+                    remaining = m_window.size();
+                }
+                lastFinalized = block.number;
+                OP_SCHEDULER_LOG(INFO)
+                    << "Finalized block " << block.number << " " << block.hash.abridged();
+                block = {};
+            }
+
+            OP_SCHEDULER_LOG(INFO) << "Finalize finished" << LOG_KV("finalized", lastFinalized)
+                                   << LOG_KV("merged", chain.size()) << LOG_KV("pruned", pruned)
+                                   << LOG_KV("windowBlocks", remaining);
         }
-        if (m_pending->announcedBlockHash != bcos::protocol::canonicalBlockHash(announcedHeader))
+        catch (...)
         {
-            OP_SCHEDULER_LOG(INFO) << "Fast-path cache holds a different block at height " << number
-                                   << "; ignoring cache and re-executing";
-            return std::nullopt;
+            captureError("Finalize failed!");
         }
-        OP_SCHEDULER_LOG(INFO) << "Block has been executed, return result directly";
-        return std::pair{m_pending->executedHeader, false};
+
+        // Notify once per batch after m_commitMutex is released, including any prefix that landed
+        // before a mid-chain failure (republishLedgerConfig always reads the latest disk tip).
+        if (lastFinalized >= 0)
+        {
+            try
+            {
+                notifyBlockNumber(lastFinalized);
+            }
+            catch (...)
+            {
+                captureError("Finalize notifier failed!");
+            }
+        }
+        co_return error;
+    }
+
+    /// Only leaves can be evicted. Protect the tracked head and the incoming block's parent.
+    /// Their ancestors already have children in the window.
+    /// Among remaining leaves, evict the one at the lowest height. Caller holds m_windowMutex.
+    std::optional<bcos::crypto::HashType> windowEvictionCandidateLocked(
+        std::optional<bcos::crypto::HashType> const& head,
+        bcos::crypto::HashType const& incomingParent) const
+    {
+        std::unordered_set<bcos::crypto::HashType> retained;
+        retained.reserve(m_window.size());
+        retained.insert(incomingParent);
+        if (head)
+        {
+            retained.insert(*head);
+        }
+        for (auto const& [hash, block] : m_window)
+        {
+            retained.insert(block.parentHash);
+        }
+
+        BlockLayer const* victim = nullptr;
+        for (auto const& [hash, block] : m_window)
+        {
+            if (!retained.contains(hash) &&
+                (!victim || std::tie(block.number, hash) < std::tie(victim->number, victim->hash)))
+            {
+                victim = &block;
+            }
+        }
+        return victim ? std::optional(victim->hash) : std::nullopt;
+    }
+
+    /// Build the block's ledger layer (when m_ledger is present) and stage it in m_staged.
+    task::Task<void> coStageBlock(std::vector<LayerPtr> const& parentLayers, LayerPtr stateLayer,
+        protocol::Block::Ptr block, OpEthExecuteBlockResult const& result,
+        bcos::crypto::HashType const& announcedHash, protocol::BlockHeader::Ptr executedHeader,
+        bool clearProbe)
+    {
+        auto blockHeader = block->blockHeader();
+        auto ledgerLayer = m_ledger ? co_await buildLedgerLayer(
+                                          parentLayers, stateLayer, block, result, announcedHash) :
+                                      LayerPtr{};
+        stageBlock(BlockLayer{.number = blockHeader->number(),
+                       .hash = announcedHash,
+                       .executedHash = bcos::protocol::canonicalBlockHash(*executedHeader),
+                       .parentHash = blockHeader->parentInfo().blockHash,
+                       .state = std::move(stateLayer),
+                       .ledger = std::move(ledgerLayer),
+                       .executedHeader = std::move(executedHeader),
+                       .block = std::move(block)},
+            clearProbe);
+    }
+
+    /// Staged blocks are re-executable. Replace the lowest-height entry at capacity so
+    /// abandoned stages cannot block a new verified payload; destroy evicted/probe outside lock.
+    void stageBlock(BlockLayer block, bool clearProbe)
+    {
+        BlockNode evicted;
+        std::optional<ProbeSlot> droppedProbe;
+        std::lock_guard lock(m_windowMutex);
+        auto const hash = block.hash;
+        if (m_staged.size() >= m_stagedCapacity && !m_staged.contains(hash))
+        {
+            evicted = m_staged.extract(std::min_element(
+                m_staged.begin(), m_staged.end(), [](auto const& lhs, auto const& rhs) {
+                    return std::tie(lhs.second.number, lhs.first) <
+                           std::tie(rhs.second.number, rhs.first);
+                }));
+        }
+        m_staged.insert_or_assign(hash, std::move(block));
+        if (clearProbe)
+        {
+            droppedProbe.swap(m_lastProbe);
+        }
+    }
+
+    void eraseExecutedHashLocked(
+        bcos::crypto::HashType const& execHash, bcos::crypto::HashType const& key)
+    {
+        if (auto it = m_windowByExecutedHash.find(execHash);
+            it != m_windowByExecutedHash.end() && it->second == key)
+        {
+            m_windowByExecutedHash.erase(it);
+        }
+    }
+
+    /// Staged children and the retained probe cannot attach to a pruned parent. Extracted into
+    /// caller-owned containers so destruction runs outside m_windowMutex.
+    void dropOrphanStagesLocked(bcos::crypto::HashType const& root,
+        std::vector<BlockNode>& droppedStages, std::optional<ProbeSlot>& droppedProbe)
+    {
+        auto parentMissing = [&](bcos::crypto::HashType const& parent) {
+            return parent != root && !m_window.contains(parent);
+        };
+        for (auto it = m_staged.begin(); it != m_staged.end();)
+        {
+            auto current = it++;
+            if (parentMissing(current->second.parentHash))
+            {
+                droppedStages.push_back(m_staged.extract(current));
+            }
+        }
+        if (m_lastProbe && parentMissing(m_lastProbe->executedHeader->parentInfo().blockHash))
+        {
+            droppedProbe.swap(m_lastProbe);
+        }
+    }
+
+    /// Plan the removal of non-descendants before publishing a finalized block.
+    std::vector<bcos::crypto::HashType> losingWindowBlocksLocked(
+        bcos::crypto::HashType const& root) const
+    {
+        std::unordered_multimap<bcos::crypto::HashType, bcos::crypto::HashType> children;
+        for (auto const& [hash, layer] : m_window)
+        {
+            children.emplace(layer.parentHash, hash);
+        }
+        std::unordered_set<bcos::crypto::HashType> keep{root};
+        std::vector<bcos::crypto::HashType> descendants{root};
+        for (std::size_t i = 0; i < descendants.size(); ++i)
+        {
+            for (auto [it, end] = children.equal_range(descendants[i]); it != end; ++it)
+            {
+                keep.insert(it->second);
+                descendants.push_back(it->second);
+            }
+        }
+        std::vector<bcos::crypto::HashType> losing;
+        for (auto const& [hash, _] : m_window)
+        {
+            if (!keep.contains(hash))
+            {
+                losing.push_back(hash);
+            }
+        }
+        return losing;
+    }
+
+    /// An initialized ledger anchors every chain at the next height and, when present,
+    /// at the finalized block hash. Caller holds m_windowMutex.
+    bool isFinalizedTipLocked(
+        bcos::crypto::HashType const& hash, protocol::BlockNumber oldestNumber) const
+    {
+        auto const finalized = m_finalizedNumber.load();
+        if (finalized == -1)
+        {
+            return true;
+        }
+        return oldestNumber > 0 && oldestNumber - 1 == finalized &&
+               (m_finalizedHash == bcos::crypto::HashType{} || hash == m_finalizedHash);
+    }
+
+    static std::vector<LayerPtr> layersFromAncestors(
+        std::vector<BlockLayer const*> const& ancestors)
+    {
+        std::vector<LayerPtr> layers;
+        layers.reserve(ancestors.size() * 2);
+        for (auto it = ancestors.rbegin(); it != ancestors.rend(); ++it)
+        {
+            layers.push_back((*it)->state);
+            layers.push_back((*it)->ledger);
+        }
+        return layers;
+    }
+
+    /// Ancestor layers of @p parentHash, oldest first, walking the window down to the
+    /// finalized tip. Requires hydrateFinalized() to have run.
+    ParentChain resolveParentChain(
+        bcos::crypto::HashType const& parentHash, protocol::BlockNumber number)
+    {
+        ParentChain out;
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        std::vector<BlockLayer const*> ancestors;  // newest first
+        auto cursor = parentHash;
+        auto oldestNumber = number;
+        for (auto it = m_window.find(cursor); it != m_window.end(); it = m_window.find(cursor))
+        {
+            if (oldestNumber <= 0 || it->second.number != oldestNumber - 1)
+            {
+                out.error = fmt::format("Block {}: nonconsecutive parent at height {}",
+                    oldestNumber, it->second.number);
+                return out;
+            }
+            ancestors.push_back(&it->second);
+            oldestNumber = it->second.number;
+            cursor = it->second.parentHash;
+        }
+        if (!isFinalizedTipLocked(cursor, oldestNumber))
+        {
+            out.error = fmt::format(
+                "Block {}: parent {} is neither in the unfinalized window nor the finalized tip "
+                "{} (finalized height {})",
+                number, parentHash.abridged(), m_finalizedHash.abridged(),
+                m_finalizedNumber.load());
+            return out;
+        }
+        out.layers = layersFromAncestors(ancestors);
+        return out;
+    }
+
+    /// Layers of @p layer's chain INCLUDING the block itself, oldest first. Caller holds
+    /// m_windowMutex.
+    std::vector<LayerPtr> chainLayersLocked(BlockLayer const& layer) const
+    {
+        std::vector<BlockLayer const*> ancestors{&layer};
+        auto cursor = layer.parentHash;
+        for (auto it = m_window.find(cursor); it != m_window.end(); it = m_window.find(cursor))
+        {
+            ancestors.push_back(&it->second);
+            cursor = it->second.parentHash;
+        }
+        return layersFromAncestors(ancestors);
+    }
+
+    /// The executed header of a staged or admitted block with this height and announced hash.
+    protocol::BlockHeader::Ptr knownExecutedHeader(
+        protocol::BlockNumber number, bcos::crypto::HashType const& announcedBlockHash)
+    {
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        for (auto const* table : {&m_staged, &m_window})
+        {
+            if (auto it = table->find(announcedBlockHash);
+                it != table->end() && it->second.number == number)
+            {
+                OP_SCHEDULER_LOG(INFO) << "Block " << number << " has been executed, return "
+                                       << "result directly";
+                return it->second.executedHeader;
+            }
+        }
+        return nullptr;
     }
 
     /// OP blocks carry txs inline.
@@ -1212,10 +1889,7 @@ private:
                 "raw tx decode or block-level consensus fault");
         }
 
-        // Commit keys on the announced payload hash; finishExecute() mirrors announced
-        // metadata + execution commitments onto executedHeader, which stays out of this identity.
-        bcos::crypto::HashType announcedBlockHash = bcos::protocol::canonicalBlockHash(header);
-        co_return ExecuteOutcome{std::move(result), announcedBlockHash};
+        co_return ExecuteOutcome{std::move(result)};
     }
 
     /// Copy execution commitments onto a clone of the announced header.
@@ -1276,93 +1950,99 @@ private:
         co_return executedBlockHeader;
     }
 
-    /// prewriteBlockToBuffer(announcedHash). Undo journal is a follow-up.
-    task::Task<std::shared_ptr<typename MultiLayerStorage::MutableStorage>> commitPersist(
-        PendingBlock const& pending)
+    /// This block's ledger rows as its own layer (D1 §9.3): receipts attached to the block,
+    /// prewriteBlockToBuffer(announcedHash, writeNonces=false) written on top of the parent
+    /// chain + @p stateLayer so number-keyed rows of a sibling never collide, then the two
+    /// SYS_CURRENT_STATE totals recomputed from the PARENT CHAIN. Ledger::asyncPrewriteBlock
+    /// derives them from the ledger's own state storage, i.e. the finalized backend, which
+    /// under a window is stale by every unfinalized ancestor; reading the parent's rows through
+    /// the chain view keeps each branch's running totals correct by induction.
+    task::Task<LayerPtr> buildLedgerLayer(std::vector<LayerPtr> parentLayers,
+        LayerPtr const& stateLayer, protocol::Block::Ptr const& block,
+        OpEthExecuteBlockResult const& result, bcos::crypto::HashType const& announcedBlockHash)
     {
-        auto storage = std::make_shared<typename MultiLayerStorage::MutableStorage>();
-
         // Receipt count must equal tx count.
-        if (pending.result.receipts.size() != pending.block->transactionsSize())
+        if (result.receipts.size() != block->transactionsSize())
             BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{} << bcos::errinfo_comment{
                                       "OP block execution returned a receipt count differing "
                                       "from the transaction count"});
 
-        auto block = pending.block;
-        // Idempotency: retrying a failed commit re-appends the same pending result; clear first.
+        parentLayers.push_back(stateLayer);
+        auto view = m_multiLayerStorage->forkChain(std::move(parentLayers));
+        auto readTotal = [&view](std::string_view key) -> task::Task<int64_t> {
+            auto entry = co_await storage2::readOne(
+                view, executor_v1::StateKeyView{ledger::SYS_CURRENT_STATE, key});
+            co_return entry ? boost::lexical_cast<int64_t>(entry->get()) : 0;
+        };
+        auto const parentTotal = co_await readTotal(ledger::SYS_KEY_TOTAL_TRANSACTION_COUNT);
+        auto const parentFailed = co_await readTotal(ledger::SYS_KEY_TOTAL_FAILED_TRANSACTION);
+        view.newMutable();
+
+        // Idempotency: a re-run re-appends the same result; clear first.
         block->clearReceipts();
-        for (auto const& r : pending.result.receipts)
-            block->appendReceipt(r);
-        // Only toShared() copies should carry setStoreToBackend.
-        for (auto const& tx : block->transactions())
-            tx->setStoreToBackend(false);
+        int64_t failedCount = 0;
+        for (auto const& receipt : result.receipts)
+        {
+            block->appendReceipt(receipt);
+            if (receipt->status() != 0)
+            {
+                ++failedCount;
+            }
+        }
+        // Always write the block's inline transactions into its own branch. Inline prewrite
+        // neither consults nor updates storeToBackend; this layer can still be discarded.
+        co_await bcos::ledger::prewriteBlockToBuffer(
+            *m_ledger, nullptr, block, view, announcedBlockHash, /*writeNonces=*/false);
 
-        // toShared() is required for ConstPtr.
-        auto blockTxs = std::make_shared<protocol::ConstTransactions>(
-            block->transactions() | ::ranges::views::transform([](auto tx) {
-                return protocol::Transaction::ConstPtr{std::move(tx).toShared()};
-            }) |
-            ::ranges::to<std::vector>());
-
-        co_await bcos::ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, *storage,
-            pending.announcedBlockHash, /*writeNonces=*/false);
-        co_return storage;
+        auto writeTotal = [&view](std::string_view key, int64_t value) -> task::Task<void> {
+            co_await storage2::writeOne(view,
+                executor_v1::StateKey{ledger::SYS_CURRENT_STATE, std::string(key)},
+                storage::Entry{boost::lexical_cast<std::string>(value)});
+        };
+        co_await writeTotal(ledger::SYS_KEY_TOTAL_TRANSACTION_COUNT,
+            parentTotal + static_cast<int64_t>(result.receipts.size()));
+        if (failedCount != 0)
+        {
+            co_await writeTotal(
+                ledger::SYS_KEY_TOTAL_FAILED_TRANSACTION, parentFailed + failedCount);
+        }
+        co_return view.m_mutableStorage;
     }
 
-    /// Load lastCommitted (and lastExecuted if still unset) from storage after restart.
-    task::Task<void> hydrateCommittedTip()
+    /// Load the finalized tip (height + hash) from the backend once (restart, D1 §13.2). The
+    /// hash stays zero when the ledger has no SYS_NUMBER_2_HASH row for the tip; the chain
+    /// checks then fall back to height continuity (isFinalizedTipLocked).
+    task::Task<void> hydrateFinalized()
     {
-        if (m_lastCommittedBlockNumber.load() != -1)
+        if (m_finalizedNumber.load() != -1)
         {
             co_return;
         }
         auto view = m_multiLayerStorage->forkCommitted();
         auto const tip =
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-        if (tip != -1)
+        if (tip == -1)
         {
-            m_lastCommittedBlockNumber.store(tip);
-            if (m_lastExecutedBlockNumber.load() == -1)
-            {
-                m_lastExecutedBlockNumber.store(tip);
-            }
+            co_return;
         }
-    }
-
-    /// Reject already-committed or discontinuous heights.
-    task::Task<bool> commitContinuityCheck(protocol::BlockNumber number)
-    {
-        if (!isSysContractDeploy(number))
+        auto const hash = co_await ledger::getBlockHash(view, tip, ledger::fromStorage);
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        if (m_finalizedNumber.load() == -1)
         {
-            auto lastCommitted = m_lastCommittedBlockNumber.load();
-            if (lastCommitted == -1)
-            {
-                auto view = m_multiLayerStorage->forkCommitted();
-                lastCommitted =
-                    co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-                m_lastCommittedBlockNumber.store(lastCommitted);
-            }
-            if (lastCommitted != -1 && number <= lastCommitted)
-            {
-                OP_SCHEDULER_LOG(INFO)
-                    << "Block already committed: " << number << "! latest: " << lastCommitted;
-                co_return false;
-            }
-            else if (lastCommitted != -1 && number - lastCommitted != 1)
-            {
-                OP_SCHEDULER_LOG(INFO) << "Discontinuous commit block number: " << number
-                                       << "! expect: " << (lastCommitted + 1);
-                co_return false;
-            }
+            m_finalizedNumber.store(tip);
+            m_finalizedHash = hash.value_or(bcos::crypto::HashType{});
         }
-        co_return true;
     }
 
     /// Invoke the installed notifiers (ctor defaults are no-ops).
     void notifyBlockNumber(protocol::BlockNumber number)
     {
-        m_blockNumberNotifier(number);
-        m_transactionNotifier(number, std::make_shared<bcos::protocol::TransactionSubmitResults>(),
+        std::unique_lock lock(m_windowMutex);
+        auto blockNotifier = m_blockNumberNotifier;
+        auto txNotifier = m_transactionNotifier;
+        lock.unlock();
+        blockNotifier(number);
+        txNotifier(number, std::make_shared<bcos::protocol::TransactionSubmitResults>(),
             [](const Error::Ptr&) {});
     }
 
@@ -1599,16 +2279,10 @@ private:
     task::Task<protocol::TransactionReceipt::Ptr> coCallLatest(
         protocol::Transaction::Ptr transaction)
     {
-        auto view = m_multiLayerStorage->forkCommitted();
-        view.newMutable();
-        auto blockNumber =
-            co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-
         // Scenario B by construction (the OP lane builds the complete MPT from genesis):
-        // balances live in committed MPT only. The flat committed plane has no
-        // ACCOUNT_BALANCE rows, so route latest eth_call / estimateGas through the same MPT
-        // view as historical calls.
-        auto [err, receipt] = co_await coCallAtBlock(std::move(transaction), blockNumber);
+        // balances live in MPT only. The flat plane has no ACCOUNT_BALANCE rows, so route
+        // latest eth_call / estimateGas through the same MPT view as historical calls.
+        auto [err, receipt] = co_await coCallAtBlock(std::move(transaction), std::nullopt);
         if (err)
         {
             BOOST_THROW_EXCEPTION(*err);
@@ -1616,13 +2290,14 @@ private:
         co_return receipt;
     }
 
-    /// eth_call against the committed MPT at @p blockNumber. Refusals return Error, not throw.
+    /// eth_call on a single head-chain view. Use its tip if @p requestedBlock is absent.
     task::Task<std::tuple<Error::Ptr, protocol::TransactionReceipt::Ptr>> coCallAtBlock(
-        protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber)
+        protocol::Transaction::Ptr transaction, std::optional<protocol::BlockNumber> requestedBlock)
     {
-        auto latestView = m_multiLayerStorage->forkCommitted();
+        auto latestView = co_await headView();
         auto latestNumber =
             co_await bcos::ledger::getCurrentBlockNumber(latestView, bcos::ledger::fromStorage);
+        auto const blockNumber = requestedBlock.value_or(latestNumber);
         // Negative or beyond-latest: InvalidBlockNumber.
         if (blockNumber < 0 || blockNumber > latestNumber)
         {
@@ -1687,17 +2362,35 @@ private:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::IOServicePool::Ptr m_ioServicePool;
+    static constexpr std::size_t c_maxStagedBlocks = 16;
+    /// Leave room for the longest allowed canonical chain and one equally long alternate.
+    const std::size_t m_windowCapacity;
+    const std::size_t m_stagedCapacity;
     std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
         std::function<void(bcos::Error::Ptr)>)>
         m_transactionNotifier;
     bool m_crossCheckIncrementalRoot = false;
+    // Lock order: m_executeMutex → m_commitMutex → m_windowMutex. execute/admit try-lock the
+    // first two (fail closed on contention); finalize blocks on m_commitMutex. m_windowMutex is
+    // held only for map access, never across a co_await, so the RPC read plane (viewAt) is
+    // never blocked by a merge.
     std::mutex m_executeMutex;
-    std::atomic<int64_t> m_lastExecutedBlockNumber{-1};
     std::mutex m_commitMutex;
-    std::atomic<int64_t> m_lastCommittedBlockNumber{-1};
-    std::mutex m_pendingMutex;
-    std::optional<PendingBlock> m_pending;
+    mutable std::mutex m_windowMutex;
+    /// Finalized (backend) tip: height, monotonic, -1 before hydration/first block.
+    std::atomic<int64_t> m_finalizedNumber{-1};
+    /// Hash of the finalized tip; zero when the ledger has no SYS_NUMBER_2_HASH row for it.
+    bcos::crypto::HashType m_finalizedHash;
+    /// Admitted blocks by announced hash; parentHash chains to the window or the finalized tip.
+    BlockMap m_window;
+    std::unordered_map<bcos::crypto::HashType, bcos::crypto::HashType> m_windowByExecutedHash;
+    std::optional<ViewType> m_preFinalizeView;
+    /// Executed (verify=true) but not yet admitted; dropped by reset().
+    BlockMap m_staged;
+    /// The tracker's head for this scheduler's own reads (setCanonicalHeadProvider); guarded
+    /// by m_windowMutex, copied out before it is invoked.
+    CanonicalHeadProvider m_headProvider;
     std::optional<ProbeSlot> m_lastProbe;
 };
 
