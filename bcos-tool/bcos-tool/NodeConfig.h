@@ -601,6 +601,7 @@ private:
     // booting. Default off — the boot skips the scan entirely and only logs a hint (counting
     // the garbage would itself cost the full-table scan).
     bool m_mptPruneSweepGarbage = false;
+    // Required for reorg-enabled pruning: a rollback needs a full reachability rebuild.
     bool m_mptPruneAllowRebuild = false;
     // One-shot boot-time migration of the account tables to the binary encoding
     // (libinitializer/AccountTableMigration). Hex-only executor lanes refuse it at boot.

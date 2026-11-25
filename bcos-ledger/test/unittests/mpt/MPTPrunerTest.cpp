@@ -1735,6 +1735,94 @@ BOOST_AUTO_TEST_CASE(RebuildSkippedBeforeActivationThenDeltaSeeds)
     }
 }
 
+BOOST_AUTO_TEST_CASE(RebuildInvalidatesUntrackedStoredCounts)
+{
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    writeMptActivation(backend, /*activation=*/0);
+    constexpr int64_t N = 2;
+    auto const root = seedTrieFlushed(nodes, emptyRootHash(),
+        {{accountKeyHash(makeAddress(1)), makePruneAccount(0, 100).encode()}})
+                          .root;
+    std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, root}};
+
+    auto const abandoned = garbageHash(0xF2);
+    bcos::task::syncWait(nodes.writeOne(abandoned, bcos::bytes{0xBB}));
+    Pruner rebuilt(backend, N);
+    bcos::task::syncWait(
+        rebuilt.init(1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
+    BOOST_CHECK(rebuilt.countOf(abandoned) == std::optional<uint64_t>{0});
+    BOOST_CHECK(!rebuilt.deadlineOf(abandoned).has_value());
+
+    MPTDeltaLayer born;
+    born.refCountDeltas[abandoned] = 1;
+    born.newNodes[abandoned] = bcos::bytes{0xBB};
+    commitPruneBlock(backend, rebuilt, 2, born);
+    BOOST_CHECK(rebuilt.countOf(abandoned) == std::optional<uint64_t>{1});
+
+    MPTDeltaLayer obsoleted;
+    obsoleted.refCountDeltas[abandoned] = -1;
+    obsoleted.obsoletedNodes.insert(abandoned);
+    commitPruneBlock(backend, rebuilt, 3, obsoleted);
+    BOOST_CHECK(rebuilt.countOf(abandoned) == std::optional<uint64_t>{0});
+    BOOST_CHECK(rebuilt.deadlineOf(abandoned) == std::optional<uint64_t>{5});
+    runEmptyBlocks(backend, rebuilt, 4, 5);
+    BOOST_CHECK(!nodeRowExists(backend, abandoned));
+}
+
+BOOST_AUTO_TEST_CASE(InterruptedRebuildMarkerPreventsFastRestore)
+{
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    writeMptActivation(backend, /*activation=*/0);
+    constexpr int64_t N = 2;
+    auto const rootA = seedTrieFlushed(nodes, emptyRootHash(),
+        {{accountKeyHash(makeAddress(1)), makePruneAccount(0, 100).encode()}})
+                           .root;
+    auto const rootB = seedTrieFlushed(
+        nodes, rootA, {{accountKeyHash(makeAddress(1)), makePruneAccount(1, 200).encode()}})
+                           .root;
+    std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, rootA}, {2, rootB}};
+
+    Pruner initial(backend, N);
+    bcos::task::syncWait(
+        initial.init(2, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
+    auto const expectedPending = initial.pendingCount();
+    BOOST_REQUIRE_GT(expectedPending, 0U);
+
+    std::vector<bcos::executor_v1::StateKey> queueRows;
+    auto iterator = bcos::task::syncWait(bcos::storage2::range(backend, bcos::storage2::RANGE_SEEK,
+        bcos::executor_v1::StateKey{bcos::storage2::kMPTPruneQueueTable, std::string_view{}}));
+    while (auto item = bcos::task::syncWait(iterator.next()))
+    {
+        bcos::executor_v1::StateKeyView const key{std::get<0>(*item)};
+        if (key.m_table != bcos::storage2::kMPTPruneQueueTable)
+        {
+            break;
+        }
+        queueRows.push_back(std::get<0>(*item));
+    }
+    bcos::task::syncWait(bcos::storage2::removeSome(backend, std::move(queueRows)));
+
+    bcos::storage::Entry marker;
+    marker.set(std::string_view{"1"});
+    std::vector<std::pair<bcos::executor_v1::StateKey, bcos::storage::Entry>> markerRows;
+    markerRows.emplace_back(bcos::executor_v1::StateKey{bcos::storage2::kMPTPruneMetaTable,
+                                bcos::storage2::kMPTPruneRebuildInProgressKey},
+        std::move(marker));
+    bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(markerRows)));
+
+    Pruner restored(backend, N);
+    bcos::task::syncWait(
+        restored.init(2, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
+    BOOST_CHECK_EQUAL(restored.pendingCount(), expectedPending);
+    auto const markerAfter = bcos::task::syncWait(bcos::storage2::readOne(
+        backend, bcos::executor_v1::StateKey{bcos::storage2::kMPTPruneMetaTable,
+                     bcos::storage2::kMPTPruneRebuildInProgressKey}));
+    BOOST_REQUIRE(markerAfter.has_value());
+    BOOST_CHECK_EQUAL(markerAfter->get(), "0");
+}
+
 BOOST_AUTO_TEST_CASE(RebuildRequiresExplicitOptIn)
 {
     PruneBackend backend;

@@ -541,12 +541,22 @@ BOOST_AUTO_TEST_CASE(elReorgWindowVsMptPruneWindow)
         BOOST_CHECK_EQUAL(cfg.ethereumReorgWindow(), 256);
     }
     // Pruning window larger than / equal to the reorg window: accepted.
-    for (auto const* ini : {"[ethereum]\n[storage]\nmpt_prune_window=300\n",
-             "[ethereum]\nreorg_window=100\n[storage]\nmpt_prune_window=100\n"})
+    for (auto const* ini :
+        {"[ethereum]\n[storage]\nmpt_prune_window=300\nmpt_prune_allow_rebuild=true\n",
+            "[ethereum]\nreorg_window=100\n[storage]\nmpt_prune_window=100\nmpt_prune_allow_"
+            "rebuild=true\n"})
     {
         NodeConfig cfg(keyFactory);
         loadBoth(cfg, ini);
         BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+    }
+    // Pruning and reorgs are enabled, but the operator did not accept the rebuild cost:
+    // reject before any rollback can mutate the ledger and leave the pruner inconsistent.
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg, "[ethereum]\n[storage]\nmpt_prune_window=300\n");
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "mpt_prune_allow_rebuild=true"); });
     }
     // Pruning enabled below the reorg window: rejected — an in-window rollback target
     // would have its trie nodes pruned already.
@@ -621,7 +631,7 @@ BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
         NodeConfig cfg(keyFactory);
         loadBoth(cfg,
             "[web3_rpc]\nenable_debug_api=true\n"
-            "[storage]\nmpt_prune_window=300\n");
+            "[storage]\nmpt_prune_window=300\nmpt_prune_allow_rebuild=true\n");
         BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
             return errinfoContains(e, "enable_debug_api requires storage.mpt_prune_window = -1");
         });
@@ -632,7 +642,7 @@ BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
         NodeConfig cfg(keyFactory);
         loadBoth(cfg,
             "[engine_rpc]\nenable_debug_api=true\n"
-            "[storage]\nmpt_prune_window=300\n");
+            "[storage]\nmpt_prune_window=300\nmpt_prune_allow_rebuild=true\n");
         BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
             return errinfoContains(e, "enable_debug_api requires storage.mpt_prune_window = -1");
         });
@@ -646,7 +656,7 @@ BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
     // Pruning on with the namespace off: unaffected — the invariant is scoped to the gate.
     {
         NodeConfig cfg(keyFactory);
-        loadBoth(cfg, "[storage]\nmpt_prune_window=300\n");
+        loadBoth(cfg, "[storage]\nmpt_prune_window=300\nmpt_prune_allow_rebuild=true\n");
         BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
     }
 }

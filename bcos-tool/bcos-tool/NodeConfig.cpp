@@ -944,6 +944,14 @@ void NodeConfig::validateELModeInvariants() const
                                   std::to_string(m_ethereumReorgWindow) +
                                   "): an EL rollback target's trie nodes would already be pruned"));
     }
+    if (ethereumELModeEnabled() && m_ethereumReorgWindow > 0 && m_mptPruneWindow != -1 &&
+        !m_mptPruneAllowRebuild)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "storage.mpt_prune_allow_rebuild=true is required when MPT "
+                                  "pruning and ethereum.reorg_window are both enabled: an EL "
+                                  "rollback requires a full reference-count rebuild"));
+    }
     // The challenger data plane (debug_dbGet, gated by enable_debug_api on either listener)
     // reads MPT preimages straight out of the node store with no retention guarantee: a block
     // still inside a dispute game's challenge window can have its trie nodes pruned, and

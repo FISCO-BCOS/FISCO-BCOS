@@ -61,7 +61,9 @@
     ; format; no migration is provided.
     ; A full reachability rebuild can use a large temporary in-memory map. Default
     ; false refuses that rebuild with an actionable error; set true only when you
-    ; explicitly allow the startup cost. Matching metadata needs no rebuild.
+    ; explicitly allow the startup cost. Matching metadata needs no rebuild. When
+    ; pruning is enabled with ethereum.reorg_window > 0, true is required because
+    ; a rollback also needs a full reachability rebuild.
     ;mpt_prune_allow_rebuild=false
     ;mpt_prune_window=-1
     ; Startup garbage sweep: set true to scan the whole MPT node table at boot and

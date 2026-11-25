@@ -398,19 +398,22 @@ BOOST_AUTO_TEST_CASE(engineApiDebugApiFollowsTheListenerSection)
 
 BOOST_AUTO_TEST_CASE(traceApiIsIndependentAndAllowsRetainedState)
 {
-    auto web3 = starts(2, "[web3_rpc]\nenable_trace_api=true\n[storage]\nmpt_prune_window=1000\n");
+    auto web3 = starts(2,
+        "[web3_rpc]\nenable_trace_api=true\n[storage]\nmpt_prune_window=1000\nmpt_prune_allow_"
+        "rebuild=true\n");
     BOOST_CHECK(web3->enableTraceApi());
     BOOST_CHECK(!web3->engineApiTraceApi());
     BOOST_CHECK(!web3->enableDebugApi());
-    auto engine =
-        starts(2, "[engine_rpc]\nenable_trace_api=true\n[storage]\nmpt_prune_window=1000\n");
+    auto engine = starts(2,
+        "[engine_rpc]\nenable_trace_api=true\n[storage]\nmpt_prune_window=1000\nmpt_prune_allow_"
+        "rebuild=true\n");
     BOOST_CHECK(engine->engineApiTraceApi());
     BOOST_CHECK(!engine->enableTraceApi());
     BOOST_CHECK(!engine->engineApiDebugApi());
     BOOST_CHECK(!starts(2, "")->enableTraceApi());
     refuses(2,
         "[web3_rpc]\nenable_trace_api=true\nenable_debug_api=true\n"
-        "[storage]\nmpt_prune_window=1000\n",
+        "[storage]\nmpt_prune_window=1000\nmpt_prune_allow_rebuild=true\n",
         "enable_debug_api requires storage.mpt_prune_window = -1");
 }
 

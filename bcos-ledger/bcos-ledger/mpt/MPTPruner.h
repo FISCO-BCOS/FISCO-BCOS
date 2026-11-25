@@ -1064,6 +1064,8 @@ private:
             *m_backend, metadataKey(bcos::storage2::kMPTPruneHeadRootKey));
         auto windowEntry = co_await bcos::storage2::readOne(
             *m_backend, metadataKey(bcos::storage2::kMPTPruneWindowKey));
+        auto rebuildEntry = co_await bcos::storage2::readOne(
+            *m_backend, metadataKey(bcos::storage2::kMPTPruneRebuildInProgressKey));
         state.present = trackedEntry && rootEntry && windowEntry;
         if (!state.present)
         {
@@ -1075,7 +1077,8 @@ private:
         state.tracked = std::stoull(std::string(trackedRaw));
         auto const storedWindow = std::stoll(std::string(windowRaw));
         state.matches =
-            storedWindow == m_pruneWindow && rootRaw.size() == bcos::h256::SIZE &&
+            (!rebuildEntry || rebuildEntry->get() == "0") && storedWindow == m_pruneWindow &&
+            rootRaw.size() == bcos::h256::SIZE &&
             bcos::h256(bcos::bytesConstRef(
                 reinterpret_cast<bcos::byte const*>(rootRaw.data()), rootRaw.size())) == headRoot;
         co_return state;
@@ -1142,8 +1145,66 @@ private:
         co_await bcos::storage2::writeSome(*m_backend, std::move(upserts));
     }
 
+    bcos::task::Task<void> invalidateUntrackedNodes()
+    {
+        auto iterator = co_await bcos::storage2::range(*m_backend, bcos::storage2::RANGE_SEEK,
+            bcos::executor_v1::StateKey{bcos::storage2::kMPTTable, std::string_view{}});
+        std::vector<std::pair<bcos::executor_v1::StateKey, bcos::storage::Entry>> upserts;
+        while (auto item = co_await iterator.next())
+        {
+            bcos::executor_v1::StateKeyView const key{std::get<0>(*item)};
+            if (key.m_table != bcos::storage2::kMPTTable)
+            {
+                break;
+            }
+            if (key.m_key.size() != bcos::h256::SIZE)
+            {
+                continue;
+            }
+            bcos::h256 const hash{bcos::bytesConstRef(
+                reinterpret_cast<bcos::byte const*>(key.m_key.data()), bcos::h256::SIZE)};
+            if (m_counts.contains(hash))
+            {
+                continue;
+            }
+            auto const* entry =
+                std::get_if<bcos::storage::Entry>(std::addressof(std::get<1>(*item)));
+            if (!entry)
+            {
+                continue;
+            }
+            bcos::bytes raw;
+            try
+            {
+                raw = decodeStoredNode(entry->get()).rlp;
+            }
+            catch (bcos::storage2::MPTNodeStorageError const&)
+            {
+                continue;
+            }
+            upserts.emplace_back(bcos::ledger::mptNodeStateKey(hash),
+                makeEntry(encodeStoredNode(bcos::ref(raw), 0, 0)));
+            if (upserts.size() >= SWEEP_DELETE_CHUNK)
+            {
+                co_await bcos::storage2::writeSome(*m_backend, std::move(upserts));
+                upserts.clear();
+            }
+        }
+        if (!upserts.empty())
+        {
+            co_await bcos::storage2::writeSome(*m_backend, std::move(upserts));
+        }
+    }
+
     bcos::task::Task<void> persistRebuild(bcos::h256 const& headRoot)
     {
+        PruneRowBatch inProgress;
+        inProgress.upserts.emplace_back(metadataKey(bcos::storage2::kMPTPruneRebuildInProgressKey),
+            makeEntry(std::string_view{"1"}));
+        co_await bcos::storage2::writeSome(*m_backend, std::move(inProgress.upserts));
+
+        // The rebuilt set is authoritative: abandoned rows must restart from zero when revived.
+        co_await invalidateUntrackedNodes();
         std::vector<bcos::h256> hashes;
         for (auto const& [hash, entry] : m_counts)
         {
@@ -1183,6 +1244,8 @@ private:
         m_trackedCount = m_counts.size();
         m_stagedTrackedCount = m_trackedCount;
         appendMetadata(metadata, m_trackedCount, headRoot);
+        metadata.upserts.emplace_back(metadataKey(bcos::storage2::kMPTPruneRebuildInProgressKey),
+            makeEntry(std::string_view{"0"}));
         co_await bcos::storage2::writeSome(*m_backend, std::move(metadata.upserts));
     }
 

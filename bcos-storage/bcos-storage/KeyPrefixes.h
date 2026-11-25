@@ -44,6 +44,7 @@ inline constexpr std::string_view kMPTPruneMetaTable = "/sys/mpt_prune_meta/";
 inline constexpr std::string_view kMPTPruneTrackedCountKey = "tracked_count";
 inline constexpr std::string_view kMPTPruneHeadRootKey = "head_root";
 inline constexpr std::string_view kMPTPruneWindowKey = "prune_window";
+inline constexpr std::string_view kMPTPruneRebuildInProgressKey = "rebuild_in_progress";
 
 static_assert(kMPTTable.find(':') == std::string_view::npos,
     "the MPT table name must not contain ':' — StateKeyResolver splits a physical key at its "
