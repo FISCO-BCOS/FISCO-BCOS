@@ -362,8 +362,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // evaluated at the chain head's timestamp — LedgerConfigState is republished with every
     // committed block (MultiVersionScheduler's commitBlock wrapper, the engine services' commit
     // lanes, and the devp2p sync loop in EthereumSyncInitializer) and carries the head header's
-    // millisecond timestamp. Every other version keeps the L2 pool defaults (no fee market,
-    // blobs refused).
+    // millisecond timestamp. OP (executor_version>=3) keeps ChainKind::L2 (no fee market, blobs
+    // refused) while applying the same capacity/lifetime/per-sender bounds; older versions keep
+    // the unbounded L2 pool defaults.
     bcos::txpool::MemPoolConfig memPoolConfig;
     if (m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
     {
@@ -385,6 +386,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                        1000;
             };
         }
+    }
+    else if (m_executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+    {
+        // OP keeps pooled txs through L1 finality for rewind; bound the pool so finality stalls
+        // cannot grow it without limit while keeping ChainKind::L2 (no blobs / no L1 replacement).
+        memPoolConfig.capacity = m_nodeConfig->ethereumMempoolCapacity();
+        memPoolConfig.txLifetimeMs = m_nodeConfig->ethereumMempoolTxLifetimeMinutes() * 60 * 1000;
+        memPoolConfig.maxTxsPerSender = m_nodeConfig->ethereumMempoolMaxTxsPerSender();
     }
     m_memPoolInitializer = MemPoolInitializer::build(memPoolConfig);
 
@@ -770,7 +779,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
         m_opScheduler = opDelegate;
         // Republish the full ledger configuration after every OP FINALIZE — the notifier fires
-        // once per block merged into the backend, never on admit into the unfinalized window
+        // once per finalize batch (highest merged block), never on admit into the window
         // (see engine/OpLedgerConfigRepublish.h for why the engine must not publish the
         // scheduler's own LedgerConfig instead). On failure the previous snapshot stays, which
         // is strictly better than an empty one.
@@ -1239,9 +1248,13 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     if (m_setOpSchedulerBlockNumberNotifier)
     {
         m_setOpSchedulerBlockNumberNotifier(
-            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
-                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
-                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            [weakRpc = std::weak_ptr<bcos::rpc::RPCInterface>(_rpc), groupID, nodeName](
+                bcos::protocol::BlockNumber number) {
+                if (auto rpc = weakRpc.lock())
+                {
+                    INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                    rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+                }
             });
     }
 

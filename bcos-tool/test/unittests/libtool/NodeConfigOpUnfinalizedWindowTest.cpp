@@ -58,12 +58,12 @@ BOOST_AUTO_TEST_CASE(unfinalizedWindowDefault)
 BOOST_AUTO_TEST_CASE(unfinalizedWindowPopulated)
 {
     WindowConfigProbe probe;
-    auto pt = fromIni("[engine_rpc]\nunfinalized_window=4096\n");
+    auto pt = fromIni("[engine_rpc]\nunfinalized_window=2048\n");
     probe.loadEngineRpcConfig(pt);
-    BOOST_CHECK_EQUAL(probe.opUnfinalizedWindow(), 4096);
+    BOOST_CHECK_EQUAL(probe.opUnfinalizedWindow(), 2048);
     // Both bounds are inclusive.
     for (auto const* ini :
-        {"[engine_rpc]\nunfinalized_window=16\n", "[engine_rpc]\nunfinalized_window=100000\n"})
+        {"[engine_rpc]\nunfinalized_window=16\n", "[engine_rpc]\nunfinalized_window=4096\n"})
     {
         WindowConfigProbe edge;
         BOOST_REQUIRE_NO_THROW(edge.loadEngineRpcConfig(fromIni(ini)));
@@ -74,12 +74,12 @@ BOOST_AUTO_TEST_CASE(unfinalizedWindowOutOfRangeRejected)
 {
     for (auto const* ini :
         {"[engine_rpc]\nunfinalized_window=15\n", "[engine_rpc]\nunfinalized_window=0\n",
-            "[engine_rpc]\nunfinalized_window=-1\n", "[engine_rpc]\nunfinalized_window=100001\n"})
+            "[engine_rpc]\nunfinalized_window=-1\n", "[engine_rpc]\nunfinalized_window=4097\n"})
     {
         WindowConfigProbe probe;
         BOOST_CHECK_EXCEPTION(
             probe.loadEngineRpcConfig(fromIni(ini)), InvalidConfig, [](auto const& e) {
-                return errinfoContains(e, "engine_rpc.unfinalized_window must be in");
+                return errinfoContains(e, "engine_rpc.unfinalized_window must be in [16, 4096]");
             });
     }
 }

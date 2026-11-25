@@ -3677,4 +3677,178 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsOpPendingDroppedNotUnknownError)
     BOOST_CHECK(commitErr->errorMessage().find("Unexpected empty results") != std::string::npos);
 }
 
+// Regression tests for PR #5659 review fixes:
+// - F4c: O(1) idempotent coAdmit via m_windowByExecutedHash + cleanup on finalize
+// - F4d: multi-block finalizeUpTo fires blockNumberNotifier once with the highest merged block
+// - F5: OpScheduler::stop() releases captured callback references
+// - F6: m_staged is capped at 16 even under default unfinalizedWindow=1024, and coAdmit cleans
+//   up m_staged on non-capacity errors
+// - F8d: WindowBlockView::ledgerAt throws std::out_of_range when height > number
+BOOST_AUTO_TEST_CASE(WindowHardeningStopStageCapBatchNotifyAndBounds)
+{
+    Fixture f;  // default unfinalizedWindow = 1024 (m_windowCapacity = 2048, m_stagedCapacity = 16)
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+    auto const deposit = opeth::encodeOpEthDepositEnvelope(makeDeposit());
+    driveOpBlock(f, makeHeader(), {deposit});
+
+    // F6a: staging 17 distinct blocks at height 2 evicts the lowest-hash entry even though
+    // m_windowCapacity is 2048.
+    std::vector<std::pair<bcos::crypto::HashType, bcos::protocol::BlockHeader::Ptr>> staged;
+    staged.reserve(17);
+    for (uint8_t i = 1; i <= 17; ++i)
+    {
+        evmc::bytes32 src{};
+        src.bytes[31] = i;
+        auto out = executeOpBlock(
+            f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {depositEnvWithSource(src)}, true);
+        BOOST_REQUIRE_MESSAGE(out.err == nullptr, (out.err ? out.err->errorMessage() : ""));
+        staged.emplace_back(f.announcedHashAt.at(2), std::move(out.header));
+    }
+    auto minIt = std::min_element(staged.begin(), staged.end(),
+        [](auto const& lhs, auto const& rhs) { return lhs.first < rhs.first; });
+    {
+        bcos::Error::Ptr err;
+        f.scheduler->commitBlock(
+            minIt->second, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) { err = e; });
+        BOOST_REQUIRE(err != nullptr);
+        BOOST_CHECK(boost::get_error_info<bcos::engine::OpPendingDropped>(*err) != nullptr);
+    }
+
+    // Pick a surviving stage at height 2, admit it, verify idempotent resend (F4c) and ledgerAt
+    // out_of_range guard (F8d).
+    auto winner = (minIt == staged.begin()) ? staged[1] : staged[0];
+    commitOpBlock(f, winner.second);
+    {
+        bcos::Error::Ptr dupErr;
+        f.scheduler->commitBlock(winner.second,
+            [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) { dupErr = e; });
+        BOOST_CHECK(dupErr == nullptr);
+    }
+    {
+        auto wbv = bcos::task::syncWait(f.scheduler->windowBlockView(winner.first));
+        BOOST_REQUIRE(wbv.has_value());
+        BOOST_CHECK_THROW(wbv->ledgerAt(3), std::out_of_range);
+    }
+
+    // Admit blocks 3 and 4 on top of winner; pick a surviving side sibling at height 2 that is
+    // distinct from both minIt (evicted) and winner (admitted).
+    auto sideIt = std::find_if(staged.begin(), staged.end(), [&](auto const& entry) {
+        return entry.first != minIt->first && entry.first != winner.first;
+    });
+    BOOST_REQUIRE(sideIt != staged.end());
+    auto const side = *sideIt;
+    f.announcedHashAt[2] = winner.first;
+    auto b3 = executeOpBlock(f, makeHeaderAt(3, bcos::u256(2'000'000'000)), {deposit}, true);
+    BOOST_REQUIRE(b3.err == nullptr);
+    commitOpBlock(f, b3.header);
+    auto b4 = executeOpBlock(f, makeHeaderAt(4, bcos::u256(2'000'000'000)), {deposit}, true);
+    BOOST_REQUIRE(b4.err == nullptr);
+    commitOpBlock(f, b4.header);
+    auto const h4 = f.announcedHashAt.at(4);
+
+    // F4d: multi-block finalizeUpTo fires blockNumberNotifier once with the highest merged block
+    // (4) and drops orphan staged siblings at height 2.
+    std::vector<bcos::protocol::BlockNumber> batchNotified;
+    f.scheduler->setBlockNumberNotifier(
+        [&](bcos::protocol::BlockNumber n) { batchNotified.push_back(n); });
+    bcos::Error::Ptr finErr;
+    f.scheduler->finalizeUpTo(h4, [&](bcos::Error::Ptr e) { finErr = e; });
+    BOOST_REQUIRE(finErr == nullptr);
+    BOOST_REQUIRE_EQUAL(batchNotified.size(), 1U);
+    BOOST_CHECK_EQUAL(batchNotified.front(), 4);
+    BOOST_CHECK_EQUAL(f.scheduler->windowSize(), 0U);
+    // F4c: finalized block is no longer reported as already-in-window on stale commitBlock.
+    {
+        bcos::Error::Ptr staleErr;
+        f.scheduler->commitBlock(winner.second,
+            [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) { staleErr = e; });
+        BOOST_REQUIRE(staleErr != nullptr);
+        BOOST_CHECK(boost::get_error_info<bcos::engine::OpPendingDropped>(*staleErr) != nullptr);
+    }
+
+    // Orphan stage at height 2 was dropped during finalization of height 4.
+    {
+        bcos::Error::Ptr sideErr;
+        f.scheduler->commitBlock(
+            side.second, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) { sideErr = e; });
+        BOOST_REQUIRE(sideErr != nullptr);
+        BOOST_CHECK(boost::get_error_info<bcos::engine::OpPendingDropped>(*sideErr) != nullptr);
+    }
+
+    // F5: stop() releases strong references held by blockNumberNotifier, transactionNotifier,
+    // and canonicalHeadProvider.
+    auto bnOwner = std::make_shared<int>(1);
+    auto tnOwner = std::make_shared<int>(2);
+    auto hpOwner = std::make_shared<int>(3);
+    std::weak_ptr<int> bnWeak = bnOwner;
+    std::weak_ptr<int> tnWeak = tnOwner;
+    std::weak_ptr<int> hpWeak = hpOwner;
+    f.scheduler->setBlockNumberNotifier(
+        [keep = std::move(bnOwner)](bcos::protocol::BlockNumber) { (void)keep; });
+    f.scheduler->setTransactionNotifier(
+        [keep = std::move(tnOwner)](bcos::protocol::BlockNumber,
+            bcos::protocol::TransactionSubmitResultsPtr, std::function<void(bcos::Error::Ptr)> cb) {
+            (void)keep;
+            cb(nullptr);
+        });
+    f.scheduler->setCanonicalHeadProvider(
+        [keep = std::move(hpOwner)]() -> std::optional<bcos::crypto::HashType> {
+            (void)keep;
+            return std::nullopt;
+        });
+    BOOST_REQUIRE(!bnWeak.expired());
+    BOOST_REQUIRE(!tnWeak.expired());
+    BOOST_REQUIRE(!hpWeak.expired());
+    f.scheduler->stop();
+    BOOST_CHECK(bnWeak.expired());
+    BOOST_CHECK(tnWeak.expired());
+    BOOST_CHECK(hpWeak.expired());
+
+    // F6b negative control: when coAdmit fails with InvalidBlockNumber (parent no longer valid
+    // after hydrateFinalized advances tip), m_staged must drop the stale entry so a retry reports
+    // OpPendingDropped rather than repeating InvalidBlockNumber.
+    {
+        Fixture fStale;
+        auto const staleGenesisRoot = computeAndPersistGenesisTrie(fStale.multiLayerStorage);
+        // Seed only block 0's header (not SYS_KEY_CURRENT_NUMBER) so executeOpBlock can read its
+        // parent header while m_finalizedNumber stays -1 until commitBlock hydrates it.
+        {
+            auto view = fStale.multiLayerStorage.fork();
+            view.newMutable();
+            bcos::bytes encoded;
+            makeCallGenesisHeader(staleGenesisRoot)->encode(encoded);
+            bcos::task::syncWait(bcos::storage2::writeOne(view,
+                StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, "0"},
+                bcos::storage::Entry{std::move(encoded)}));
+            bcos::task::syncWait(fStale.multiLayerStorage.mergeView(std::move(view)));
+        }
+        auto b1 = executeOpBlock(fStale, makeHeader(), {deposit}, true);
+        BOOST_REQUIRE(b1.err == nullptr);
+        // Advance persisted tip to 1 before commitBlock hydrates m_finalizedNumber (still -1).
+        auto view = fStale.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::storage::Entry tipEntry;
+        tipEntry.set(std::string("1"));
+        bcos::task::syncWait(bcos::storage2::writeOne(view,
+            StateKey{
+                bcos::ledger::SYS_CURRENT_STATE, std::string(bcos::ledger::SYS_KEY_CURRENT_NUMBER)},
+            std::move(tipEntry)));
+        bcos::task::syncWait(fStale.multiLayerStorage.mergeView(std::move(view)));
+
+        bcos::Error::Ptr firstErr;
+        fStale.scheduler->commitBlock(
+            b1.header, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) { firstErr = e; });
+        BOOST_REQUIRE(firstErr != nullptr);
+        BOOST_CHECK_EQUAL(
+            firstErr->errorCode(), bcos::scheduler::SchedulerError::InvalidBlockNumber);
+
+        bcos::Error::Ptr secondErr;
+        fStale.scheduler->commitBlock(
+            b1.header, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) { secondErr = e; });
+        BOOST_REQUIRE(secondErr != nullptr);
+        BOOST_CHECK(boost::get_error_info<bcos::engine::OpPendingDropped>(*secondErr) != nullptr);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

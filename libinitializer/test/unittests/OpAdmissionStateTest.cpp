@@ -101,6 +101,29 @@ BOOST_AUTO_TEST_CASE(admissionReadsSelectedWindowHeadAndRewinds)
     BOOST_CHECK_EQUAL(*ignoresPending.rollupCost, 5);
     fixture->multiLayerStorage.popFrontStorage();
 
+    // Parameter-form inner coroutine: destroying the temporary AdmissionChainStateFn before
+    // awaiting its Task must keep storageOwner and HeadCache alive in the coroutine frame.
+    {
+        auto lifetimeOwner = std::make_shared<int>(42);
+        std::weak_ptr<int> weakOwner = lifetimeOwner;
+        auto detachedTask = [&] {
+            auto ephemeral =
+                initializer::makeOpAdmissionChainState(std::weak_ptr{fixture->opDelegate},
+                    std::move(lifetimeOwner), fixture->blockFactory, fixture->forkSchedule);
+            return ephemeral(*tx, checks);
+        }();
+        BOOST_CHECK(!weakOwner.expired());
+        auto const fromTemporary = [&] {
+            auto taskToRun = std::move(detachedTask);
+            return task::syncWait(std::move(taskToRun));
+        }();
+        BOOST_CHECK(weakOwner.expired());
+        BOOST_REQUIRE(fromTemporary.sender);
+        BOOST_CHECK_EQUAL(fromTemporary.config->hash().hex(), rewind.config->hash().hex());
+        BOOST_CHECK(fromTemporary.config->baseFeePerGas() == rewind.config->baseFeePerGas());
+        BOOST_CHECK_EQUAL(fromTemporary.sender->balance, rewind.sender->balance);
+    }
+
     // Model a restored header whose identity disagrees with the height index.
     auto committed = fixture->multiLayerStorage.forkCommitted();
     auto block =

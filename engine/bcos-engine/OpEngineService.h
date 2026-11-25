@@ -229,11 +229,7 @@ public:
     /// hash, so concurrent submissions cannot clobber each other.
     bcos::protocol::BlockHeader::Ptr executedHeader(h256 const& blockHash) const
     {
-        if (!m_delegate)
-        {
-            return nullptr;
-        }
-        auto entry = m_delegate->unfinalizedBlock(blockHash);
+        auto entry = m_delegate ? m_delegate->unfinalizedBlock(blockHash) : std::nullopt;
         return entry ? entry->header : nullptr;
     }
 
@@ -330,11 +326,8 @@ private:
         ~WindowMutationGuard() { m_epoch.fetch_add(1, std::memory_order_release); }
     };
 
-    bcos::Error::Ptr admitBlock(bcos::protocol::BlockHeader::Ptr header)
+    bcos::Error::Ptr admitBlockLocked(bcos::protocol::BlockHeader::Ptr header)
     {
-        // Admission can evict a side branch. Serialize with forkchoice's membership check
-        // and tracker update so an FCU cannot select a block that just left the window.
-        std::scoped_lock lock(m_fcuMutex);
         WindowMutationGuard guard{m_windowEpoch};
         bcos::Error::Ptr error;
         m_delegate->commitBlock(
@@ -342,6 +335,14 @@ private:
                 error = std::move(result);
             });
         return error;
+    }
+
+    bcos::Error::Ptr admitBlock(bcos::protocol::BlockHeader::Ptr header)
+    {
+        // Admission can evict a side branch. Serialize with forkchoice's membership check
+        // and tracker update so an FCU cannot select a block that just left the window.
+        std::scoped_lock lock(m_fcuMutex);
+        return admitBlockLocked(std::move(header));
     }
 
     /// FCU method-version window for the OP lane: V1-V3 exactly (Isthmus/Jovian —
@@ -407,25 +408,19 @@ private:
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     std::shared_ptr<DACaps> m_daCaps;
     bool m_allowSynthesizedL1Attributes;
-    /// newPayload requests can run concurrently on RPC threads (no serial executor). The
-    /// m_delegate (an OpScheduler) sequences (reset → executeBlock, executeBlock →
-    /// commitBlock) need no extra serialization here: OpScheduler::executeBlock try-locks
-    /// m_executeMutex AND m_commitMutex ("Another block is executing/committing!" — a
-    /// concurrent second caller fails closed), and executeBlock/commitBlock drive their task
-    /// via task::syncWait, so a sequence's calls are ordered within the calling thread.
-    /// OpScheduler::reset drops the STAGED (executed, not yet admitted) blocks and the probe
-    /// but never the window; a reset landing between another caller's executeBlock and
-    /// commitBlock can drop the stage, as can window or stage eviction. The OpPendingDropped
-    /// tag makes newPayload re-execute a dropped local build or answer SYNCING when a stage
-    /// disappears after that request's own execution.
+    /// Engine RPC handlers may run concurrently on RPC threads. Synchronous delegate write phases
+    /// (finalize + tracker commit, payload build reset/execute/publish, and newPayload
+    /// execute/admit) serialize on m_fcuMutex (never held across co_await) so concurrent FCU and
+    /// newPayload calls wait instead of colliding on OpScheduler's try-locks (-32603).
     /// newPayload run-ahead bound over the finalized tip (blocks); beyond it newPayload
     /// answers SYNCING (backpressure: op-node retries, nothing is lost).
     int64_t m_unfinalizedWindow;
     std::atomic<WindowClock::time_point> m_nextWindowWarning{WindowClock::time_point::min()};
-    /// Serializes admission and the synchronous finalize + tracker commit step of
-    /// updateForkchoice. Never held across a co_await in the engine.
+    /// Serializes synchronous delegate write phases and forkchoice publication (never across
+    /// co_await).
     std::mutex m_fcuMutex;
     std::atomic<std::uint64_t> m_windowEpoch{0};
+    std::atomic<std::uint64_t> m_finalizeEpoch{0};
     /// See setChainViewProvider. Set once at wiring, before any request is served.
     ChainViewProvider m_chainViewProvider;
 };

@@ -65,7 +65,7 @@ struct EngineRpcConfig
     bool enableDebugApi = false;
     bool enableTraceApi = false;
     // OP lane only: how many blocks newPayload may sit above the finalized (backend) tip before
-    // it answers SYNCING. Range [16, 100000].
+    // it answers SYNCING. Range [16, 4096].
     std::int64_t unfinalizedWindow = engine::c_defaultUnfinalizedWindow;
 };
 

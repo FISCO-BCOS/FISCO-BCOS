@@ -384,6 +384,9 @@ BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurren
             onFinalize;
         std::function<void(bcos::crypto::HashType const&)> onUnfinalizedLookup;
         std::function<void()> beforeExecute;
+        std::function<void(bcos::protocol::BlockHeader::Ptr,
+            std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)>)>
+            onCommit;
 
         explicit HookedDelegate(std::shared_ptr<Delegate> d) : inner(std::move(d)) {}
 
@@ -406,6 +409,11 @@ BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurren
         void commitBlock(bcos::protocol::BlockHeader::Ptr header,
             std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> cb) override
         {
+            if (onCommit)
+            {
+                onCommit(std::move(header), std::move(cb));
+                return;
+            }
             inner->commitBlock(std::move(header), std::move(cb));
         }
         void finalizeUpTo(bcos::crypto::HashType const& blockHash,
@@ -634,6 +642,8 @@ BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurren
         BOOST_CHECK_EQUAL(f.service->getFinalizedBlockNumber().value_or(-1), 4);
     }
 
+    // (e) A newPayload that raced finalization of the same hash after parent resolution answers
+    // VALID instead of throwing -32603.
     {
         auto const head = f.trackedHead();
         BOOST_REQUIRE(head);
@@ -642,9 +652,9 @@ BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurren
         // Drop the local payload artifact so both submissions take the external execution path.
         f.service = std::make_unique<OpEngine>(f.memPool, f.multiLayerStorage, f.seam,
             f.blockFactory, hooked, nullptr, false, f.unfinalizedWindow);
-        bool finalizedDuringExecute = false;
-        hooked->beforeExecute = [&] {
-            if (!std::exchange(finalizedDuringExecute, true))
+        bool finalizedDuringLookup = false;
+        hooked->onUnfinalizedLookup = [&](bcos::crypto::HashType const& hash) {
+            if (hash == *head && !std::exchange(finalizedDuringLookup, true))
             {
                 BOOST_REQUIRE(f.np(b6b).status == PayloadValidationStatus::Valid);
                 BOOST_REQUIRE(f.fcu(f.fc(h6b, h6b, h6b)).payloadStatus.status ==
@@ -652,12 +662,268 @@ BOOST_AUTO_TEST_CASE(fcu_finalize_failure_keeps_tracker_and_serializes_concurren
             }
         };
         auto const result = f.np(b6b);
-        hooked->beforeExecute = nullptr;
-        BOOST_CHECK(finalizedDuringExecute);
+        hooked->onUnfinalizedLookup = nullptr;
+        BOOST_CHECK(finalizedDuringLookup);
         BOOST_CHECK(result.status == PayloadValidationStatus::Valid);
         BOOST_REQUIRE(result.latestValidHash);
         BOOST_CHECK_EQUAL(result.latestValidHash->hex(), h6b.hex());
         BOOST_CHECK_EQUAL(f.backendNumber(), 6);
+    }
+
+    // (f) F3 Path C: parent was the finalized tip (!parent->inWindow), then a competing block at
+    // height 7 finalized before executeBlock ran. newPayload must answer SYNCING, not -32603.
+    {
+        auto const tip6 = f.trackedHead();
+        BOOST_REQUIRE(tip6);
+        auto const b7a = f.build(f.fc(*tip6, *tip6, *tip6), 7, 1);
+        auto const b7b = f.build(f.fc(*tip6, *tip6, *tip6), 7, 2);
+        auto const h7b = f.hashOf(b7b);
+        f.service = std::make_unique<OpEngine>(f.memPool, f.multiLayerStorage, f.seam,
+            f.blockFactory, hooked, nullptr, false, f.unfinalizedWindow);
+        bool competitorFinalized = false;
+        hooked->onUnfinalizedLookup = [&](bcos::crypto::HashType const& hash) {
+            if (hash == *tip6 && !std::exchange(competitorFinalized, true))
+            {
+                BOOST_REQUIRE(f.np(b7b).status == PayloadValidationStatus::Valid);
+                BOOST_REQUIRE(f.fcu(f.fc(h7b, h7b, h7b)).payloadStatus.status ==
+                              PayloadValidationStatus::Valid);
+            }
+        };
+        auto const result = f.np(b7a);
+        hooked->onUnfinalizedLookup = nullptr;
+        BOOST_CHECK(competitorFinalized);
+        BOOST_CHECK(result.status == PayloadValidationStatus::Syncing);
+        BOOST_CHECK_EQUAL(f.backendNumber(), 7);
+    }
+
+    // (g) F3 Paths A & B + F4a/F4b:
+    //   - concurrent finalizeUpTo vs newPayload serializes cleanly without -32603
+    //   - concurrent buildOpPayload vs newPayload serializes cleanly without -32603
+    //   - pure-append admitBlock does not force updateForkchoice to retry
+    //   - isOnChainOf stops at target height for same-height siblings (zero lower lookups)
+    {
+        auto const tip7 = f.trackedHead();
+        BOOST_REQUIRE(tip7);
+        auto const b8a = f.build(f.fc(*tip7, *tip7, *tip7), 8, 1);
+        auto const h8a = f.hashOf(b8a);
+        BOOST_REQUIRE(f.np(b8a).status == PayloadValidationStatus::Valid);
+        auto const b9a = f.build(f.fc(h8a, *tip7, *tip7), 9, 1);
+        auto const h9a = f.hashOf(b9a);
+        auto const b9b = f.build(f.fc(h8a, *tip7, *tip7), 9, 2);
+        auto const h9b = f.hashOf(b9b);
+
+        // Path A: FCU finalizing B8a while external newPayload submits B9a concurrently.
+        // Negative control: beforeExecute must never overlap finalizeUpTo (m_fcuMutex serializes).
+        f.service = std::make_unique<OpEngine>(f.memPool, f.multiLayerStorage, f.seam,
+            f.blockFactory, hooked, nullptr, false, f.unfinalizedWindow);
+        BOOST_REQUIRE(
+            f.fcu(f.fc(h8a, *tip7, *tip7)).payloadStatus.status == PayloadValidationStatus::Valid);
+        {
+            std::promise<void> inFinalizeProm;
+            std::promise<void> releaseFinalize;
+            auto releaseFuture = releaseFinalize.get_future().share();
+            std::atomic<bool> inFinalize{false};
+            std::atomic<bool> executeOverlappedFinalize{false};
+            PromiseRelease guardIn{inFinalizeProm};
+            PromiseRelease guardRelease{releaseFinalize};
+            hooked->beforeExecute = [&] {
+                if (inFinalize.load(std::memory_order_acquire))
+                {
+                    executeOverlappedFinalize.store(true, std::memory_order_release);
+                }
+            };
+            hooked->onFinalize = [&](bcos::crypto::HashType const& hash,
+                                     std::function<void(bcos::Error::Ptr)> cb) {
+                inFinalize.store(true, std::memory_order_release);
+                guardIn.release();
+                releaseFuture.wait();
+                hooked->inner->finalizeUpTo(hash, std::move(cb));
+                inFinalize.store(false, std::memory_order_release);
+            };
+            auto fcuFuture = std::async(std::launch::async, [&] {
+                ScopeRelease onExit{guardIn};
+                return f.fcu(f.fc(h8a, h8a, h8a));
+            });
+            inFinalizeProm.get_future().wait();
+            auto npFuture = std::async(std::launch::async, [&] { return f.np(b9a); });
+            // Let np reach m_fcuMutex, then release finalizeUpTo.
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            guardRelease.release();
+            auto const fcuRes = fcuFuture.get();
+            auto const npRes = npFuture.get();
+            hooked->onFinalize = nullptr;
+            hooked->beforeExecute = nullptr;
+            BOOST_CHECK(!executeOverlappedFinalize.load());
+            BOOST_CHECK(fcuRes.payloadStatus.status == PayloadValidationStatus::Valid);
+            BOOST_CHECK(npRes.status == PayloadValidationStatus::Valid);
+        }
+
+        // Path B: buildOpPayload holding m_fcuMutex while newPayload submits B9b concurrently.
+        // Negative control: maxConcurrentExecutes must stay 1 (m_fcuMutex serializes both).
+        {
+            std::promise<void> inBuild;
+            std::promise<void> releaseBuild;
+            auto releaseFuture = releaseBuild.get_future().share();
+            std::atomic<bool> pausedBuild{false};
+            std::atomic<int> activeExecutes{0};
+            std::atomic<int> maxConcurrentExecutes{0};
+            PromiseRelease guardIn{inBuild};
+            PromiseRelease guardRelease{releaseBuild};
+            hooked->beforeExecute = [&] {
+                int const cur = ++activeExecutes;
+                int prev = maxConcurrentExecutes.load();
+                while (cur > prev && !maxConcurrentExecutes.compare_exchange_weak(prev, cur))
+                {
+                }
+                struct Dec
+                {
+                    std::atomic<int>& counter;
+                    ~Dec() { --counter; }
+                } dec{activeExecutes};
+                if (!pausedBuild.exchange(true))
+                {
+                    guardIn.release();
+                    releaseFuture.wait();
+                }
+            };
+            auto attrs10 = f.attrs(10, 1);
+            auto buildFuture = std::async(std::launch::async, [&] {
+                ScopeRelease onExit{guardIn};
+                return f.fcu(f.fc(h9a, h8a, h8a), &attrs10);
+            });
+            inBuild.get_future().wait();
+            auto npFuture = std::async(std::launch::async, [&] { return f.np(b9b); });
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            guardRelease.release();
+            auto const buildRes = buildFuture.get();
+            auto const npRes = npFuture.get();
+            hooked->beforeExecute = nullptr;
+            BOOST_CHECK_EQUAL(maxConcurrentExecutes.load(), 1);
+            BOOST_CHECK(buildRes.payloadStatus.status == PayloadValidationStatus::Valid);
+            BOOST_CHECK(buildRes.payloadId.has_value());
+            BOOST_CHECK(npRes.status == PayloadValidationStatus::Valid);
+        }
+
+        // Built-header admitBlock receiving InvalidBlockNumber: answers Valid when already known,
+        // Syncing when unknown (never -32603).
+        {
+            auto const b10Known = f.build(f.fc(h9a, h8a, h8a), 10, 4);
+            auto const h10Known = f.hashOf(b10Known);
+            hooked->onCommit =
+                [&](bcos::protocol::BlockHeader::Ptr hdr,
+                    std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> cb) {
+                    hooked->inner->commitBlock(
+                        std::move(hdr), [&](bcos::Error::Ptr err, bcos::ledger::LedgerConfig::Ptr) {
+                            BOOST_REQUIRE(!err);
+                        });
+                    cb(BCOS_ERROR_UNIQUE_PTR(bcos::scheduler::SchedulerError::InvalidBlockNumber,
+                           "simulated post-finalize race"),
+                        nullptr);
+                };
+            auto const knownRes = f.np(b10Known);
+            hooked->onCommit = nullptr;
+            BOOST_CHECK(knownRes.status == PayloadValidationStatus::Valid);
+            BOOST_REQUIRE(knownRes.latestValidHash);
+            BOOST_CHECK_EQUAL(knownRes.latestValidHash->hex(), h10Known.hex());
+
+            auto const b10Unknown = f.build(f.fc(h9a, h8a, h8a), 10, 5);
+            hooked->onCommit =
+                [&](bcos::protocol::BlockHeader::Ptr,
+                    std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> cb) {
+                    cb(BCOS_ERROR_UNIQUE_PTR(bcos::scheduler::SchedulerError::InvalidBlockNumber,
+                           "simulated pruned parent race"),
+                        nullptr);
+                };
+            auto const unknownRes = f.np(b10Unknown);
+            hooked->onCommit = nullptr;
+            BOOST_CHECK(unknownRes.status == PayloadValidationStatus::Syncing);
+        }
+
+        // F4a: a pure-append admitBlock during FCU resolution must NOT trigger an FCU retry.
+        auto const b10a = f.build(f.fc(h9a, h8a, h8a), 10, 2);
+        auto const h10a = f.hashOf(b10a);
+        {
+            std::atomic<int> h9aLookups{0};
+            bool appended = false;
+            hooked->onUnfinalizedLookup = [&](bcos::crypto::HashType const& hash) {
+                if (hash == h9a)
+                {
+                    int const count = ++h9aLookups;
+                    if (count == 1 && !std::exchange(appended, true))
+                    {
+                        BOOST_REQUIRE(f.np(b10a).status == PayloadValidationStatus::Valid);
+                    }
+                }
+            };
+            auto const fcuRes = f.fcu(f.fc(h9a, h9a, h8a));
+            hooked->onUnfinalizedLookup = nullptr;
+            BOOST_CHECK(appended);
+            BOOST_CHECK(fcuRes.payloadStatus.status == PayloadValidationStatus::Valid);
+            // Lookup 1: resolveBlock(head), Lookup 2: resolveBlock(safe),
+            // Lookup 3: windowMissing(head), Lookup 4: windowMissing(safe) — zero loop retries!
+            BOOST_CHECK_EQUAL(h9aLookups.load(), 4);
+        }
+
+        // F4b: isOnChainOf stops at target height for both same-height siblings (h9a vs h9b)
+        // and multi-step walks (h10a vs h9b) without ever querying h8a.
+        {
+            int h8aWalkLookups = 0;
+            hooked->onUnfinalizedLookup = [&](bcos::crypto::HashType const& hash) {
+                if (hash == h8a)
+                {
+                    ++h8aWalkLookups;
+                }
+            };
+            BOOST_CHECK_THROW(
+                f.fcu(f.fc(h9a, h9b, bcos::h256{})), bcos::engine::InvalidForkchoiceState);
+            BOOST_CHECK_THROW(
+                f.fcu(f.fc(h10a, h9b, bcos::h256{})), bcos::engine::InvalidForkchoiceState);
+            hooked->onUnfinalizedLookup = nullptr;
+            BOOST_CHECK_EQUAL(h8aWalkLookups, 0);
+        }
+
+        // Retry exhaustion under continuous concurrent window mutations must answer SYNCING
+        // (not spurious -38002), while the uncontended call still throws InvalidForkchoiceState.
+        {
+            bcos::h256 const unknownSafe(
+                "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+            BOOST_CHECK_THROW(
+                f.fcu(f.fc(h10a, unknownSafe, bcos::h256{})), bcos::engine::InvalidForkchoiceState);
+
+            std::vector<bcos::engine::NewPayloadRequest> siblings;
+            for (uint64_t mint = 10; mint < 18; ++mint)
+            {
+                siblings.push_back(f.build(f.fc(h9a, h8a, h8a), 10, mint));
+            }
+            std::size_t attempts = 0;
+            hooked->onUnfinalizedLookup = [&](bcos::crypto::HashType const& hash) {
+                if (hash == h10a && attempts < siblings.size())
+                {
+                    auto const idx = attempts++;
+                    BOOST_REQUIRE(f.np(siblings[idx]).status == PayloadValidationStatus::Valid);
+                }
+            };
+            auto const exhausted = f.fcu(f.fc(h10a, unknownSafe, bcos::h256{}));
+            hooked->onUnfinalizedLookup = nullptr;
+            BOOST_CHECK_EQUAL(attempts, 8U);
+            BOOST_CHECK(exhausted.payloadStatus.status == PayloadValidationStatus::Syncing);
+            BOOST_CHECK(!exhausted.payloadId.has_value());
+        }
+
+        // F8b: undecodable stored header at finalized tip throws OpExecutionInternalError.
+        {
+            auto view = f.multiLayerStorage.forkCommitted();
+            view.newMutable();
+            bcos::storage::Entry corrupt;
+            corrupt.set(bcos::bytes{0xff, 0x00, 0xab});
+            bcos::task::syncWait(bcos::storage2::writeOne(view,
+                bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, "8"},
+                std::move(corrupt)));
+            bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
+            auto attrs9 = f.attrs(9, 3);
+            BOOST_CHECK_THROW(
+                f.fcu(f.fc(h8a, h8a, h8a), &attrs9), bcos::engine::OpExecutionInternalError);
+        }
     }
 }
 
