@@ -3,24 +3,29 @@ pragma solidity 0.8.25;
 
 import "forge-std/Test.sol";
 import {SystemConfig} from "../src/SystemConfig.sol";
-import {ISystemConfig} from "../src/interfaces/ISystemConfig.sol";
 
 contract SystemConfigTest is Test {
     SystemConfig cfg;
     address owner = address(0xCAFE);
 
-    // The only runtime-writable key (D4 authority boundary).
-    string constant WRITABLE_KEY = "block_tx_count_limit";
+    // A genesis-seeded key (chain-config system_config); runtime-frozen like every key.
+    string constant GENESIS_KEY = "chain_id";
 
     function setUp() public {
         cfg = new SystemConfig();
         cfg.initialize(owner);
     }
 
-    function test_SetGetValueByKey_RoundTrip() public {
-        vm.prank(owner);
-        cfg.setValueByKey(WRITABLE_KEY, 3_000, 5);
-        (uint192 v, uint64 e) = cfg.getValueByKey(WRITABLE_KEY);
+    /// Entries are written at genesis straight into the Entry slot (build-allocs.py); the
+    /// contract only reads them back. vm.store stands in for the genesis tooling.
+    function seedEntry(string memory key, uint192 value, uint64 enableNumber) internal {
+        bytes32 slot = keccak256(abi.encodePacked(key, CONFIG_BASE_SLOT));
+        vm.store(address(cfg), slot, bytes32((uint256(enableNumber) << 192) | uint256(value)));
+    }
+
+    function test_GetValueByKey_ReadsGenesisSeededEntry() public {
+        seedEntry(GENESIS_KEY, 3_000, 5);
+        (uint192 v, uint64 e) = cfg.getValueByKey(GENESIS_KEY);
         assertEq(uint256(v), 3_000);
         assertEq(uint256(e), 5);
     }
@@ -34,7 +39,7 @@ contract SystemConfigTest is Test {
     function test_SetValueByKey_OnlyOwner() public {
         vm.prank(address(0xBEEF));
         vm.expectRevert("Ownable: caller is not the owner");
-        cfg.setValueByKey(WRITABLE_KEY, 1, 0);
+        cfg.setValueByKey(GENESIS_KEY, 1, 0);
     }
 
     /// D4 authority boundary: frozen keys revert even for the owner —
@@ -60,38 +65,31 @@ contract SystemConfigTest is Test {
         cfg.setValueByKey("some_future_key", 1, 0);
     }
 
-    function test_SetValueByKey_EmitsConfigUpdate() public {
-        vm.expectEmit(true, false, false, true);
-        emit ISystemConfig.ConfigUpdate(WRITABLE_KEY, 901, 5);
+    /// The whitelist is empty: the owner's write of a genesis-seeded key reverts too, and
+    /// the seeded entry is untouched.
+    function test_SetValueByKey_OwnerCannotOverwriteGenesisEntry() public {
+        seedEntry(GENESIS_KEY, 1, 10);
         vm.prank(owner);
-        cfg.setValueByKey(WRITABLE_KEY, 901, 5);
+        vm.expectRevert("SystemConfig: key not runtime-writable");
+        cfg.setValueByKey(GENESIS_KEY, 2, 20);
+        (uint192 v, uint64 e) = cfg.getValueByKey(GENESIS_KEY);
+        assertEq(uint256(v), 1);
+        assertEq(uint256(e), 10);
     }
 
-    /// value (192 bit) and enableNumber (64 bit) share one slot; setting one to
-    /// its max must not bleed into the other.
+    /// value (192 bit) and enableNumber (64 bit) share one slot; a max in one
+    /// half must not bleed into the other when the word is split on read.
     function test_Packing_ValueAndEnableIndependent() public {
         uint192 bigV = type(uint192).max;
         uint64 bigE = type(uint64).max;
-        vm.startPrank(owner);
-        cfg.setValueByKey(WRITABLE_KEY, bigV, 0);
-        (uint192 v1, uint64 e1) = cfg.getValueByKey(WRITABLE_KEY);
+        seedEntry(GENESIS_KEY, bigV, 0);
+        (uint192 v1, uint64 e1) = cfg.getValueByKey(GENESIS_KEY);
         assertEq(uint256(v1), uint256(bigV));
         assertEq(uint256(e1), 0);
-        cfg.setValueByKey(WRITABLE_KEY, 0, bigE);
-        (uint192 v2, uint64 e2) = cfg.getValueByKey(WRITABLE_KEY);
+        seedEntry(GENESIS_KEY, 0, bigE);
+        (uint192 v2, uint64 e2) = cfg.getValueByKey(GENESIS_KEY);
         assertEq(uint256(v2), 0);
         assertEq(uint256(e2), uint256(bigE));
-        vm.stopPrank();
-    }
-
-    function test_Overwrite_LastWriteWins() public {
-        vm.startPrank(owner);
-        cfg.setValueByKey(WRITABLE_KEY, 1, 10);
-        cfg.setValueByKey(WRITABLE_KEY, 2, 20);
-        vm.stopPrank();
-        (uint192 v, uint64 e) = cfg.getValueByKey(WRITABLE_KEY);
-        assertEq(uint256(v), 2);
-        assertEq(uint256(e), 20);
     }
 
     function test_Initialize_CannotBeCalledTwice() public {
@@ -105,18 +103,17 @@ contract SystemConfigTest is Test {
     ///      reader hardcodes this baseSlot.
     uint256 internal constant CONFIG_BASE_SLOT = 101;
 
-    /// Cross-language storage contract: the L2 upper layers read a key's slot
-    /// directly (no EVM) via keccak256(utf8(key) ‖ be32(baseSlot)), then split the
-    /// word into value(low 192) / enableNumber(high 64). This test asserts the
-    /// Solidity mapping addressing equals that exact formula — if it ever diverges
-    /// (e.g. someone adds state before _config, shifting baseSlot), the C++ reader
-    /// would read garbage, and this fails first.
+    /// Cross-language storage contract: genesis tooling writes a key's slot
+    /// directly (no EVM) via keccak256(utf8(key) ‖ be32(baseSlot)), packing
+    /// value(low 192) / enableNumber(high 64). This test asserts the Solidity
+    /// mapping addressing equals that exact formula — if it ever diverges (e.g.
+    /// someone adds state before _config, shifting baseSlot), getValueByKey would
+    /// miss every genesis-seeded entry, and this fails first.
     function test_SlotAddressing_MatchesKeccakFormula() public {
-        vm.prank(owner);
-        cfg.setValueByKey(WRITABLE_KEY, 901, 5);
-        bytes32 slot = keccak256(abi.encodePacked(WRITABLE_KEY, CONFIG_BASE_SLOT));
-        uint256 word = uint256(vm.load(address(cfg), slot));
-        assertEq(word & ((uint256(1) << 192) - 1), 901, "value = low 192 bits");
-        assertEq(word >> 192, 5, "enableNumber = high 64 bits");
+        bytes32 slot = keccak256(abi.encodePacked(GENESIS_KEY, CONFIG_BASE_SLOT));
+        vm.store(address(cfg), slot, bytes32((uint256(5) << 192) | uint256(901)));
+        (uint192 v, uint64 e) = cfg.getValueByKey(GENESIS_KEY);
+        assertEq(uint256(v), 901, "value = low 192 bits");
+        assertEq(uint256(e), 5, "enableNumber = high 64 bits");
     }
 }

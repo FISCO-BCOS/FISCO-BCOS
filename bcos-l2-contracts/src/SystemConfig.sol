@@ -21,16 +21,20 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 ///         never point them at the same entity.
 ///
 ///         Runtime writes are restricted to a key whitelist (D4 authority
-///         boundary): `chain_id` is chain identity, immutable after genesis;
-///         `gas_limit` authority is L1 SystemConfig → op-node payload
-///         attributes → execution layer, never this contract;
+///         boundary), and the whitelist is currently EMPTY: setValueByKey
+///         reverts for every key. `chain_id` is chain identity, immutable
+///         after genesis; `gas_limit` authority is L1 SystemConfig → op-node
+///         payload attributes → execution layer, never this contract;
 ///         `compatibility_version` / `feature_flags` change state-transition
 ///         semantics, so a runtime write would fork FISCO from the OP oracle.
 ///         `chain_id` and `gas_limit` are frozen permanently;
 ///         `compatibility_version` and `feature_flags` are frozen until a
 ///         governed change path that keeps the OP oracle in sync exists
-///         (tracked in the integration plan). Widening the whitelist requires
-///         a contract upgrade, i.e. explicit governance review.
+///         (tracked in the integration plan). The block transaction-count cap,
+///         once the only writable key, left when blocks started sealing
+///         against the gas limit (#5747): the node has no reader for it.
+///         Widening the whitelist requires a contract upgrade, i.e. explicit
+///         governance review.
 ///
 ///         GENESIS: as a predeploy the constructor/initialize do not run on-chain;
 ///         genesis tooling writes the owner slot (OZ) and each key's packed Entry
@@ -73,15 +77,13 @@ contract SystemConfig is ISystemConfig, OwnableUpgradeable {
         return (e.value, e.enableNumber);
     }
 
-    /// @dev keccak256 of the only runtime-writable key. Computed at compile
-    ///      time; constants occupy no storage slot, so the storage-layout
-    ///      fixture is unaffected.
-    bytes32 private constant WRITABLE_KEY_HASH = keccak256("block_tx_count_limit");
-
-    /// @dev Whitelist of runtime-writable keys — see the contract @dev note
-    ///      for why chain_id / gas_limit / compatibility_version /
-    ///      feature_flags (and every unknown key) are genesis-frozen.
-    function _isWritableKey(string calldata key) internal pure returns (bool) {
-        return keccak256(bytes(key)) == WRITABLE_KEY_HASH;
+    /// @dev Whitelist of runtime-writable keys, currently empty — see the
+    ///      contract @dev note for why chain_id / gas_limit /
+    ///      compatibility_version / feature_flags (and every unknown key) are
+    ///      genesis-frozen. Admitting a key means listing its keccak256 here
+    ///      (a compile-time constant, no storage slot, so the storage-layout
+    ///      fixture is unaffected) through a contract upgrade.
+    function _isWritableKey(string calldata) internal pure returns (bool) {
+        return false;
     }
 }
