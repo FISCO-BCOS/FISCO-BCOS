@@ -42,16 +42,17 @@ if(("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VER
     message(FATAL_ERROR "FISCO-BCOS requires GCC 14+ / Clang 22+ / Apple Clang 18+ / VS2022 17.5+ with C++23 ranges support (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}${MSVC_VERSION})")
 endif()
 
+# libc++ provides zip_view without defining __cpp_lib_ranges_zip until P2321R2 is complete;
+# the actual zip_view expressions are checked when compiling the project.
 include(CheckCXXSourceCompiles)
 check_cxx_source_compiles([=[
     #include <version>
     static_assert(__cpp_lib_ranges_to_container >= 202202L);
-    static_assert(__cpp_lib_ranges_zip >= 202110L);
     static_assert(__cpp_lib_ranges_chunk_by >= 202202L);
     int main() {}
 ]=] FISCO_BCOS_HAS_REQUIRED_RANGES_MACROS)
 if(NOT FISCO_BCOS_HAS_REQUIRED_RANGES_MACROS)
-    message(FATAL_ERROR "The standard library lacks required C++23 ranges feature-test macros for ranges::to, views::zip and views::chunk_by (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})")
+    message(FATAL_ERROR "The standard library lacks required C++23 ranges feature-test macros for ranges::to and views::chunk_by (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})")
 endif()
 
 message(STATUS "COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
