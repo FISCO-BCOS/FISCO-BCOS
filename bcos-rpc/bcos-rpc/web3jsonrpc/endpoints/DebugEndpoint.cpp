@@ -60,17 +60,24 @@ constexpr std::uint8_t c_depositTxType = 0x7e;
 /// The full signed wire form of one stored transaction — the value its transactions-trie leaf
 /// holds, so keccak256(result) is the canonical transaction hash.
 ///
-/// Two storage shapes have to be told apart:
+/// Three storage shapes reach here; the reassembly helper discriminates the last two itself, so
+/// this function does not have to:
 ///   * deposit (0x7e): the transaction has no signature at all; its signing preimage IS the full
-///     envelope (Web3TxHandler's DepositTxHandler::encodeForSign returns encode()), so it is
-///     served verbatim. Reassembling would fail on the missing 65-byte trailer, which would make
-///     every OP block unservable — every L2 block carries an L1-attributes deposit.
-///   * every other type: only the signing preimage is stored (extraTransactionBytes), so the
-///     65-byte r||s||yParity trailer from signatureData() has to be spliced back on.
+///     envelope (Web3TxHandler's DepositTxHandler::encodeForSign returns encode()), and the helper
+///     would reject the missing 65-byte trailer. Served verbatim here. Every OP L2 block carries an
+///     L1-attributes deposit, so getting this wrong would make every OP block unservable.
+///   * the POOL/ADMISSION carrier (takeToTarsTransaction, i.e. eth_sendRawTransaction): only the
+///     signing preimage is stored, so the 65-byte r||s||yParity trailer is spliced back on.
+///   * the ENGINE/OP carrier (decodedTransactionFromEnvelope, wrapOpP2pEnvelope): the payload is
+///     already the full wire envelope — the exact bytes the OP lane hashes into txsRoot
+///     (OpScheduler's rawTxBytes) — while the row still carries a signature.
+/// reassembleWeb3RawTransaction tells the latter two apart by RLP item count (a typed body with
+/// fields+3 items, a legacy body with a non-empty sealed trailer) and returns the wire form
+/// verbatim after cross-checking that trailer against the stored signature, so calling it is
+/// correct for both. Documented because the two shapes look identical byte-wise.
 ///
-/// Throws std::invalid_argument (from the reassembly helper) when the payload is not a decodable
-/// Web3 signing payload, and returns an empty vector for a FISCO-native transaction, which has no
-/// EIP-2718 envelope at all.
+/// Returns an empty vector for a FISCO-native transaction, which has no EIP-2718 envelope at all,
+/// and lets the helper's std::invalid_argument escape for a payload that is neither shape.
 bcos::bytes fullRawEnvelope(bcos::protocol::Transaction const& transaction)
 {
     auto const payload = transaction.extraTransactionBytes();

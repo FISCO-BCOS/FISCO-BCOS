@@ -52,10 +52,16 @@ namespace mpt = bcos::ledger::mpt;
 /// A ledger whose transaction read can be made to fail in one of the two ways the production
 /// ledger distinguishes, so the endpoint's translation can be told apart from a passthrough
 /// (review F1):
-///  * Missing -- the shape a pruned/absent SYS_HASH_2_TX row takes: batchGetTransactions reports a
-///    count mismatch, which must become geth's -32000 "not found";
+///  * Missing -- the shape a pruned/absent SYS_HASH_2_TX row takes: batchGetTransactions fails with
+///    a count mismatch, which must become geth's -32000 "not found";
 ///  * Failing -- a genuine storage failure, which must keep its diagnostics and surface as an
 ///    internal error instead of being flattened into the same "not found".
+///
+/// Both inject the PRODUCTION nesting, not a bare inner error: Ledger::getBatchTxsByHashList wraps
+/// whatever batchGetTransactions raised in GetStorageError("GetBatchTxsByHashList error"). The two
+/// outcomes therefore have an identical outer code and message and differ only in the cause chain,
+/// which is exactly what isMissingTransactionRow() has to traverse -- injecting a direct inner
+/// error would test a shape that never occurs on a node.
 class FaultyReadLedger : public FakeLedger
 {
 public:
@@ -74,15 +80,20 @@ public:
     {
         if (mode == Mode::Missing)
         {
-            // Verbatim the message Ledger.cpp raises for an absent row.
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::CollectAsyncCallbackError,
+            // Verbatim the pair Ledger.cpp produces for an absent row, wrapper and all.
+            auto inner = BCOS_ERROR(bcos::ledger::LedgerError::CollectAsyncCallbackError,
                 "Batch get transaction failed, transactions size not match hashesSize, txsSize: 0, "
-                "hashesSize: 1"));
+                "hashesSize: 1");
+            BOOST_THROW_EXCEPTION(BCOS_ERROR_WITH_PREV(
+                bcos::ledger::LedgerError::GetStorageError, "GetBatchTxsByHashList error", inner));
         }
         if (mode == Mode::Failing)
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError,
-                "simulated storage outage reading SYS_HASH_2_TX"));
+            // Same wrapper, different cause: a storage outage rather than an absent row.
+            auto inner = BCOS_ERROR(
+                bcos::ledger::LedgerError::GetStorageError, "Batch get transaction failed ");
+            BOOST_THROW_EXCEPTION(BCOS_ERROR_WITH_PREV(
+                bcos::ledger::LedgerError::GetStorageError, "GetBatchTxsByHashList error", inner));
         }
         co_return co_await FakeLedger::getBatchTxsByHashList(std::move(hashes), withProof);
     }
@@ -1008,6 +1019,95 @@ BOOST_AUTO_TEST_CASE(RawBlockServesByteExactSignedTransactions)
     BOOST_CHECK_EQUAL(oneEnvelope["result"].asString(), toHexStringWithPrefix(expected[0]));
 }
 
+// REGRESSION: the ENGINE/OP storage carrier, which is what a block that arrived through
+// engine_newPayload actually holds. `decodedTransactionFromEnvelope` and `wrapOpP2pEnvelope` both
+// overwrite extraTransactionBytes with the FULL wire envelope (that is the byte string the OP lane
+// hashes into txsRoot — OpScheduler's rawTxBytes), while the row still carries the r||s||yParity
+// signature. Unconditionally splicing the signature back on therefore appends to an already-signed
+// envelope: the previous implementation would corrupt or reject every such transaction, i.e. every
+// block on a real OP node.
+//
+// The pool carrier (preimage + signature) is covered by RawBlockServesByteExactSignedTransactions
+// above; this is its twin, with the same expected bytes and the opposite stored shape.
+BOOST_AUTO_TEST_CASE(RawBlockServesEngineCarriedFullEnvelopes)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+
+    std::vector<bcos::bytes> expected;
+    std::vector<bcos::protocol::Transaction::Ptr> stored;
+    for (auto const& v : SIGNED_TX_VECTORS)
+    {
+        auto const signature = fromHex(v.signatureHex);
+        auto envelope = bcostars::protocol::reassembleWeb3RawTransaction(
+            bcos::ref(fromHex(v.preimageHex)), bcos::ref(signature));
+        BOOST_REQUIRE_EQUAL(bcos::crypto::keccak256Hash(bcos::ref(envelope)).hexPrefixed(),
+            std::string("0x") + v.canonicalHashHex);
+
+        // The engine shape: the envelope itself in extraTransactionBytes, the signature still
+        // present beside it. Splicing on top of this is the bug this test pins.
+        auto tx = makeStoredTransaction(
+            bcos::ref(envelope), bcos::ref(signature), bcos::ref(fromHex(v.canonicalHashHex)));
+        m_ledger->storeTxAndReceipt(tx, nullptr);
+        expected.push_back(std::move(envelope));
+        stored.push_back(std::move(tx));
+    }
+    // A deposit in the same carrier: full envelope, empty signature.
+    {
+        auto deposit = buildDepositEnvelope();
+        auto const depositHash = bcos::crypto::keccak256Hash(bcos::ref(deposit));
+        auto tx = makeStoredTransaction(bcos::ref(deposit), bcos::bytesConstRef{},
+            bcos::bytesConstRef(depositHash.data(), depositHash.size()));
+        m_ledger->storeTxAndReceipt(tx, nullptr);
+        expected.push_back(std::move(deposit));
+        stored.push_back(std::move(tx));
+    }
+
+    auto const number = m_ledger->blockNumber() + 1;
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(number);
+    header->setTimestamp(1'700'000'000'000);
+    header->setBaseFee(7);
+    std::vector<bcos::bytesConstRef> refs;
+    refs.reserve(expected.size());
+    for (auto const& tx : expected)
+    {
+        refs.emplace_back(tx.data(), tx.size());
+    }
+    header->setTxsRoot(bcos::ledger::mpt::calculateTransactionsRoot(refs));
+    header->setWithdrawalsRoot(mpt::emptyRootHash());
+    BOOST_REQUIRE(bcos::protocol::isOpEthereumBlock(*header));
+    header->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*header));
+    block->setBlockHeader(header);
+    block->setBlockType(protocol::CompleteBlock);
+    for (auto& tx : stored)
+    {
+        block->appendTransaction(tx);
+    }
+    m_ledger->appendBuiltBlock(block);
+    m_ledger->indexBlockHash(header->hash(), number);
+
+    // Every transaction must come back byte-identical: nothing was appended to the envelope.
+    auto const rawBlock = resultBytes(call1("debug_getRawBlock", toQuantity(number)));
+    bcos::protocol::EthBlock decoded;
+    auto mutableBlock = rawBlock;
+    decoded.rlpDecode(bcos::bytesConstRef(mutableBlock.data(), mutableBlock.size()));
+    BOOST_REQUIRE_EQUAL(decoded.data().transactions.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); ++i)
+    {
+        BOOST_CHECK_MESSAGE(decoded.data().transactions[i] == expected[i],
+            "engine-carried transaction " << i << " is not byte-identical to the wire form");
+    }
+    // And the body still reproduces the committed root (the endpoint checks this itself; asserting
+    // it here names the failure if the served bytes ever drift).
+    BOOST_CHECK(bcos::ledger::mpt::calculateTransactionsRoot(refs) == header->txsRoot());
+
+    auto const oneEnvelope = call1("debug_getRawTransaction",
+        bcos::crypto::keccak256Hash(bcos::ref(expected[0])).hexPrefixed());
+    BOOST_REQUIRE_MESSAGE(!oneEnvelope.isMember("error"), printJson(oneEnvelope));
+    BOOST_CHECK_EQUAL(oneEnvelope["result"].asString(), toHexStringWithPrefix(expected[0]));
+}
+
 // REGRESSION (found only against a real node): a block header the ledger rebuilt from its stored
 // SYS_NUMBER_2_BLOCK_HEADER row carries NO dataHash, so BlockHeaderImpl::hash() throws
 // EmptyBlockHeaderHash. The endpoint used to call canonicalBlockHash(header) here, which reaches
@@ -1179,6 +1279,25 @@ BOOST_AUTO_TEST_CASE(RawTransactionReadFailureIsNotFlattenedIntoNotFound)
     BOOST_CHECK(resp["error"]["code"].asInt() != Web3DefaultError);
     BOOST_CHECK_MESSAGE(resp["error"]["message"].asString().find("not found") == std::string::npos,
         "a failed read must not be reported as a miss, got: " << printJson(resp));
+}
+
+// Focus #4 (lane consistency): the two places that decide "which lane" — NodeService's cached
+// version, used by the body-shape branch, and the ledger's executor_version row, used by the lane
+// gate — are filled from the SAME boot-time read (Initializer::init reads the on-chain row, with
+// config.genesis executor.version as the fallback), and SystemConfigPrecompiled refuses a
+// governance write that would enter the Ethereum lane, so the value cannot drift while the node
+// runs. They can only disagree when the row is ABSENT and the genesis fallback was used; this pins
+// that the disagreement is harmless: the gate reads the row, sees 0, and answers MethodNotFound
+// instead of serving a body shaped by the other lane's rules.
+BOOST_AUTO_TEST_CASE(RawBlockFailsClosedWhenLedgerHasNoLaneRow)
+{
+    // NodeService says OP; the ledger has no executor_version row (never set in this fixture).
+    nodeService->setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+
+    auto const resp = call1("debug_getRawBlock", "0x0");
+    BOOST_REQUIRE_MESSAGE(resp.isMember("error"), printJson(resp));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), MethodNotFound);
+    BOOST_TEST(!resp.isMember("result"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
