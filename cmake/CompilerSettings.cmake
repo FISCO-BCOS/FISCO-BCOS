@@ -44,23 +44,14 @@ endif()
 
 include(CheckCXXSourceCompiles)
 check_cxx_source_compiles([=[
-    #include <ranges>
-    #include <vector>
-
-    int main()
-    {
-        std::vector<int> values{0, 1, 1, 2};
-        auto converted = std::ranges::to<std::vector>(values);
-        auto zipped = std::ranges::views::zip(values, converted);
-        auto groups = std::ranges::views::chunk_by(zipped, [](auto const&, auto const&) {
-            return true;
-        });
-        (void)groups;
-        return 0;
-    }
-]=] FISCO_BCOS_HAS_REQUIRED_RANGES)
-if(NOT FISCO_BCOS_HAS_REQUIRED_RANGES)
-    message(FATAL_ERROR "The standard library lacks required C++23 ranges support: ranges::to, views::zip and views::chunk_by (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})")
+    #include <version>
+    static_assert(__cpp_lib_ranges_to_container >= 202202L);
+    static_assert(__cpp_lib_ranges_zip >= 202110L);
+    static_assert(__cpp_lib_ranges_chunk_by >= 202202L);
+    int main() {}
+]=] FISCO_BCOS_HAS_REQUIRED_RANGES_MACROS)
+if(NOT FISCO_BCOS_HAS_REQUIRED_RANGES_MACROS)
+    message(FATAL_ERROR "The standard library lacks required C++23 ranges feature-test macros for ranges::to, views::zip and views::chunk_by (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})")
 endif()
 
 message(STATUS "COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
