@@ -22,6 +22,7 @@
 
 #include "bcos-rpc/groupmgr/NodeService.h"
 #include "bcos-task/Task.h"
+#include <bcos-framework/engine/OpCanonicalReader.h>
 #include <json/json.h>
 #include <atomic>
 
@@ -61,10 +62,11 @@ private:
     task::Task<void> handleGetPayload(engine::ApiVersion version, const Json::Value&, Json::Value&);
     task::Task<void> handleNewPayload(engine::ApiVersion version, const Json::Value&, Json::Value&);
 
-    /// The committed block at `number` as an ExecutionPayloadBodyV1 JSON value (raw
+    /// The block at `number` as an ExecutionPayloadBodyV1 JSON value (raw
     /// EIP-2718 transactions; withdrawals only for Shanghai+ blocks), or Json::nullValue
     /// when the block — or a Shanghai+ block's withdrawals sidecar row — is unavailable.
-    task::Task<Json::Value> payloadBodyAtNumber(protocol::BlockNumber number);
+    task::Task<Json::Value> payloadBodyAtNumber(
+        protocol::BlockNumber number, engine::OpCanonicalReader::HeadReadView const* view);
     /// The ExecutionPayloadBodyV1 of a fetched block (transactions' wire bytes, withdrawals).
     task::Task<Json::Value> payloadBodyOf(protocol::Block::Ptr const& block);
 

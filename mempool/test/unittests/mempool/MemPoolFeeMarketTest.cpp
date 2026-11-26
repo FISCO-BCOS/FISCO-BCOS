@@ -513,6 +513,41 @@ BOOST_AUTO_TEST_CASE(remove_by_state_releases_sender_count_and_pending_cost)
         pool.pendingCost(sender, {}, protocol::CostBasis::MaxCost), u512{kFeeTxGas} * 100);
 }
 
+BOOST_AUTO_TEST_CASE(txpool_snapshot_hides_retained_transactions_until_rewind)
+{
+    MemPoolImpl pool{MemPoolConfig{}};
+    std::string senderA(20, 'A');
+    std::string senderB(20, 'B');
+    BOOST_REQUIRE(pool.tryAdd(makeFeeTx(senderA, 0, 10, 100)) == TransactionStatus::None);
+    BOOST_REQUIRE(pool.tryAdd(makeFeeTx(senderA, 1, 10, 100)) == TransactionStatus::None);
+    BOOST_REQUIRE(pool.tryAdd(makeFeeTx(senderA, 3, 10, 100)) == TransactionStatus::None);
+    BOOST_REQUIRE(pool.tryAdd(makeFeeTx(senderB, 0, 10, 100)) == TransactionStatus::None);
+
+    FeeMarketStateStorage state{};
+    evmc_address addr{};
+    std::copy_n(senderA.begin(), sizeof(addr.bytes), addr.bytes);
+    ledger::account::EVMAccount account(state, addr, ledger::account::nodeAddressTableMode());
+    task::syncWait(account.setNonce("1"));
+
+    auto const current = pool.snapshotPendingQueued(state);
+    BOOST_REQUIRE_EQUAL(current.size(), 3);
+    BOOST_CHECK_EQUAL(current[0].transaction->sender(), senderA);
+    BOOST_CHECK_EQUAL(current[0].nonce, 1);
+    BOOST_CHECK(current[0].pending);
+    BOOST_CHECK_EQUAL(current[1].nonce, 3);
+    BOOST_CHECK(!current[1].pending);
+    BOOST_CHECK_EQUAL(current[2].transaction->sender(), senderB);
+    BOOST_CHECK(current[2].pending);
+
+    task::syncWait(account.setNonce("0"));
+    auto const rewound = pool.snapshotPendingQueued(state);
+    BOOST_REQUIRE_EQUAL(rewound.size(), 4);
+    BOOST_CHECK_EQUAL(rewound[0].nonce, 0);
+    BOOST_CHECK(rewound[0].pending);
+    BOOST_CHECK(rewound[1].pending);
+    BOOST_CHECK(!rewound[2].pending);
+}
+
 // pendingCost sums the sender's pooled transactions at their fee caps (gasLimit × cap + value),
 // leaves out the nonce an incoming transaction would replace, and ignores other senders.
 BOOST_AUTO_TEST_CASE(pending_cost_sums_the_sender_at_fee_caps)
@@ -532,6 +567,23 @@ BOOST_AUTO_TEST_CASE(pending_cost_sums_the_sender_at_fee_caps)
     BOOST_CHECK_EQUAL(
         pool.pendingCost(std::string("CCCCCCCCCCCCCCCCCCCC", 20), {}, protocol::CostBasis::MaxCost),
         u512{0});
+}
+
+BOOST_AUTO_TEST_CASE(pending_cost_excludes_executed_nonces_without_removing_them)
+{
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L2}};
+    std::string sender("HHHHHHHHHHHHHHHHHHHH", 20);
+    pool.add(std::vector{makeFeeTx(sender, 0, 10, 100), makeFeeTx(sender, 1, 10, 200),
+        makeFeeTx(sender, 2, 10, 300), makeFeeTx(sender, 3, 10, 400),
+        makeFeeTx(sender, 5, 10, 500)});
+    constexpr auto basis = protocol::CostBasis::MaxCost;
+
+    BOOST_CHECK_EQUAL(pool.pendingCost(sender, "3", basis, u256{3}), u512{kFeeTxGas} * 500);
+    BOOST_CHECK_EQUAL(pool.pendingCost(sender, {}, basis, u256{3}), u512{kFeeTxGas} * 900);
+
+    // Rewinding the selected nonce to 2 charges that slot again without putting it back.
+    BOOST_CHECK_EQUAL(pool.pendingCost(sender, "0x3", basis, u256{2}), u512{kFeeTxGas} * 800);
+    BOOST_CHECK_EQUAL(pool.pendingCost(sender, {}, basis, u256{1} << 64), u512{0});
 }
 
 // On the value-only basis (a free-gas chain) the pending budget is the sum of values -- these

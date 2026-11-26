@@ -416,10 +416,11 @@ public:
 
     /// The most the sender's pooled transactions can cost together (Σ protocol::costAt on
     /// @p basis, 512-bit), leaving out the one at @p excludeNonce (the slot an incoming transaction
-    /// would replace). The pending balance budget: admission charges a new transaction
+    /// would replace) and any below @p fromNonce, which the caller's selected state already paid
+    /// for. The pending balance budget: admission charges a new transaction
     /// against this on top of its own cost (geth's ValidateTransactionWithState +
     /// list.totalcost), so a sender cannot pool more than its balance funds.
-    /// Two differences from geth, both on the conservative side: every pooled nonce counts
+    /// Two differences from geth, both on the conservative side: every eligible pooled nonce counts
     /// (geth sums the executable list only, so a transaction that fills a nonce gap here is
     /// budgeted against the gapped ones already pooled), and the figure is read before
     /// tryAdd() takes the lock, so two concurrent submissions from one sender can both pass
@@ -429,8 +430,8 @@ public:
     /// @p basis is the chain's cost basis (protocol::CostBasis): the full maxCost where gas is
     /// charged, the value alone on a free-gas chain -- the same basis admission charges the new
     /// transaction on. No default: the validator decides the basis once, callers forward it.
-    u512 pendingCost(
-        std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis) const;
+    u512 pendingCost(std::string_view sender, std::string_view excludeNonce,
+        protocol::CostBasis basis, std::optional<u256> const& fromNonce = std::nullopt) const;
 
     /// The sidecar of a pooled blob transaction, or nullopt when the transaction is not
     /// pooled or carries none.
@@ -663,11 +664,10 @@ public:
         return nonce;
     }
 
-    /// Every pooled transaction, each tagged with whether seal() would pick it against
-    /// @p state: pending = the sender's gapless nonce run starting at its account nonce
-    /// (seal()'s rule, without the count limit), queued = everything else (a nonce gap, or a
-    /// nonce the account has already passed). geth's txpool_content split. The pool lock covers
-    /// only the copy; the state reads run after it, so an RPC caller never stalls seal().
+    /// The txpool RPC snapshot against @p state. Pending is the sender's gapless run from its
+    /// account nonce, and queued contains the transactions beyond a gap. Executed transactions
+    /// stay in the pool for rewind but are absent from this snapshot. State reads run after
+    /// copying the pool and releasing its lock.
     std::vector<PooledTransaction> snapshotPendingQueued(auto& state)
     {
         std::vector<PooledTransaction> out;
@@ -680,16 +680,29 @@ public:
         }
         std::string_view sender;
         int64_t expected = 0;
-        for (std::size_t i = 0; i < out.size(); ++i)
+        auto visible = out.begin();
+        for (auto it = out.begin(); it != out.end(); ++it)
         {
-            if (i == 0 || out[i].transaction->sender() != sender)
+            auto const currentSender = it->transaction->sender();
+            if (it == out.begin() || currentSender != sender)
             {
-                sender = out[i].transaction->sender();
-                expected = accountNonce(state, sender);
+                expected = accountNonce(state, currentSender);
             }
-            out[i].pending = out[i].nonce == expected;
-            expected += out[i].pending ? 1 : 0;
+            // The transaction that held the previous sender view can be overwritten below.
+            sender = currentSender;
+            if (it->nonce < expected)
+            {
+                continue;
+            }
+            it->pending = it->nonce == expected;
+            expected += it->pending && expected < std::numeric_limits<int64_t>::max();
+            if (visible != it)
+            {
+                *visible = std::move(*it);
+            }
+            ++visible;
         }
+        out.erase(visible, out.end());
         return out;
     }
 

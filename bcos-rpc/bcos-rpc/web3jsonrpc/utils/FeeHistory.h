@@ -65,8 +65,7 @@ std::vector<u256> rewardPercentiles(std::vector<RewardSample> samples,
 u256 nextOpBaseFee(protocol::BlockHeader const& parent);
 
 /// Where eth_feeHistory reads its blocks: (number, ledger::getBlockData flags) → block. The
-/// endpoint passes rpc::canonicalBlockByNumber so an unfinalized head-chain block (OP Engine
-/// lane, D1 §10.2) is read from the window like every other block read.
+/// endpoint binds a source to one captured head chain when the OP window is active.
 using FeeHistoryBlockSource =
     std::function<task::Task<protocol::Block::Ptr>(protocol::BlockNumber, int32_t)>;
 

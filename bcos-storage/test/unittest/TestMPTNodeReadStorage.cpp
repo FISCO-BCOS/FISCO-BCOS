@@ -155,6 +155,22 @@ BOOST_AUTO_TEST_CASE(anyStorageHandleOwnsItsAdapter)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(readerKeepsExplicitBackendOwnerAlive)
+{
+    auto storage =
+        std::make_shared<StateRocksDB>(*rocksDB, StateKeyResolver{}, StateValueResolver{});
+    task::syncWait(writeNodeRow(*storage, hashA, nodeRlpA()));
+    std::weak_ptr<StateRocksDB> backend = storage;
+    auto reader = storage2::makeMPTNodeReader(*storage, storage);
+    storage.reset();
+    BOOST_REQUIRE(!backend.expired());
+    auto value = task::syncWait(reader->readOne(hashA));
+    BOOST_REQUIRE(value.has_value());
+    BOOST_CHECK(*value == nodeRlpA());
+    reader.reset();
+    BOOST_CHECK(backend.expired());
+}
+
 // The adapter is a read-only view: every mutating entry point AnyStorage's type-erasure
 // forces onto it throws instead of touching the backend; reads on the same handle keep
 // working afterwards (negative control that the throw is per-operation, not poisoning).

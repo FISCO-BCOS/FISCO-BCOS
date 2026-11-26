@@ -67,24 +67,28 @@ struct AccountState
 /// would drag evmone into every module that admits a transaction.
 using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 
-/// The OP rollup cost of one signed envelope -- L1 data fee plus operator fee at @p gasLimit.
-/// @p head is the snapshot the pass judges by: its timestamp selects the fork, its (number,
-/// hash) keys the callable's per-head cache; the L1Block attributes come from the committed
-/// plane. Injected for the same reason SystemTxPredicate is (the formulas live behind evmone).
-/// nullopt = no rollup cost on this chain, Check::L1Cost stands down. Bound on the OP lane only.
-/// 512-bit: the L1 fee and the operator fee are each up to 2^256-1 and execution adds them at
-/// 512 bits (OpPolicy::additionalMaxCost); a callable that saturated their sum to 2^256-1 would
-/// let a sender holding exactly 2^256-1 through a check execution then fails.
-using RollupCostFn = std::function<task::Task<std::optional<u512>>(
-    bytesConstRef signedEnvelope, uint64_t gasLimit, ledger::LedgerConfig const& head)>;
+/// Inputs supplied by one canonical OP head view. The fork and the account both follow that
+/// head, as do the L1Block attributes used to price the signed transaction's rollup cost.
+struct AdmissionChainState
+{
+    std::shared_ptr<const ledger::LedgerConfig> config;
+    std::optional<evmc_revision> revision;
+    std::optional<AccountState> sender;
+    /// L1 data fee plus operator fee at the transaction's gas limit, added at 512 bits.
+    std::optional<u512> rollupCost;
+};
+
+using AdmissionChainStateFn =
+    std::function<task::Task<AdmissionChainState>(protocol::Transaction const&, Check)>;
 
 /// What the sender's already-pooled transactions can cost at most, leaving out the one at
-/// @p excludeNonce (the slot the incoming transaction would replace), charged on the chain's
+/// @p excludeNonce (the slot the incoming transaction would replace) and any already executed
+/// below @p fromNonce in the captured OP head. Charged on the chain's
 /// cost basis (the same one Check::Balance charges the new transaction on):
 /// MemPoolImpl::pendingCost. Bound by the Engine-driven lanes' initializer; unbound, admission
 /// budgets against the committed balance alone.
-using PendingCostFn = std::function<u512(
-    std::string_view sender, std::string_view excludeNonce, protocol::CostBasis basis)>;
+using PendingCostFn = std::function<u512(std::string_view sender, std::string_view excludeNonce,
+    protocol::CostBasis basis, std::optional<u256> const& fromNonce)>;
 
 /// The one place a transaction is judged admissible, for every ingress of both transaction
 /// pools: JSON-RPC (BCOS and Web3), P2P, and block-proposal verification. The txpool's two
@@ -146,8 +150,8 @@ public:
     /// falls back to the committed ledger balance instead of the pending plane.
     void setScheduler(std::weak_ptr<scheduler::SchedulerInterface> scheduler);
 
-    /// Bound by the OP lane's initializer after construction. Unbound, Check::L1Cost passes.
-    void setRollupCostFn(RollupCostFn rollupCost);
+    /// Bound by the OP lane's initializer to supply a single view for config, account and fees.
+    void setAdmissionChainStateFn(AdmissionChainStateFn chainState);
 
     /// Bound by the mempool lanes' initializer after construction: Check::Balance and
     /// Check::L1Cost then charge the transaction on top of the sender's pooled cost.
@@ -183,11 +187,6 @@ protected:
     virtual task::Task<std::optional<AccountState>> readAccountState(std::string_view sender);
 
 private:
-    /// The bound RollupCostFn's answer for @p tx, or nullopt when none is bound. Reassembles the
-    /// signed envelope from the mirror; @p head is the snapshot the pass judges by.
-    task::Task<std::optional<u512>> readRollupCost(
-        protocol::Transaction const& tx, ledger::LedgerConfig const& head);
-
     crypto::CryptoSuite::Ptr m_cryptoSuite;
     std::shared_ptr<ledger::LedgerInterface> m_ledger;
     ledger::LedgerConfigState::Ptr m_ledgerConfigState;
@@ -203,8 +202,8 @@ private:
     /// revision-dependent checks judge against the revision this schedule assigns to the head
     /// block's timestamp. Empty elsewhere, where the snapshot's evmcRevisionForBlock decides.
     ledger::EvmcRevisionSchedule m_evmcRevisionSchedule;
-    /// The two late-bound dependencies, both written once from an init path that runs while
-    /// transactions may already be arriving, hence the lock. Readers copy the handle out and
+    /// Late-bound dependencies are written by initialization, potentially while transactions
+    /// are already arriving. Readers copy the handle under the lock and
     /// release, so nothing is held across a co_await.
     ///
     /// The scheduler is weak on purpose: a strong edge would have the pool and the scheduler
@@ -215,7 +214,7 @@ private:
     std::shared_ptr<LedgerNonceChecker> m_ledgerNonceChecker;
     std::weak_ptr<scheduler::SchedulerInterface> m_scheduler;
     /// shared_ptr: a reader copies a pointer under the lock, not the closure.
-    std::shared_ptr<const RollupCostFn> m_rollupCost;
+    std::shared_ptr<const AdmissionChainStateFn> m_chainState;
     std::shared_ptr<const PendingCostFn> m_pendingCost;
 };
 
