@@ -45,6 +45,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
@@ -174,8 +175,8 @@ opeth::OpEthExecuteBlockResult runExecutorPath(DualRunFixture& f, ViewType& view
         f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);
     auto transactionsRefs =
         transactions |
-        ::ranges::views::transform([](bcos::protocol::Transaction::ConstPtr const& ptr)
-                                       -> bcos::protocol::Transaction const& { return *ptr; });
+        std::ranges::views::transform([](bcos::protocol::Transaction::ConstPtr const& ptr)
+                                          -> bcos::protocol::Transaction const& { return *ptr; });
     auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
         view, executor, header, transactionsRefs, execLedgerConfig, ctx));
     return bcos::task::syncWait(opeth::finalizeOpEthBlockResult(view, header, execLedgerConfig,

@@ -10,10 +10,7 @@
 #include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <ostream>
-#include <range/v3/view/filter.hpp>
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/transform.hpp>
-#include <range/v3/view/zip.hpp>
+#include <ranges>
 #include <set>
 #include <string_view>
 
@@ -210,8 +207,8 @@ public:
 
     auto flags() const
     {
-        return ::ranges::views::iota(0LU, m_flags.size()) |
-               ::ranges::views::transform([this](size_t index) {
+        return std::ranges::views::iota(0LU, m_flags.size()) |
+               std::ranges::views::transform([this](size_t index) {
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return std::make_tuple(flag, magic_enum::enum_name(flag), m_flags[index]);
                });
@@ -219,8 +216,8 @@ public:
 
     static auto featureKeys()
     {
-        return ::ranges::views::iota(0LU, magic_enum::enum_count<Flag>()) |
-               ::ranges::views::transform([](size_t index) {
+        return std::ranges::views::iota(0LU, magic_enum::enum_count<Flag>()) |
+               std::ranges::views::transform([](size_t index) {
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return magic_enum::enum_name(flag);
                });

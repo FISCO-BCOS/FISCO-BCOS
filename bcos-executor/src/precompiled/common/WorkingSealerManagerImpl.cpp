@@ -29,9 +29,9 @@
 #include <boost/endian/conversion.hpp>
 #include <algorithm>
 #include <cstdint>
-#include <range/v3/numeric/accumulate.hpp>
-#include <range/v3/range_fwd.hpp>
+#include <numeric>
 #include <range/v3/view/concat.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -101,9 +101,8 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
         co_return;
     }
 
-    if (m_withWeight && ::ranges::accumulate(::ranges::views::transform(m_consensusNodes,
-                                                 [](auto& node) { return node.termWeight; }),
-                            0) > 0)
+    if (m_withWeight && std::accumulate(m_consensusNodes.begin(), m_consensusNodes.end(), 0,
+                            [](auto total, auto& node) { return total + node.termWeight; }) > 0)
     {
         PRECOMPILED_LOG(INFO) << "Enable weight rotate";
         rotateWorkingSealerByWeight(_executive);
@@ -122,7 +121,7 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
             << LOG_DESC("rotateWorkingSealer: rotate workingSealers into sealers")
             << LOG_KV("rotatedCount", removedWorkingSealerNum)
             << LOG_KV("rmNodes",
-                   fmt::format("{}", fmt::join(::ranges::views::transform(workingSealersToRemove,
+                   fmt::format("{}", fmt::join(std::ranges::views::transform(workingSealersToRemove,
                                                    [](const consensus::ConsensusNode& node) {
                                                        return node.nodeID->hex();
                                                    }),
@@ -144,7 +143,7 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
             << LOG_DESC("rotateWorkingSealer: rotate sealers into workingSealers")
             << LOG_KV("rotatedCount", insertedWorkingSealerNum)
             << LOG_KV("insertNodes",
-                   fmt::format("{}", fmt::join(::ranges::views::transform(workingSealersToInsert,
+                   fmt::format("{}", fmt::join(std::ranges::views::transform(workingSealersToInsert,
                                                    [](const consensus::ConsensusNode& node) {
                                                        return node.nodeID->hex();
                                                    }),
@@ -455,7 +454,7 @@ static consensus::ConsensusNode& pickNodeByWeight(
     auto weight =
         nodeIt->offset - ((nodeWeightRanges.begin() == nodeIt) ? 0LU : (nodeIt - 1)->offset);
     totalWeight -= weight;
-    for (auto& it : ::ranges::subrange<decltype(nodeIt)>(nodeIt + 1, nodeWeightRanges.end()))
+    for (auto& it : std::ranges::subrange<decltype(nodeIt)>(nodeIt + 1, nodeWeightRanges.end()))
     {
         it.offset -= weight;
     }
@@ -466,12 +465,12 @@ static consensus::ConsensusNode& pickNodeByWeight(
 }
 
 static std::vector<std::reference_wrapper<consensus::ConsensusNode>> getNodeListByWeight(
-    ::ranges::input_range auto const& nodeList, const u256& seed, size_t count)
-    requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(nodeList)>>,
+    std::ranges::input_range auto const& nodeList, const u256& seed, size_t count)
+    requires std::same_as<std::decay_t<std::ranges::range_value_t<decltype(nodeList)>>,
         std::reference_wrapper<consensus::ConsensusNode>>
 {
     std::vector<NodeWeightRange> nodeWeightRanges;
-    nodeWeightRanges.reserve(::ranges::size(nodeList));
+    nodeWeightRanges.reserve(std::ranges::size(nodeList));
 
     size_t totalWeight = 0;
     for (consensus::ConsensusNode& node : nodeList)
@@ -487,7 +486,7 @@ static std::vector<std::reference_wrapper<consensus::ConsensusNode>> getNodeList
     std::vector<std::reference_wrapper<consensus::ConsensusNode>> result;
     result.reserve(count);
     for ([[maybe_unused]] auto i :
-        ::ranges::views::iota(0LU, std::min(count, nodeWeightRanges.size())))
+        std::ranges::views::iota(0LU, std::min(count, nodeWeightRanges.size())))
     {
         result.emplace_back(pickNodeByWeight(nodeWeightRanges, totalWeight, seed));
     }
@@ -572,7 +571,7 @@ void bcos::precompiled::WorkingSealerManagerImpl::rotateWorkingSealerByWeight(
         "rotateWorkingSealer: rotate workingSealers into sealers by "
         "weight, rotatedCount: {}, insertNodes: {}",
         workingSealers.size(),
-        fmt::join(::ranges::views::transform(workingSealers,
+        fmt::join(std::ranges::views::transform(workingSealers,
                       [](const consensus::ConsensusNode& node) { return node.nodeID->hex(); }),
             ","));
     for (consensus::ConsensusNode& node : candidateSealers)

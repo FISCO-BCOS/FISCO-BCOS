@@ -57,6 +57,7 @@
 #include <limits>
 #include <magic_enum/magic_enum.hpp>
 #include <memory>
+#include <ranges>
 #include <sstream>
 
 // Anonymous namespace + EEBV prefix: this TU is compiled standalone (it defines the
@@ -471,7 +472,7 @@ struct EEBVFaultyBackendStorage : EEBVBackendStorage
             key, std::forward<decltype(args)>(args)...);
     }
 
-    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
+    auto readSomeRaw(std::ranges::input_range auto keys, auto&&... args)
         -> task::Task<std::vector<DataValue>>
     {
         if (requestContractReadThrowRemaining->load(std::memory_order_acquire) > 0)
@@ -492,7 +493,7 @@ struct EEBVFaultyBackendStorage : EEBVBackendStorage
             std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto readSome(::ranges::input_range auto keys, auto&&... args)
+    auto readSome(std::ranges::input_range auto keys, auto&&... args)
         -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
     {
         if (requestContractReadThrowRemaining->load(std::memory_order_acquire) > 0)

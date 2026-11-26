@@ -11,7 +11,6 @@
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
-#include <range/v3/algorithm/copy.hpp>
 
 namespace bcos::ledger::account
 {
@@ -548,7 +547,7 @@ public:
             storage,
             [](const bcos::Address& address) {
                 evmc_address evmcAddress;
-                ::ranges::copy(address, std::span{evmcAddress.bytes}.data());
+                std::ranges::copy(address, std::span{evmcAddress.bytes}.data());
                 return evmcAddress;
             }(address),
             mode)

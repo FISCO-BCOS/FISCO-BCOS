@@ -86,7 +86,7 @@ public:
     }
 
     bcos::task::Task<std::vector<std::optional<bcos::bytes>>> readSome(
-        ::ranges::input_range auto keys)
+        std::ranges::input_range auto keys)
     {
         std::vector<std::optional<bcos::bytes>> values;
         for (auto const& key : keys)
@@ -104,7 +104,7 @@ public:
             *m_backend, bcos::ledger::mptNodeStateKey(key), std::move(entry));
     }
 
-    bcos::task::Task<void> writeSome(::ranges::input_range auto keyValues)
+    bcos::task::Task<void> writeSome(std::ranges::input_range auto keyValues)
     {
         for (auto const& [key, value] : keyValues)
         {

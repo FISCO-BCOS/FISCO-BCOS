@@ -32,6 +32,7 @@
 #include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <memory>
+#include <range/v3/view/single.hpp>
 #include <string>
 #include <thread>
 

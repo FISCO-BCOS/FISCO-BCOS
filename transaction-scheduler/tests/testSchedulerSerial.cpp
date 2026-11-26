@@ -11,6 +11,7 @@
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <boost/test/unit_test.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -81,11 +82,11 @@ BOOST_AUTO_TEST_CASE(executeBlock)
     task::syncWait([&, this]() -> task::Task<void> {
         bcostars::protocol::BlockHeaderImpl blockHeader;
         auto transactions =
-            ::ranges::iota_view<int, int>(0, 100) | ::ranges::views::transform([](int index) {
+            std::ranges::iota_view<int, int>(0, 100) | std::ranges::views::transform([](int index) {
                 return std::make_unique<bcostars::protocol::TransactionImpl>(
                     [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
             }) |
-            ::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
+            std::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
         MockExecutorSerial executor;
         auto view = multiLayerStorage.fork();
@@ -95,7 +96,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         static_assert(scheduler_v1::TransactionScheduler<SchedulerSerialImpl, decltype(view),
             MockExecutorSerial, decltype(transactions)>);
         auto receipts = co_await scheduler.executeBlock(view, executor, blockHeader,
-            transactions | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; }),
+            transactions | std::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; }),
             ledgerConfig);
         BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 

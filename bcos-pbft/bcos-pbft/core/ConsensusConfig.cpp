@@ -19,7 +19,7 @@
  * @date 2021-04-09
  */
 #include "ConsensusConfig.h"
-#include <range/v3/algorithm/sort.hpp>
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -85,7 +85,7 @@ void ConsensusConfig::setConsensusNodeList(ConsensusNodeList _consensusNodeList)
                               << errinfo_comment("Must contain at least one consensus node"));
     }
 
-    ::ranges::sort(_consensusNodeList);
+    std::ranges::sort(_consensusNodeList);
     // update the consensus list
     {
         UpgradableGuard lock(x_consensusNodeList);

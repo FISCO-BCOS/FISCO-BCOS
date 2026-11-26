@@ -29,6 +29,7 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <ranges>
 #include <set>
 #include <thread>
 #include <unordered_map>
@@ -90,7 +91,7 @@ BOOST_AUTO_TEST_CASE(updateNonceCacheDoesNotDeleteNewerEntry)
             while (!startGate.load(std::memory_order_acquire))
             {
             }
-            task::syncWait(checker.updateNonceCache(::ranges::views::all(commitMap)));
+            task::syncWait(checker.updateNonceCache(std::ranges::views::all(commitMap)));
         });
 
         startGate.store(true, std::memory_order_release);

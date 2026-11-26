@@ -23,8 +23,7 @@
 #include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
 #include "bcos-tars-protocol/protocol/GroupNodeInfoImpl.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/join.hpp>
+#include <ranges>
 
 std::atomic<int64_t> bcostars::GatewayServiceClient::s_tarsTimeoutCount = {0};
 const int64_t bcostars::GatewayServiceClient::c_maxTarsTimeoutCount = 500;
@@ -242,7 +241,7 @@ bcos::task::Task<void> bcostars::GatewayServiceClient::broadcastMessage(uint16_t
     {
         co_return;
     }
-    bcos::bytes data = ::ranges::views::join(payloads) | ::ranges::to<bcos::bytes>();
+    bcos::bytes data = std::ranges::views::join(payloads) | std::ranges::to<bcos::bytes>();
     auto srcNodeIDBytes = srcNodeID.data();
     m_prx->async_asyncSendBroadcastMessage(nullptr, type, std::string{groupID}, moduleID,
         std::vector<char>(srcNodeIDBytes.begin(), srcNodeIDBytes.end()),

@@ -29,13 +29,12 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-utilities/AnyView.h>
 #include <bcos-utilities/LogStream.h>
 #include <boost/endian/conversion.hpp>
 #include <boost/lexical_cast.hpp>
 #include <cstring>
 #include <limits>
-#include <range/v3/view/any_view.hpp>
-#include <range/v3/view/transform.hpp>
 #include <stdexcept>
 
 DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);

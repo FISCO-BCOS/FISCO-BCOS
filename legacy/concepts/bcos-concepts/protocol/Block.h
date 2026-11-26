@@ -2,8 +2,7 @@
 #include "Receipt.h"
 #include "Transaction.h"
 #include <concepts>
-#include <range/v3/range/concepts.hpp>
-#include <range/v3/range/traits.hpp>
+#include <ranges>
 
 namespace bcos::concepts::block
 {
@@ -26,17 +25,17 @@ concept Signature = requires(SignatureType signature) {
 template <class BlockHeaderDataType>
 concept BlockHeaderData = requires(BlockHeaderDataType blockHeaderData) {
     requires std::integral<decltype(blockHeaderData.version)>;
-    requires ::ranges::range<decltype(blockHeaderData.parentInfo)> &&
-                 ParentInfo<::ranges::range_value_t<decltype(blockHeaderData.parentInfo)>>;
+    requires std::ranges::range<decltype(blockHeaderData.parentInfo)> &&
+                 ParentInfo<std::ranges::range_value_t<decltype(blockHeaderData.parentInfo)>>;
     blockHeaderData.txsRoot;
     blockHeaderData.receiptRoot;
     blockHeaderData.stateRoot;
     requires BlockNumber<decltype(blockHeaderData.blockNumber)>;
     requires std::integral<decltype(blockHeaderData.timestamp)>;
     requires std::integral<decltype(blockHeaderData.sealer)>;
-    requires ::ranges::range<decltype(blockHeaderData.sealerList)>;
+    requires std::ranges::range<decltype(blockHeaderData.sealerList)>;
     blockHeaderData.extraData;
-    requires ::ranges::range<decltype(blockHeaderData.consensusWeights)>;
+    requires std::ranges::range<decltype(blockHeaderData.consensusWeights)>;
 };
 
 template <class BlockHeaderType>
@@ -44,8 +43,8 @@ concept BlockHeader = requires(BlockHeaderType block) {
     BlockHeaderType{};
     requires BlockHeaderData<decltype(block.data)>;
     block.dataHash;
-    requires ::ranges::range<decltype(block.signatureList)> &&
-                 Signature<::ranges::range_value_t<decltype(block.signatureList)>>;
+    requires std::ranges::range<decltype(block.signatureList)> &&
+                 Signature<std::ranges::range_value_t<decltype(block.signatureList)>>;
 };
 
 template <class BlockType>
@@ -54,16 +53,17 @@ concept Block = requires(BlockType block) {
     requires std::integral<decltype(block.version)>;
     requires std::integral<decltype(block.type)>;
     requires BlockHeader<decltype(block.blockHeader)>;
-    requires ::ranges::range<decltype(block.transactions)> &&
+    requires std::ranges::range<decltype(block.transactions)> &&
                  bcos::concepts::transaction::Transaction<
-                     ::ranges::range_value_t<decltype(block.transactions)>>;
-    requires ::ranges::range<decltype(block.receipts)> &&
+                     std::ranges::range_value_t<decltype(block.transactions)>>;
+    requires std::ranges::range<decltype(block.receipts)> &&
                  bcos::concepts::receipt::TransactionReceipt<
-                     ::ranges::range_value_t<decltype(block.receipts)>>;
-    requires ::ranges::range<decltype(block.transactionsMetaData)>;  // TODO: add metadata concept
-    requires ::ranges::range<decltype(block.receiptsHash)> &&
-                 ByteBuffer<::ranges::range_value_t<decltype(block.receiptsHash)>>;
-    requires ::ranges::range<decltype(block.nonceList)> &&
-                 ByteBuffer<::ranges::range_value_t<decltype(block.nonceList)>>;
+                     std::ranges::range_value_t<decltype(block.receipts)>>;
+    requires std::ranges::range<decltype(block.transactionsMetaData)>;  // TODO: add metadata
+                                                                        // concept
+    requires std::ranges::range<decltype(block.receiptsHash)> &&
+                 ByteBuffer<std::ranges::range_value_t<decltype(block.receiptsHash)>>;
+    requires std::ranges::range<decltype(block.nonceList)> &&
+                 ByteBuffer<std::ranges::range_value_t<decltype(block.nonceList)>>;
 };
 }  // namespace bcos::concepts::block

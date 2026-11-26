@@ -59,14 +59,13 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <cassert>
 #include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
-#include <range/v3/algorithm/equal.hpp>
-#include <range/v3/algorithm/fill.hpp>
-#include <range/v3/algorithm/move.hpp>
+#include <ranges>
 #include <string_view>
 
 namespace bcos::executor_v1::hostcontext
@@ -322,7 +321,7 @@ public:
         }
         else
         {
-            ::ranges::fill(value.bytes, 0);
+            std::ranges::fill(value.bytes, 0);
         }
         HOST_CONTEXT_LOG(TRACE) << "getTransientStorage:"
                                 << LOG_KV("key", concepts::bytebuffer::toView(key->bytes))
@@ -535,7 +534,7 @@ public:
                 {
                     if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
                             (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
-                        !::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                        !std::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
                         m_ledgerConfig.get().balanceTransfer())
                     {
                         co_await transferBalance(*ref);
@@ -543,7 +542,7 @@ public:
                 }
                 else
                 {
-                    if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                    if (!std::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
                         m_ledgerConfig.get().balanceTransfer())
                     {
                         co_await transferBalance(*ref);
@@ -646,8 +645,8 @@ public:
         auto& logs = hostcontext.logs();
         if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {
-            m_logs.reserve(m_logs.size() + ::ranges::size(logs));
-            ::ranges::move(logs, std::back_inserter(m_logs));
+            m_logs.reserve(m_logs.size() + std::ranges::size(logs));
+            std::ranges::move(logs, std::back_inserter(m_logs));
         }
         co_return result;
     }

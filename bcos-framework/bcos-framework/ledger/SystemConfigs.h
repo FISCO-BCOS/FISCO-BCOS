@@ -22,8 +22,7 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include <boost/throw_exception.hpp>
 #include <magic_enum/magic_enum.hpp>
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 
 namespace bcos::ledger
 {
@@ -104,8 +103,8 @@ public:
 
     auto systemConfigs() const
     {
-        return ::ranges::views::iota(std::size_t{0}, std::size_t{m_sysConfigs.size()}) |
-               ::ranges::views::transform([this](size_t index) {
+        return std::ranges::views::iota(std::size_t{0}, std::size_t{m_sysConfigs.size()}) |
+               std::ranges::views::transform([this](size_t index) {
                    auto flag = magic_enum::enum_value<SystemConfig>(index);
                    return std::make_tuple(
                        flag, magic_enum::enum_name(flag), m_sysConfigs.at(index));
@@ -115,9 +114,9 @@ public:
     // return all config names
     static auto supportConfigs()
     {
-        return ::ranges::views::iota(
+        return std::ranges::views::iota(
                    std::size_t{0}, std::size_t{magic_enum::enum_count<SystemConfig>()}) |
-               ::ranges::views::transform([](size_t index) {
+               std::ranges::views::transform([](size_t index) {
                    auto flag = magic_enum::enum_value<SystemConfig>(index);
                    return magic_enum::enum_name(flag);
                });

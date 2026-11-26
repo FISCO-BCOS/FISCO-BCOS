@@ -28,9 +28,9 @@
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <opstack-executor/OpRollupCost.h>
 
+#include <algorithm>
 #include <iterator>
-#include <range/v3/algorithm/any_of.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 
 namespace bcos::engine
 {
@@ -49,7 +49,7 @@ inline auto estimatedDaBytes(bcos::bytes const& env)
 inline auto rawEnvelopes(ExecutionPayload const& payload)
 {
     return payload.transactions |
-           ::ranges::views::transform(
+           std::ranges::views::transform(
                [](EngineTransaction const& tx) -> bytes const& { return tx.raw; });
 }
 

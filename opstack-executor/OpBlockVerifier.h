@@ -78,8 +78,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -521,7 +520,7 @@ public:
                 m_ioServicePool, /*chunkSize=*/1, /*serial=*/true);
             auto transactionsRefs =
                 result.transactions |
-                ::ranges::views::transform(
+                std::ranges::views::transform(
                     [](protocol::Transaction::Ptr const& ptr) -> protocol::Transaction const& {
                         return *ptr;
                     });
@@ -636,10 +635,10 @@ public:
                 outBlock->appendReceipt(receipt);
             }
             auto blockTxs = std::make_shared<protocol::ConstTransactions>(
-                result.transactions | ::ranges::views::transform([](auto const& tx) {
+                result.transactions | std::ranges::views::transform([](auto const& tx) {
                     return protocol::Transaction::ConstPtr(tx);
                 }) |
-                ::ranges::to<std::vector>());
+                std::ranges::to<std::vector>());
             // blockHashOverride keys the hash rows by the p2p identity; writeNonces=false
             // matches the OP commit path (OpScheduler::commitPersist).
             co_await ledger::prewriteBlockToBuffer(

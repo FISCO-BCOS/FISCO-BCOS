@@ -28,10 +28,11 @@
 #include <cstddef>
 #include <functional>
 #include <iterator>
-#include <range/v3/numeric/accumulate.hpp>
+#include <numeric>
 #include <range/v3/view/all.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
+#include <ranges>
 #include <utility>
 #include <variant>
 
@@ -103,7 +104,7 @@ bool Session::active(Host& server) const
 }
 
 static task::Task<boost::system::error_code> send(
-    Session& session, ::ranges::input_range auto payloads)
+    Session& session, std::ranges::input_range auto payloads)
 {
     if (!session.active() || !session.m_socket->isConnected())
     {
@@ -119,9 +120,9 @@ static task::Task<boost::system::error_code> send(
         task::GetResultAwaitable<boost::system::error_code>::complete(result, ec);
     };
     auto& vec = payload.m_data;
-    if constexpr (::ranges::sized_range<decltype(payloads)>)
+    if constexpr (std::ranges::sized_range<decltype(payloads)>)
     {
-        vec.reserve(::ranges::size(payloads));
+        vec.reserve(std::ranges::size(payloads));
     }
     for (const auto& data : payloads)
     {
@@ -1049,8 +1050,8 @@ bcos::task::Task<std::optional<bcos::gateway::Message>> bcos::gateway::Session::
 
 size_t bcos::gateway::Payload::size() const
 {
-    return ::ranges::accumulate(
-        m_data, size_t(0), [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
+    return std::accumulate(m_data.begin(), m_data.end(), size_t(0),
+        [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
 }
 std::size_t bcos::gateway::SessionRecvBuffer::readPos() const
 {

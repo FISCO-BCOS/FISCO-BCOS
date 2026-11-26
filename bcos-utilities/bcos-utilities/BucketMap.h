@@ -29,17 +29,11 @@
 #include <oneapi/tbb/rw_mutex.h>
 #include <rapidhash.h>
 #include <concepts>
+#include <iterator>
 #include <optional>
 #include <random>
-#include <range/v3/iterator/operations.hpp>
-#include <range/v3/range/concepts.hpp>
-#include <range/v3/range/traits.hpp>
-#include <range/v3/view/addressof.hpp>
-#include <range/v3/view/chunk_by.hpp>
 #include <range/v3/view/enumerate.hpp>
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/map.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <type_traits>
 #include <unordered_map>
 
@@ -265,20 +259,20 @@ public:
     }
 
     template <class Accessor, bool parallel, class Keys, class Handler>
-        requires ::ranges::random_access_range<Keys> && ::ranges::sized_range<Keys> &&
-                 std::invocable<Handler, Accessor&, std::span<::ranges::range_size_t<Keys>>,
+        requires std::ranges::random_access_range<Keys> && std::ranges::sized_range<Keys> &&
+                 std::invocable<Handler, Accessor&, std::span<std::ranges::range_size_t<Keys>>,
                      BucketType&>
     auto traverse(Keys keys, Handler handler)
     {
         auto sortedKeys = ::ranges::views::enumerate(keys) |
-                          ::ranges::views::transform([&](const auto& tuple) {
+                          std::ranges::views::transform([&](const auto& tuple) {
                               auto&& [index, key] = tuple;
                               return std::make_pair(index, getBucketIndex(key));
                           }) |
-                          ::ranges::to<std::vector>();
+                          std::ranges::to<std::vector>();
         std::sort(sortedKeys.begin(), sortedKeys.end(),
             [](const auto& lhs, const auto& rhs) { return std::get<1>(lhs) < std::get<1>(rhs); });
-        auto chunks = ::ranges::views::chunk_by(sortedKeys,
+        auto chunks = std::ranges::views::chunk_by(sortedKeys,
             [](const auto& lhs, const auto& rhs) { return std::get<1>(lhs) == std::get<1>(rhs); });
 
         constexpr static auto innerHandler = [](auto& buckets, auto& chunk, auto& handler) {
@@ -287,12 +281,12 @@ public:
 
             Accessor accessor;
             bucket->acquireAccessor(accessor);
-            handler(accessor, ::ranges::views::keys(chunk), *bucket);
+            handler(accessor, std::ranges::views::keys(chunk), *bucket);
         };
 
         if constexpr (parallel)
         {
-            auto chunksVec = ::ranges::to<std::vector>(chunks);
+            auto chunksVec = std::ranges::to<std::vector>(chunks);
             tbb::parallel_for(tbb::blocked_range(0LU, chunksVec.size()), [&](auto const& range) {
                 for (auto i = range.begin(); i != range.end(); ++i)
                 {
@@ -311,10 +305,10 @@ public:
     }
 
     template <class KeyValues>
-        requires ::ranges::random_access_range<KeyValues> && ::ranges::sized_range<KeyValues>
+        requires std::ranges::random_access_range<KeyValues> && std::ranges::sized_range<KeyValues>
     void batchInsert(KeyValues keyValues)
     {
-        traverse<WriteAccessor, true>(::ranges::views::keys(keyValues),
+        traverse<WriteAccessor, true>(std::ranges::views::keys(keyValues),
             [&](WriteAccessor& accessor, const auto& range, BucketType& bucket) {
                 for (auto index : range)
                 {
@@ -329,7 +323,7 @@ public:
     {
         std::vector<std::optional<ValueType>,
             tbb::cache_aligned_allocator<std::optional<ValueType>>>
-            values(::ranges::size(keys));
+            values(std::ranges::size(keys));
         traverse<AccessorType, true>(
             keys, [&](AccessorType& accessor, const auto& range, BucketType& bucket) {
                 for (auto index : range)
@@ -344,7 +338,7 @@ public:
     }
 
     template <class Keys>
-        requires ::ranges::random_access_range<Keys> && ::ranges::sized_range<Keys>
+        requires std::ranges::random_access_range<Keys> && std::ranges::sized_range<Keys>
     void batchRemove(Keys keys)
     {
         traverse<WriteAccessor, true>(
@@ -412,8 +406,8 @@ public:
     template <class AccessorType>
     task::Generator<AccessorType&> range(size_t startIndex) const
     {
-        for (auto& bucket : ::ranges::views::iota(startIndex, startIndex + m_buckets.size()) |
-                                ::ranges::views::transform([&](auto index) -> auto& {
+        for (auto& bucket : std::ranges::views::iota(startIndex, startIndex + m_buckets.size()) |
+                                std::ranges::views::transform([&](auto index) -> auto& {
                                     return m_buckets[index % m_buckets.size()];
                                 }))
         {
@@ -476,7 +470,7 @@ public:
             results;
         if constexpr (returnInsertResult)
         {
-            results.resize(::ranges::size(keys));
+            results.resize(std::ranges::size(keys));
         }
         BucketMap<KeyType, EmptyType, BucketHasher>::template traverse<WriteAccessor, true>(
             keys, [&](WriteAccessor& accessor, const auto& range, auto& bucket) {

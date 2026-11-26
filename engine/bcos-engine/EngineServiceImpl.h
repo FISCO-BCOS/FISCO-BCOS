@@ -51,6 +51,7 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -58,10 +59,8 @@
 #include <functional>
 #include <mutex>
 #include <optional>
-#include <range/v3/algorithm/any_of.hpp>
-#include <range/v3/view/filter.hpp>
 #include <range/v3/view/indirect.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -717,12 +716,12 @@ private:
                     }
                     blockTxs = std::make_shared<protocol::ConstTransactions>(
                         it->second.executionPayload.transactions |
-                        ::ranges::views::filter(
+                        std::ranges::views::filter(
                             [](auto const& tx) { return tx.decoded != nullptr; }) |
-                        ::ranges::views::transform([](auto const& tx) {
+                        std::ranges::views::transform([](auto const& tx) {
                             return protocol::Transaction::ConstPtr(tx.decoded);
                         }) |
-                        ::ranges::to<std::vector>());
+                        std::ranges::to<std::vector>());
                     // header/receipts stay intact here: they are consumed only after the
                     // durable write succeeds, so a throw leaves the entry retryable.
                 }

@@ -57,13 +57,11 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/test/unit_test.hpp>
 #include <cstdint>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
-#include <range/v3/iterator/operations.hpp>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
@@ -182,7 +180,7 @@ struct SharedMockScheduler
 
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
         auto& /*executor*/, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
+        std::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
     {
         auto writeRows = [&storage](std::vector<RowOp> const& rows) -> task::Task<void> {
             for (auto const& row : rows)
@@ -215,8 +213,8 @@ struct SharedMockScheduler
         }
 
         auto receipts =
-            ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |
-            ::ranges::views::transform([this](size_t) -> protocol::TransactionReceipt::Ptr {
+            std::ranges::iota_view<size_t, size_t>(0, std::ranges::size(transactions)) |
+            std::ranges::views::transform([this](size_t) -> protocol::TransactionReceipt::Ptr {
                 auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
                 constexpr static std::string_view str = "abc";
                 auto& inner = receipt->inner();
@@ -234,7 +232,7 @@ struct SharedMockScheduler
                 }
                 return receipt;
             }) |
-            ::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
+            std::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
         co_return receipts;
     }
 };

@@ -1,11 +1,8 @@
 #pragma once
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
-#include <range/v3/range.hpp>
 #include <range/v3/view/indirect.hpp>
-#include <range/v3/view/single.hpp>
-#include <range/v3/view/transform.hpp>
-#include <range/v3/view/zip.hpp>
+#include <ranges>
 #include <tuple>
 #include <type_traits>
 #include <variant>
@@ -61,7 +58,7 @@ using ReturnType = typename task::AwaitableReturnType<Invoke>;
 
 inline constexpr struct ReadSome
 {
-    auto operator()(auto& storage, ::ranges::input_range auto keys, auto&&... args) const
+    auto operator()(auto& storage, std::ranges::input_range auto keys, auto&&... args) const
         -> task::Task<task::AwaitableReturnType<decltype(storage.readSome(
             std::move(keys), std::forward<decltype(args)>(args)...))>>
         requires requires {
@@ -71,7 +68,7 @@ inline constexpr struct ReadSome
         co_return co_await storage.readSome(std::move(keys), std::forward<decltype(args)>(args)...);
     }
 
-    auto operator()(auto& storage, ::ranges::input_range auto keys, auto&&... args) const
+    auto operator()(auto& storage, std::ranges::input_range auto keys, auto&&... args) const
         -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
             *this, storage, std::move(keys), std::forward<decltype(args)>(args)...))>>
         requires(
@@ -84,12 +81,13 @@ inline constexpr struct ReadSome
 
 inline constexpr struct WriteSome
 {
-    auto operator()(auto& storage, ::ranges::input_range auto keyValues, auto&&... args) const
+    auto operator()(auto& storage, std::ranges::input_range auto keyValues, auto&&... args) const
         -> task::Task<task::AwaitableReturnType<decltype(storage.writeSome(
             std::move(keyValues), std::forward<decltype(args)>(args)...))>>
-        requires(std::tuple_size_v<::ranges::range_value_t<decltype(keyValues)>> >= 2) && requires {
-            storage.writeSome(std::move(keyValues), std::forward<decltype(args)>(args)...);
-        }
+        requires(std::tuple_size_v<std::ranges::range_value_t<decltype(keyValues)>> >= 2) &&
+                requires {
+                    storage.writeSome(std::move(keyValues), std::forward<decltype(args)>(args)...);
+                }
     {
         using Return = decltype(storage.writeSome(
             std::move(keyValues), std::forward<decltype(args)>(args)...));
@@ -105,10 +103,10 @@ inline constexpr struct WriteSome
         }
     }
 
-    auto operator()(auto& storage, ::ranges::input_range auto keyValues, auto&&... args) const
+    auto operator()(auto& storage, std::ranges::input_range auto keyValues, auto&&... args) const
         -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
             *this, storage, std::move(keyValues), std::forward<decltype(args)>(args)...))>>
-        requires(std::tuple_size_v<::ranges::range_value_t<decltype(keyValues)>> >= 2) &&
+        requires(std::tuple_size_v<std::ranges::range_value_t<decltype(keyValues)>> >= 2) &&
                 (!requires {
                     storage.writeSome(std::move(keyValues), std::forward<decltype(args)>(args)...);
                 })
@@ -131,7 +129,7 @@ inline constexpr struct WriteSome
 
 inline constexpr struct RemoveSome
 {
-    auto operator()(auto& storage, ::ranges::input_range auto keys, auto&&... args) const
+    auto operator()(auto& storage, std::ranges::input_range auto keys, auto&&... args) const
         -> task::Task<task::AwaitableReturnType<decltype(storage.removeSome(
             std::move(keys), std::forward<decltype(args)>(args)...))>>
         requires requires {
@@ -152,7 +150,7 @@ inline constexpr struct RemoveSome
         }
     }
 
-    auto operator()(auto& storage, ::ranges::input_range auto keys, auto&&... args) const
+    auto operator()(auto& storage, std::ranges::input_range auto keys, auto&&... args) const
         -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
             *this, storage, std::move(keys), std::forward<decltype(args)>(args)...))>>
         requires(!requires {

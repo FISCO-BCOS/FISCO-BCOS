@@ -16,7 +16,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Overloaded.h"
-#include <range/v3/view/map.hpp>
+#include <ranges>
 #include <type_traits>
 
 namespace bcos::executor_v1
@@ -96,26 +96,26 @@ private:
     std::reference_wrapper<Storage> m_storage;
 
     template <class Keys>
-        requires ::ranges::sized_range<Keys> && ::ranges::input_range<Keys>
+        requires std::ranges::sized_range<Keys> && std::ranges::input_range<Keys>
     task::Task<void> storeOldValues(Keys keys, bool withEmpty)
     {
         auto& storage = m_storage.get();
         auto keyList = [&]() {
-            if constexpr (std::is_same_v<::ranges::range_value_t<std::decay_t<Keys>>, Key>)
+            if constexpr (std::is_same_v<std::ranges::range_value_t<std::decay_t<Keys>>, Key>)
             {
-                return ::ranges::views::all(keys);
+                return std::ranges::views::all(keys);
             }
             else
             {
-                return keys | ::ranges::views::transform([](auto&& key) { return Key(key); }) |
-                       ::ranges::to<std::vector<Key>>;
+                return keys | std::ranges::views::transform([](auto&& key) { return Key(key); }) |
+                       std::ranges::to<std::vector<Key>>();
             }
         }();
         auto oldValues = co_await storage.readSomeRaw(
             keyList, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER);
 
         m_records.reserve(m_records.size() + keyList.size());
-        for (auto&& [key, oldValue] : ::ranges::views::zip(keyList, oldValues))
+        for (auto&& [key, oldValue] : std::ranges::views::zip(keyList, oldValues))
         {
             if (!withEmpty && std::holds_alternative<storage2::NOT_EXISTS_TYPE>(oldValue))
             {
@@ -127,26 +127,26 @@ private:
     }
 
 public:
-    auto writeSome(::ranges::input_range auto keyValues)
+    auto writeSome(std::ranges::input_range auto keyValues)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::WriteSome,
             std::add_lvalue_reference_t<Storage>, decltype(keyValues)>>>
         requires HasReadSomeRaw<Storage>
     {
-        if constexpr (::ranges::borrowed_range<decltype(keyValues)>)
+        if constexpr (std::ranges::borrowed_range<decltype(keyValues)>)
         {
-            co_await storeOldValues(::ranges::views::keys(keyValues), true);
+            co_await storeOldValues(std::ranges::views::keys(keyValues), true);
             co_return co_await storage2::writeSome(
                 m_storage.get(), std::forward<decltype(keyValues)>(keyValues));
         }
         else
         {
-            auto newKeyValues = ::ranges::to<std::vector>(keyValues);
-            co_await storeOldValues(::ranges::views::keys(newKeyValues), true);
+            auto newKeyValues = std::ranges::to<std::vector>(keyValues);
+            co_await storeOldValues(std::ranges::views::keys(newKeyValues), true);
             co_return co_await storage2::writeSome(m_storage.get(), std::move(newKeyValues));
         }
     }
 
-    auto readSome(::ranges::input_range auto keys) -> task::Task<task::AwaitableReturnType<
+    auto readSome(std::ranges::input_range auto keys) -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
         co_return co_await storage2::readSome(m_storage.get(), std::move(keys));
@@ -191,12 +191,12 @@ public:
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveOne,
             std::add_lvalue_reference_t<Storage>, decltype(key), decltype(args)...>>>
     {
-        co_await storeOldValues(::ranges::views::single(key), false);
+        co_await storeOldValues(std::ranges::views::single(key), false);
         co_return co_await storage2::removeOne(
             m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto removeSome(::ranges::input_range auto keys)
+    auto removeSome(std::ranges::input_range auto keys)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome,
             std::add_lvalue_reference_t<Storage>, decltype(keys)>>>
     {

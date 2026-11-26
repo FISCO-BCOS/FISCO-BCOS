@@ -36,6 +36,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
@@ -416,7 +417,7 @@ BOOST_AUTO_TEST_CASE(TxpoolPendingQueuedSplit)
     {
         txs.push_back(makeTx(eip1559(nonce, 150, 20), h256(id++), who));
     }
-    memPool.add(::ranges::views::all(txs));
+    memPool.add(std::ranges::views::all(txs));
     nodeService->setMemPool(memPool);
     nodeService->setStateStorageProvider(
         [&state]() { return std::make_shared<NodeService::StateStorage>(state); });

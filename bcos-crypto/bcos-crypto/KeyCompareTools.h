@@ -21,23 +21,24 @@
 
 #pragma once
 
-#include <range/v3/algorithm/find_if.hpp>
+#include <algorithm>
 #include <range/v3/view/enumerate.hpp>
+#include <ranges>
 namespace bcos::crypto
 {
 template <class NodeType>
 concept Node = requires(NodeType node) { node->data(); };
 template <class NodesType>
 concept Nodes = requires(NodesType nodesType) {
-    requires ::ranges::bidirectional_range<NodesType>;
-    requires Node<::ranges::range_value_t<NodesType>>;
+    requires std::ranges::bidirectional_range<NodesType>;
+    requires Node<std::ranges::range_value_t<NodesType>>;
 };
 class KeyCompareTools
 {
 public:
     static bool compareTwoNodeIDs(Nodes auto const& nodes1, Nodes auto const& nodes2)
     {
-        if (::ranges::size(nodes1) != ::ranges::size(nodes2))
+        if (std::ranges::size(nodes1) != std::ranges::size(nodes2))
         {
             return false;
         }
@@ -54,8 +55,9 @@ public:
 
     static bool isNodeIDExist(Node auto const& node, Nodes auto const& nodes)
     {
-        return ::ranges::find_if(::ranges::begin(nodes), ::ranges::end(nodes),
-                   [&node](auto&& n) { return n->data() == node->data(); }) != ::ranges::end(nodes);
+        return std::ranges::find_if(std::ranges::begin(nodes), std::ranges::end(nodes),
+                   [&node](auto&& n) { return n->data() == node->data(); }) !=
+               std::ranges::end(nodes);
     }
 };
 }  // namespace bcos::crypto

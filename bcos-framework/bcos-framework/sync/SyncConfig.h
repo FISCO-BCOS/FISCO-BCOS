@@ -24,7 +24,7 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-utilities/Log.h>
 #include <mutex>
-#include <range/v3/view/filter.hpp>
+#include <ranges>
 namespace bcos::sync
 {
 class SyncConfig
@@ -123,7 +123,7 @@ public:
     {
         std::scoped_lock lock(x_nodeList, x_connectedNodeList);
         auto nodeList =
-            m_nodeList | ::ranges::views::filter([this](const bcos::crypto::NodeIDPtr& _nodeId) {
+            m_nodeList | std::ranges::views::filter([this](const bcos::crypto::NodeIDPtr& _nodeId) {
                 return m_connectedNodeList.contains(_nodeId);
             });
         return {nodeList.begin(), nodeList.end()};

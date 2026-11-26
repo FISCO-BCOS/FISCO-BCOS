@@ -32,6 +32,7 @@
 #include <boost/atomic.hpp>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -115,11 +116,12 @@ BOOST_AUTO_TEST_CASE(createContextsAbortsWhenHasRAWIsSet)
 
         constexpr int TX_COUNT = 50;
         auto transactions =
-            ::ranges::iota_view<int, int>(0, TX_COUNT) | ::ranges::views::transform([](int index) {
+            std::ranges::iota_view<int, int>(0, TX_COUNT) |
+            std::ranges::views::transform([](int index) {
                 return std::make_unique<bcostars::protocol::TransactionImpl>(
                     [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
             }) |
-            ::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
+            std::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
         std::vector<protocol::TransactionReceipt::Ptr> receipts(TX_COUNT);
         std::vector<ExecutionContext> contexts;
@@ -129,8 +131,8 @@ BOOST_AUTO_TEST_CASE(createContextsAbortsWhenHasRAWIsSet)
             contexts.emplace_back(i, std::addressof(*transactions[i]), std::addressof(receipts[i]));
         }
 
-        using ContextIterator = ::ranges::iterator_t<decltype(contexts)>;
-        using ContextRange = ::ranges::subrange<ContextIterator>;
+        using ContextIterator = std::ranges::iterator_t<decltype(contexts)>;
+        using ContextRange = std::ranges::subrange<ContextIterator>;
         using BackendStorageType = std::remove_reference_t<decltype(view.backendStorageRef())>;
         using ChunkType =
             ChunkStatus<MutableStorage, BackendStorageType, CountingExecutor, ContextRange>;

@@ -21,7 +21,7 @@
 #include <bcos-transaction-executor/RollbackableStorage.h>
 #include <bcos-transaction-scheduler/ReadWriteSetStorage.h>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -41,7 +41,7 @@ struct DirectMockStorage
         co_return storage2::NOT_EXISTS_TYPE{};
     }
 
-    auto readSomeRaw(::ranges::input_range auto keys, auto&&... /*args*/)
+    auto readSomeRaw(std::ranges::input_range auto keys, auto&&... /*args*/)
         -> task::Task<std::vector<storage2::StorageValueType<Value>>>
     {
         std::vector<storage2::StorageValueType<Value>> result;
@@ -74,7 +74,7 @@ task::Task<std::optional<int>> tag_invoke(storage2::tag_t<storage2::readOne> /*u
 
 task::Task<std::vector<std::optional<int>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, DirectMockStorage& /*storage*/,
-    ::ranges::forward_range auto keys)
+    std::ranges::forward_range auto keys)
 {
     std::vector<std::optional<int>> result;
     for (auto&& key : keys)
@@ -86,7 +86,7 @@ task::Task<std::vector<std::optional<int>>> tag_invoke(
 
 task::Task<std::vector<std::optional<int>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, DirectMockStorage& /*storage*/,
-    ::ranges::forward_range auto keys, storage2::BYPASS_READ_SET_TYPE /*unused*/)
+    std::ranges::forward_range auto keys, storage2::BYPASS_READ_SET_TYPE /*unused*/)
 {
     std::vector<std::optional<int>> result;
     for (auto&& key : keys)
@@ -116,7 +116,7 @@ BOOST_AUTO_TEST_CASE(untrackedReadOneDoesNotPolluteReadSet)
         BOOST_CHECK_EQUAL(*value, 420);
 
         // Read set must remain empty — bypass-read-set is infrastructure, not business.
-        BOOST_CHECK(::ranges::empty(readWriteSet(reader)));
+        BOOST_CHECK(std::ranges::empty(readWriteSet(reader)));
         co_return;
     }());
 }
@@ -134,7 +134,7 @@ BOOST_AUTO_TEST_CASE(untrackedReadSomeDoesNotPolluteReadSet)
         BOOST_CHECK_EQUAL(*values[1], 50);
         BOOST_CHECK_EQUAL(*values[2], 70);
 
-        BOOST_CHECK(::ranges::empty(readWriteSet(reader)));
+        BOOST_CHECK(std::ranges::empty(readWriteSet(reader)));
         co_return;
     }());
 }
@@ -233,8 +233,8 @@ BOOST_AUTO_TEST_CASE(forwardRangeWriteSomePersists)
         // ranges::views::transform is a forward_range when the source is, so
         // this exercises the two-pass pattern (tracking loop + forwarding).
         std::vector<int> source{1, 2, 3};
-        auto keyValues =
-            source | ::ranges::views::transform([](int key) { return std::pair{key, key * 100}; });
+        auto keyValues = source | std::ranges::views::transform(
+                                      [](int key) { return std::pair{key, key * 100}; });
 
         co_await storage2::writeSome(rwStorage, keyValues);
 

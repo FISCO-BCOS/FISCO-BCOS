@@ -29,11 +29,13 @@
 #include <bcos-utilities/ITTAPI.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <algorithm>
 #include <exception>
 #include <mutex>
+#include <range/v3/view/all.hpp>
 #include <range/v3/view/enumerate.hpp>
-#include <range/v3/view/filter.hpp>
-#include <range/v3/view/transform.hpp>
+#include <range/v3/view/single.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -181,7 +183,7 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
         // NOTE: the protocolList is a vector which sorted by nodeID, and is NOT convenience
         // for filter whether send new protocol or not. So one-size-fits-all approach, if
         // protocolList have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default.
-        auto index = ::ranges::find_if(protocolList, [](auto const& protocol) {
+        auto index = std::ranges::find_if(protocolList, [](auto const& protocol) {
             // FIB-166: skip null entries in the sorted list rather than dereferencing them.
             // A null protocol entry is treated as "lower version" so we err on the side of
             // the safer SYNC_PUSH_TRANSACTION fanout, matching the existing pessimistic
@@ -559,16 +561,16 @@ void TxPool::fillBlock(HashListPtr _txsHash,
 
     // getTransactions guarantees that txs and *_txsHash have the same size and order
     auto txs = m_txpoolStorage->getTransactions(*_txsHash);
-    auto missedTxs = ::ranges::views::zip(*_txsHash, txs) |
-                     ::ranges::views::filter([](const auto& pair) {
+    auto missedTxs = std::ranges::views::zip(*_txsHash, txs) |
+                     std::ranges::views::filter([](const auto& pair) {
                          auto& [hash, tx] = pair;
                          return !tx;
                      }) |
-                     ::ranges::views::transform([](const auto& pair) {
+                     std::ranges::views::transform([](const auto& pair) {
                          auto& [hash, tx] = pair;
                          return hash;
                      }) |
-                     ::ranges::to<HashList>();
+                     std::ranges::to<HashList>();
     if (!missedTxs.empty())
     {
         TXPOOL_LOG(WARNING) << LOG_DESC("asyncFillBlock failed for missing some transactions")

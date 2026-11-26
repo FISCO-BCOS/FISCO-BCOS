@@ -46,7 +46,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <range/v3/algorithm/equal.hpp>
 #include <regex>
 #include <sstream>
 #include <string>

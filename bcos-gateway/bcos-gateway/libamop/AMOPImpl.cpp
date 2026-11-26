@@ -27,6 +27,8 @@
 #include <algorithm>
 #include <chrono>
 #include <random>
+#include <range/v3/view/single.hpp>
+
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::amop;

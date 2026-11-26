@@ -65,6 +65,7 @@
 #include <iterator>
 #include <memory>
 #include <ostream>
+#include <range/v3/view/transform.hpp>
 #include <string>
 #include <utility>
 #include <vector>

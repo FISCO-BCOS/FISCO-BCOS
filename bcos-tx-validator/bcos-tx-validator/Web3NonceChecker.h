@@ -24,6 +24,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/txpool/TxPoolTypeDef.h>
 #include <concepts>
+#include <ranges>
 
 namespace bcos::txvalidator
 {
@@ -120,7 +121,7 @@ public:
      * committed
      * @param senderNonces sender and nonce set list
      */
-    task::Task<void> updateNonceCache(::ranges::input_range auto senderNonces)
+    task::Task<void> updateNonceCache(std::ranges::input_range auto senderNonces)
     {
         for (auto&& [sender, nonceSet] : senderNonces)
         {
@@ -174,7 +175,7 @@ public:
      * @param nonces nonce string list
      */
     task::Task<void> batchRemoveMemoryNonce(
-        ::ranges::input_range auto&& senders, ::ranges::input_range auto&& nonces)
+        std::ranges::input_range auto&& senders, std::ranges::input_range auto&& nonces)
     {
         // 假设交易池里有0xabcd的3笔交易，nonce分别是5，7，9。如果nonce为7的交易先被打包进区块，ledger
         // state nonce将会更新到7，那么交易池中memory nonce中小等于ledger
@@ -184,7 +185,7 @@ public:
         // into a block first, the ledge state nonce will be updated to 7, then the transactions
         // with nonce 5 and 7 in the memory nonce of the transaction pool will be removed.
         std::stringstream ss;
-        for (auto&& [sender, nonce] : ::ranges::views::zip(senders, nonces))
+        for (auto&& [sender, nonce] : std::ranges::views::zip(senders, nonces))
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {

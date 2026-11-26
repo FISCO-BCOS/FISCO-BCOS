@@ -22,6 +22,8 @@
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
 #include <boost/test/unit_test.hpp>
+#include <ranges>
+
 using namespace bcos;
 using namespace std;
 
@@ -276,9 +278,9 @@ BOOST_AUTO_TEST_CASE(parallelTest2)
 
     tbb::parallel_for(
         tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
-            auto kvs = ::ranges::iota_view<int, int>(range.begin(), range.end()) |
-                       ::ranges::views::transform([](int i) { return std::make_pair(i, i); }) |
-                       ::ranges::to<std::vector>();
+            auto kvs = std::ranges::iota_view<int, int>(range.begin(), range.end()) |
+                       std::ranges::views::transform([](int i) { return std::make_pair(i, i); }) |
+                       std::ranges::to<std::vector>();
 
             bucketMap.batchInsert(kvs);
         });
@@ -286,8 +288,8 @@ BOOST_AUTO_TEST_CASE(parallelTest2)
 
     tbb::parallel_for(
         tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
-            auto ks = ::ranges::iota_view<int, int>(range.begin(), range.end()) |
-                      ::ranges::to<std::vector>();
+            auto ks = std::ranges::iota_view<int, int>(range.begin(), range.end()) |
+                      std::ranges::to<std::vector>();
 
             bucketMap.traverse<WriteAccessor, true>(
                 ks, [&](WriteAccessor& accessor, const auto& range, auto& bucket) {
@@ -309,8 +311,8 @@ BOOST_AUTO_TEST_CASE(parallelTest2)
 
     tbb::parallel_for(
         tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
-            auto ks = ::ranges::iota_view<int, int>(range.begin(), range.end()) |
-                      ::ranges::to<std::vector>();
+            auto ks = std::ranges::iota_view<int, int>(range.begin(), range.end()) |
+                      std::ranges::to<std::vector>();
 
             bucketMap.batchRemove(ks);
         });

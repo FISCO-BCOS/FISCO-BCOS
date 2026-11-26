@@ -32,8 +32,7 @@
 #include <boost/lexical_cast.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <optional>
-#include <range/v3/view/transform.hpp>
-#include <range/v3/view/zip.hpp>
+#include <ranges>
 #include <string>
 #include <string_view>
 
@@ -260,11 +259,11 @@ inline task::Task<void> readFromStorage(
 {
     auto keys = bcos::ledger::SystemConfigs::supportConfigs();
     auto entries = co_await storage2::readSome(
-        storage, keys | ::ranges::views::transform([](std::string_view key) {
+        storage, keys | std::ranges::views::transform([](std::string_view key) {
             return executor_v1::StateKeyView(ledger::SYS_CONFIG, key);
         }));
 
-    for (auto&& [key, entry] : ::ranges::views::zip(keys, entries))
+    for (auto&& [key, entry] : std::ranges::views::zip(keys, entries))
     {
         if (entry)
         {

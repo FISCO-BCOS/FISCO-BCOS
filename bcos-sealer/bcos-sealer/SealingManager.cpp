@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/CommonError.h"
 #include <limits>
 #include <range/v3/view/concat.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::sealer;
@@ -165,8 +166,8 @@ void SealingManager::clearPendingTxs()
                        << LOG_KV("size", pendingTxsSize);
         snapshot =
             ::ranges::views::concat(m_pendingTxs, m_pendingSysTxs) |
-            ::ranges::views::transform([](auto& transaction) { return transaction->hash(); }) |
-            ::ranges::to<bcos::crypto::HashList>();
+            std::ranges::views::transform([](auto& transaction) { return transaction->hash(); }) |
+            std::ranges::to<bcos::crypto::HashList>();
         m_pendingTxs.clear();
         m_pendingSysTxs.clear();
     }
@@ -226,9 +227,9 @@ void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag
 void SealingManager::notifyResetProposal(
     const std::vector<protocol::TransactionMetaData::Ptr>& metaDatas)
 {
-    auto txsHashList = ::ranges::views::transform(metaDatas, [](auto& metaData) {
+    auto txsHashList = std::ranges::views::transform(metaDatas, [](auto& metaData) {
         return metaData->hash();
-    }) | ::ranges::to<std::vector>();
+    }) | std::ranges::to<std::vector>();
     notifyResetTxsFlag(txsHashList, false);
 }
 

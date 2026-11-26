@@ -23,7 +23,7 @@
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
 #include <cstddef>
-#include <range/v3/range/concepts.hpp>
+#include <ranges>
 
 namespace bcos::protocol
 {
@@ -78,7 +78,7 @@ struct ReceiptNormalizer
 /// method (a `Block`, say) would bind `Receipts` to that type and only then fail inside the
 /// range-for, pointing at a line the caller never wrote.
 template <class Receipts>
-    requires ::ranges::input_range<Receipts>
+    requires std::ranges::input_range<Receipts>
 inline u256 normalizeReceipts(Receipts& receipts)
 {
     ReceiptNormalizer normalizer;

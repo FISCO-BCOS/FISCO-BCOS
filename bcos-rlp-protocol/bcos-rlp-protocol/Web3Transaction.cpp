@@ -27,8 +27,6 @@
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>  // bcos::fromBigEndian
 #include <limits>
-#include <range/v3/algorithm/find_if.hpp>
-#include <range/v3/algorithm/move.hpp>
 #include <utility>
 
 namespace bcos

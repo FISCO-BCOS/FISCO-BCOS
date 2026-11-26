@@ -66,6 +66,8 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <range/v3/view/indirect.hpp>
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -1263,10 +1265,10 @@ public:
                 block->appendReceipt(receipt);
             }
             auto blockTxs = std::make_shared<protocol::ConstTransactions>(
-                transactions | ::ranges::views::transform([](auto const& transaction) {
+                transactions | std::ranges::views::transform([](auto const& transaction) {
                     return protocol::Transaction::ConstPtr(transaction);
                 }) |
-                ::ranges::to<std::vector>());
+                std::ranges::to<std::vector>());
             co_await ledger::prewriteBlockToBuffer(ledger, blockTxs, block, prewriteStorage);
             // EIP-4895 withdrawals sidecar (Shanghai+): the Block structure carries no
             // withdrawals, so persist the raw per-item RLP as one number-keyed row (the
@@ -1354,8 +1356,8 @@ public:
     /// Engine API block builder (buildPayload) also uses.
     static task::Task<EthereumBlockComputation> computeEthereumRoots(
         std::vector<protocol::TransactionReceipt::Ptr>& receipts,
-        ::ranges::input_range auto const& transactions,
-        ::ranges::input_range auto const& rawTransactions)
+        std::ranges::input_range auto const& transactions,
+        std::ranges::input_range auto const& rawTransactions)
     {
         return ledger::mpt::computeEthereumRoots(receipts, transactions, rawTransactions);
     }

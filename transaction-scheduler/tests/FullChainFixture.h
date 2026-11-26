@@ -75,6 +75,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -112,7 +113,7 @@ struct FCWritingScheduler
 
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
         auto& /*executor*/, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
+        std::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
     {
         if (auto it = m_plan->find(blockHeader.number()); it != m_plan->end())
         {
@@ -132,17 +133,17 @@ struct FCWritingScheduler
                 }
             }
         }
-        auto receipts = ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |
-                        ::ranges::views::transform([](size_t) -> protocol::TransactionReceipt::Ptr {
-                            auto receipt =
-                                std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-                            constexpr static std::string_view str = "abc";
-                            auto& inner = receipt->inner();
-                            inner.dataHash.assign(str.begin(), str.end());
-                            inner.data.gasUsed = "100";
-                            return receipt;
-                        }) |
-                        ::ranges::to<std::vector>();
+        auto receipts =
+            std::ranges::iota_view<size_t, size_t>(0, std::ranges::size(transactions)) |
+            std::ranges::views::transform([](size_t) -> protocol::TransactionReceipt::Ptr {
+                auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+                constexpr static std::string_view str = "abc";
+                auto& inner = receipt->inner();
+                inner.dataHash.assign(str.begin(), str.end());
+                inner.data.gasUsed = "100";
+                return receipt;
+            }) |
+            std::ranges::to<std::vector>();
         co_return receipts;
     }
 };

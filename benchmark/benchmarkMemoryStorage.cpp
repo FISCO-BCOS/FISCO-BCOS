@@ -7,8 +7,7 @@
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_map.h>
 #include <tbb/concurrent_unordered_map.h>
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/zip.hpp>
+#include <ranges>
 #include <variant>
 
 using namespace bcos;
@@ -26,7 +25,7 @@ struct Fixture
     {
         allKeys.clear();
         allValues.clear();
-        for (auto i : ::ranges::views::iota(0, count))
+        for (auto i : std::ranges::views::iota(0, count))
         {
             auto tableName = fmt::format("Table-{}", i % 1000);  // All 1000 tables
             auto key = fmt::format("Key-{}", i);
@@ -76,7 +75,7 @@ static void read(benchmark::State& state)
                 [&](auto& storage) -> task::Task<void> {
                     setCapacityForMRU(storage);
                     co_await storage2::writeSome(
-                        storage, ::ranges::views::zip(fixture.allKeys, fixture.allValues));
+                        storage, std::ranges::views::zip(fixture.allKeys, fixture.allValues));
                 },
                 allStorage);
         }());
@@ -144,7 +143,7 @@ static void readTBBHashMap(benchmark::State& state)
         fixture.prepareData(state.range(0));
         tbbHashMap.clear();
 
-        for (auto&& [key, value] : ::ranges::views::zip(fixture.allKeys, fixture.allValues))
+        for (auto&& [key, value] : std::ranges::views::zip(fixture.allKeys, fixture.allValues))
         {
             tbbHashMap.emplace(key, value);
         }
@@ -168,7 +167,7 @@ static void readTBBUnorderedMap(benchmark::State& state)
         fixture.prepareData(state.range(0));
         tbbUnorderedMap.clear();
 
-        for (auto&& [key, value] : ::ranges::views::zip(fixture.allKeys, fixture.allValues))
+        for (auto&& [key, value] : std::ranges::views::zip(fixture.allKeys, fixture.allValues))
         {
             tbbUnorderedMap.emplace(key, value);
         }
@@ -191,7 +190,7 @@ static void readTBBMap(benchmark::State& state)
         fixture.prepareData(state.range(0));
         tbbMap.clear();
 
-        for (auto&& [key, value] : ::ranges::views::zip(fixture.allKeys, fixture.allValues))
+        for (auto&& [key, value] : std::ranges::views::zip(fixture.allKeys, fixture.allValues))
         {
             tbbMap.emplace(key, value);
         }

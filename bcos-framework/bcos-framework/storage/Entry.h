@@ -17,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -33,11 +34,11 @@ concept ByteBuffer = requires(const T& t) {
 };
 
 // ─── View detection ────────────────────────────────────────────────
-// Delegates to std::ranges::view which covers string_view, span, and any
-// other standard or user-defined view that opts in via view_interface.
+// Recognize standard and range-v3 views while any_view remains in public APIs.
 // Non-owning views → deep-copied; owning types → stored directly.
 template <typename T>
-constexpr bool IsByteBufferViewV = ::ranges::view_<std::remove_cvref_t<T>>;
+constexpr bool IsByteBufferViewV =
+    std::ranges::view<std::remove_cvref_t<T>> || ::ranges::view_<std::remove_cvref_t<T>>;
 
 // ─── Status enum at namespace scope ────────────────────────────────
 // Defined before buffer models and facade so they can use it as a

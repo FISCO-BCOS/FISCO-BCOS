@@ -7,6 +7,7 @@
 #include <iterator>
 #include <ostream>
 #include <random>
+#include <ranges>
 #include <stdexcept>
 
 using MerkleTestHash = std::array<uint8_t, 32>;
@@ -58,7 +59,7 @@ void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashe
     emptyHash.fill(0);
     auto seed = std::random_device{}();
 
-    for (auto count = 0lu; count < ::ranges::size(inputHashes); ++count)
+    for (auto count = 0lu; count < std::ranges::size(inputHashes); ++count)
     {
         std::span<MerkleTestHash const> hashes(inputHashes.data(), count);
 
@@ -84,7 +85,7 @@ void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashe
             BOOST_CHECK_THROW(trie.generateMerkleProof(hashes, outMerkle, emptyHash, outProof),
                 boost::wrapexcept<std::invalid_argument>);
             BOOST_CHECK_THROW(
-                trie.generateMerkleProof(hashes, outMerkle, ::ranges::size(hashes), outProof),
+                trie.generateMerkleProof(hashes, outMerkle, std::ranges::size(hashes), outProof),
                 boost::wrapexcept<std::invalid_argument>);
 
             for (auto& hash : hashes)

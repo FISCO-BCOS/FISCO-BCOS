@@ -32,6 +32,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/throw_exception.hpp>
 #include <queue>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -358,7 +359,7 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
                 // max return is 500
                 keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
                 auto keys = _executive->storage().getPrimaryKeys(absolutePath, keyCondition);
-                for (const auto& key : keys | ::ranges::views::all)
+                for (const auto& key : keys | std::ranges::views::all)
                 {
                     auto entry = _executive->storage().getRow(absolutePath, key);
                     auto fields =
@@ -497,7 +498,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         keyCondition->limit((size_t)offset, (size_t)count);
         auto keys = _executive->storage().getPrimaryKeys(absolutePath, keyCondition);
 
-        for (const auto& key : keys | ::ranges::views::all)
+        for (const auto& key : keys | std::ranges::views::all)
         {
             auto entry = _executive->storage().getRow(absolutePath, key);
             auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
@@ -882,7 +883,7 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
     // create / dir
     _executive->storage().createTable(std::string(tool::FS_ROOT), std::string(tool::FS_DIR_FIELDS));
     // build root subs metadata
-    for (const auto& subName : tool::FS_ROOT_SUBS | ::ranges::views::drop(1))
+    for (const auto& subName : tool::FS_ROOT_SUBS | std::ranges::views::drop(1))
     {
         Entry entry;
         // type, status, acl_type, acl_white, acl_black, extra

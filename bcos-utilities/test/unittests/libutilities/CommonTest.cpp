@@ -26,6 +26,7 @@
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <chrono>
+#include <ranges>
 #include <thread>
 
 namespace bcos
@@ -191,9 +192,9 @@ BOOST_AUTO_TEST_CASE(testError)
     BOOST_CHECK(error->errorMessage() == errorMessage);
 }
 
-void testRange(::ranges::range auto range)
+void testRange(std::ranges::range auto range)
 {
-    BOOST_CHECK(::ranges::size(range) > 0);
+    BOOST_CHECK(std::ranges::size(range) > 0);
 }
 
 BOOST_AUTO_TEST_CASE(range)

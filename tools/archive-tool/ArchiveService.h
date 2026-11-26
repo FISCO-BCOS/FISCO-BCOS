@@ -35,6 +35,7 @@
 #include <json/json.h>
 #include <functional>
 #include <future>
+#include <ranges>
 #include <utility>
 
 #define ARCHIVE_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[ARCHIVE]"
@@ -177,13 +178,13 @@ public:
                 if (lastBlockToDeleteNonces != 1)
                 {
                     auto numberRange =
-                        ::ranges::iota_view<uint64_t, uint64_t>(1, lastBlockToDeleteNonces);
+                        std::ranges::iota_view<uint64_t, uint64_t>(1, lastBlockToDeleteNonces);
                     auto numberList =
                         numberRange |
-                        ::ranges::views::transform([](protocol::BlockNumber blockNumber) {
+                        std::ranges::views::transform([](protocol::BlockNumber blockNumber) {
                             return boost::lexical_cast<std::string>(blockNumber);
                         }) |
-                        ::ranges::to<std::vector<std::string>>();
+                        std::ranges::to<std::vector<std::string>>();
                     auto err = m_storage->deleteRows(ledger::SYS_BLOCK_NUMBER_2_NONCES, numberList);
                     if (err)
                     {

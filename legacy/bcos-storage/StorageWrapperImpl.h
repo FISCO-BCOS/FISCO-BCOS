@@ -4,8 +4,7 @@
 #include <bcos-concepts/Basic.h>
 #include <bcos-framework/storage/Entry.h>
 #include <boost/throw_exception.hpp>
-#include <range/v3/range/access.hpp>
-#include <range/v3/range/concepts.hpp>
+#include <ranges>
 
 namespace bcos::storage
 {
@@ -41,7 +40,7 @@ public:
     }
 
     std::vector<std::optional<Entry>> impl_getRows(
-        std::string_view table, ::ranges::range auto const& keys)
+        std::string_view table, std::ranges::range auto const& keys)
     {
         Error::UniquePtr error;
         std::vector<std::optional<Entry>> entries;
@@ -53,11 +52,11 @@ public:
         };
 
         std::vector<std::string_view> viewArray;
-        viewArray.reserve(::ranges::size(keys));
+        viewArray.reserve(std::ranges::size(keys));
         for (auto&& it : keys)
         {
             viewArray.emplace_back(
-                std::string_view((const char*)::ranges::data(it), ::ranges::size(it)));
+                std::string_view((const char*)std::ranges::data(it), std::ranges::size(it)));
         }
         storage().asyncGetRows(table, viewArray, std::move(callback));
 

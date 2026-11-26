@@ -21,9 +21,9 @@
 #include <functional>
 #include <memory>
 #include <range/v3/view/chunk.hpp>
-#include <range/v3/view/drop.hpp>
 #include <range/v3/view/enumerate.hpp>
-#include <range/v3/view/zip.hpp>
+#include <range/v3/view/subrange.hpp>
+#include <ranges>
 
 namespace bcos::scheduler_v1
 {
@@ -74,7 +74,7 @@ public:
     }
 
     int64_t chunkIndex() const { return m_chunkIndex; }
-    auto count() const { return ::ranges::size(m_contexts); }
+    auto count() const { return std::ranges::size(m_contexts); }
     auto& storageView() & { return m_storageView; }
     auto& readWriteSetStorage() & { return m_readWriteSetStorage; }
 
@@ -83,7 +83,7 @@ public:
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK4);
-        m_executeContexts.reserve(::ranges::size(m_contexts));
+        m_executeContexts.reserve(std::ranges::size(m_contexts));
         for (auto& context : m_contexts)
         {
             if (m_hasRAW.get().test())
@@ -134,7 +134,8 @@ public:
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
-        for (auto&& [context, executeContext] : ::ranges::views::zip(m_contexts, m_executeContexts))
+        for (auto&& [context, executeContext] :
+            std::ranges::views::zip(m_contexts, m_executeContexts))
         {
             *context.receipt = co_await executeContext.finish();
         }
@@ -171,17 +172,18 @@ public:
     template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
     size_t executeSinglePass(Storage& storage, TransactionExecutor& executor,
         protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
-        ::ranges::random_access_range auto& contexts, size_t chunkSize)
+        std::ranges::random_access_range auto& contexts, size_t chunkSize)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().SINGLE_PASS);
 
-        const auto count = ::ranges::size(contexts);
+        const auto count = std::ranges::size(contexts);
         ReadWriteSetStorage<Storage> writeSet(storage);
 
+        using ContextRange = ::ranges::subrange<std::ranges::iterator_t<decltype(contexts)>,
+            std::ranges::sentinel_t<decltype(contexts)>>;
         using Chunk = ChunkStatus<typename SchedulerParallelImpl::MutableStorage, Storage,
-            TransactionExecutor,
-            decltype(::ranges::subrange<::ranges::iterator_t<decltype(contexts)>>(contexts))>;
+            TransactionExecutor, ContextRange>;
 
         boost::atomic_flag hasRAW;
         typename SchedulerParallelImpl::MutableStorage lastStorage;
@@ -197,7 +199,7 @@ public:
         tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
             tbb::make_filter<void, std::unique_ptr<Chunk>>(tbb::filter_mode::serial_in_order,
                 [&](tbb::flow_control& control) -> std::unique_ptr<Chunk> {
-                    if (chunkIndex >= ::ranges::size(contextChunks) || hasRAW.test())
+                    if (chunkIndex >= std::ranges::size(contextChunks) || hasRAW.test())
                     {
                         control.stop();
                         return {};
@@ -322,9 +324,10 @@ public:
         m_gc.collect(std::move(writeSet));
         if (offset < count)
         {
-            PARALLEL_SCHEDULER_LOG(DEBUG)
-                << "Start new chunk executing... " << offset << " | " << ::ranges::size(contexts);
-            auto nextView = ::ranges::views::drop(contexts, offset);
+            PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing... " << offset << " | "
+                                          << std::ranges::size(contexts);
+            auto nextView =
+                ContextRange(std::ranges::begin(contexts) + offset, std::ranges::end(contexts));
             return 1 + executeSinglePass(
                            storage, executor, blockHeader, ledgerConfig, nextView, chunkSize);
         }
@@ -335,17 +338,17 @@ public:
     template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
         TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
-        ::ranges::random_access_range auto const& transactions,
+        std::ranges::random_access_range auto const& transactions,
         ledger::LedgerConfig const& ledgerConfig)
     {
-        auto transactionCount = ::ranges::size(transactions);
+        auto transactionCount = std::ranges::size(transactions);
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
         std::vector<protocol::TransactionReceipt::Ptr> receipts(transactionCount);
 
         std::vector<ExecutionContext> contexts;
         contexts.reserve(transactionCount);
-        for (auto index : ranges::views::iota(0LU, transactionCount))
+        for (auto index : std::ranges::views::iota(0LU, transactionCount))
         {
             contexts.emplace_back(
                 index, std::addressof(transactions[index]), std::addressof(receipts[index]));

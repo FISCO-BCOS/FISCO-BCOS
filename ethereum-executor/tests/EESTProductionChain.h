@@ -69,6 +69,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <set>
 #include <sstream>
 #include <string>
@@ -668,7 +669,7 @@ struct NullScheduler
 {
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&& transactions,
+        const protocol::BlockHeader&, std::ranges::input_range auto&& transactions,
         const ledger::LedgerConfig&)
     {
         crypto::Keccak256 hasher;

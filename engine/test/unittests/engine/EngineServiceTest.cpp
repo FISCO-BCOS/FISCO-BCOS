@@ -48,6 +48,7 @@
 #include <algorithm>
 #include <atomic>
 #include <future>
+#include <ranges>
 #include <stdexcept>
 #include <thread>
 
@@ -157,7 +158,7 @@ struct SvcBloomScheduler
 
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
+        const protocol::BlockHeader&, std::ranges::input_range auto&&, const ledger::LedgerConfig&)
     {
         // Production shape: a receipt's logs and its bloom come from one execution, so the bloom
         // is derived from the logs here rather than fabricated. normalizeReceipts recomputes it

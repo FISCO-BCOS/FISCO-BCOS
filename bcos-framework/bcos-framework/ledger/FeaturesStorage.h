@@ -7,10 +7,7 @@
 #include "Features.h"
 #include "bcos-task/Task.h"
 #include <boost/lexical_cast.hpp>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/filter.hpp>
-#include <range/v3/view/transform.hpp>
-#include <range/v3/view/zip.hpp>
+#include <ranges>
 
 namespace bcos::ledger
 {
@@ -56,14 +53,14 @@ inline task::Task<void> readFromStorage(Features& features,
     storage2::ReadableStorage<executor_v1::StateKey> auto& storage, long blockNumber)
 {
     decltype(auto) keys = bcos::ledger::Features::featureKeys();
-    // Materialize the key views: a lazy range-v3 pipeline reports its size as
-    // ranges::detail::diffmax_t, which storages like MemoryStorage cannot narrow to
-    // size_t in readSome's reserve; a vector is a plain sized range for any storage.
-    auto keyViews = keys | ::ranges::views::transform([](std::string_view key) {
+    // Materialize the key views: storage implementations require a sized range whose
+    // size is convertible to size_t; a vector avoids propagating a lazy view's
+    // difference type into readSome's reserve.
+    auto keyViews = keys | std::ranges::views::transform([](std::string_view key) {
         return executor_v1::StateKeyView(ledger::SYS_CONFIG, key);
-    }) | ::ranges::to<std::vector>();
+    }) | std::ranges::to<std::vector>();
     auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage), keyViews);
-    for (auto&& [key, entry] : ::ranges::views::zip(keys, entries))
+    for (auto&& [key, entry] : std::ranges::views::zip(keys, entries))
     {
         if (entry)
         {
@@ -82,10 +79,10 @@ inline task::Task<void> writeToStorage(Features const& features,
     storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
     long blockNumber)
 {
-    decltype(auto) flags =
-        features.flags() | ::ranges::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
+    decltype(auto) flags = features.flags() | std::ranges::views::filter(
+                                                  [](auto&& tuple) { return std::get<2>(tuple); });
     co_await storage2::writeSome(std::forward<decltype(storage)>(storage),
-        ::ranges::views::transform(flags, [&](auto&& tuple) {
+        std::ranges::views::transform(flags, [&](auto&& tuple) {
             storage::Entry entry;
             entry.set(storage::serialize::encode(SystemConfigEntry{
                 boost::lexical_cast<std::string>((int)std::get<2>(tuple)), blockNumber}));

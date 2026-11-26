@@ -20,11 +20,9 @@
 #pragma once
 
 #include "EngineStorageCommit.h"
-#include <range/v3/algorithm/any_of.hpp>
-#include <range/v3/view/filter.hpp>
+#include <algorithm>
 #include <range/v3/view/indirect.hpp>
-#include <range/v3/view/reverse.hpp>
-#include <range/v3/view/transform.hpp>
+#include <ranges>
 #include <span>
 
 #include <bcos-framework/protocol/BlobSchedule.h>
@@ -35,7 +33,6 @@
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-transaction-scheduler/EthereumChainRollback.h>
-#include <algorithm>
 #include <limits>
 #include <optional>
 #include <unordered_set>
@@ -880,10 +877,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
         auto blockTxs = std::make_shared<protocol::ConstTransactions>(
             cached->executionPayload.transactions |
-            ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
-            ::ranges::views::transform(
+            std::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
+            std::ranges::views::transform(
                 [](auto const& tx) { return protocol::Transaction::ConstPtr(tx.decoded); }) |
-            ::ranges::to<std::vector>());
+            std::ranges::to<std::vector>());
         co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
         // EL mode: persist the EIP-4895 withdrawals sidecar exactly like the external
         // verifier's commit (EthereumBlockVerifier step 8 — one number-keyed row holding
@@ -1693,7 +1690,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
         m_memPool.removeByHash(std::span<bcos::crypto::HashType const>(evicted));
         // Back to front: the positions are ascending and stay valid while erasing.
-        for (auto const index : built.invalidTransactions | ::ranges::views::reverse)
+        for (auto const index : built.invalidTransactions | std::ranges::views::reverse)
         {
             auto const position = static_cast<std::ptrdiff_t>(index);
             auto const& decoded = engineTransactions[index].decoded;

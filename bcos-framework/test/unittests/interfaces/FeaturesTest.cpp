@@ -4,6 +4,7 @@
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>
+#include <ranges>
 
 using namespace bcos::ledger;
 
@@ -278,8 +279,8 @@ BOOST_AUTO_TEST_CASE(flagCountWithinReflectionRange)
 auto validFlags(const Features& features)
 {
     return features.flags() |
-           ::ranges::views::filter([](auto feature) { return std::get<2>(feature); }) |
-           ::ranges::to<std::vector>();
+           std::ranges::views::filter([](auto feature) { return std::get<2>(feature); }) |
+           std::ranges::to<std::vector>();
 }
 
 BOOST_AUTO_TEST_CASE(upgrade)

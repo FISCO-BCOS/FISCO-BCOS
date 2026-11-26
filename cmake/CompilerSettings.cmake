@@ -32,11 +32,27 @@ if(UNITY_BUILD)
     set(CMAKE_UNITY_BUILD_BATCH_SIZE ${UNITY_BUILD_BATCH_SIZE})
 endif()
 
-# C++23 std::expected floor: GCC 12+ / Clang 16+ (Xcode 16+) / VS2022 17.3+ (MSVC 19.33+).
-if(("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12) OR
-   ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16) OR
-   (MSVC AND MSVC_VERSION LESS 1933))
-    message(FATAL_ERROR "FISCO-BCOS requires GCC 12+ / Clang 16+ (Xcode 16+) / VS2022 17.3+ for C++23 std::expected (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}${MSVC_VERSION})")
+# C++23 ranges floor: GCC 14+ / Clang 22+ / Apple Clang 18+ / VS2022 17.5+.
+# Apple Clang is versioned independently and may backport features, so its standard library
+# is checked below in addition to the version floor.
+if(("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14) OR
+   ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 22) OR
+   ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 18) OR
+   (MSVC AND MSVC_VERSION LESS 1935))
+    message(FATAL_ERROR "FISCO-BCOS requires GCC 14+ / Clang 22+ / Apple Clang 18+ / VS2022 17.5+ with C++23 ranges support (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}${MSVC_VERSION})")
+endif()
+
+# libc++ provides zip_view without defining __cpp_lib_ranges_zip until P2321R2 is complete;
+# the actual zip_view expressions are checked when compiling the project.
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles([=[
+    #include <version>
+    static_assert(__cpp_lib_ranges_to_container >= 202202L);
+    static_assert(__cpp_lib_ranges_chunk_by >= 202202L);
+    int main() {}
+]=] FISCO_BCOS_HAS_REQUIRED_RANGES_MACROS)
+if(NOT FISCO_BCOS_HAS_REQUIRED_RANGES_MACROS)
+    message(FATAL_ERROR "The standard library lacks required C++23 ranges feature-test macros for ranges::to and views::chunk_by (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})")
 endif()
 
 message(STATUS "COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
@@ -166,8 +182,8 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-        # Check that we've got GCC 11.0 or newer.
-        set(GCC_MIN_VERSION "11.0")
+        # Check that we've got GCC 14.0 or newer.
+        set(GCC_MIN_VERSION "14.0")
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
 

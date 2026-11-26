@@ -26,7 +26,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-table/src/ContractShardUtils.h"
 #include <boost/throw_exception.hpp>
-#include <range/v3/algorithm/find_if.hpp>
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -97,7 +97,7 @@ inline bool isFromThisOrGovernors(std::shared_ptr<executor::TransactionExecutive
     auto codec = CodecWrapper(blockContext.hashHandler());
 
     auto governors = getGovernorList(_executive, _callParameters, codec);
-    return (::ranges::find_if(governors, [&_callParameters](const Address& address) {
+    return (std::ranges::find_if(governors, [&_callParameters](const Address& address) {
         return address.hex() == _callParameters->m_sender;
     }) != governors.end());
 }

@@ -20,8 +20,8 @@
 #include "bcos-executor/src/precompiled/extension/ZkpPrecompiled.h"
 #include "bcos-transaction-executor/precompiled/EvmPrecompiledAdapter.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledImpl.h"
+#include <algorithm>
 #include <memory>
-#include <range/v3/algorithm/sort.hpp>
 
 
 bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hashImpl)
@@ -154,7 +154,7 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
         0x1011, Precompiled{std::make_shared<precompiled::BalancePrecompiled>(m_hashImpl),
                     ledger::Features::Flag::feature_balance_precompiled});
 
-    ::ranges::sort(m_address2Precompiled,
+    std::ranges::sort(m_address2Precompiled,
         [](const auto& lhs, const auto& rhs) { return std::get<0>(lhs) < std::get<0>(rhs); });
 
     // Init the AUTH_COMMITTEE_ADDRESS

@@ -1,7 +1,7 @@
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include <benchmark/benchmark.h>
-#include <range/v3/view/iota.hpp>
+#include <ranges>
 #include <utility>
 
 struct Fixture
@@ -10,7 +10,7 @@ struct Fixture
 
     Fixture() : block(std::make_shared<bcostars::protocol::BlockImpl>())
     {
-        for (auto i : ::ranges::views::iota(0, 10 * 10000))
+        for (auto i : std::ranges::views::iota(0, 10 * 10000))
         {
             auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>();
             transaction->mutableInner().importTime = i;

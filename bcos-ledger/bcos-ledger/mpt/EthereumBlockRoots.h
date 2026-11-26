@@ -34,7 +34,7 @@
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
 #include <boost/throw_exception.hpp>
-#include <range/v3/range.hpp>
+#include <ranges>
 #include <stdexcept>
 #include <vector>
 
@@ -65,11 +65,11 @@ struct EthereumBlockComputation
 /// @param transactions the executed transactions, parallel to `receipts` by index, supplying
 ///                     the EIP-2718 type per receipt; elements may be Transaction
 ///                     values/references or Transaction::Ptr
-inline h256 calculateEthereumReceiptsRoot(
-    ::ranges::input_range auto const& receipts, ::ranges::input_range auto const& transactions)
+inline h256 calculateEthereumReceiptsRoot(std::ranges::input_range auto const& receipts,
+    std::ranges::input_range auto const& transactions)
 {
     std::vector<uint8_t> txTypes;
-    txTypes.reserve(::ranges::size(transactions));
+    txTypes.reserve(std::ranges::size(transactions));
     for (auto const& transaction : transactions)
     {
         // Through the engine helper, next to rawTransactionTypeByte: envelope classification is
@@ -87,14 +87,14 @@ inline h256 calculateEthereumReceiptsRoot(
         }();
         txTypes.push_back(engine::receiptLeafTypeByte(tx));
     }
-    if (txTypes.size() != ::ranges::size(receipts))
+    if (txTypes.size() != std::ranges::size(receipts))
     {
         BOOST_THROW_EXCEPTION(std::runtime_error{
             "calculateEthereumReceiptsRoot: receipt count does not match executed transaction "
             "count"});
     }
     std::vector<bcos::bytes> receiptRlps;
-    receiptRlps.reserve(::ranges::size(receipts));
+    receiptRlps.reserve(std::ranges::size(receipts));
     size_t index = 0;
     for (auto const& receipt : receipts)
     {
@@ -137,8 +137,8 @@ inline h256 calculateEthereumReceiptsRoot(
 ///                        ride along unexecuted, e.g. OP deposit transactions)
 inline task::Task<EthereumBlockComputation> computeEthereumRoots(
     std::vector<protocol::TransactionReceipt::Ptr>& receipts,
-    ::ranges::input_range auto const& transactions,
-    ::ranges::input_range auto const& rawTransactions)
+    std::ranges::input_range auto const& transactions,
+    std::ranges::input_range auto const& rawTransactions)
 {
     EthereumBlockComputation computation;
 
@@ -163,7 +163,7 @@ inline task::Task<EthereumBlockComputation> computeEthereumRoots(
 
     // txsRoot over the raw EIP-2718 encodings (index-keyed trie).
     std::vector<bcos::bytesConstRef> txRaws;
-    txRaws.reserve(::ranges::size(rawTransactions));
+    txRaws.reserve(std::ranges::size(rawTransactions));
     for (auto const& raw : rawTransactions)
     {
         txRaws.emplace_back(bcos::ref(raw));

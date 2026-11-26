@@ -23,6 +23,7 @@
 #include <functional>
 #include <limits>
 #include <queue>
+#include <ranges>
 #include <string_view>
 #include <unordered_set>
 
@@ -155,13 +156,13 @@ struct PooledTransaction
 
 template <class TransactionsType>
 concept InputTransactions =
-    ::ranges::input_range<TransactionsType> &&
-    std::same_as<::ranges::range_value_t<TransactionsType>, protocol::Transaction::Ptr>;
+    std::ranges::input_range<TransactionsType> &&
+    std::same_as<std::ranges::range_value_t<TransactionsType>, protocol::Transaction::Ptr>;
 
 template <class InputHashesType>
 concept InputHashes =
-    ::ranges::input_range<InputHashesType> &&
-    std::same_as<::ranges::range_value_t<InputHashesType>, bcos::crypto::HashType>;
+    std::ranges::input_range<InputHashesType> &&
+    std::same_as<std::ranges::range_value_t<InputHashesType>, bcos::crypto::HashType>;
 
 template <class SenderNonceTuple>
 concept SenderNonce = requires(SenderNonceTuple senderNonce) {
@@ -171,8 +172,8 @@ concept SenderNonce = requires(SenderNonceTuple senderNonce) {
 
 
 template <class SenderNoncesType>
-concept SenderNonces = ::ranges::input_range<SenderNoncesType> &&
-                       SenderNonce<::ranges::range_value_t<SenderNoncesType>>;
+concept SenderNonces = std::ranges::input_range<SenderNoncesType> &&
+                       SenderNonce<std::ranges::range_value_t<SenderNoncesType>>;
 
 
 class MemPoolImpl
@@ -737,14 +738,14 @@ public:
                 }
             }
         }
-        removeBySenderNonces(::ranges::views::all(senderNonceMap));
+        removeBySenderNonces(std::ranges::views::all(senderNonceMap));
     }
 
     template <InputHashes TransactionHashes>
     std::vector<protocol::Transaction::Ptr> get(TransactionHashes hashes)
     {
         std::vector<protocol::Transaction::Ptr> transactions;
-        if constexpr (::ranges::sized_range<TransactionHashes>)
+        if constexpr (std::ranges::sized_range<TransactionHashes>)
         {
             transactions.reserve(hashes.size());
         }

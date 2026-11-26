@@ -8,7 +8,7 @@
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
 #include <range/v3/view/enumerate.hpp>
-#include <range/v3/view/repeat.hpp>
+#include <ranges>
 #include <variant>
 
 using namespace bcos;
@@ -62,7 +62,7 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
         entry.set("Hello world!");
         co_await storage2::writeOne(*view, key, entry);
 
-        ::ranges::single_view keyViews(key);
+        std::ranges::single_view keyViews(key);
         auto values = co_await storage2::readSome(*view, keyViews);
 
         BOOST_REQUIRE(values[0].has_value());
@@ -82,17 +82,17 @@ BOOST_AUTO_TEST_CASE(merge)
     task::syncWait([this]() -> task::Task<void> {
         auto view = std::make_optional(multiLayerStorage.fork());
         view->newMutable();
-        auto toKey = ::ranges::views::transform(
+        auto toKey = std::ranges::views::transform(
             [](int num) { return StateKey{"test_table"sv, fmt::format("key: {}", num)}; });
-        auto toValue = ::ranges::views::transform([](int num) {
+        auto toValue = std::ranges::views::transform([](int num) {
             storage::Entry entry;
             entry.set(fmt::format("value: {}", num));
             return entry;
         });
 
         co_await storage2::writeSome(
-            *view, ::ranges::views::zip(::ranges::iota_view<int, int>(0, 100) | toKey,
-                       ::ranges::iota_view<int, int>(0, 100) | toValue));
+            *view, std::ranges::views::zip(std::ranges::iota_view<int, int>(0, 100) | toKey,
+                       std::ranges::iota_view<int, int>(0, 100) | toValue));
 
         BOOST_CHECK_THROW(
             co_await multiLayerStorage.mergeBackStorage(), NotExistsImmutableStorageError);
@@ -101,7 +101,7 @@ BOOST_AUTO_TEST_CASE(merge)
         co_await multiLayerStorage.mergeBackStorage();
 
         auto view2 = multiLayerStorage.fork();
-        auto keys = ::ranges::iota_view<int, int>(0, 100) | toKey;
+        auto keys = std::ranges::iota_view<int, int>(0, 100) | toKey;
         auto values = co_await storage2::readSome(view2, keys);
 
         for (auto&& [index, value] : ::ranges::views::enumerate(values))
@@ -109,11 +109,11 @@ BOOST_AUTO_TEST_CASE(merge)
             BOOST_REQUIRE(value.has_value());
             BOOST_CHECK_EQUAL(value->get(), fmt::format("value: {}", index));
         }
-        BOOST_CHECK_EQUAL(::ranges::size(values), 100);
+        BOOST_CHECK_EQUAL(std::ranges::size(values), 100);
 
         auto view3 = multiLayerStorage.fork();
         view3.newMutable();
-        co_await storage2::removeSome(view3, ::ranges::iota_view<int, int>(20, 30) | toKey);
+        co_await storage2::removeSome(view3, std::ranges::iota_view<int, int>(20, 30) | toKey);
         multiLayerStorage.pushView(std::move(view3));
         co_await multiLayerStorage.mergeBackStorage();
 
@@ -215,27 +215,27 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
         BackendStorage backendStorage;
         CheckpointBackend checkpointBackend(backendStorage);
         co_await storage2::writeSome(backendStorage,
-            ::ranges::views::zip(::ranges::views::iota(0, 4), ::ranges::views::repeat(0)));
+            std::ranges::views::zip(std::ranges::views::iota(0, 4), std::ranges::views::repeat(0)));
 
         MultiLayerStorage<MutableStorage, void, CheckpointBackend> myMultiLayerStorage(
             checkpointBackend);
 
         auto view1 = myMultiLayerStorage.fork();
         view1.newMutable();
-        co_await storage2::writeSome(
-            view1, ::ranges::views::zip(::ranges::views::iota(2, 6), ::ranges::views::repeat(1)));
+        co_await storage2::writeSome(view1,
+            std::ranges::views::zip(std::ranges::views::iota(2, 6), std::ranges::views::repeat(1)));
         co_await storage2::removeOne(view1, 2);
         myMultiLayerStorage.pushView(std::move(view1));
 
         auto view2 = myMultiLayerStorage.fork();
         view2.newMutable();
-        co_await storage2::writeSome(
-            view2, ::ranges::views::zip(::ranges::views::iota(4, 8), ::ranges::views::repeat(2)));
+        co_await storage2::writeSome(view2,
+            std::ranges::views::zip(std::ranges::views::iota(4, 8), std::ranges::views::repeat(2)));
 
-        auto resultList = co_await storage2::readSome(view2, ::ranges::views::iota(0, 8));
-        auto vecList = resultList |
-                       ::ranges::views::transform([](auto input) { return input.value_or(-1); }) |
-                       ::ranges::to<std::vector>();
+        auto resultList = co_await storage2::readSome(view2, std::ranges::views::iota(0, 8));
+        auto vecList = resultList | std::ranges::views::transform([](auto input) {
+            return input.value_or(-1);
+        }) | std::ranges::to<std::vector>();
         BOOST_CHECK_EQUAL(resultList.size(), 8);
         auto expectList = std::vector<int>({0, 0, -1, 1, 2, 2, 2, 2});
         BOOST_CHECK_EQUAL_COLLECTIONS(
@@ -288,7 +288,7 @@ BOOST_AUTO_TEST_CASE(deletedEntry)
 
         BOOST_CHECK(!co_await storage2::existsOne(view2, key));
 
-        auto values = co_await storage2::readSome(view2, ::ranges::views::single(key));
+        auto values = co_await storage2::readSome(view2, std::ranges::views::single(key));
         BOOST_CHECK(!values[0]);
 
         auto range = co_await storage2::range(view2);

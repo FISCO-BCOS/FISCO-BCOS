@@ -2,6 +2,8 @@
 #include "bcos-task/Wait.h"
 #include <bcos-tars-protocol/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <range/v3/view/single.hpp>
+
 using namespace bcostars;
 bcostars::Error GatewayServiceServer::asyncNotifyGroupInfo(
     const bcostars::GroupInfo& groupInfo, tars::TarsCurrentPtr current)

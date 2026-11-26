@@ -27,10 +27,10 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "Common.h"
 #include "Entry.h"
+#include <bcos-utilities/AnyView.h>
 #include <bcos-utilities/Error.h>
 #include <memory>
 #include <optional>
-#include <range/v3/view/any_view.hpp>
 #include <string>
 #include <variant>
 

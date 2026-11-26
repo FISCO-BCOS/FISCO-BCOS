@@ -35,6 +35,7 @@
 #include <bcos-utilities/FileUtility.h>
 #include <include/BuildInfo.h>
 #include <json/json.h>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -173,10 +174,10 @@ void PBFTInitializer::initChainNodeInfo(
     m_nodeInfo->setCompatibilityVersion(m_pbft->compatibilityVersion());
     m_nodeInfo->setFeatureKeys(
         ledger::Features::featureKeys() |
-        ::ranges::views::transform([](std::string_view view) { return std::string(view); }));
+        std::ranges::views::transform([](std::string_view view) { return std::string(view); }));
     m_nodeInfo->setSupportConfigs(
         ledger::SystemConfigs::supportConfigs() |
-        ::ranges::views::transform([](std::string_view view) { return std::string(view); }));
+        std::ranges::views::transform([](std::string_view view) { return std::string(view); }));
     m_groupInfo->appendNodeInfo(m_nodeInfo);
     INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
                           << LOG_KV("nodeType", m_nodeInfo->nodeType())

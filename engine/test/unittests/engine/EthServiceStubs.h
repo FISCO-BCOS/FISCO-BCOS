@@ -46,7 +46,7 @@
 #include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <map>
-#include <range/v3/range/concepts.hpp>
+#include <ranges>
 
 #include <algorithm>
 #include <cstdlib>
@@ -117,7 +117,7 @@ struct StubScheduler
 {
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&& transactions,
+        const protocol::BlockHeader&, std::ranges::input_range auto&& transactions,
         const ledger::LedgerConfig&)
     {
         // One receipt per executed transaction — the real scheduler contract, and the v2

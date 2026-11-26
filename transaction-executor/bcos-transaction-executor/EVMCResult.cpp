@@ -1,11 +1,10 @@
-#include <range/v3/algorithm/copy.hpp>
+#include <algorithm>
 
 #include "EVMCResult.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
-#include <algorithm>
 #include <cstdint>
 #include <gsl/pointers>
 
@@ -84,7 +83,7 @@ bcos::executor_v1::fillErrorOutputInPlace(
     }
 
     auto* output = new uint8_t[errorBytes.size()];  // NOLINT
-    ::ranges::copy(errorBytes, output);
+    std::ranges::copy(errorBytes, output);
     constexpr static auto* release = +[](const struct evmc_result* result) {
         gsl::owner<decltype(result->output_data)> ptr{result->output_data};
         delete[] ptr;

@@ -5,6 +5,8 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionMetaDataImpl.h"
 #include <bcos-task/Wait.h>
+#include <ranges>
+
 using namespace bcostars;
 
 bcostars::Error TxPoolServiceServer::submit(const bcostars::Transaction& tx,
@@ -124,10 +126,10 @@ bcostars::Error TxPoolServiceServer::asyncMarkTxs(
     tars::Int64 _batchId, const std::vector<tars::Char>& _batchHash, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    auto hashList = ::ranges::views::transform(txHashs, [](auto& txHash) {
+    auto hashList = std::ranges::views::transform(txHashs, [](auto& txHash) {
         return bcos::crypto::HashType(
             reinterpret_cast<const bcos::byte*>(txHash.data()), txHash.size());
-    }) | ::ranges::to<std::vector>();
+    }) | std::ranges::to<std::vector>();
     auto batchHash = bcos::crypto::HashType(
         reinterpret_cast<const bcos::byte*>(_batchHash.data()), _batchHash.size());
     m_txpoolInitializer->txpool()->asyncMarkTxs(

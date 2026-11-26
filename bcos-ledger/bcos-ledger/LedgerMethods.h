@@ -51,6 +51,7 @@
 #include <boost/throw_exception.hpp>
 #include <concepts>
 #include <optional>
+#include <ranges>
 #include <type_traits>
 
 #define LEDGER2_LOG(LEVEL) BCOS_MODULE_LOG(LEDGER, LEVEL) << LOG_BADGE("LEDGER2")
@@ -269,7 +270,7 @@ task::Task<std::vector<bcos::crypto::HashType>> getBlockTransactionHashList(
     auto txs = txsEntry->get();
     auto blockWithTxs =
         blockFactory.createBlock(bcos::bytesConstRef((bcos::byte*)txs.data(), txs.size()));
-    auto hashes = blockWithTxs->transactionHashes() | ::ranges::to<std::vector>();
+    auto hashes = blockWithTxs->transactionHashes() | std::ranges::to<std::vector>();
     LEDGER_LOG(TRACE) << "Get transactions hash list success, size:" << hashes.size();
     co_return hashes;
 }
@@ -354,7 +355,7 @@ task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
         if ((_blockFlag & TRANSACTIONS) != 0)
         {
             auto transactions = co_await storage2::readSome(
-                dataStorage, hashes | ::ranges::views::transform([](auto& hash) {
+                dataStorage, hashes | std::ranges::views::transform([](auto& hash) {
                     return executor_v1::StateKeyView{
                         SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(hash)};
                 }));
@@ -379,7 +380,7 @@ task::Task<protocol::Block::Ptr> getBlockDataFromStorages(
         if ((_blockFlag & RECEIPTS) != 0)
         {
             auto receipts = co_await storage2::readSome(
-                dataStorage, ::ranges::views::transform(hashes, [](auto& hash) {
+                dataStorage, std::ranges::views::transform(hashes, [](auto& hash) {
                     return executor_v1::StateKeyView{
                         SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(hash)};
                 }));
@@ -435,7 +436,7 @@ task::Task<TransactionCount> tag_invoke(ledger::tag_t<getTransactionCount> /*unu
         SYS_KEY_TOTAL_TRANSACTION_COUNT, SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER};
 
     auto entries = co_await storage2::readSome(
-        storage, keys | ::ranges::views::transform([](std::string_view key) {
+        storage, keys | std::ranges::views::transform([](std::string_view key) {
             return executor_v1::StateKeyView{SYS_CURRENT_STATE, key};
         }));
 
@@ -519,12 +520,12 @@ inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
     {
         ledgerConfig.setBaseFeePerGas(headBaseFee);
     }
-    ledgerConfig.setConsensusNodeList(::ranges::views::filter(nodeList, [](auto const& node) {
+    ledgerConfig.setConsensusNodeList(std::ranges::views::filter(nodeList, [](auto const& node) {
         return node.type == consensus::Type::consensus_sealer;
-    }) | ::ranges::to<std::vector>());
-    ledgerConfig.setObserverNodeList(::ranges::views::filter(nodeList, [](auto const& node) {
+    }) | std::ranges::to<std::vector>());
+    ledgerConfig.setObserverNodeList(std::ranges::views::filter(nodeList, [](auto const& node) {
         return node.type == consensus::Type::consensus_observer;
-    }) | ::ranges::to<std::vector>());
+    }) | std::ranges::to<std::vector>());
 
     if (auto txLimitConfig = sysConfig.get(ledger::SystemConfig::tx_count_limit))
     {
@@ -573,9 +574,10 @@ inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
         std::string(enableRPBFT ? ledger::RPBFT_CONSENSUS_TYPE : ledger::PBFT_CONSENSUS_TYPE));
     if (enableRPBFT)
     {
-        ledgerConfig.setCandidateSealerNodeList(::ranges::views::filter(nodeList, [](auto& node) {
-            return node.type == consensus::Type::consensus_candidate_sealer;
-        }) | ::ranges::to<std::vector>());
+        ledgerConfig
+            .setCandidateSealerNodeList(std::ranges::views::filter(nodeList, [](auto& node) {
+                return node.type == consensus::Type::consensus_candidate_sealer;
+            }) | std::ranges::to<std::vector>());
 
         auto epochSealer =
             sysConfig.getOrDefault(ledger::SystemConfig::feature_rpbft_epoch_sealer_num,
@@ -843,7 +845,7 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(ledger::tag_t<getNodeList> /
 
     auto ledgerConsensusNodeList = decodeConsensusList(nodeListEntry->get());
     consensus::ConsensusNodeList nodes =
-        ledgerConsensusNodeList | ::ranges::views::transform([](auto const& node) {
+        ledgerConsensusNodeList | std::ranges::views::transform([](auto const& node) {
             auto nodeIDBin = fromHex(node.nodeID);
             crypto::NodeIDPtr nodeID = std::make_shared<crypto::KeyImpl>(nodeIDBin);
             auto type = magic_enum::enum_cast<consensus::Type>(node.type);
@@ -857,14 +859,14 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(ledger::tag_t<getNodeList> /
                 node.voteWeight.template convert_to<uint64_t>(), 0,
                 boost::lexical_cast<protocol::BlockNumber>(node.enableNumber)};
         }) |
-        ::ranges::to<std::vector>();
+        std::ranges::to<std::vector>();
 
     auto entries = co_await storage2::readSome(
-        storage, ::ranges::views::transform(nodes, [](auto const& node) {
+        storage, std::ranges::views::transform(nodes, [](auto const& node) {
             std::string_view extraKey{node.nodeID->constData(), node.nodeID->size()};
             return executor_v1::StateKeyView{SYS_CONSENSUS, extraKey};
         }));
-    for (auto&& [node, entry] : ::ranges::views::zip(nodes, entries))
+    for (auto&& [node, entry] : std::ranges::views::zip(nodes, entries))
     {
         if (entry)
         {
@@ -880,23 +882,23 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(ledger::tag_t<getNodeList> /
 
 task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/,
     storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
-    ::ranges::input_range auto&& nodeList, bool forceSet = false)
+    std::ranges::input_range auto&& nodeList, bool forceSet = false)
 {
     LEDGER_LOG(DEBUG) << "SetNodeList request";
-    auto ledgerNodeList = ::ranges::views::transform(nodeList, [&](auto const& node) {
+    auto ledgerNodeList = std::ranges::views::transform(nodeList, [&](auto const& node) {
         ledger::ConsensusNode ledgerNode{.nodeID = node.nodeID->hex(),
             .voteWeight = node.voteWeight,
             .type = std::string(magic_enum::enum_name(node.type)),
             .enableNumber = boost::lexical_cast<std::string>(node.enableNumber)};
         return ledgerNode;
-    }) | ::ranges::to<std::vector>();
+    }) | std::ranges::to<std::vector>();
     auto nodeListEntry = encodeConsensusList(ledgerNodeList);
     co_await storage2::writeOne(storage, executor_v1::StateKey{SYS_CONSENSUS, "key"},
         storage::Entry(std::move(nodeListEntry)));
 
-    auto tarsNodeList = ::ranges::views::filter(nodeList, [&](auto const& node) {
+    auto tarsNodeList = std::ranges::views::filter(nodeList, [&](auto const& node) {
         return forceSet || node.termWeight > 0;
-    }) | ::ranges::views::transform([](auto const& node) {
+    }) | std::ranges::views::transform([](auto const& node) {
         bcostars::ConsensusNode tarsConsensusNode;
         tarsConsensusNode.nodeID.assign(
             node.nodeID->constData(), node.nodeID->constData() + node.nodeID->size());
@@ -905,11 +907,11 @@ task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/,
         tarsConsensusNode.termWeight = node.termWeight;
         tarsConsensusNode.enableNumber = node.enableNumber;
         return tarsConsensusNode;
-    }) | ::ranges::to<std::vector>();
+    }) | std::ranges::to<std::vector>();
     if (!tarsNodeList.empty())
     {
         co_await storage2::writeSome(
-            storage, ::ranges::views::transform(tarsNodeList, [](auto const& node) {
+            storage, std::ranges::views::transform(tarsNodeList, [](auto const& node) {
                 bytes data;
                 concepts::serialize::encode(node, data);
                 return std::make_tuple(

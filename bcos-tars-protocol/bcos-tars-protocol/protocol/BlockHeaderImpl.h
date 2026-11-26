@@ -30,10 +30,10 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-utilities/AnyView.h>
 #include <bcos-utilities/Error.h>
 #include <gsl/span>
 #include <memory>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcostars::protocol
 {

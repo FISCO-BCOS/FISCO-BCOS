@@ -32,7 +32,7 @@
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/string.hpp>
-#include <range/v3/algorithm/find.hpp>
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::storage;
@@ -320,7 +320,7 @@ int64_t SystemConfigPrecompiled::validate(
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
     auto featureKeys = ledger::Features::featureKeys();
-    bool setFeature = (::ranges::find(featureKeys, key) != featureKeys.end());
+    bool setFeature = (std::ranges::find(featureKeys, key) != featureKeys.end());
     if (!m_sysValueCmp.contains(key) && !m_valueConverter.contains(key) && !setFeature)
     {
         BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("unsupported key " + key));

@@ -21,8 +21,7 @@
 #include <bcos-rpc/event/Common.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-utilities/LogStream.h>
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/zip.hpp>
+#include <ranges>
 
 using namespace bcos;
 using namespace bcos::event;
@@ -34,7 +33,7 @@ uint32_t EventSubMatcher::matches(
     auto transactions = _block->transactions();
     auto receipts = _block->receipts();
     for (auto [index, transaction, receipt] :
-        ::ranges::views::zip(::ranges::views::iota(0), transactions, receipts))
+        std::ranges::views::zip(std::ranges::views::iota(0), transactions, receipts))
     {
         count += matches(_params, *receipt, *transaction, index, _result);
     }

@@ -22,9 +22,9 @@
 
 #include "Common.h"
 #include "StorageInterface.h"
+#include <bcos-utilities/AnyView.h>
 #include <future>
 #include <gsl/span>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcos::storage
 {

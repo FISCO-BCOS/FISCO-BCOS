@@ -61,6 +61,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <system_error>
 #include <unordered_map>
@@ -617,8 +618,8 @@ opeth::OpEthExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& view,
         f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);
     auto transactionsRefs =
         transactions |
-        ::ranges::views::transform([](bcos::protocol::Transaction::ConstPtr const& ptr)
-                                       -> bcos::protocol::Transaction const& { return *ptr; });
+        std::ranges::views::transform([](bcos::protocol::Transaction::ConstPtr const& ptr)
+                                          -> bcos::protocol::Transaction const& { return *ptr; });
     auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
         view, executor, header, transactionsRefs, execLedgerConfig, ctx));
     auto result =
