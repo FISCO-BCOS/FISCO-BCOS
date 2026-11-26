@@ -55,6 +55,19 @@ public:
     /// cumulativeGasUsed, logsBloom, logs]).
     task::Task<void> getRawReceipts(const Json::Value&, Json::Value&);
 
+    /// debug_getRawBlock: the RLP encoding of a whole block, i.e. geth's `types.Block`
+    /// rlp([header, transactions, ommers, withdrawals?]). op-succinct's witness generator reads
+    /// L2 blocks through this method (`get_l2_block_by_number` in utils/host/src/fetcher.rs) and
+    /// has no fallback, so without it proof generation cannot start at all. The optional fourth
+    /// element is fork-significant (EIP-4895): present iff the header carries a withdrawalsRoot,
+    /// which is what tells the decoder the block is Shanghai+.
+    task::Task<void> getRawBlock(const Json::Value&, Json::Value&);
+
+    /// debug_getRawTransaction: the raw EIP-2718 envelope of one transaction by hash — the same
+    /// bytes its transactions-trie leaf holds, so a client can rebuild the trie and get the
+    /// header's txsRoot back. Mirrors geth's DebugAPI.GetRawTransaction.
+    task::Task<void> getRawTransaction(const Json::Value&, Json::Value&);
+
     /// debug_executePayload: kona-host's high-level "execute a payload and return the whole
     /// stateless execution witness" hint. See the .cpp for why it answers MethodNotFound.
     task::Task<void> executePayload(const Json::Value&, Json::Value&);
@@ -63,13 +76,22 @@ public:
     task::Task<void> traceTransaction(const Json::Value&, Json::Value&);
 
 private:
-    /// Resolve the single block parameter both raw-data endpoints take (a block number, a
-    /// tag other than safe/finalized/pending, or a 32-byte hash) to a height, and reject one
-    /// this node does not have. Shared so the header and receipts paths cannot disagree about
-    /// which block a request names -- on the fault-proof data plane two answers for one input
-    /// is a divergence, not a cosmetic difference.
-    task::Task<protocol::BlockNumber> resolveRawBlockParameter(
-        const Json::Value& request, std::string_view method);
+    /// Read the single block parameter the raw-data endpoints take (a block number, a tag other
+    /// than safe/finalized/pending, or a 32-byte hash) on the CANONICAL plane and return the
+    /// block with @p blockFlag rows. Shared so the header, receipts and block paths cannot
+    /// disagree about which block a request names -- on the fault-proof data plane two answers
+    /// for one input is a divergence, not a cosmetic difference.
+    ///
+    /// Canonical, not raw-ledger, is the point: on the OP lane the backend holds the finalized
+    /// chain only and the blocks op-node is currently serving live in the OpScheduler window, so
+    /// a direct ledger read would answer "not found" for every unfinalized block -- including
+    /// "latest" -- and disagree with eth_getBlockByNumber on the same node.
+    /// When the parameter is a hash and @p requestedHash is non-null, the requested hash is
+    /// returned through it so the caller can bind the answer to it (a window entry read by hash
+    /// is unambiguous, a hash resolved to a height may be replaced by a reorg underneath).
+    task::Task<protocol::Block::Ptr> rawBlockByParameter(const Json::Value& request,
+        std::string_view method, int32_t blockFlag,
+        std::optional<crypto::HashType>* requestedHash = nullptr);
 
     NodeService::Ptr m_nodeService;
 };

@@ -129,8 +129,18 @@ public:
         bcos::crypto::HashType hash{};
         if (number >= 0)
         {
-            hash = (co_await ledger::getBlockHash(view, number, ledger::fromStorage))
-                       .value_or(bcos::crypto::HashType{});
+            // Bind the awaited value with `auto` before touching it: `view`'s type is dependent
+            // on MultiLayerStorage, so overload resolution of getBlockHash (and therefore its
+            // return type) is deferred to instantiation. Calling `.value_or()` on the parenthesised
+            // co_await expression makes GCC resolve a member of an undeduced type at parse time
+            // and fail with "insufficient contextual information to determine type". The
+            // auto-bound form below is what the sibling call further down already uses.
+            auto const canonicalHash =
+                co_await ledger::getBlockHash(view, number, ledger::fromStorage);
+            if (canonicalHash)
+            {
+                hash = *canonicalHash;
+            }
         }
         co_return {number, hash, std::move(view), number};
     }

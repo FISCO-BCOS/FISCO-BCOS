@@ -26,7 +26,10 @@
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <bcos-rlp-protocol/EthBlockBody.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/groupmgr/AirGroupManager.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
@@ -34,6 +37,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
@@ -115,18 +119,27 @@ struct FakeReader : engine::OpCanonicalReader
     std::map<h256, std::shared_ptr<StateStorage>> flatStates;
     std::function<void()> onCaptureHeadView;
     std::function<void(protocol::BlockNumber)> onWindowRead;
+    /// How many times the endpoint asked for the head, and how many views it captured: a read that
+    /// resolves the tag and fetches the block out of ONE capture shows 0 head() and 1 capture.
+    int headReads = 0;
+    int headViewCaptures = 0;
     /// A hash the window still LISTS (unfinalizedNumberOf answers) but no longer HOLDS
     /// (unfinalizedBlock null): the finalize race between an endpoint's two lookups.
     std::optional<BlockRef> evicted;
 
     task::Task<BlockRef> finalized() override { co_return finalizedRef; }
-    task::Task<BlockRef> head() override { co_return headRef; }
+    task::Task<BlockRef> head() override
+    {
+        ++headReads;
+        co_return headRef;
+    }
     task::Task<protocol::BlockNumber> safeNumber() override
     {
         co_return safe.value_or(finalizedRef.number);
     }
     task::Task<HeadReadView> captureHeadView() override
     {
+        ++headViewCaptures;
         auto view = std::make_unique<ReadView>(*this);
         if (auto state = flatStates.find(headRef.hash); state != flatStates.end())
         {
@@ -336,6 +349,11 @@ public:
 
     /// One block at tip+1 with one transaction whose receipt carries one log; @p salt makes
     /// the header hash and the tx hash distinct per sibling.
+    ///
+    /// The header commits to what the body actually holds: txsRoot is the transactions-trie root
+    /// of the signed envelope (what debug_getRawBlock verifies) and withdrawalsRoot is the empty
+    /// list's root (the OP lane never carries withdrawals). A fabricated commitment here would
+    /// make every raw-block assertion test the refusal path instead of the bytes.
     WindowBlock windowBlock(uint8_t salt, uint64_t baseFee = 100,
         std::optional<engine::OpCanonicalReader::BlockRef> parent = std::nullopt)
     {
@@ -354,13 +372,19 @@ public:
         // root; the salt keeps the sibling hashes apart through the timestamp.
         header->setExtraData(bytes{0x00, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06});
         header->setBaseFee(baseFee);
-        header->setWithdrawalsRoot(h256(1U));
+        header->setWithdrawalsRoot(ledger::mpt::emptyRootHash());
         header->setExcessBlobGas(0);
         header->setBlobGasUsed(0);
-        header->setRLPHash(protocol::canonicalBlockHash(*header));
-        block->setBlockHeader(header);
+
         h256 const txHash(static_cast<unsigned>(salt));
         auto tx = makeReadPlaneTx(0, txHash);
+        // The signed envelope, exactly as the transactions trie keys it.
+        auto const envelope = bcostars::protocol::reassembleWeb3RawTransaction(
+            tx->extraTransactionBytes(), tx->signatureData());
+        header->setTxsRoot(ledger::mpt::calculateTransactionsRoot(
+            std::vector<bcos::bytesConstRef>{{envelope.data(), envelope.size()}}));
+        header->setRLPHash(protocol::canonicalBlockHash(*header));
+        block->setBlockHeader(header);
         std::vector<protocol::LogEntry> logs;
         // Four topics: the filter's empty `topics` array parses into positional sets, and a
         // log with fewer topics than positions never matches (LogMatcher::matches).
@@ -936,6 +960,94 @@ BOOST_AUTO_TEST_CASE(LatestCodeRequiresAnExactAddress)
     auto const response =
         call("eth_getCode", params({"0x00000000000000000000000000000000000000b1", "latest"}));
     BOOST_CHECK_EQUAL(response["result"].asString(), "0x");
+}
+
+// REGRESSION: the raw-data endpoints used to resolve the tag/number against the LEDGER's current
+// number and then read the block from the ledger. On this lane the ledger stops at the finalized
+// tip, so every unfinalized block -- including "latest", the block eth_getBlockByNumber is
+// serving -- answered "Block not found". They now go through the canonical plane (CanonicalReads),
+// which is what this pins: the same blocks, byte for byte, that the window holds.
+BOOST_AUTO_TEST_CASE(RawBlockServesUnfinalizedWindowBlocks)
+{
+    auto const headTag = toQuantity(tip + 1);
+    auto const expected = bcostars::protocol::reassembleWeb3RawTransaction(
+        b.tx->extraTransactionBytes(), b.tx->signatureData());
+
+    // latest, the head's number, and the head's hash must all name the same block.
+    auto const byLatest = call("debug_getRawBlock", params({"latest"}));
+    BOOST_REQUIRE_MESSAGE(!byLatest.isMember("error"), printJson(byLatest));
+    auto const byNumber = call("debug_getRawBlock", params({headTag}));
+    auto const byHash = call("debug_getRawBlock", params({hashB.hexPrefixed()}));
+    BOOST_REQUIRE_MESSAGE(!byNumber.isMember("error"), printJson(byNumber));
+    BOOST_REQUIRE_MESSAGE(!byHash.isMember("error"), printJson(byHash));
+    BOOST_CHECK_EQUAL(byLatest["result"].asString(), byNumber["result"].asString());
+    BOOST_CHECK_EQUAL(byNumber["result"].asString(), byHash["result"].asString());
+
+    // The bytes are a 4-element block whose header hashes to the published block hash and whose
+    // single transaction is the signed envelope, i.e. the body reproduces the header commitments.
+    auto const raw = fromHexWithPrefix(byNumber["result"].asString());
+    protocol::EthBlock decoded;
+    auto mutableRaw = raw;
+    decoded.rlpDecode(bytesConstRef(mutableRaw.data(), mutableRaw.size()));
+    bytes headerRlp;
+    codec::rlp::encode(headerRlp, decoded.data().header);
+    BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bytesConstRef(headerRlp.data(), headerRlp.size()))
+                          .hexPrefixed(),
+        hashB.hexPrefixed());
+    BOOST_REQUIRE_EQUAL(decoded.data().transactions.size(), 1U);
+    BOOST_CHECK(decoded.data().transactions[0] == expected);
+    BOOST_REQUIRE(decoded.data().withdrawals.has_value());
+    BOOST_CHECK(decoded.data().withdrawals->empty());
+
+    // The per-transaction endpoint resolves the same transaction on the head chain.
+    auto const oneTx = call("debug_getRawTransaction", params({txB.hexPrefixed()}));
+    BOOST_REQUIRE_MESSAGE(!oneTx.isMember("error"), printJson(oneTx));
+    BOOST_CHECK_EQUAL(oneTx["result"].asString(), toHexStringWithPrefix(expected));
+
+    // A sibling on a non-head branch is still readable by hash (op-node's restore walks it),
+    // and never by number -- the number always names the head chain's block.
+    auto const sibling = call("debug_getRawBlock", params({hashA.hexPrefixed()}));
+    BOOST_REQUIRE_MESSAGE(!sibling.isMember("error"), printJson(sibling));
+    BOOST_CHECK(sibling["result"].asString() != byNumber["result"].asString());
+    BOOST_CHECK_EQUAL(call("debug_getRawBlock", params({headTag}))["result"].asString(),
+        byNumber["result"].asString());
+
+    // A height above the head is still not found (the head is the canonical tip, not the
+    // backend's finalized tip).
+    BOOST_CHECK_EQUAL(
+        call("debug_getRawBlock", params({toQuantity(tip + 2)}))["error"]["code"].asInt(), -32602);
+}
+
+// REGRESSION (review F3): the tag must be resolved and the block read out of ONE captured head
+// view. Resolving through canonicalLatestNumber() and then calling canonicalBlockByNumber() reads
+// the head twice and captures a second view, so a head replacement in between answers the wrong
+// block (or a spurious miss). The counters pin the shared snapshot directly, and the head is moved
+// at capture time so the returned block proves which view was used.
+BOOST_AUTO_TEST_CASE(RawBlockLatestComesFromOneCapturedHead)
+{
+    setHead(a);
+    reader->onCaptureHeadView = [&] { setHead(b); };
+    auto const headsBefore = reader->headReads;
+    auto const capturesBefore = reader->headViewCaptures;
+
+    auto const response = call("debug_getRawBlock", params({"latest"}));
+    BOOST_REQUIRE_MESSAGE(!response.isMember("error"), printJson(response));
+
+    // One snapshot served both the tag resolution and the body: no separate head() read.
+    BOOST_CHECK_EQUAL(reader->headReads - headsBefore, 0);
+    BOOST_CHECK_EQUAL(reader->headViewCaptures - capturesBefore, 1);
+
+    auto const raw = fromHexWithPrefix(response["result"].asString());
+    protocol::EthBlock decoded;
+    auto mutableRaw = raw;
+    decoded.rlpDecode(bytesConstRef(mutableRaw.data(), mutableRaw.size()));
+    bytes headerRlp;
+    codec::rlp::encode(headerRlp, decoded.data().header);
+    BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bytesConstRef(headerRlp.data(), headerRlp.size()))
+                          .hexPrefixed(),
+        hashA.hexPrefixed());
+    // The head really did move, so the assertion above is discriminating.
+    BOOST_CHECK_EQUAL(blockByNumber("latest")["hash"].asString(), hashB.hexPrefixed());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

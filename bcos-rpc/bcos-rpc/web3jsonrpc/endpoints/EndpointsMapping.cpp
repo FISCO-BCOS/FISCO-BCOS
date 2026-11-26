@@ -184,6 +184,8 @@ void EndpointsMapping::addDebugHandlers()
     m_handlers[methodString(EthMethod::debug_dbGet)] = &Endpoints::dbGet;
     m_handlers[methodString(EthMethod::debug_getRawHeader)] = &Endpoints::getRawHeader;
     m_handlers[methodString(EthMethod::debug_getRawReceipts)] = &Endpoints::getRawReceipts;
+    m_handlers[methodString(EthMethod::debug_getRawBlock)] = &Endpoints::getRawBlock;
+    m_handlers[methodString(EthMethod::debug_getRawTransaction)] = &Endpoints::getRawTransaction;
     m_handlers[methodString(EthMethod::debug_executePayload)] = &Endpoints::executePayload;
     // clang-format on
 }
