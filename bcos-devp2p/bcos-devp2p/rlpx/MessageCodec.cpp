@@ -278,7 +278,7 @@ RlpResult<Message> MessageCodec::decode(bytesConstRef _frameData) const
     }
     else
     {
-        RLP_TRY(message.data, rawSnappyDecompress(payload, kMaxFrameSize));
+        RLP_TRY(message.data, rawSnappyDecompress(payload, m_maxDecompressedSize));
     }
     return message;
 }

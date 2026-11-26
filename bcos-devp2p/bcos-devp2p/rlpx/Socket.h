@@ -21,10 +21,19 @@
 
 #include <bcos-utilities/Common.h>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 
 namespace bcos::devp2p::rlpx
 {
+// The bounded I/O helpers below hit their deadline (c_ioTimeoutMs of silence). A
+// distinct type so a serving loop can tell "idle peer" from a broken connection
+// without matching on the message text.
+struct SocketTimeout : public std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
 // Blocking TCP socket with full-read/full-write helpers.
 class Socket
 {
@@ -40,6 +49,10 @@ public:
     // Connect to a host (IP or DNS) and port. Throws on failure.
     void connect(std::string const& _host, uint16_t _port);
     void close();
+    // Half-close both directions (::shutdown). Wakes a thread parked in recvFixed on
+    // this socket with "connection closed", so an owner can unblock a serving loop
+    // from another thread; the fd itself stays open until close()/destruction.
+    void shutdown() noexcept;
     // Write all bytes. Throws on error.
     void sendAll(bytesConstRef _data);
     // Read exactly _size bytes. Throws on EOF/error.

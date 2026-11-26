@@ -39,7 +39,7 @@ RUN chmod +x /bcos.sh /hive-bin/enode.sh \
     && mkdir -p /bcos \
     && echo "fisco-bcos ${tag}" > /version.txt
 
-# 8545: JSON-RPC HTTP, 8551: Engine API, 30303: devp2p (outbound-only for now)
+# 8545: JSON-RPC HTTP, 8551: Engine API, 30303: devp2p (RLPx over TCP, discv4 over UDP)
 EXPOSE 8545 8551 30303 30303/udp
 
 WORKDIR /bcos
