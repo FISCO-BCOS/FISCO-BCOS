@@ -1099,12 +1099,13 @@ BOOST_AUTO_TEST_CASE(RawBlockServesEmptyWithdrawalsWhenSidecarRowIsAbsent)
         "expected the missing-sidecar refusal, got: " << printJson(refused));
 }
 
-// The OP lane serves an empty withdrawals list because an OP L2 header commits to the empty-trie
-// root (the message-passer root lives in the output root, not this field). If a header ever
-// commits to anything else, the endpoint must say exactly that instead of failing later with a
-// generic "body does not reproduce withdrawalsRoot" -- or, worse, emitting a body whose header
-// commitment it cannot satisfy (review F2).
-BOOST_AUTO_TEST_CASE(RawBlockRefusesOpBlockWithNonEmptyWithdrawalsRoot)
+// Isthmus+ on the OP lane: the body's withdrawals list is always empty, but the header field is
+// the L2ToL1MessagePasser storage root, NOT the empty list's trie root
+// (opstack-executor/OpEthBlockExecute.h "withdrawalsRoot by fork"). The endpoint must serve the
+// header verbatim with an empty fourth element -- it cannot recompute that root from the body, and
+// refusing the mismatch would make every non-empty message-passer block (i.e. every real Isthmus
+// L2 block with any withdrawal ever proven) unservable to op-succinct.
+BOOST_AUTO_TEST_CASE(RawBlockServesIsthmusOpBlockWithMessagePasserRoot)
 {
     setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
 
@@ -1114,18 +1115,35 @@ BOOST_AUTO_TEST_CASE(RawBlockRefusesOpBlockWithNonEmptyWithdrawalsRoot)
     header->setTimestamp(1'700'000'000);
     header->setBaseFee(7);
     header->setTxsRoot(mpt::emptyRootHash());
-    // Still an OP header (isOpEthereumBlock needs withdrawalsRoot + baseFee), but committing to a
-    // withdrawals root the empty list cannot reproduce.
-    header->setWithdrawalsRoot(h256(0x1234U));
+    // A message-passer storage root: nothing the empty withdrawals list can reproduce.
+    auto const messagePasserRoot = h256(0x1234U);
+    BOOST_REQUIRE(messagePasserRoot != mpt::emptyRootHash());
+    header->setWithdrawalsRoot(messagePasserRoot);
     BOOST_REQUIRE(bcos::protocol::isOpEthereumBlock(*header));
     header->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*header));
+    auto const blockHash = header->hash();
+    m_ledger->indexBlockHash(blockHash, number);
 
-    auto const refused = call1("debug_getRawBlock", toQuantity(number));
-    BOOST_REQUIRE_MESSAGE(refused.isMember("error"), printJson(refused));
-    BOOST_CHECK_EQUAL(refused["error"]["code"].asInt(), InternalError);
-    BOOST_CHECK_MESSAGE(refused["error"]["message"].asString().find("non-empty withdrawalsRoot") !=
-                            std::string::npos,
-        "expected the OP withdrawals assumption to be named, got: " << printJson(refused));
+    auto const raw = resultBytes(call1("debug_getRawBlock", toQuantity(number)));
+    bcos::protocol::EthBlock decoded;
+    auto mutableRaw = raw;
+    decoded.rlpDecode(bcos::bytesConstRef(mutableRaw.data(), mutableRaw.size()));
+
+    // Fourth element present and empty, exactly as an OP body must be.
+    BOOST_REQUIRE(decoded.data().withdrawals.has_value());
+    BOOST_CHECK(decoded.data().withdrawals->empty());
+    // The header is served verbatim: its root is the message-passer root, untouched, and the
+    // re-encoded header still hashes to the published block hash.
+    BOOST_REQUIRE(decoded.data().header.withdrawalsHash.has_value());
+    BOOST_CHECK(*decoded.data().header.withdrawalsHash == messagePasserRoot);
+    bytes headerRlp;
+    codec::rlp::encode(headerRlp, decoded.data().header);
+    BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bytesConstRef(headerRlp.data(), headerRlp.size()))
+                          .hexPrefixed(),
+        blockHash.hexPrefixed());
+
+    // Same answer through the hash parameter (the identity check must not trip on the root).
+    BOOST_CHECK(resultBytes(call1("debug_getRawBlock", blockHash.hexPrefixed())) == raw);
 }
 
 // F1, the positive half: the ledger reports an absent SYS_HASH_2_TX row by failing the batch with

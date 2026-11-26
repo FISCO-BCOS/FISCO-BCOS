@@ -807,28 +807,26 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
         body.transactions.push_back(std::move(envelope));
     }
 
-    // Withdrawals are fork-significant: nullopt for pre-Shanghai (3-element block), an
-    // always-empty list on the OP lane (op-node never sends any, and the OP verifier writes no
-    // sidecar row — reading one would turn every OP body into an error).
+    // Withdrawals are fork-significant, and the header field means different things per fork and
+    // per lane -- which is why the commitment re-check below must NOT compare the body's list
+    // against it on the OP lane:
+    //   * pre-Canyon (either lane): field absent -> 3-element block.
+    //   * OP lane: the body is ALWAYS an empty list (an L2 never processes withdrawal credits),
+    //     but the header field is the empty-trie root only for Canyon-Holocene. From Isthmus on it
+    //     is the L2ToL1MessagePasser storage root -- a different commitment that has nothing to do
+    //     with the body's (empty) withdrawals trie. See opstack-executor/OpEthBlockExecute.h
+    //     ("withdrawalsRoot by fork") and OpEthCommitments.h. Comparing the empty list against it
+    //     would reject every legitimate Isthmus+ block whose message-passer storage is non-empty.
+    //     This endpoint cannot recompute that root from the body, so it serves the header's value
+    //     verbatim and leaves verification to the payload path that owns the state.
+    //   * eth lane: field present from Shanghai on and IS the withdrawals trie root, decoded from
+    //     the sidecar row.
     if (!header.withdrawalsRoot().has_value())
     {
         body.withdrawals = std::nullopt;
     }
     else if (isOpStackLane(m_nodeService->executorVersion()))
     {
-        // An OP L2 header commits to the EMPTY withdrawals trie: the L2 produces no withdrawals
-        // list (the message-passer storage root lives in the output root, not in this field), so
-        // the body is an empty list and the committed root is the empty-trie root. State that
-        // assumption here, where it is made, instead of letting a violation surface later as a
-        // generic "body does not reproduce withdrawalsRoot": if a future fork ever commits
-        // something else, this endpoint cannot serve that block and must say so plainly.
-        if (*header.withdrawalsRoot() != bcos::ledger::mpt::emptyRootHash()) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-                "OP block " + std::to_string(blockNumber) +
-                    " commits to a non-empty withdrawalsRoot; this endpoint serves the empty "
-                    "withdrawals list an OP lane produces"));
-        }
         body.withdrawals.emplace();
     }
     else
@@ -922,9 +920,18 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
                                                 " body does not reproduce the header's "
                                                 "transactionsRoot"));
     }
-    if (header.withdrawalsRoot().has_value())
+    // Withdrawals: the commitment re-check applies to the ETH lane only. There the header field is
+    // the withdrawals trie root and the sidecar row is the list it commits to, so a mismatch means
+    // the row was missing or mis-decoded and the body would contradict its own header.
+    //
+    // On the OP lane the field is NOT this list's root from Isthmus on (it is the
+    // L2ToL1MessagePasser storage root -- OpEthBlockExecute.h "withdrawalsRoot by fork"), so
+    // recomputing the empty list's root and comparing would reject every legitimate Isthmus+ block
+    // whose message-passer storage is non-empty. The body's list is empty by construction and the
+    // header value is served verbatim; verifying it needs the account state this endpoint does not
+    // read. transactionsRoot is still checked on both lanes -- that commitment is the same on both.
+    if (header.withdrawalsRoot().has_value() && !isOpStackLane(m_nodeService->executorVersion()))
     {
-        std::vector<bcos::bytesConstRef> refs;
         if (body.withdrawals)
         {
             std::vector<bcos::bytes> encodedWithdrawals;
@@ -935,6 +942,7 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
                 bcos::codec::rlp::encode(item, withdrawal);
                 encodedWithdrawals.push_back(std::move(item));
             }
+            std::vector<bcos::bytesConstRef> refs;
             refs.reserve(encodedWithdrawals.size());
             for (auto const& item : encodedWithdrawals)
             {
