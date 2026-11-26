@@ -584,9 +584,10 @@ task::Task<void> DebugEndpoint::getRawReceipts(const Json::Value& request, Json:
     // type byte, which only the transaction carries, and the receipt itself comes from the same
     // block read. Both flags are required and they are disjoint (LedgerTypeDef.h): RECEIPTS is what
     // populates receipts(), so asking for TRANSACTIONS alone leaves receiptsSize() at 0 and the
-    // count guard below then rejects every block that has a transaction.
+    // count guard below then rejects every block that has a transaction. HEADER is added only so
+    // the diagnostics below can name the block by its own number; nothing here reads the header.
     auto const block = co_await rawBlockByParameter(
-        request, "debug_getRawReceipts", ledger::TRANSACTIONS | ledger::RECEIPTS);
+        request, "debug_getRawReceipts", ledger::HEADER | ledger::TRANSACTIONS | ledger::RECEIPTS);
     if (!block) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
