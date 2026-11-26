@@ -446,10 +446,13 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
 bcos::task::Task<void> ServiceV2::broadcastMessageToAll(Message::Ptr message,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads, Options options)
 {
-    auto reachableNodes = m_routerTable->getAllReachableNode();
+    // Borrowed pointer into the router table's cached snapshot: valid for the whole fan-out below,
+    // which is a short, non-suspending loop (each peer's send is dispatched, not awaited).
+    auto const* reachableNodes = m_routerTable->getAllReachableNode();
     auto selfV2 = std::static_pointer_cast<ServiceV2>(shared_from_this());
-    // Fan out one independent coroutine per peer (see Service::broadcastMessageToAll).
-    for (auto const& node : reachableNodes)
+    // Fan out one independent coroutine per peer (see Service::broadcastMessageToAll). The id is
+    // copied into each per-peer frame, so nothing below retains the borrowed set.
+    for (auto const& node : *reachableNodes)
     {
         task::wait([](std::shared_ptr<ServiceV2> _self, P2pID _node, Message::Ptr _message,
                        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
@@ -472,8 +475,8 @@ bcos::task::Task<void> ServiceV2::broadcastMessageToAll(Message::Ptr message,
 
 bool ServiceV2::isReachable(P2pID const& _nodeID) const
 {
-    auto reachableNodes = m_routerTable->getAllReachableNode();
-    return reachableNodes.contains(_nodeID);
+    // direct lookup on the routing table instead of materialising the reachable set
+    return m_routerTable->isReachableNode(_nodeID);
 }
 
 void ServiceV2::sendRespMessageBySession(bytesConstRef _payload, uint32_t _requestSeq,
@@ -593,8 +596,9 @@ std::string bcos::gateway::ServiceV2::getShortP2pID(std::string const& rawP2pID)
     {
         return rawP2pID;
     }
-    bcos::ReadGuard lock(x_rawP2pIDInfo);
-    if (auto it = m_rawP2pIDInfo.find(rawP2pID); it != m_rawP2pIDInfo.end())
+    // one lock-free snapshot load instead of a shared_mutex acquisition on the send hot path
+    auto const& idMaps = m_idMaps.read();
+    if (auto it = idMaps.raw2short.find(rawP2pID); it != idMaps.raw2short.end())
     {
         return it->second;
     }
@@ -615,8 +619,8 @@ std::string bcos::gateway::ServiceV2::getRawP2pID(std::string const& shortP2pID)
     {
         return shortP2pID;
     }
-    bcos::ReadGuard lock(x_p2pIDInfo);
-    if (auto it = m_p2pIDInfo.find(shortP2pID); it != m_p2pIDInfo.end())
+    auto const& idMaps = m_idMaps.read();
+    if (auto it = idMaps.short2raw.find(shortP2pID); it != idMaps.short2raw.end())
     {
         return it->second;
     }
@@ -628,16 +632,43 @@ std::string bcos::gateway::ServiceV2::getRawP2pID(std::string const& shortP2pID)
 void bcos::gateway::ServiceV2::resetP2pID(
     Message& message, bcos::protocol::ProtocolVersion const& version)
 {
+    // Both directions come from the same snapshot, so the two lookups below share one atomic load.
+    // A miss falls back to the public accessor, which keeps the "id mapping not found" diagnostic.
+    auto const& idMaps = m_idMaps.read();
+    auto const isRaw = [](std::string const& id) { return id.size() > HASH_NODEID_MAX_SIZE; };
+
+    auto resolve = [&](std::string const& id, bool toRaw) -> std::string {
+        if (id.empty())
+        {
+            return id;
+        }
+        if (toRaw)
+        {
+            if (isRaw(id))
+            {
+                return id;
+            }
+            auto it = idMaps.short2raw.find(id);
+            return it != idMaps.short2raw.end() ? it->second : getRawP2pID(id);
+        }
+        if (!isRaw(id))
+        {
+            return id;
+        }
+        auto it = idMaps.raw2short.find(id);
+        return it != idMaps.raw2short.end() ? it->second : getShortP2pID(id);
+    };
+
     // old node case, set to long nodeID
     if (version < protocol::ProtocolVersion::V3) [[unlikely]]
     {
-        message.setSrcP2PNodeID(getRawP2pID(message.srcP2PNodeID()));
-        message.setDstP2PNodeID(getRawP2pID(message.dstP2PNodeID()));
+        message.setSrcP2PNodeID(resolve(message.srcP2PNodeID(), /*toRaw=*/true));
+        message.setDstP2PNodeID(resolve(message.dstP2PNodeID(), /*toRaw=*/true));
         return;
     }
-    // new ndoe case, set to short nodeID
-    message.setSrcP2PNodeID(getShortP2pID(message.srcP2PNodeID()));
-    message.setDstP2PNodeID(getShortP2pID(message.dstP2PNodeID()));
+    // new node case, set to short nodeID
+    message.setSrcP2PNodeID(resolve(message.srcP2PNodeID(), /*toRaw=*/false));
+    message.setDstP2PNodeID(resolve(message.dstP2PNodeID(), /*toRaw=*/false));
 }
 
 void bcos::gateway::ServiceV2::onP2PNodesUnreachable(std::set<std::string> const& _p2pNodeIDs)
@@ -672,22 +703,24 @@ void bcos::gateway::ServiceV2::updateP2pInfo(P2PInfo const& p2pInfo)
 
 void bcos::gateway::ServiceV2::tryToUpdateRawP2pInfo(P2PInfo const& p2pInfo)
 {
-    bcos::UpgradableGuard lock(x_rawP2pIDInfo);
-    auto it = m_rawP2pIDInfo.find(p2pInfo.rawP2pID);
-    if (it != m_rawP2pIDInfo.end())
+    // The map only ever grows (an id mapping is immutable once learned), so a clone-on-insert is
+    // paid once per peer and never on the read path. Skip the clone entirely when already present.
+    if (m_idMaps.read().raw2short.contains(p2pInfo.rawP2pID))
     {
         return;
     }
-    m_rawP2pIDInfo.insert(std::make_pair(p2pInfo.rawP2pID, p2pInfo.p2pID));
+    m_idMaps.update([&](IdMaps& maps) {
+        maps.raw2short.try_emplace(p2pInfo.rawP2pID, p2pInfo.p2pID);
+    });
 }
 
 void bcos::gateway::ServiceV2::tryToUpdateP2pInfo(P2PInfo const& p2pInfo)
 {
-    bcos::UpgradableGuard lock(x_p2pIDInfo);
-    auto it = m_p2pIDInfo.find(p2pInfo.p2pID);
-    if (it != m_p2pIDInfo.end())
+    if (m_idMaps.read().short2raw.contains(p2pInfo.p2pID))
     {
         return;
     }
-    m_p2pIDInfo.insert(std::make_pair(p2pInfo.p2pID, p2pInfo.rawP2pID));
+    m_idMaps.update([&](IdMaps& maps) {
+        maps.short2raw.try_emplace(p2pInfo.p2pID, p2pInfo.rawP2pID);
+    });
 }

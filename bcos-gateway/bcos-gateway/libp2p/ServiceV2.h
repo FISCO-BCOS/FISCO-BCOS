@@ -116,12 +116,17 @@ private:
     std::map<std::string, uint32_t> m_node2Seq;
     mutable SharedMutex x_node2Seq;
 
-    // rawP2pID->p2pID
-    std::map<std::string, std::string> m_rawP2pIDInfo;
-    mutable SharedMutex x_rawP2pIDInfo;
-    // p2pID->rawP2pID
-    std::map<std::string, std::string> m_p2pIDInfo;
-    mutable SharedMutex x_p2pIDInfo;
+    // rawP2pID<->p2pID translation. Both are read twice on every send (resetP2pID) and written
+    // only when a peer first appears, so they are copy-on-write snapshots like m_sessions. Keeping
+    // them in one struct means a resetP2pID pass takes ONE atomic load for both directions.
+    struct IdMaps
+    {
+        // rawP2pID -> short p2pID
+        std::map<std::string, std::string, std::less<>> raw2short;
+        // short p2pID -> rawP2pID
+        std::map<std::string, std::string, std::less<>> short2raw;
+    };
+    bcos::RcuSnapshot<IdMaps> m_idMaps;
 
     const int c_unreachableDistance = 10;
 
