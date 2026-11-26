@@ -22,7 +22,7 @@ vcpkg_from_github(
     REF v0.24.0
     SHA512 83351c486c0638e8cae7fb826c9341ccadc1362d46346a331451695b53a79366e8354843bed431afddd0102221c48644d38385330f1198b5705bb2e8c60c6d53
     HEAD_REF master
-    PATCHES fisco-sm3.patch trace-cancellation.patch
+    PATCHES fisco-sm3.patch trace-cancellation.patch precompile-errors.patch
 )
 
 # evmone's blst ExternalProject otherwise downloads outside vcpkg's verified

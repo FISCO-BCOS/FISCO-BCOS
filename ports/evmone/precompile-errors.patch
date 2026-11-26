@@ -1,0 +1,677 @@
+--- a/lib/evmone_precompiles/bls.hpp
++++ b/lib/evmone_precompiles/bls.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+
+ #include <intx/intx.hpp>
++#include <string_view>
+
+ using namespace intx::literals;
+
+@@ -14,14 +15,15 @@
+ ///
+ /// Computes P ⊕ Q for two points in affine coordinates on the BLS12-381 curve,
+ [[nodiscard]] bool g1_add(uint8_t _rx[64], uint8_t _ry[64], const uint8_t _x0[64],
+-    const uint8_t _y0[64], const uint8_t _x1[64], const uint8_t _y1[64]) noexcept;
++    const uint8_t _y0[64], const uint8_t _x1[64], const uint8_t _y1[64],
++    std::string_view* error = nullptr) noexcept;
+
+ /// Scalar multiplication in BLS12-381 curve G1 subgroup.
+ ///
+ /// Computes [c]P for a point in affine coordinate on the BLS12-381 curve, performs subgroup check
+ /// according to spec https://eips.ethereum.org/EIPS/eip-2537#abi-for-g1-multiplication
+ [[nodiscard]] bool g1_mul(uint8_t _rx[64], uint8_t _ry[64], const uint8_t _x[64],
+-    const uint8_t _y[64], const uint8_t _c[32]) noexcept;
++    const uint8_t _y[64], const uint8_t _c[32], std::string_view* error = nullptr) noexcept;
+
+ /// Addition in BLS12-381 curve group over G2 extension field.
+ ///
+@@ -29,7 +31,8 @@
+ /// field. Checks that point coordinates are from the field and that points are on curve.
+ /// https://eips.ethereum.org/EIPS/eip-2537#abi-for-g2-addition
+ [[nodiscard]] bool g2_add(uint8_t _rx[128], uint8_t _ry[128], const uint8_t _x0[128],
+-    const uint8_t _y0[128], const uint8_t _x1[128], const uint8_t _y1[128]) noexcept;
++    const uint8_t _y0[128], const uint8_t _x1[128], const uint8_t _y1[128],
++    std::string_view* error = nullptr) noexcept;
+
+ /// Scalar multiplication in BLS12-381 curve group over G2 extension field
+ ///
+@@ -37,7 +40,7 @@
+ /// field, performs subgroup check according to spec
+ /// https://eips.ethereum.org/EIPS/eip-2537#abi-for-g2-multiplication
+ [[nodiscard]] bool g2_mul(uint8_t _rx[128], uint8_t _ry[128], const uint8_t _x[128],
+-    const uint8_t _y[128], const uint8_t _c[32]) noexcept;
++    const uint8_t _y[128], const uint8_t _c[32], std::string_view* error = nullptr) noexcept;
+
+ /// Multi scalar multiplication in BLS12-381 curve G1 subgroup.
+ ///
+@@ -45,7 +48,8 @@
+ /// subgroup check according to spec
+ /// https://eips.ethereum.org/EIPS/eip-2537#abi-for-g1-msm
+ /// @throws std::bad_alloc
+-[[nodiscard]] bool g1_msm(uint8_t _rx[64], uint8_t _ry[64], const uint8_t* _xycs, size_t size);
++[[nodiscard]] bool g1_msm(uint8_t _rx[64], uint8_t _ry[64], const uint8_t* _xycs, size_t size,
++    std::string_view* error = nullptr);
+
+ /// Multi scalar multiplication in BLS12-381 curve G2 subgroup.
+ ///
+@@ -53,27 +57,30 @@
+ /// field, performs subgroup check according to spec
+ /// https://eips.ethereum.org/EIPS/eip-2537#abi-for-g2-msm
+ /// @throws std::bad_alloc
+-[[nodiscard]] bool g2_msm(uint8_t _rx[128], uint8_t _ry[128], const uint8_t* _xycs, size_t size);
++[[nodiscard]] bool g2_msm(uint8_t _rx[128], uint8_t _ry[128], const uint8_t* _xycs, size_t size,
++    std::string_view* error = nullptr);
+
+ /// Maps field element of Fp to curve point on BLS12-381 curve G1 subgroup.
+ ///
+ /// Performs field Fp element check. Returns `false` if an element is not from the field.
+ /// According to spec
+ /// https://eips.ethereum.org/EIPS/eip-2537#abi-for-mapping-fp-element-to-g1-point
+-[[nodiscard]] bool map_fp_to_g1(uint8_t _rx[64], uint8_t _ry[64], const uint8_t _fp[64]) noexcept;
++[[nodiscard]] bool map_fp_to_g1(uint8_t _rx[64], uint8_t _ry[64], const uint8_t _fp[64],
++    std::string_view* error = nullptr) noexcept;
+
+ /// Maps field element of Fp2 to curve point on BLS12-381 curve G2 subgroup.
+ ///
+ /// Performs field Fp2 element check. Returns `false` if an element is not from the field.
+ /// According to spec
+ /// https://eips.ethereum.org/EIPS/eip-2537#abi-for-mapping-fp2-element-to-g2-point
+-[[nodiscard]] bool map_fp2_to_g2(
+-    uint8_t _rx[128], uint8_t _ry[128], const uint8_t _fp[128]) noexcept;
++[[nodiscard]] bool map_fp2_to_g2(uint8_t _rx[128], uint8_t _ry[128], const uint8_t _fp[128],
++    std::string_view* error = nullptr) noexcept;
+
+ /// Computes pairing for pairs of P and Q point from G1 and G2 accordingly.
+ ///
+ /// Performs filed and groups check for both input points. Returns 'false' if any of requirement is
+ /// not met according to spec https://eips.ethereum.org/EIPS/eip-2537#abi-for-pairing-check
+-[[nodiscard]] bool pairing_check(uint8_t _r[32], const uint8_t* _pairs, size_t size) noexcept;
++[[nodiscard]] bool pairing_check(
++    uint8_t _r[32], const uint8_t* _pairs, size_t size, std::string_view* error = nullptr) noexcept;
+
+ }  // namespace evmone::crypto::bls
+--- a/lib/evmone_precompiles/bls.cpp
++++ b/lib/evmone_precompiles/bls.cpp
+@@ -12,11 +12,23 @@
+ /// https://eips.ethereum.org/EIPS/eip-2537#field-elements-encoding
+ constexpr auto FP_BYTES_OFFSET = 64 - 48;
+
++void set_error(std::string_view* error, std::string_view reason) noexcept
++{
++    if (error != nullptr)
++        *error = reason;
++}
++
+ /// Validates that integer encoded in big endian is valid element of BLS12-381 Fp field
+-[[nodiscard]] std::optional<blst_fp> validate_fp(const uint8_t _p[64]) noexcept
+-{
+-    if (intx::be::unsafe::load<intx::uint512>(_p) >= BLS_FIELD_MODULUS)
+-        return std::nullopt;
++[[nodiscard]] std::optional<blst_fp> validate_fp(
++    const uint8_t _p[64], std::string_view* error) noexcept
++{
++    const auto value = intx::be::unsafe::load<intx::uint512>(_p);
++    if (value >= BLS_FIELD_MODULUS)
++    {
++        set_error(error, (value >> 384) != 0 ? "invalid field element top bytes" :
++                                               "invalid fp.Element encoding");
++        return std::nullopt;
++    }
+
+     blst_fp p;
+     blst_fp_from_bendian(&p, &_p[FP_BYTES_OFFSET]);
+@@ -26,29 +38,33 @@
+ /// Validates p1 affine point. Checks that point coordinates are from the BLS12-381 field and
+ /// that the point is on curve. https://eips.ethereum.org/EIPS/eip-2537#abi-for-g1-addition
+ [[nodiscard]] std::optional<blst_p1_affine> validate_p1(
+-    const uint8_t _x[64], const uint8_t _y[64]) noexcept
+-{
+-    const auto x = validate_fp(_x);
++    const uint8_t _x[64], const uint8_t _y[64], std::string_view* error) noexcept
++{
++    const auto x = validate_fp(_x, error);
+     if (!x.has_value())
+         return std::nullopt;
+-    const auto y = validate_fp(_y);
++    const auto y = validate_fp(_y, error);
+     if (!y.has_value())
+         return std::nullopt;
+
+     const blst_p1_affine p0_affine{*x, *y};
+     if (!blst_p1_affine_on_curve(&p0_affine))
+-        return std::nullopt;
++    {
++        set_error(error, "invalid point: not on curve");
++        return std::nullopt;
++    }
+
+     return p0_affine;
+ }
+
+ /// Validates that integer encoded in big endian is valid element of BLS12-381 Fp2 extension field
+-[[nodiscard]] std::optional<blst_fp2> validate_fp2(const uint8_t _p[128]) noexcept
+-{
+-    const auto fp0 = validate_fp(_p);
++[[nodiscard]] std::optional<blst_fp2> validate_fp2(
++    const uint8_t _p[128], std::string_view* error) noexcept
++{
++    const auto fp0 = validate_fp(_p, error);
+     if (!fp0.has_value())
+         return std::nullopt;
+-    const auto fp1 = validate_fp(&_p[64]);
++    const auto fp1 = validate_fp(&_p[64], error);
+     if (!fp1.has_value())
+         return std::nullopt;
+
+@@ -58,19 +74,22 @@
+ /// Validates p2 affine point. Checks that point coordinates are from the BLS12-381 field and
+ /// that the point is on curve. https://eips.ethereum.org/EIPS/eip-2537#abi-for-g2-addition
+ [[nodiscard]] std::optional<blst_p2_affine> validate_p2(
+-    const uint8_t _x[128], const uint8_t _y[128]) noexcept
+-{
+-    const auto x = validate_fp2(_x);
++    const uint8_t _x[128], const uint8_t _y[128], std::string_view* error) noexcept
++{
++    const auto x = validate_fp2(_x, error);
+     if (!x.has_value())
+         return std::nullopt;
+
+-    const auto y = validate_fp2(_y);
++    const auto y = validate_fp2(_y, error);
+     if (!y.has_value())
+         return std::nullopt;
+
+     const blst_p2_affine p_affine{*x, *y};
+     if (!blst_p2_affine_on_curve(&p_affine))
+-        return std::nullopt;
++    {
++        set_error(error, "invalid point: not on curve");
++        return std::nullopt;
++    }
+
+     return p_affine;
+ }
+@@ -92,12 +111,15 @@
+ }  // namespace
+
+ [[nodiscard]] bool g1_add(uint8_t _rx[64], uint8_t _ry[64], const uint8_t _x0[64],
+-    const uint8_t _y0[64], const uint8_t _x1[64], const uint8_t _y1[64]) noexcept
+-{
+-    const auto p0_affine = validate_p1(_x0, _y0);
+-    const auto p1_affine = validate_p1(_x1, _y1);
+-
+-    if (!p0_affine.has_value() || !p1_affine.has_value())
++    const uint8_t _y0[64], const uint8_t _x1[64], const uint8_t _y1[64],
++    std::string_view* error) noexcept
++{
++    set_error(error, {});
++    const auto p0_affine = validate_p1(_x0, _y0, error);
++    if (!p0_affine.has_value())
++        return false;
++    const auto p1_affine = validate_p1(_x1, _y1, error);
++    if (!p1_affine.has_value())
+         return false;
+
+     blst_p1 p0;
+@@ -115,12 +137,13 @@
+ }
+
+ [[nodiscard]] bool g1_mul(uint8_t _rx[64], uint8_t _ry[64], const uint8_t _x[64],
+-    const uint8_t _y[64], const uint8_t _c[32]) noexcept
+-{
++    const uint8_t _y[64], const uint8_t _c[32], std::string_view* error) noexcept
++{
++    set_error(error, {});
+     blst_scalar scalar;
+     blst_scalar_from_bendian(&scalar, _c);
+
+-    const auto p_affine = validate_p1(_x, _y);
++    const auto p_affine = validate_p1(_x, _y, error);
+     if (!p_affine.has_value())
+         return false;
+
+@@ -128,7 +151,10 @@
+     blst_p1_from_affine(&p, &*p_affine);
+
+     if (!blst_p1_in_g1(&p))
+-        return false;
++    {
++        set_error(error, "g1 point is not on correct subgroup");
++        return false;
++    }
+
+     blst_p1 out;
+     blst_p1_mult(&out, &p, scalar.b, 256);
+@@ -142,12 +168,15 @@
+ }
+
+ [[nodiscard]] bool g2_add(uint8_t _rx[128], uint8_t _ry[128], const uint8_t _x0[128],
+-    const uint8_t _y0[128], const uint8_t _x1[128], const uint8_t _y1[128]) noexcept
+-{
+-    const auto p0_affine = validate_p2(_x0, _y0);
+-    const auto p1_affine = validate_p2(_x1, _y1);
+-
+-    if (!p0_affine.has_value() || !p1_affine.has_value())
++    const uint8_t _y0[128], const uint8_t _x1[128], const uint8_t _y1[128],
++    std::string_view* error) noexcept
++{
++    set_error(error, {});
++    const auto p0_affine = validate_p2(_x0, _y0, error);
++    if (!p0_affine.has_value())
++        return false;
++    const auto p1_affine = validate_p2(_x1, _y1, error);
++    if (!p1_affine.has_value())
+         return false;
+
+     blst_p2 p0;
+@@ -165,12 +194,13 @@
+ }
+
+ [[nodiscard]] bool g2_mul(uint8_t _rx[128], uint8_t _ry[128], const uint8_t _x[128],
+-    const uint8_t _y[128], const uint8_t _c[32]) noexcept
+-{
++    const uint8_t _y[128], const uint8_t _c[32], std::string_view* error) noexcept
++{
++    set_error(error, {});
+     blst_scalar scalar;
+     blst_scalar_from_bendian(&scalar, _c);
+
+-    const auto p_affine = validate_p2(_x, _y);
++    const auto p_affine = validate_p2(_x, _y, error);
+     if (!p_affine.has_value())
+         return false;
+
+@@ -178,7 +208,10 @@
+     blst_p2_from_affine(&p, &*p_affine);
+
+     if (!blst_p2_in_g2(&p))
+-        return false;
++    {
++        set_error(error, "g2 point is not on correct subgroup");
++        return false;
++    }
+
+     blst_p2 out;
+     blst_p2_mult(&out, &p, scalar.b, 256);
+@@ -191,8 +224,10 @@
+     return true;
+ }
+
+-[[nodiscard]] bool g1_msm(uint8_t _rx[64], uint8_t _ry[64], const uint8_t* _xycs, size_t size)
+-{
++[[nodiscard]] bool g1_msm(
++    uint8_t _rx[64], uint8_t _ry[64], const uint8_t* _xycs, size_t size, std::string_view* error)
++{
++    set_error(error, {});
+     constexpr auto SINGLE_ENTRY_SIZE = (64 * 2 + 32);
+     assert(size != 0);
+     assert(size % SINGLE_ENTRY_SIZE == 0);
+@@ -211,12 +246,15 @@
+     const auto end = _xycs + size;
+     for (auto ptr = _xycs; ptr != end; ptr += SINGLE_ENTRY_SIZE)
+     {
+-        const auto p_affine = validate_p1(ptr, &ptr[64]);
++        const auto p_affine = validate_p1(ptr, &ptr[64], error);
+         if (!p_affine.has_value())
+             return false;
+
+         if (!blst_p1_affine_in_g1(&*p_affine))
+-            return false;
++        {
++            set_error(error, "g1 point is not on correct subgroup");
++            return false;
++        }
+
+         const auto& p = p1_affines.emplace_back(*p_affine);
+         p1_affine_ptrs.emplace_back(&p);
+@@ -242,8 +280,10 @@
+     return true;
+ }
+
+-[[nodiscard]] bool g2_msm(uint8_t _rx[128], uint8_t _ry[128], const uint8_t* _xycs, size_t size)
+-{
++[[nodiscard]] bool g2_msm(
++    uint8_t _rx[128], uint8_t _ry[128], const uint8_t* _xycs, size_t size, std::string_view* error)
++{
++    set_error(error, {});
+     constexpr auto SINGLE_ENTRY_SIZE = (128 * 2 + 32);
+     assert(size != 0);
+     assert(size % SINGLE_ENTRY_SIZE == 0);
+@@ -262,12 +302,15 @@
+     const auto end = _xycs + size;
+     for (auto ptr = _xycs; ptr != end; ptr += SINGLE_ENTRY_SIZE)
+     {
+-        const auto p_affine = validate_p2(ptr, &ptr[128]);
++        const auto p_affine = validate_p2(ptr, &ptr[128], error);
+         if (!p_affine.has_value())
+             return false;
+
+         if (!blst_p2_affine_in_g2(&*p_affine))
+-            return false;
++        {
++            set_error(error, "g2 point is not on correct subgroup");
++            return false;
++        }
+
+         const auto& p = p2_affines.emplace_back(*p_affine);
+         p2_affine_ptrs.emplace_back(&p);
+@@ -293,9 +336,11 @@
+     return true;
+ }
+
+-[[nodiscard]] bool map_fp_to_g1(uint8_t _rx[64], uint8_t _ry[64], const uint8_t _fp[64]) noexcept
+-{
+-    const auto fp = validate_fp(_fp);
++[[nodiscard]] bool map_fp_to_g1(
++    uint8_t _rx[64], uint8_t _ry[64], const uint8_t _fp[64], std::string_view* error) noexcept
++{
++    set_error(error, {});
++    const auto fp = validate_fp(_fp, error);
+     if (!fp.has_value())
+         return false;
+
+@@ -311,9 +356,10 @@
+ }
+
+ [[nodiscard]] bool map_fp2_to_g2(
+-    uint8_t _rx[128], uint8_t _ry[128], const uint8_t _fp2[128]) noexcept
+-{
+-    const auto fp2 = validate_fp2(_fp2);
++    uint8_t _rx[128], uint8_t _ry[128], const uint8_t _fp2[128], std::string_view* error) noexcept
++{
++    set_error(error, {});
++    const auto fp2 = validate_fp2(_fp2, error);
+     if (!fp2.has_value())
+         return false;
+
+@@ -328,8 +374,10 @@
+     return true;
+ }
+
+-[[nodiscard]] bool pairing_check(uint8_t _r[32], const uint8_t* _pairs, size_t size) noexcept
+-{
++[[nodiscard]] bool pairing_check(
++    uint8_t _r[32], const uint8_t* _pairs, size_t size, std::string_view* error) noexcept
++{
++    set_error(error, {});
+     static constexpr auto FP_SIZE = 64;
+     static constexpr auto FP2_SIZE = 2 * FP_SIZE;
+     static constexpr auto P1_SIZE = 2 * FP_SIZE;
+@@ -341,19 +389,25 @@
+     const auto pairs_end = _pairs + size;
+     for (auto ptr = _pairs; ptr != pairs_end; ptr += PAIR_SIZE)
+     {
+-        const auto P_affine = validate_p1(ptr, &ptr[FP_SIZE]);
++        const auto P_affine = validate_p1(ptr, &ptr[FP_SIZE], error);
+         if (!P_affine.has_value())
+             return false;
+
+-        const auto Q_affine = validate_p2(&ptr[P1_SIZE], &ptr[P1_SIZE + FP2_SIZE]);
++        const auto Q_affine = validate_p2(&ptr[P1_SIZE], &ptr[P1_SIZE + FP2_SIZE], error);
+         if (!Q_affine.has_value())
+             return false;
+
+         if (!blst_p1_affine_in_g1(&*P_affine))
+-            return false;
++        {
++            set_error(error, "g1 point is not on correct subgroup");
++            return false;
++        }
+
+         if (!blst_p2_affine_in_g2(&*Q_affine))
+-            return false;
++        {
++            set_error(error, "g2 point is not on correct subgroup");
++            return false;
++        }
+
+         // Skip a pair containing any point at infinity.
+         if (blst_p1_affine_is_inf(&*P_affine) || blst_p2_affine_is_inf(&*Q_affine))
+diff --git a/lib/evmone_precompiles/kzg.cpp b/lib/evmone_precompiles/kzg.cpp
+index 0840a33..323c5d7 100644
+--- a/lib/evmone_precompiles/kzg.cpp
++++ b/lib/evmone_precompiles/kzg.cpp
+@@ -28,17 +28,50 @@ std::optional<blst_scalar> validate_scalar(std::span<const std::byte, 32> b) noe
+     return blst_scalar_fr_check(&v) ? std::optional{v} : std::nullopt;
+ }
+
++constexpr std::string_view subgroup_error =
++    "error verifying kzg proof: invalid point: subgroup check failed";
++
++std::string_view g1_decode_error(std::byte first_byte, BLST_ERROR status) noexcept
++{
++    // The high three bits select the point encoding. Uncompressed encodings require 96 bytes.
++    switch (static_cast<uint8_t>(first_byte) & 0xe0)
++    {
++    case 0x00:
++    case 0x40:
++        return "error verifying kzg proof: short buffer";
++    case 0x20:
++    case 0x60:
++    case 0xe0:
++        return "error verifying kzg proof: invalid point encoding";
++    case 0xc0:
++        return "error verifying kzg proof: invalid infinity point encoding";
++    }
++    if (status == BLST_POINT_NOT_IN_GROUP)
++        return subgroup_error;
++    if (status == BLST_POINT_NOT_ON_CURVE)
++        return "error verifying kzg proof: invalid compressed coordinate: square root doesn't exist";
++    return "error verifying kzg proof: invalid fp.Element encoding";
++}
++
+ /// Uncompress and validate a point from G1 subgroup.
+-std::optional<blst_p1_affine> validate_G1(std::span<const std::byte, 48> b) noexcept
++std::optional<blst_p1_affine> validate_G1(
++    std::span<const std::byte, 48> b, std::string_view& error) noexcept
+ {
+     blst_p1_affine r;
+-    if (blst_p1_uncompress(&r, reinterpret_cast<const uint8_t*>(b.data())) != BLST_SUCCESS)
++    const auto status = blst_p1_uncompress(&r, reinterpret_cast<const uint8_t*>(b.data()));
++    if (status != BLST_SUCCESS)
++    {
++        error = g1_decode_error(b[0], status);
+         return std::nullopt;
++    }
+
+     // Subgroup check is required by the spec but there are no test vectors
+     // with points outside G1 which would satisfy the final pairings check.
+     if (!blst_p1_affine_in_g1(&r))
++    {
++        error = subgroup_error;
+         return std::nullopt;
++    }
+     return r;
+ }
+
+@@ -66,31 +99,46 @@ bool pairings_verify(const blst_p1_affine& a1, const blst_p1_affine& b1) noexcep
+ }  // namespace
+
+ bool kzg_verify_proof(const std::byte versioned_hash[VERSIONED_HASH_SIZE], const std::byte z[32],
+-    const std::byte y[32], const std::byte commitment[48], const std::byte proof[48]) noexcept
++    const std::byte y[32], const std::byte commitment[48], const std::byte proof[48],
++    std::string_view* error) noexcept
+ {
++    std::string_view ignored;
++    auto& reason = error ? *error : ignored;
++    reason = {};
+     std::byte computed_versioned_hash[32];
+     sha256(computed_versioned_hash, commitment, 48);
+     computed_versioned_hash[0] = VERSIONED_HASH_VERSION_KZG;
+     if (!std::ranges::equal(std::span{versioned_hash, 32}, computed_versioned_hash))
++    {
++        reason = "mismatched versioned hash";
+         return false;
++    }
+
+     // Load and validate scalars z and y.
+     // TODO(C++26): The span construction can be done as std::snap(z, std::c_<32>).
++    constexpr std::string_view scalar_error =
++        "error verifying kzg proof: scalar is not canonical when interpreted as a big integer in big-endian";
+     const auto zz = validate_scalar(std::span<const std::byte, 32>{z, 32});
+     if (!zz)
++    {
++        reason = scalar_error;
+         return false;
++    }
+     const auto yy = validate_scalar(std::span<const std::byte, 32>{y, 32});
+     if (!yy)
++    {
++        reason = scalar_error;
+         return false;
++    }
+
+     // Uncompress and validate the points C (representing the polynomial commitment)
+     // and Pi (representing the proof). They both are valid to be points at infinity
+     // when they prove a commitment to a constant polynomial,
+     // see https://hackmd.io/@kevaundray/kzg-is-zero-proof-sound
+-    const auto C = validate_G1(std::span<const std::byte, 48>{commitment, 48});
++    const auto C = validate_G1(std::span<const std::byte, 48>{commitment, 48}, reason);
+     if (!C)
+         return false;
+-    const auto Pi = validate_G1(std::span<const std::byte, 48>{proof, 48});
++    const auto Pi = validate_G1(std::span<const std::byte, 48>{proof, 48}, reason);
+     if (!Pi)
+         return false;
+
+@@ -111,6 +159,9 @@ bool kzg_verify_proof(const std::byte versioned_hash[VERSIONED_HASH_SIZE], const
+     const auto lsh_g1 = add_or_double(*C, z_pi_minus_y_g1);
+
+     // e(C + [z]π - [y]₁, [1]₂) =? e(π, [s]₂)
+-    return pairings_verify(lsh_g1, *Pi);
++    const auto valid = pairings_verify(lsh_g1, *Pi);
++    if (!valid)
++        reason = "error verifying kzg proof: can't verify opening proof";
++    return valid;
+ }
+ }  // namespace evmone::crypto
+diff --git a/lib/evmone_precompiles/kzg.hpp b/lib/evmone_precompiles/kzg.hpp
+index 02b6067..21782cc 100644
+--- a/lib/evmone_precompiles/kzg.hpp
++++ b/lib/evmone_precompiles/kzg.hpp
+@@ -5,6 +5,7 @@
+ #pragma once
+ #include "sha256.hpp"
+ #include <intx/intx.hpp>
++#include <string_view>
+
+ namespace evmone::crypto
+ {
+@@ -28,5 +29,6 @@ constexpr size_t BLS_MODULUS_BITS = 255;
+ static_assert((BLS_MODULUS >> BLS_MODULUS_BITS) == 0);
+
+ bool kzg_verify_proof(const std::byte versioned_hash[VERSIONED_HASH_SIZE], const std::byte z[32],
+-    const std::byte y[32], const std::byte commitment[48], const std::byte proof[48]) noexcept;
++    const std::byte y[32], const std::byte commitment[48], const std::byte proof[48],
++    std::string_view* error = nullptr) noexcept;
+ }  // namespace evmone::crypto
+diff --git a/lib/evmone_precompiles/bn254.hpp b/lib/evmone_precompiles/bn254.hpp
+index 11f3302..c6850b3 100644
+--- a/lib/evmone_precompiles/bn254.hpp
++++ b/lib/evmone_precompiles/bn254.hpp
+@@ -7,6 +7,7 @@
+ #include "pairing/field_template.hpp"
+ #include <optional>
+ #include <span>
++#include <string_view>
+ #include <vector>
+
+ namespace evmone::crypto::bn254
+@@ -98,4 +99,8 @@ AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept;
+ ///               std::nullopt on error.
+ std::optional<bool> pairing_check(std::span<const std::pair<AffinePoint, ExtPoint>> pairs) noexcept;
+
++/// Checks EIP-197 wire input in tuple order and reports the first invalid encoding or point.
++std::optional<bool> pairing_check_eip197(
++    std::span<const uint8_t> input, std::string_view* error = nullptr) noexcept;
++
+ }  // namespace evmone::crypto::bn254
+diff --git a/lib/evmone_precompiles/pairing/bn254/pairing.cpp b/lib/evmone_precompiles/pairing/bn254/pairing.cpp
+index da61d9b..c886222 100644
+--- a/lib/evmone_precompiles/pairing/bn254/pairing.cpp
++++ b/lib/evmone_precompiles/pairing/bn254/pairing.cpp
+@@ -149,25 +149,72 @@ Fq12 final_exp(const Fq12& v) noexcept
+     t0 = cyclotomic_square(t0);
+     return t1 * t0;
+ }
++
++std::string_view g2_validation_error(const ExtPoint& q) noexcept
++{
++    if (q == 0)
++        return {};
++    if (!is_on_twisted_curve(q))
++        return "point is not on curve";
++    if (!g2_subgroup_check(q))
++        return "point is not in correct subgroup";
++    return {};
++}
++
++bool pairing_product_is_one(std::span<const std::pair<AffinePoint, ExtPoint>> pairs) noexcept
++{
++    return pairs.empty() || final_exp(multi_miller_loop(pairs)) == Fq12::one();
++}
+ }  // namespace
+
+ std::optional<bool> pairing_check(std::span<const std::pair<AffinePoint, ExtPoint>> pairs) noexcept
+ {
+-    if (pairs.empty())
+-        return true;
+-
+     for (const auto& [p, q] : pairs)
+     {
+-        if (!validate(p))
+-            return std::nullopt;
+-
+-        // Verify that Q is on the curve and in the proper subgroup. This subgroup is much smaller
+-        // than the group containing all the points from the twisted curve over Fq2 field.
+-        // TODO: Fold q != 0 check into curve/subgroup checks.
+-        if (q != 0 && (!is_on_twisted_curve(q) || !g2_subgroup_check(q)))
++        if (!validate(p) || !g2_validation_error(q).empty())
+             return std::nullopt;
+     }
++    return pairing_product_is_one(pairs);
++}
+
+-    return final_exp(multi_miller_loop(pairs)) == Fq12::one();
++std::optional<bool> pairing_check_eip197(
++    std::span<const uint8_t> input, std::string_view* error) noexcept
++{
++    constexpr size_t pair_size = 192;
++    if (error)
++        *error = {};
++    const auto invalid = [error](std::string_view reason) {
++        if (error)
++            *error = reason;
++        return std::nullopt;
++    };
++
++    if (input.size() % pair_size != 0)
++        return invalid("bad elliptic curve pairing size");
++
++    std::vector<std::pair<AffinePoint, ExtPoint>> pairs;
++    pairs.reserve(input.size() / pair_size);
++    for (; !input.empty(); input = input.subspan(pair_size))
++    {
++        const auto p = AffinePoint::from_bytes(input.first<64>());
++        if (!p)
++            return invalid("invalid fp.Element encoding");
++        if (!validate(*p))
++            return invalid("point is not on curve");
++
++        // EIP-197 encodes each Fq² coordinate as (imaginary, real).
++        const auto xi = Fq::from_bytes(input.subspan<64, 32>());
++        const auto xr = Fq::from_bytes(input.subspan<96, 32>());
++        const auto yi = Fq::from_bytes(input.subspan<128, 32>());
++        const auto yr = Fq::from_bytes(input.subspan<160, 32>());
++        if (!xi || !xr || !yi || !yr)
++            return invalid("invalid fp.Element encoding");
++        const ExtPoint q{Fq2({*xr, *xi}), Fq2({*yr, *yi})};
++        if (const auto reason = g2_validation_error(q); !reason.empty())
++            return invalid(reason);
++
++        pairs.emplace_back(*p, q);
++    }
++    return pairing_product_is_one(pairs);
+ }
+ }  // namespace evmone::crypto::bn254

@@ -284,7 +284,7 @@ BOOST_AUTO_TEST_CASE(CryptoValidatorsExposeNativeFailureReason)
         message.gas = 1000000;
         std::string_view error;
         auto result = eth::evm::call_precompile(EVMC_PRAGUE, message, &error);
-        BOOST_CHECK_NE(result.status_code, EVMC_SUCCESS);
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_PRECOMPILE_FAILURE);
         return std::string(error);
     };
     BOOST_CHECK_EQUAL(invoke(10, bcos::bytes(192, 0)), "mismatched versioned hash");
@@ -295,12 +295,26 @@ BOOST_AUTO_TEST_CASE(CryptoValidatorsExposeNativeFailureReason)
     BOOST_CHECK_EQUAL(invoke(6, curve), "point is not on curve");
     auto bls = bcos::bytes(256, 0);
     bls[63] = bls[127] = 1;
-    // evmone 0.24's BLS validators expose only a bool; the per-cause strings come
-    // from the 0.21-only precompile-errors extension. `invoke` already asserts the
-    // failure status, which is the contract available on this lane.
-    BOOST_CHECK(invoke(11, bls).empty());
+    BOOST_CHECK_EQUAL(invoke(11, bls), "invalid point: not on curve");
     bls[0] = 1;
-    BOOST_CHECK(invoke(11, bls).empty());
+    BOOST_CHECK_EQUAL(invoke(11, bls), "invalid field element top bytes");
+
+    // The zero polynomial commits to infinity. A claimed value of one fails the opening check.
+    constexpr auto zeroPolynomialHash =
+        0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014_bytes32;
+    bcos::bytes opening(192);
+    std::ranges::copy(zeroPolynomialHash.bytes, opening.begin());
+    opening[95] = 1;
+    opening[96] = opening[144] = 0xc0;
+    BOOST_CHECK_EQUAL(invoke(10, opening), "error verifying kzg proof: can't verify opening proof");
+
+    // G1 in the first pair is validated before G2 or any coordinate in a later pair.
+    bcos::bytes pairs(2 * 192);
+    pairs[31] = pairs[63] = 1;      // (1,1) is off-curve.
+    pairs[64] = pairs[192] = 0xff;  // Out-of-field G2 and next G1 coordinates.
+    BOOST_CHECK_EQUAL(invoke(8, pairs), "point is not on curve");
+    pairs[31] = pairs[63] = 0;
+    BOOST_CHECK_EQUAL(invoke(8, pairs), "invalid fp.Element encoding");
 }
 BOOST_AUTO_TEST_CASE(ModexpLengthRejectionChecksNominalGasFirst)
 {
