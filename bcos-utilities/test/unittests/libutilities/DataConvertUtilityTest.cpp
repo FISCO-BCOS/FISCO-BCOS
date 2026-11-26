@@ -56,6 +56,11 @@ BOOST_AUTO_TEST_CASE(testHex)
     BOOST_CHECK_THROW(fromHex("0934xyza"), BadHexCharacter);
     BOOST_CHECK(fromHex("093") == fromHex("0093"));
     BOOST_CHECK(fromHex("0xabc") == fromHex("0abc"));
+    const auto oddHex = std::string(63, 'f');
+    auto expected = bytes(32, 0xff);
+    expected.front() = 0x0f;
+    BOOST_CHECK(fromHex(oddHex) == expected);
+    BOOST_CHECK(fromHex(oddHex) == fromHex("0" + oddHex));
     BOOST_CHECK(isHexString("0934xyz") == false);
 
     BOOST_CHECK(isHexString("0x000abc") == true);

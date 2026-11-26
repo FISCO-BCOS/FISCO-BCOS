@@ -154,16 +154,12 @@ Out fromHex(const Hex& hex)
     {
         if (needPadding)
         {
-            std::string padded;
-            padded.reserve(payload.size() + 1);
-            padded += '0';
-            padded += payload;
-            boost::algorithm::unhex(padded.begin(), padded.end(), std::back_inserter(out));
+            const char paddedFirst[] = {'0', payload.front()};
+            boost::algorithm::unhex(
+                std::begin(paddedFirst), std::end(paddedFirst), std::back_inserter(out));
+            payload.remove_prefix(1);
         }
-        else
-        {
-            boost::algorithm::unhex(payload.begin(), payload.end(), std::back_inserter(out));
-        }
+        boost::algorithm::unhex(payload.begin(), payload.end(), std::back_inserter(out));
     }
     catch (...)
     {
