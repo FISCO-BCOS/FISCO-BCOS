@@ -579,7 +579,11 @@ void AMOPImpl::dispatcherAMOPMessage(
     // zero copy overhead
     auto amopMessage = m_messageFactory->buildMessage(_message.payload());
     auto amopMsgType = amopMessage->type();
-    auto fromNodeID = _message.srcP2PNodeID().empty() ? _session->p2pID() : _message.srcP2PNodeID();
+    // bind by reference: both operands already own their id, and a by-value `auto` here copied the
+    // 32/128-byte node id on every inbound AMOP message. The ternary yields a prvalue when the
+    // session fallback is taken, and lifetime extension keeps it valid for the whole scope.
+    auto const& fromNodeID =
+        _message.srcP2PNodeID().empty() ? _session->p2pID() : _message.srcP2PNodeID();
     switch (amopMsgType)
     {
     case AMOPMessage::Type::TopicSeq:

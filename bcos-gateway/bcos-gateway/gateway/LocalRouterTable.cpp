@@ -46,13 +46,17 @@ LocalRouterTable::GroupNodeListType LocalRouterTable::nodeList() const
 FrontServiceInfo::Ptr LocalRouterTable::getFrontService(
     const std::string& _groupID, NodeIDPtr _nodeID) const
 {
+    // encode the node id BEFORE taking the lock: even with hex() caching its result, the lookup
+    // string has no reason to extend the time the shared lock is held against every other reader
+    auto nodeHex = _nodeID->hex();
+
     ReadGuard l(x_nodeList);
     auto it = m_nodeList.find(_groupID);
     if (it == m_nodeList.end())
     {
         return nullptr;
     }
-    auto it2 = it->second.find(_nodeID->hex());
+    auto it2 = it->second.find(nodeHex);
     if (it2 == it->second.end())
     {
         return nullptr;

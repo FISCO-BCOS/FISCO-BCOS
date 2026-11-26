@@ -16,6 +16,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/LogStream.h"
+#include "bcos-utilities/ZstdCompress.h"
 #include <bcos-task/Wait.h>
 #include <boost/random.hpp>
 #include <boost/throw_exception.hpp>
@@ -500,6 +501,9 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message me
     }
 }
 
+
+
+
 bcos::task::Task<void> Service::broadcastMessageToAll(Message::Ptr message,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads, Options options)
 {
@@ -512,6 +516,13 @@ bcos::task::Task<void> Service::broadcastMessageToAll(Message::Ptr message,
             nodeIDs.push_back(session.first);
         }
     }
+    // compress the fan-out payload once instead of once per peer
+    auto prepared = prepareFanoutPayload(payloads, m_enableCompressForBroadcast.load());
+    if (prepared)
+    {
+        options.prepared = prepared;
+    }
+
     auto self = shared_from_this();
     // Fan out one independent coroutine per peer (see broadcastMessageToNeighbors): the caller's
     // message is handed over as a shared_ptr so every per-peer task keeps it alive; each task's
@@ -553,6 +564,12 @@ bcos::task::Task<void> Service::broadcastMessageToNeighbors(Message::Ptr message
             nodeIDs.push_back(session.first);
         }
     }
+    auto prepared = prepareFanoutPayload(payloads, m_enableCompressForBroadcast.load());
+    if (prepared)
+    {
+        options.prepared = prepared;
+    }
+
     auto self = shared_from_this();
     // Fan out one independent coroutine per peer: the caller's message
     // is handed over as a shared_ptr so every per-peer task keeps it alive; each task's

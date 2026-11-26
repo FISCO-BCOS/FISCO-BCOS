@@ -27,12 +27,13 @@
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-task/Task.h"
 #include <oneapi/tbb/concurrent_unordered_map.h>
+#include <atomic>
 #include <memory>
 #include <utility>
 
 namespace bcos::gateway
 {
-class PeersRouterTable
+class PeersRouterTable : public std::enable_shared_from_this<PeersRouterTable>
 {
 public:
     using Ptr = std::shared_ptr<PeersRouterTable>;
@@ -56,8 +57,13 @@ public:
     Group2NodeIDListType peersNodeIDList(P2pID const& _p2pNodeID) const;
 
     task::Task<void> broadcastMessage(uint16_t type, std::string_view group, uint16_t moduleID,
-        const Message& message,
+        Message::Ptr message,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads);
+
+    /// Whether a fan-out may compress its payload once for all peers rather than once per peer.
+    /// Mirrors Service::setEnableCompressForBroadcast so the two broadcast paths behave the same.
+    void setEnableCompressForBroadcast(bool _enable) { m_enableCompressForBroadcast.store(_enable); }
+    bool enableCompressForBroadcast() const { return m_enableCompressForBroadcast.load(); }
 
     std::set<P2pID> getAllPeers() const;
     GatewayStatus::Ptr gatewayInfo(std::string const& _uuid);
@@ -109,5 +115,8 @@ private:
 
     GatewayStatusFactory::Ptr m_gatewayStatusFactory;
     tbb::concurrent_unordered_map<std::string, GatewayStatus::Ptr> m_gatewayInfos;
+
+    // see setEnableCompressForBroadcast
+    std::atomic_bool m_enableCompressForBroadcast{true};
 };
 }  // namespace bcos::gateway
