@@ -33,11 +33,11 @@
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockBody.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
-#include <bcos-tars-protocol/protocol/TransactionImpl.h>
-#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
@@ -675,8 +675,7 @@ BOOST_AUTO_TEST_CASE(RawBlockReproducesHeaderCommitments)
 {
     setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
     auto const headerPtr = makeEmptyOpBlock();
-    auto const rawBlock =
-        resultBytes(call1("debug_getRawBlock", toQuantity(headerPtr->number())));
+    auto const rawBlock = resultBytes(call1("debug_getRawBlock", toQuantity(headerPtr->number())));
 
     bcos::protocol::EthBlock decoded;
     auto mutableBlock = rawBlock;
@@ -687,8 +686,7 @@ BOOST_AUTO_TEST_CASE(RawBlockReproducesHeaderCommitments)
     {
         txRefs.emplace_back(tx.data(), tx.size());
     }
-    BOOST_CHECK(bcos::ledger::mpt::calculateTransactionsRoot(txRefs) ==
-                headerPtr->txsRoot());
+    BOOST_CHECK(bcos::ledger::mpt::calculateTransactionsRoot(txRefs) == headerPtr->txsRoot());
 
     BOOST_REQUIRE(decoded.data().withdrawals.has_value());
     std::vector<bcos::bytes> encodedWithdrawals;
@@ -817,10 +815,10 @@ constexpr std::array<SignedTxVector, 5> SIGNED_TX_VECTORS{{
 bcos::bytes buildDepositEnvelope()
 {
     auto const sourceHash = bcos::h256(0xaaU);
-    auto const from =
-        bcos::Address(std::string_view("0x00000000000000000000000000000000000000f1"), bcos::Address::FromHex);
-    auto const to =
-        bcos::Address(std::string_view("0x4200000000000000000000000000000000000015"), bcos::Address::FromHex);
+    auto const from = bcos::Address(
+        std::string_view("0x00000000000000000000000000000000000000f1"), bcos::Address::FromHex);
+    auto const to = bcos::Address(
+        std::string_view("0x4200000000000000000000000000000000000015"), bcos::Address::FromHex);
     bcos::u256 const mint{0};
     bcos::u256 const value{1'000'000};
     uint64_t const gas = 200'000;
@@ -886,8 +884,7 @@ BOOST_AUTO_TEST_CASE(RawBlockServesByteExactSignedTransactions)
     {
         auto deposit = buildDepositEnvelope();
         auto const depositHash = bcos::crypto::keccak256Hash(bcos::ref(deposit));
-        auto tx = makeStoredTransaction(
-            bcos::ref(deposit), bcos::bytesConstRef{},
+        auto tx = makeStoredTransaction(bcos::ref(deposit), bcos::bytesConstRef{},
             bcos::bytesConstRef(depositHash.data(), depositHash.size()));
         m_ledger->storeTxAndReceipt(tx, nullptr);
         expected.push_back(std::move(deposit));
@@ -922,9 +919,8 @@ BOOST_AUTO_TEST_CASE(RawBlockServesByteExactSignedTransactions)
     {
         storage::Entry withdrawalsRow;
         withdrawalsRow.set(bcos::bytes{0xc0});
-        m_ledger->setStateStorageEntry(
-            std::string(ledger::SYS_NUMBER_2_WITHDRAWALS), std::to_string(number),
-            std::move(withdrawalsRow));
+        m_ledger->setStateStorageEntry(std::string(ledger::SYS_NUMBER_2_WITHDRAWALS),
+            std::to_string(number), std::move(withdrawalsRow));
     }
 
     auto const rawBlock = resultBytes(call1("debug_getRawBlock", toQuantity(number)));
@@ -945,6 +941,97 @@ BOOST_AUTO_TEST_CASE(RawBlockServesByteExactSignedTransactions)
         bcos::crypto::keccak256Hash(bcos::ref(expected[0])).hexPrefixed());
     BOOST_REQUIRE(!oneEnvelope.isMember("error"));
     BOOST_CHECK_EQUAL(oneEnvelope["result"].asString(), toHexStringWithPrefix(expected[0]));
+}
+
+// REGRESSION (found only against a real node): a block header the ledger rebuilt from its stored
+// SYS_NUMBER_2_BLOCK_HEADER row carries NO dataHash, so BlockHeaderImpl::hash() throws
+// EmptyBlockHeaderHash. The endpoint used to call canonicalBlockHash(header) here, which reaches
+// hash() on the eth lane and turned every debug_getRawBlock on such a node into
+// -32603 "Throw in function ...BlockHeaderImpl::hash()". The identity of the bytes served is
+// keccak256(encodeHeader(header)) -- which is exactly what a client recomputes -- so the header's
+// stored hash must not be load-bearing. This test clears dataHash on purpose to pin that down.
+BOOST_AUTO_TEST_CASE(RawBlockServesHeaderWithoutStoredHash)
+{
+    setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+
+    auto const number = m_ledger->blockNumber() + 1;
+    m_ledger->addNewBlock(nullptr, number, 0);
+    auto header = m_ledger->ledgerData().back()->blockHeader();
+    header->setTimestamp(1'700'000'000);
+    header->setBaseFee(1'000'000'000);
+    header->setTxsRoot(mpt::emptyRootHash());
+    header->setWithdrawalsRoot(mpt::emptyRootHash());
+    // The shape the ledger hands back: encodable, but with no stored hash. Every tars setter
+    // clears dataHash, so re-stamping an unchanged field drops the hash the calculateHash above
+    // would otherwise leave behind -- reproducing exactly what a decoded storage row looks like.
+    header->setStateRoot(header->stateRoot());
+
+    // Empty withdrawals commitment with no sidecar row is the genesis shape, served as [].
+    auto const rlp = protocol::EthBlockHeader::encodeHeader(*header);
+    auto const identity = bcos::crypto::keccak256Hash(bcos::ref(rlp));
+    m_ledger->indexBlockHash(identity, number);
+
+    auto const raw = resultBytes(call1("debug_getRawBlock", toQuantity(number)));
+    bcos::protocol::EthBlock decoded;
+    auto mutableRaw = raw;
+    decoded.rlpDecode(bcos::bytesConstRef(mutableRaw.data(), mutableRaw.size()));
+    // The served header must hash to the published identity of the block just served, and the
+    // body must be the empty transaction list this header commits to.
+    BOOST_CHECK_EQUAL(
+        bcos::crypto::keccak256Hash(bcos::ref(protocol::EthBlockHeader::encodeHeader(*header)))
+            .hexPrefixed(),
+        identity.hexPrefixed());
+    BOOST_CHECK(decoded.data().transactions.empty());
+    // And a hash request for that identity serves the same block (the stale-index guard compares
+    // against the encoded header, not against a stored hash that is absent).
+    BOOST_CHECK(resultBytes(call1("debug_getRawBlock", identity.hexPrefixed())) == raw);
+}
+
+// REGRESSION (found only against a real node): the genesis block commits to the empty-withdrawals
+// root but has no SYS_NUMBER_2_WITHDRAWALS row (there is nothing to store). Refusing it made
+// debug_getRawBlock(0x0) -- and therefore the "earliest" tag -- unavailable. A missing row is
+// legitimate IFF the committed root is the empty-trie root; anything else must still fail closed,
+// or the endpoint would emit a body that contradicts its own header.
+BOOST_AUTO_TEST_CASE(RawBlockServesEmptyWithdrawalsWhenSidecarRowIsAbsent)
+{
+    setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+
+    auto const number = m_ledger->blockNumber() + 1;
+    m_ledger->addNewBlock(nullptr, number, 0);
+    auto header = m_ledger->ledgerData().back()->blockHeader();
+    header->setTimestamp(1'700'000'000);
+    header->setBaseFee(1'000'000'000);
+    header->setTxsRoot(mpt::emptyRootHash());
+    header->setWithdrawalsRoot(mpt::emptyRootHash());  // the empty list's commitment
+    // No sidecar row is written for this block on purpose.
+
+    auto const raw = resultBytes(call1("debug_getRawBlock", toQuantity(number)));
+    bcos::protocol::EthBlock decoded;
+    auto mutableRaw = raw;
+    decoded.rlpDecode(bcos::bytesConstRef(mutableRaw.data(), mutableRaw.size()));
+    BOOST_REQUIRE(decoded.data().withdrawals.has_value());
+    BOOST_CHECK(decoded.data().withdrawals->empty());
+    // Re-deriving the root from the served body must reproduce the header's commitment.
+    std::vector<bcos::bytesConstRef> refs;  // empty list
+    BOOST_CHECK(bcos::ledger::mpt::calculateWithdrawalsRoot(refs) == *header->withdrawalsRoot());
+
+    // Negative control: a NON-empty commitment with no row is a genuinely missing sidecar and
+    // must be refused rather than answered with an empty list.
+    auto const number2 = m_ledger->blockNumber() + 1;
+    m_ledger->addNewBlock(nullptr, number2, 0);
+    auto header2 = m_ledger->ledgerData().back()->blockHeader();
+    header2->setTimestamp(1'700'001'000);  // whole seconds: the eth header encodes no ms
+    header2->setBaseFee(1'000'000'000);
+    header2->setTxsRoot(mpt::emptyRootHash());
+    header2->setWithdrawalsRoot(h256(0xabcdU));  // commits to something that is not "empty"
+    auto const refused = call1("debug_getRawBlock", toQuantity(number2));
+    BOOST_REQUIRE_MESSAGE(refused.isMember("error"),
+        "a non-empty withdrawals commitment with no "
+        "sidecar row must be refused, got: "
+            << printJson(refused));
+    BOOST_CHECK_MESSAGE(refused["error"]["message"].asString().find("withdrawals row is missing") !=
+                            std::string::npos,
+        "expected the missing-sidecar refusal, got: " << printJson(refused));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

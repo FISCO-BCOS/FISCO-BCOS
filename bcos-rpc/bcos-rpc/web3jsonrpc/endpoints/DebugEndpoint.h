@@ -76,13 +76,22 @@ public:
     task::Task<void> traceTransaction(const Json::Value&, Json::Value&);
 
 private:
-    /// Resolve the single block parameter both raw-data endpoints take (a block number, a
-    /// tag other than safe/finalized/pending, or a 32-byte hash) to a height, and reject one
-    /// this node does not have. Shared so the header and receipts paths cannot disagree about
-    /// which block a request names -- on the fault-proof data plane two answers for one input
-    /// is a divergence, not a cosmetic difference.
-    task::Task<protocol::BlockNumber> resolveRawBlockParameter(
-        const Json::Value& request, std::string_view method);
+    /// Read the single block parameter the raw-data endpoints take (a block number, a tag other
+    /// than safe/finalized/pending, or a 32-byte hash) on the CANONICAL plane and return the
+    /// block with @p blockFlag rows. Shared so the header, receipts and block paths cannot
+    /// disagree about which block a request names -- on the fault-proof data plane two answers
+    /// for one input is a divergence, not a cosmetic difference.
+    ///
+    /// Canonical, not raw-ledger, is the point: on the OP lane the backend holds the finalized
+    /// chain only and the blocks op-node is currently serving live in the OpScheduler window, so
+    /// a direct ledger read would answer "not found" for every unfinalized block -- including
+    /// "latest" -- and disagree with eth_getBlockByNumber on the same node.
+    /// When the parameter is a hash and @p requestedHash is non-null, the requested hash is
+    /// returned through it so the caller can bind the answer to it (a window entry read by hash
+    /// is unambiguous, a hash resolved to a height may be replaced by a reorg underneath).
+    task::Task<protocol::Block::Ptr> rawBlockByParameter(const Json::Value& request,
+        std::string_view method, int32_t blockFlag,
+        std::optional<crypto::HashType>* requestedHash = nullptr);
 
     NodeService::Ptr m_nodeService;
 };

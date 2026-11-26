@@ -33,11 +33,12 @@
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/util.h>
+#include <bcos-rpc/web3jsonrpc/utils/CanonicalReads.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
-#include <bcos-task/FireAwaitable.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
+#include <bcos-task/FireAwaitable.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 
@@ -249,6 +250,41 @@ Json::Value traceJson(scheduler::CallTrace const& frame, TraceJsonBudget& budget
     }
     return result;
 }
+
+// Reads one transaction by hash, mapping "the ledger has no such row" to an empty result.
+//
+// The ledger's batch read fails closed: an unknown hash raises GetStorageError (wrapped by
+// asyncGetBatchTxsByHashList) instead of returning a shorter list. Letting that escape this
+// coroutine makes the dispatcher report an internal error, whereas geth answers a plain
+// -32000 "not found" for the same input. Keeping the translation next to the co_await (rather
+// than a try/catch at the call site) makes the exception->value mapping impossible to lose to
+// coroutine frame teardown.
+task::Task<bcos::protocol::Transaction::Ptr> readTransactionOrNothing(
+    bcos::ledger::LedgerInterface& ledger, std::shared_ptr<crypto::HashList> hashes)
+{
+    try
+    {
+        auto txs = co_await bcos::ledger::getTransactions(ledger, std::move(hashes));
+        if (txs && !txs->empty())
+        {
+            co_return txs->at(0);
+        }
+    }
+    catch (std::exception const& e)
+    {
+        WEB3_LOG(DEBUG) << LOG_DESC("debug_getRawTransaction: transaction not in the ledger")
+                        << LOG_KV("detail", e.what());
+    }
+    catch (...)
+    {
+        // The ledger's failure surfaces as a boost::wrapexcept that does not always answer to
+        // std::exception once it has crossed a coroutine boundary. Any failure of this read means
+        // the same thing to the caller -- this node has no such transaction -- so swallow it and
+        // let the endpoint answer geth's "not found".
+        WEB3_LOG(DEBUG) << LOG_DESC("debug_getRawTransaction: ledger read failed");
+    }
+    co_return nullptr;
+}
 }  // namespace
 
 task::Task<void> DebugEndpoint::traceTransaction(const Json::Value& request, Json::Value& response)
@@ -404,12 +440,13 @@ task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& r
     co_return;
 }
 
-task::Task<protocol::BlockNumber> DebugEndpoint::resolveRawBlockParameter(
-    const Json::Value& request, std::string_view method)
+task::Task<protocol::Block::Ptr> DebugEndpoint::rawBlockByParameter(const Json::Value& request,
+    std::string_view method, int32_t blockFlag, std::optional<crypto::HashType>* requestedHash)
 {
-    // One block parameter, shared by debug_getRawHeader and debug_getRawReceipts: a block
-    // number, a tag, or a 32-byte block hash (which kona-host uses for preimages).
-    auto const ledger = m_nodeService->ledger();
+    // One block parameter, shared by all raw-data endpoints: a block number, a tag, or a 32-byte
+    // block hash (which kona-host uses for preimages). The read goes through the canonical plane
+    // (CanonicalReads.h) rather than the raw ledger: on the OP lane the backend only holds
+    // finalized blocks, and the head op-node is serving lives in the OpScheduler window.
     if (request.size() < 1 || !request[0U].isString())
     {
         BOOST_THROW_EXCEPTION(
@@ -431,8 +468,11 @@ task::Task<protocol::BlockNumber> DebugEndpoint::resolveRawBlockParameter(
                                   "number, a block hash, latest or earliest"));
     }
 
-    protocol::BlockNumber blockNumber = 0;
-    protocol::BlockNumber head = 0;
+    // A hash names a block directly, and on the OP lane that includes an unfinalized window block
+    // on any branch: reading it back by hash (not by the height its index row happens to hold)
+    // means a reorg between resolve and read cannot swap in a different block. The caller still
+    // re-checks the served identity against this hash, which turns a deferred replacement into
+    // "not found" rather than a wrong answer.
     if (isBlockHashString(blockTag))
     {
         bcos::crypto::HashType hash;
@@ -444,10 +484,13 @@ task::Task<protocol::BlockNumber> DebugEndpoint::resolveRawBlockParameter(
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid block hash"));
         }
+        if (requestedHash != nullptr)
+        {
+            *requestedHash = hash;
+        }
         try
         {
-            blockNumber = co_await ledger::getBlockNumber(*ledger, hash);
-            head = co_await ledger::getCurrentBlockNumber(*ledger);
+            co_return co_await bcos::rpc::canonicalBlockByHash(*m_nodeService, hash, blockFlag);
         }
         catch (bcos::Error const& e)
         {
@@ -459,21 +502,33 @@ task::Task<protocol::BlockNumber> DebugEndpoint::resolveRawBlockParameter(
             throw;
         }
     }
-    else
-    {
-        // QTY|TAG: resolve through the shared tag resolver (same as eth_getBlockByNumber).
-        auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
-        auto [number, _] =
-            bcos::rpc::getBlockNumberByTag(latest, blockTag, m_nodeService->safeBlockDepth(),
-                m_nodeService->finalizedBlockDepth(), std::nullopt, std::nullopt, false);
-        blockNumber = number;
-        head = latest;
-    }
-    if (blockNumber < 0 || blockNumber > head)
+
+    // QTY|TAG: the head comes from the canonical plane too (the OP tracker's head), so a height
+    // op-node has already made canonical is accepted even while the backend still stops at the
+    // finalized tip.
+    auto const latest = co_await bcos::rpc::canonicalLatestNumber(*m_nodeService);
+    auto [number, _] =
+        bcos::rpc::getBlockNumberByTag(latest, blockTag, m_nodeService->safeBlockDepth(),
+            m_nodeService->finalizedBlockDepth(), std::nullopt, std::nullopt, false);
+    if (number < 0 || number > latest)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
-    co_return blockNumber;
+    try
+    {
+        co_return co_await bcos::rpc::canonicalBlockByNumber(*m_nodeService, number, blockFlag);
+    }
+    catch (bcos::Error const& e)
+    {
+        // The ledger reports a missing block either as a null block or by throwing; normalise
+        // both to the same "not found" answer the callers already had.
+        if (e.errorCode() == bcos::ledger::LedgerError::GetStorageError &&
+            boost::get_error_info<bcos::Error::STDError>(e) == nullptr)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+        }
+        throw;
+    }
 }
 
 task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::Value& response)
@@ -482,9 +537,7 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
     // result: the RLP-encoded Ethereum header (DATA); keccak256(result) is the block hash
     // eth_getBlockBy* reports (canonicalBlockHash), which is what kona-host checks.
     co_await requireEthereumLane(*m_nodeService->ledger(), "debug_getRawHeader");
-    auto const ledger = m_nodeService->ledger();
-    auto const blockNumber = co_await resolveRawBlockParameter(request, "debug_getRawHeader");
-    auto const block = co_await ledger::getBlockData(*ledger, blockNumber, ledger::HEADER);
+    auto const block = co_await rawBlockByParameter(request, "debug_getRawHeader", ledger::HEADER);
     auto const headerPtr = block ? block->blockHeader() : nullptr;
     if (!headerPtr) [[unlikely]]
     {
@@ -511,7 +564,7 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
     if (protocol::canonicalBlockHash(header) != bcos::crypto::keccak256Hash(bcos::ref(encoded)))
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(
-            InternalError, "Block " + std::to_string(blockNumber) + " has no Ethereum header"));
+            InternalError, "Block " + std::to_string(header.number()) + " has no Ethereum header"));
     }
     Json::Value result = toHexStringWithPrefix(encoded);
     buildJsonContent(result, response);
@@ -526,20 +579,20 @@ task::Task<void> DebugEndpoint::getRawReceipts(const Json::Value& request, Json:
     // kona-host reads the L1 receipts through this method to build the preimages its trace
     // needs; without it the challenger cannot produce an L1-side trace at all.
     co_await requireEthereumExecutorLane(*m_nodeService->ledger(), "debug_getRawReceipts");
-    auto const ledger = m_nodeService->ledger();
-    auto const blockNumber = co_await resolveRawBlockParameter(request, "debug_getRawReceipts");
 
     // TRANSACTIONS | RECEIPTS: the receipts-trie leaf is prefixed with the transaction's EIP-2718
     // type byte, which only the transaction carries, and the receipt itself comes from the same
     // block read. Both flags are required and they are disjoint (LedgerTypeDef.h): RECEIPTS is what
     // populates receipts(), so asking for TRANSACTIONS alone leaves receiptsSize() at 0 and the
     // count guard below then rejects every block that has a transaction.
-    auto const block = co_await ledger::getBlockData(
-        *ledger, blockNumber, ledger::TRANSACTIONS | ledger::RECEIPTS);
+    auto const block = co_await rawBlockByParameter(
+        request, "debug_getRawReceipts", ledger::TRANSACTIONS | ledger::RECEIPTS);
     if (!block) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
+    auto const blockNumber =
+        block->blockHeader() ? block->blockHeader()->number() : protocol::BlockNumber{-1};
 
     Json::Value result(Json::arrayValue);
     // The receipts are zipped with the transactions by index, so a mismatch would silently
@@ -586,14 +639,21 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
     // rlp([header, txs, ommers]) for pre-Shanghai and the 4-element form once the header carries
     // a withdrawalsRoot. There is no fallback path, so a MethodNotFound here stops proving.
     co_await requireEthereumLane(*m_nodeService->ledger(), "debug_getRawBlock");
-    auto const ledger = m_nodeService->ledger();
-    auto const blockNumber = co_await resolveRawBlockParameter(request, "debug_getRawBlock");
 
-    // HEADER is required, not optional: getBlockData only populates block->blockHeader() when
-    // the HEADER flag is set (LedgerMethods.h), so asking for TRANSACTIONS alone yields a block
-    // with a null header and the lookup below would answer "Block not found" for every block.
-    auto const block = co_await ledger::getBlockData(
-        *ledger, blockNumber, ledger::HEADER | ledger::TRANSACTIONS);
+    // Read on the canonical plane, not the raw ledger, for two reasons the review called out:
+    //   * HEADER is required, not optional -- getBlockData only populates block->blockHeader()
+    //     when the HEADER flag is set (LedgerMethods.h), so TRANSACTIONS alone yields a null
+    //     header and every block would answer "Block not found".
+    //   * on the OP lane the backend holds the finalized chain only; the head op-node serves sits
+    //     in the OpScheduler window, so rawBlockByParameter resolves the tag AND reads the block
+    //     through canonicalBlockByNumber / canonicalBlockByHash (CanonicalReads.h).
+    // A hash request is answered with the block that hash names, and the requested hash is handed
+    // back so the identity re-check below binds the served bytes to it: if a canonical replacement
+    // lands between the window lookup and the response, that check answers "not found" instead of
+    // serving the replacement.
+    std::optional<bcos::crypto::HashType> requestedHash;
+    auto const block = co_await rawBlockByParameter(
+        request, "debug_getRawBlock", ledger::HEADER | ledger::TRANSACTIONS, &requestedHash);
     if (!block) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
@@ -604,22 +664,7 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
     auto const& header = *headerPtr;
-
-    // A hash request must be answered with THAT block, not with whatever now sits at the height
-    // the hash was indexed against. resolveRawBlockParameter reduces a hash to a number through
-    // the SYS_HASH_2_NUMBER row, and a canonical replacement (reorg) can leave that old row in
-    // place pointing at a height that has since been filled by a different block. Re-check the
-    // identity against the requested hash before serving, so a stale index answers "not found"
-    // instead of a block nobody asked for.
-    if (isBlockHashString(toView(request[0U])))
-    {
-        auto const requestedHash =
-            bcos::crypto::HashType(toView(request[0U]), bcos::crypto::HashType::FromHex);
-        if (protocol::canonicalBlockHash(header) != requestedHash) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
-        }
-    }
+    auto const blockNumber = header.number();
 
     protocol::EthBlockData body;
     try
@@ -634,17 +679,17 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
             "Block " + std::to_string(blockNumber) + " has no Ethereum header: " + e.what()));
     }
-    // The served bytes must be reproducible from the header's own fields. Two gates, because
-    // "reproducible" means something different per lane:
-    //   * encodeHeader must succeed at all: a native FISCO header (sub-second timestamp), or an
-    //     OP header missing fork fields, has no Ethereum RLP form and throws here. This is the
-    //     gate that actually rejects a non-Ethereum header.
-    //   * the recomputed bytes must reproduce the published identity. That comparison is a real
-    //     check on the eth lane (stored hash vs keccak of what we serve) but VACUOUS on the OP
-    //     lane, where canonicalBlockHash is defined as keccak(encodeHeader(header)) and
-    //     therefore compares those bytes with themselves. Keeping it costs one encode + keccak
-    //     and still guards the eth lane, so it stays -- but it is not what makes OP blocks safe;
-    //     the commitment re-check below is.
+    // The served bytes must be reproducible from the header's own fields, and encodeHeader is the
+    // single gate for that: a native FISCO header (sub-second timestamp) or an OP header missing
+    // fork fields has no Ethereum RLP form and throws here, which is exactly the set of blocks
+    // this endpoint must refuse.
+    //
+    // Do NOT add canonicalBlockHash to this check. On the eth lane it calls header.hash(), which
+    // throws EmptyBlockHeaderHash for a header the ledger rebuilt from a row that never stored a
+    // dataHash -- observed on a real node, where it turned every debug_getRawBlock into -32603.
+    // The identity that matters is keccak256(encodeHeader(header)): that is already an OP block's
+    // identity, and on the eth lane those same bytes are what a client hashes to obtain the block
+    // hash it asked for, so a hash request is validated against them below.
     bcos::bytes encodedHeader;
     try
     {
@@ -653,12 +698,14 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-            "Block " + std::to_string(blockNumber) + " has no Ethereum header"));
+            "Block " + std::to_string(blockNumber) + " has no Ethereum header: " + e.what()));
     }
-    if (protocol::canonicalBlockHash(header) != bcos::crypto::keccak256Hash(bcos::ref(encodedHeader)))
+    if (requestedHash && bcos::crypto::keccak256Hash(bcos::ref(encodedHeader)) != *requestedHash)
+        [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InternalError, "Block " + std::to_string(blockNumber) + " has no Ethereum header"));
+        // The height this hash indexed is now occupied by a different block. Answering the current
+        // occupant would serve bytes for a block the caller never asked for.
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
 
     // Transactions are the full SIGNED envelopes, i.e. exactly the values keyed in the
@@ -680,15 +727,17 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
             // A transaction whose stored bytes cannot be turned back into its wire form cannot
             // enter the block RLP: a body with a hole in its transaction list is worse than no
             // answer, because its txsRoot would not match the header.
-            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-                "Block " + std::to_string(blockNumber) + " carries a transaction with no raw "
-                                                        "envelope: " + e.what()));
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InternalError, "Block " + std::to_string(blockNumber) +
+                                                    " carries a transaction with no raw "
+                                                    "envelope: " +
+                                                    e.what()));
         }
         if (envelope.empty()) [[unlikely]]
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-                "Block " + std::to_string(blockNumber) +
-                    " carries a transaction with no raw envelope"));
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InternalError, "Block " + std::to_string(blockNumber) +
+                                                    " carries a transaction with no raw envelope"));
         }
         body.transactions.push_back(std::move(envelope));
     }
@@ -707,41 +756,57 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
     else
     {
         body.withdrawals.emplace();
-        if (auto const stateStorage = ledger->getStateStorage())
+        // The eth lane has no window: the sidecar row lives in the same flat state the ledger
+        // exposes. (The OP lane returned above, and never writes or reads this row.)
+        if (auto const stateStorage = m_nodeService->ledger()->getStateStorage())
         {
-            auto const entry = co_await storage2::readOne(*stateStorage,
-                executor_v1::StateKeyView{
-                    ledger::SYS_NUMBER_2_WITHDRAWALS, std::to_string(blockNumber)});
+            auto const entry = co_await storage2::readOne(
+                *stateStorage, executor_v1::StateKeyView{
+                                   ledger::SYS_NUMBER_2_WITHDRAWALS, std::to_string(blockNumber)});
             if (!entry.has_value()) [[unlikely]]
             {
-                // The header commits to a withdrawalsRoot but the sidecar row is gone (pruned, or
-                // committed by a build that did not write it). Emitting an empty list here would
-                // hand out a body that contradicts its own header, which is exactly the class of
-                // silent-wrong-answer this endpoint must never produce.
-                BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-                    "Block " + std::to_string(blockNumber) +
-                        " commits to a withdrawalsRoot but its withdrawals row is missing"));
+                // The header commits to a withdrawalsRoot but there is no sidecar row. That is
+                // legitimate for exactly one block shape: a block whose withdrawals list is EMPTY
+                // commits to the empty-trie root, and a build that never wrote a row for it (the
+                // genesis block of this very chain) is telling the truth. Serve the empty list in
+                // that case -- the commitments re-check below still proves it against the header.
+                // Any other root means the row is genuinely missing (pruned, or written by an
+                // incompatible build), and emitting an empty list would hand out a body that
+                // contradicts its own header. Fail closed there, as before.
+                if (bcos::ledger::mpt::calculateWithdrawalsRoot({}) != *header.withdrawalsRoot())
+                {
+                    BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                        "Block " + std::to_string(blockNumber) +
+                            " commits to a withdrawalsRoot but its withdrawals row is missing"));
+                }
+                WEB3_LOG(DEBUG) << LOG_DESC(
+                                       "debug_getRawBlock: block has an empty withdrawals list")
+                                << LOG_KV("number", blockNumber);
             }
-            // The row holds the RLP LIST of per-item withdrawal encodings; decode each item
-            // so the re-encode below goes through the same codec as the body.
-            auto raw = bcos::bytes(entry->get().begin(), entry->get().end());
-            auto items = bcos::ref(raw);
-            auto const listHeader = bcos::codec::rlp::decodeHeader(items);
-            if (!listHeader.isList || listHeader.payloadLength != items.size())
+            else
             {
-                BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-                    "Block " + std::to_string(blockNumber) +
-                        " carries a malformed withdrawals sidecar row"));
-            }
-            while (!items.empty())
-            {
-                auto const itemStart = items;
-                auto const itemHeader = bcos::codec::rlp::decodeHeader(items);
-                auto const itemSize = (itemStart.size() - items.size()) + itemHeader.payloadLength;
-                protocol::EthWithdrawal withdrawal;
-                withdrawal.rlpDecode(bcos::bytesConstRef(itemStart.data(), itemSize));
-                body.withdrawals->push_back(withdrawal.data());
-                items = items.getCroppedData(itemHeader.payloadLength);
+                // The row holds the RLP LIST of per-item withdrawal encodings; decode each item
+                // so the re-encode below goes through the same codec as the body.
+                auto raw = bcos::bytes(entry->get().begin(), entry->get().end());
+                auto items = bcos::ref(raw);
+                auto const listHeader = bcos::codec::rlp::decodeHeader(items);
+                if (!listHeader.isList || listHeader.payloadLength != items.size())
+                {
+                    BOOST_THROW_EXCEPTION(JsonRpcException(
+                        InternalError, "Block " + std::to_string(blockNumber) +
+                                           " carries a malformed withdrawals sidecar row"));
+                }
+                while (!items.empty())
+                {
+                    auto const itemStart = items;
+                    auto const itemHeader = bcos::codec::rlp::decodeHeader(items);
+                    auto const itemSize =
+                        (itemStart.size() - items.size()) + itemHeader.payloadLength;
+                    protocol::EthWithdrawal withdrawal;
+                    withdrawal.rlpDecode(bcos::bytesConstRef(itemStart.data(), itemSize));
+                    body.withdrawals->push_back(withdrawal.data());
+                    items = items.getCroppedData(itemHeader.payloadLength);
+                }
             }
         }
         else
@@ -774,9 +839,10 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
         // into its envelope, or a stored row whose payload does not match the committed trie.
         // Either way the bytes cannot be trusted, so refuse rather than hand out a body whose
         // transactionsRoot no client can recover from the header.
-        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-            "Block " + std::to_string(blockNumber) + " body does not reproduce the header's "
-                                                    "transactionsRoot"));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InternalError, "Block " + std::to_string(blockNumber) +
+                                                " body does not reproduce the header's "
+                                                "transactionsRoot"));
     }
     if (header.withdrawalsRoot().has_value())
     {
@@ -801,9 +867,9 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
                 // The sidecar row was missing or did not decode to the committed list. Emitting an
                 // empty list for a block whose header commits to a non-empty root is the one case
                 // where being lenient produces a body that contradicts its own header.
-                BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-                    "Block " + std::to_string(blockNumber) +
-                        " body does not reproduce the header's withdrawalsRoot"));
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InternalError, "Block " + std::to_string(blockNumber) +
+                                       " body does not reproduce the header's withdrawalsRoot"));
             }
         }
         else
@@ -822,8 +888,8 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
     }
     catch (std::exception const& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InternalError, std::string("Block RLP encode failed: ") + e.what()));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InternalError, std::string("Block RLP encode failed: ") + e.what()));
     }
     Json::Value result = toHexStringWithPrefix(encoded);
     buildJsonContent(result, response);
@@ -840,8 +906,8 @@ task::Task<void> DebugEndpoint::getRawTransaction(const Json::Value& request, Js
     co_await requireEthereumLane(*m_nodeService->ledger(), "debug_getRawTransaction");
     if (request.size() < 1 || !request[0U].isString())
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "debug_getRawTransaction expects one transaction hash"));
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "debug_getRawTransaction expects one transaction hash"));
     }
     auto const hashText = toView(request[0U]);
     if (!isBlockHashString(hashText))
@@ -867,11 +933,11 @@ task::Task<void> DebugEndpoint::getRawTransaction(const Json::Value& request, Js
     {
         auto hashList = std::make_shared<crypto::HashList>();
         hashList->push_back(hash);
-        auto txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
-        if (txs && !txs->empty())
-        {
-            transaction = txs->at(0);
-        }
+        // A miss must be a value, not an exception: the ledger's batch read throws for a hash it
+        // has no SYS_HASH_2_TX row for, and a throw escaping a co_await inside this task would be
+        // rethrown by the dispatcher as an internal error (observed as -32603 on a real node).
+        // Converting it here keeps geth's -32000 "not found", which kona-host keys retry logic on.
+        transaction = co_await readTransactionOrNothing(*ledger, std::move(hashList));
     }
     if (!transaction) [[unlikely]]
     {
