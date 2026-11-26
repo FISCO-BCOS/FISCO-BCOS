@@ -251,39 +251,66 @@ Json::Value traceJson(scheduler::CallTrace const& frame, TraceJsonBudget& budget
     return result;
 }
 
+// True iff this failure means "the ledger has no such row", as opposed to a read that failed.
+//
+// batchGetTransactions skips entries the storage reports as absent and then fails the batch with a
+// count mismatch (Ledger.cpp: CollectAsyncCallbackError, "transactions size not match hashesSize").
+// getBatchTxsByHashList wraps that as GetStorageError("GetBatchTxsByHashList error"), so the
+// OUTER error carries no distinguishing information -- a genuine storage failure is wrapped in the
+// same code and message. The decision therefore has to walk the cause chain for the count-mismatch
+// leaf; anything else is a real failure and must not be flattened into "not found" (review F1).
+bool isMissingTransactionRow(bcos::Error const& error)
+{
+    // The chain is at most a few links deep; the bound is only there so a malformed/cyclic cause
+    // could never spin this loop.
+    constexpr int c_maxCauseDepth = 8;
+    auto const* current = &error;
+    for (int depth = 0; current != nullptr && depth < c_maxCauseDepth; ++depth)
+    {
+        if (current->errorCode() == bcos::ledger::LedgerError::CollectAsyncCallbackError &&
+            current->errorMessage().find("transactions size not match hashesSize") !=
+                std::string::npos)
+        {
+            return true;
+        }
+        auto const* previous = boost::get_error_info<bcos::Error::PrevError>(*current);
+        current = previous;
+    }
+    return false;
+}
+
 // Reads one transaction by hash, mapping "the ledger has no such row" to an empty result.
 //
-// The ledger's batch read fails closed: an unknown hash raises GetStorageError (wrapped by
-// asyncGetBatchTxsByHashList) instead of returning a shorter list. Letting that escape this
-// coroutine makes the dispatcher report an internal error, whereas geth answers a plain
-// -32000 "not found" for the same input. Keeping the translation next to the co_await (rather
-// than a try/catch at the call site) makes the exception->value mapping impossible to lose to
-// coroutine frame teardown.
+// The ledger's batch read fails closed: an absent SYS_HASH_2_TX row is reported by failing the
+// batch with a count mismatch. Letting that escape this coroutine makes the dispatcher report an
+// internal error, whereas geth answers a plain -32000 "not found" for the same input. Keeping the
+// translation next to the co_await (rather than a try/catch at the call site) makes the
+// exception->value mapping impossible to lose to coroutine frame teardown.
+//
+// Only the verified missing-row shape is translated. A storage or decode failure propagates with
+// its own diagnostic and reaches the client as an internal error: answering "not found" for a
+// broken read would tell kona-host to retry forever against a node that cannot serve the data.
 task::Task<bcos::protocol::Transaction::Ptr> readTransactionOrNothing(
     bcos::ledger::LedgerInterface& ledger, std::shared_ptr<crypto::HashList> hashes)
 {
     try
     {
         auto txs = co_await bcos::ledger::getTransactions(ledger, std::move(hashes));
-        if (txs && !txs->empty())
+        // An empty answer is the ledger saying the row is not there; it is not an error.
+        co_return txs && !txs->empty() ? txs->at(0) : nullptr;
+    }
+    catch (bcos::Error const& e)
+    {
+        if (isMissingTransactionRow(e))
         {
-            co_return txs->at(0);
+            WEB3_LOG(DEBUG) << LOG_DESC("debug_getRawTransaction: transaction not in the ledger")
+                            << LOG_KV("detail", e.errorMessage());
+            co_return nullptr;
         }
+        WEB3_LOG(WARNING) << LOG_DESC("debug_getRawTransaction: ledger read failed")
+                          << LOG_KV("detail", e.what());
+        throw;
     }
-    catch (std::exception const& e)
-    {
-        WEB3_LOG(DEBUG) << LOG_DESC("debug_getRawTransaction: transaction not in the ledger")
-                        << LOG_KV("detail", e.what());
-    }
-    catch (...)
-    {
-        // The ledger's failure surfaces as a boost::wrapexcept that does not always answer to
-        // std::exception once it has crossed a coroutine boundary. Any failure of this read means
-        // the same thing to the caller -- this node has no such transaction -- so swallow it and
-        // let the endpoint answer geth's "not found".
-        WEB3_LOG(DEBUG) << LOG_DESC("debug_getRawTransaction: ledger read failed");
-    }
-    co_return nullptr;
 }
 }  // namespace
 
@@ -503,9 +530,38 @@ task::Task<protocol::Block::Ptr> DebugEndpoint::rawBlockByParameter(const Json::
         }
     }
 
-    // QTY|TAG: the head comes from the canonical plane too (the OP tracker's head), so a height
-    // op-node has already made canonical is accepted even while the backend still stops at the
-    // finalized tip.
+    // QTY|TAG on the OP lane: capture the head ONCE and read the block out of that same view.
+    // Resolving the tag through canonicalLatestNumber() and then calling canonicalBlockByNumber()
+    // would take two independent snapshots, so a head rewind in between would either answer a
+    // height the second view no longer has (a spurious "not found") or a block from a view that
+    // does not belong to the number just resolved. One capture makes the answer coherent.
+    if (auto const& reader = m_nodeService->opCanonicalReader())
+    {
+        auto view = co_await reader->captureHeadView();
+        auto [number, _] =
+            bcos::rpc::getBlockNumberByTag(view.head, blockTag, m_nodeService->safeBlockDepth(),
+                m_nodeService->finalizedBlockDepth(), std::nullopt, std::nullopt, false);
+        if (number < 0 || number > view.head)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+        }
+        try
+        {
+            co_return co_await bcos::rpc::blockInView(view, number, blockFlag);
+        }
+        catch (bcos::Error const& e)
+        {
+            if (e.errorCode() == bcos::ledger::LedgerError::GetStorageError &&
+                boost::get_error_info<bcos::Error::STDError>(e) == nullptr)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+            }
+            throw;
+        }
+    }
+
+    // QTY|TAG elsewhere: no window exists, so the ledger is the whole chain and the tag resolver
+    // runs against its current number, exactly as eth_getBlockByNumber does.
     auto const latest = co_await bcos::rpc::canonicalLatestNumber(*m_nodeService);
     auto [number, _] =
         bcos::rpc::getBlockNumberByTag(latest, blockTag, m_nodeService->safeBlockDepth(),
@@ -535,20 +591,26 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
 {
     // params: blockNumberOrHash (QTY|TAG|DATA 32B)
     // result: the RLP-encoded Ethereum header (DATA); keccak256(result) is the block hash
-    // eth_getBlockBy* reports (canonicalBlockHash), which is what kona-host checks.
+    // eth_getBlockBy* reports, which is what kona-host checks.
     co_await requireEthereumLane(*m_nodeService->ledger(), "debug_getRawHeader");
-    auto const block = co_await rawBlockByParameter(request, "debug_getRawHeader", ledger::HEADER);
+    std::optional<crypto::HashType> requestedHash;
+    auto const block =
+        co_await rawBlockByParameter(request, "debug_getRawHeader", ledger::HEADER, &requestedHash);
     auto const headerPtr = block ? block->blockHeader() : nullptr;
     if (!headerPtr) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
     auto const& header = *headerPtr;
-    // The preimage-oracle contract is byte-exact: the served RLP must hash back to the block's
-    // published hash (canonicalBlockHash). Rather than re-spell the lane discriminator (which
-    // over-refuses pre-Canyon OP headers and under-checks Eth-lane headers), verify the exact
-    // invariant this endpoint needs and consult the owning module: serve iff the canonical hash
-    // equals keccak256 of the encoded header. This closes both directions at once.
+    // The preimage-oracle contract is byte-exact: what this endpoint serves must be the bytes a
+    // client hashes to obtain the block hash it asked for. encodeHeader is the whole gate --
+    // it throws for a header with no Ethereum RLP form -- and the served bytes' own keccak is the
+    // identity, so a hash request is bound to exactly that value.
+    //
+    // Do NOT validate through canonicalBlockHash here: on the eth lane it calls header.hash(),
+    // which throws EmptyBlockHeaderHash for a header the ledger rebuilt from a row that never
+    // stored a dataHash (observed on a real node). getRawBlock already works this way; keeping the
+    // two endpoints on the same identity is what makes them agree byte for byte (review F4).
     bcos::bytes encoded;
     try
     {
@@ -561,10 +623,12 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
         BOOST_THROW_EXCEPTION(
             JsonRpcException(InternalError, std::string("Header RLP encode failed: ") + e.what()));
     }
-    if (protocol::canonicalBlockHash(header) != bcos::crypto::keccak256Hash(bcos::ref(encoded)))
+    if (requestedHash && bcos::crypto::keccak256Hash(bcos::ref(encoded)) != *requestedHash)
+        [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InternalError, "Block " + std::to_string(header.number()) + " has no Ethereum header"));
+        // The height this hash indexed now holds a different block; serving it would answer a
+        // block the caller never asked for.
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
     Json::Value result = toHexStringWithPrefix(encoded);
     buildJsonContent(result, response);
@@ -752,6 +816,19 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
     }
     else if (isOpStackLane(m_nodeService->executorVersion()))
     {
+        // An OP L2 header commits to the EMPTY withdrawals trie: the L2 produces no withdrawals
+        // list (the message-passer storage root lives in the output root, not in this field), so
+        // the body is an empty list and the committed root is the empty-trie root. State that
+        // assumption here, where it is made, instead of letting a violation surface later as a
+        // generic "body does not reproduce withdrawalsRoot": if a future fork ever commits
+        // something else, this endpoint cannot serve that block and must say so plainly.
+        if (*header.withdrawalsRoot() != bcos::ledger::mpt::emptyRootHash()) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                "OP block " + std::to_string(blockNumber) +
+                    " commits to a non-empty withdrawalsRoot; this endpoint serves the empty "
+                    "withdrawals list an OP lane produces"));
+        }
         body.withdrawals.emplace();
     }
     else

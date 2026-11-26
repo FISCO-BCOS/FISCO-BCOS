@@ -119,18 +119,27 @@ struct FakeReader : engine::OpCanonicalReader
     std::map<h256, std::shared_ptr<StateStorage>> flatStates;
     std::function<void()> onCaptureHeadView;
     std::function<void(protocol::BlockNumber)> onWindowRead;
+    /// How many times the endpoint asked for the head, and how many views it captured: a read that
+    /// resolves the tag and fetches the block out of ONE capture shows 0 head() and 1 capture.
+    int headReads = 0;
+    int headViewCaptures = 0;
     /// A hash the window still LISTS (unfinalizedNumberOf answers) but no longer HOLDS
     /// (unfinalizedBlock null): the finalize race between an endpoint's two lookups.
     std::optional<BlockRef> evicted;
 
     task::Task<BlockRef> finalized() override { co_return finalizedRef; }
-    task::Task<BlockRef> head() override { co_return headRef; }
+    task::Task<BlockRef> head() override
+    {
+        ++headReads;
+        co_return headRef;
+    }
     task::Task<protocol::BlockNumber> safeNumber() override
     {
         co_return safe.value_or(finalizedRef.number);
     }
     task::Task<HeadReadView> captureHeadView() override
     {
+        ++headViewCaptures;
         auto view = std::make_unique<ReadView>(*this);
         if (auto state = flatStates.find(headRef.hash); state != flatStates.end())
         {
@@ -1007,6 +1016,38 @@ BOOST_AUTO_TEST_CASE(RawBlockServesUnfinalizedWindowBlocks)
     // backend's finalized tip).
     BOOST_CHECK_EQUAL(
         call("debug_getRawBlock", params({toQuantity(tip + 2)}))["error"]["code"].asInt(), -32602);
+}
+
+// REGRESSION (review F3): the tag must be resolved and the block read out of ONE captured head
+// view. Resolving through canonicalLatestNumber() and then calling canonicalBlockByNumber() reads
+// the head twice and captures a second view, so a head replacement in between answers the wrong
+// block (or a spurious miss). The counters pin the shared snapshot directly, and the head is moved
+// at capture time so the returned block proves which view was used.
+BOOST_AUTO_TEST_CASE(RawBlockLatestComesFromOneCapturedHead)
+{
+    setHead(a);
+    reader->onCaptureHeadView = [&] { setHead(b); };
+    auto const headsBefore = reader->headReads;
+    auto const capturesBefore = reader->headViewCaptures;
+
+    auto const response = call("debug_getRawBlock", params({"latest"}));
+    BOOST_REQUIRE_MESSAGE(!response.isMember("error"), printJson(response));
+
+    // One snapshot served both the tag resolution and the body: no separate head() read.
+    BOOST_CHECK_EQUAL(reader->headReads - headsBefore, 0);
+    BOOST_CHECK_EQUAL(reader->headViewCaptures - capturesBefore, 1);
+
+    auto const raw = fromHexWithPrefix(response["result"].asString());
+    protocol::EthBlock decoded;
+    auto mutableRaw = raw;
+    decoded.rlpDecode(bytesConstRef(mutableRaw.data(), mutableRaw.size()));
+    bytes headerRlp;
+    codec::rlp::encode(headerRlp, decoded.data().header);
+    BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bytesConstRef(headerRlp.data(), headerRlp.size()))
+                          .hexPrefixed(),
+        hashA.hexPrefixed());
+    // The head really did move, so the assertion above is discriminating.
+    BOOST_CHECK_EQUAL(blockByNumber("latest")["hash"].asString(), hashB.hexPrefixed());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

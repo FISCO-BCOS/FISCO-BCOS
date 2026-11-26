@@ -49,6 +49,45 @@ namespace bcos::test
 {
 namespace mpt = bcos::ledger::mpt;
 
+/// A ledger whose transaction read can be made to fail in one of the two ways the production
+/// ledger distinguishes, so the endpoint's translation can be told apart from a passthrough
+/// (review F1):
+///  * Missing -- the shape a pruned/absent SYS_HASH_2_TX row takes: batchGetTransactions reports a
+///    count mismatch, which must become geth's -32000 "not found";
+///  * Failing -- a genuine storage failure, which must keep its diagnostics and surface as an
+///    internal error instead of being flattened into the same "not found".
+class FaultyReadLedger : public FakeLedger
+{
+public:
+    using FakeLedger::FakeLedger;
+
+    enum class Mode : uint8_t
+    {
+        Healthy,
+        Missing,
+        Failing
+    };
+    Mode mode = Mode::Healthy;
+
+    task::Task<BatchTransactionsResult> getBatchTxsByHashList(
+        crypto::HashListPtr hashes, bool withProof) override
+    {
+        if (mode == Mode::Missing)
+        {
+            // Verbatim the message Ledger.cpp raises for an absent row.
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::CollectAsyncCallbackError,
+                "Batch get transaction failed, transactions size not match hashesSize, txsSize: 0, "
+                "hashesSize: 1"));
+        }
+        if (mode == Mode::Failing)
+        {
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError,
+                "simulated storage outage reading SYS_HASH_2_TX"));
+        }
+        co_return co_await FakeLedger::getBatchTxsByHashList(std::move(hashes), withProof);
+    }
+};
+
 class DebugChallengerFixture : public RPCFixture
 {
 public:
@@ -65,6 +104,11 @@ public:
     {
         m_ledger->setSystemConfig(
             magic_enum::enum_name(ledger::SystemConfig::executor_version), std::to_string(version));
+        // Both, because they answer different questions: the ledger row is what requireEthereumLane
+        // reads, and NodeService::executorVersion is what isOpStackLane reads for the body shape.
+        // Setting only the ledger row left every test on the eth branch, so the OP withdrawals
+        // branch was never exercised.
+        nodeService->setExecutorVersion(version);
     }
 
     /// Turn the latest fake block into an OP-shaped header (NON_ETH + withdrawalsRoot +
@@ -204,6 +248,18 @@ public:
         return call(method, std::move(params));
     }
 
+    /// Rebuild the RPC surface over @p ledger. The fixture wires one ledger into NodeService at
+    /// construction, so an endpoint under test can only be pointed at a fault-injecting ledger by
+    /// building a fresh service and RPC around it.
+    void useLedger(std::shared_ptr<FakeLedger> ledger)
+    {
+        auto service = std::make_shared<rpc::NodeService>(
+            ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory, nullptr);
+        rpc = factory->buildLocalRpc(groupInfo, service);
+        web3JsonRpc = rpc->web3JsonRpc();
+        BOOST_REQUIRE(web3JsonRpc != nullptr);
+    }
+
     Json::Value dbGet(bcos::bytes const& key)
     {
         return call1("debug_dbGet", toHexStringWithPrefix(key));
@@ -228,7 +284,6 @@ public:
 };
 
 BOOST_FIXTURE_TEST_SUITE(DebugChallengerDataPlaneTest, DebugChallengerFixture)
-
 BOOST_AUTO_TEST_CASE(LanePredicate)
 {
     BOOST_TEST(!isOpStackLane(0));
@@ -453,29 +508,39 @@ BOOST_AUTO_TEST_CASE(RawHeaderServesEthGenesisHeader)
     BOOST_CHECK(resultBytes(call1("debug_getRawHeader", "earliest")) == rlp);
 }
 
-// The guard's negative control: a header whose stored hash is NOT keccak256 of its RLP must be
-// refused. Mutating a field AFTER calculateHash reproduces exactly that — an Eth-lane header
-// the bridge can still encode, but whose bytes no longer hash back to the published hash — so
-// this is the branch that turns red if the `canonicalBlockHash != keccak256(encoded)` check is
-// ever removed.
-BOOST_AUTO_TEST_CASE(RawHeaderRefusesHeaderWhoseHashIsNotItsRlpHash)
+// A stored hash that is NOT keccak256 of the served bytes must not make the endpoint refuse the
+// header: the endpoint's identity is the bytes it emits (review F4), not a hash field the ledger
+// may never have written. What must still be refused is a HASH REQUEST whose requested hash is not
+// the keccak of those bytes -- that binding is what survives a reorg, and it is the negative
+// control for the guard as it now stands.
+BOOST_AUTO_TEST_CASE(RawHeaderServesHeaderWhoseStoredHashIsNotItsRlpHash)
 {
     setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
     auto const header = makeEthLaneHeader();
     BOOST_REQUIRE(!bcos::protocol::isOpEthereumBlock(*header));
-    // Change a field AND stamp a stored hash that is not keccak256 of the resulting RLP — the
-    // negative half of the guard's invariant. (The tars setters clear dataHash, so the wrong
-    // hash has to be re-stamped explicitly; an empty one would just make hash() throw.)
+    // Change a field AND stamp a stored identity that is not keccak256 of the resulting RLP: the
+    // shape the ledger produces when a row's hash field disagrees with its own bytes.
     header->setStateRoot(h256(0xdeadU));
-    header->setRLPHash(h256(0xc0ffeeU));
+    auto const wrongStoredHash = h256(0xc0ffeeU);
+    header->setRLPHash(wrongStoredHash);
     m_ledger->ledgerData().front()->setBlockHeader(header);
+    m_ledger->indexBlockHash(wrongStoredHash, 0);
 
-    auto const resp = call1("debug_getRawHeader", "0x0");
-    BOOST_REQUIRE_MESSAGE(resp.isMember("error"), printJson(resp));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InternalError);
-    BOOST_CHECK(
-        resp["error"]["message"].asString().find("has no Ethereum header") != std::string::npos);
-    BOOST_TEST(!resp.isMember("result"));
+    // Serving by number works: encodeHeader is the only gate and the bytes are self-consistent.
+    auto const served = resultBytes(call1("debug_getRawHeader", "0x0"));
+    auto const servedHash = bcos::crypto::keccak256Hash(bcos::ref(served));
+    BOOST_CHECK(servedHash != wrongStoredHash);
+    m_ledger->indexBlockHash(servedHash, 0);
+
+    // The served bytes' own hash resolves back to the same header.
+    BOOST_CHECK(resultBytes(call1("debug_getRawHeader", servedHash.hexPrefixed())) == served);
+
+    // Asking for the stored hash would have to answer with bytes that hash to it. They do not, so
+    // the request is a miss rather than a wrong answer.
+    auto const byStoredHash = call1("debug_getRawHeader", wrongStoredHash.hexPrefixed());
+    BOOST_REQUIRE_MESSAGE(byStoredHash.isMember("error"), printJson(byStoredHash));
+    BOOST_CHECK_EQUAL(byStoredHash["error"]["code"].asInt(), InvalidParams);
+    BOOST_TEST(!byStoredHash.isMember("result"));
 }
 
 // The guard's positive twin: a pre-Canyon OP header (Bedrock-Delta — NON_ETH + baseFee, no
@@ -1032,6 +1097,70 @@ BOOST_AUTO_TEST_CASE(RawBlockServesEmptyWithdrawalsWhenSidecarRowIsAbsent)
     BOOST_CHECK_MESSAGE(refused["error"]["message"].asString().find("withdrawals row is missing") !=
                             std::string::npos,
         "expected the missing-sidecar refusal, got: " << printJson(refused));
+}
+
+// The OP lane serves an empty withdrawals list because an OP L2 header commits to the empty-trie
+// root (the message-passer root lives in the output root, not this field). If a header ever
+// commits to anything else, the endpoint must say exactly that instead of failing later with a
+// generic "body does not reproduce withdrawalsRoot" -- or, worse, emitting a body whose header
+// commitment it cannot satisfy (review F2).
+BOOST_AUTO_TEST_CASE(RawBlockRefusesOpBlockWithNonEmptyWithdrawalsRoot)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+
+    auto const number = m_ledger->blockNumber() + 1;
+    m_ledger->addNewBlock(nullptr, number, 0);
+    auto header = m_ledger->ledgerData().back()->blockHeader();
+    header->setTimestamp(1'700'000'000);
+    header->setBaseFee(7);
+    header->setTxsRoot(mpt::emptyRootHash());
+    // Still an OP header (isOpEthereumBlock needs withdrawalsRoot + baseFee), but committing to a
+    // withdrawals root the empty list cannot reproduce.
+    header->setWithdrawalsRoot(h256(0x1234U));
+    BOOST_REQUIRE(bcos::protocol::isOpEthereumBlock(*header));
+    header->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*header));
+
+    auto const refused = call1("debug_getRawBlock", toQuantity(number));
+    BOOST_REQUIRE_MESSAGE(refused.isMember("error"), printJson(refused));
+    BOOST_CHECK_EQUAL(refused["error"]["code"].asInt(), InternalError);
+    BOOST_CHECK_MESSAGE(refused["error"]["message"].asString().find("non-empty withdrawalsRoot") !=
+                            std::string::npos,
+        "expected the OP withdrawals assumption to be named, got: " << printJson(refused));
+}
+
+// F1, the positive half: the ledger reports an absent SYS_HASH_2_TX row by failing the batch with
+// a count mismatch. That exact shape is geth's -32000 "not found" and nothing else.
+BOOST_AUTO_TEST_CASE(RawTransactionMissingRowIsNotFound)
+{
+    auto faulty = std::make_shared<FaultyReadLedger>(m_blockFactory, 20, 10, 10);
+    faulty->setSystemConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
+        std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+    faulty->mode = FaultyReadLedger::Mode::Missing;
+    useLedger(faulty);
+
+    auto const resp = call1("debug_getRawTransaction", std::string("0x") + std::string(64, '7'));
+    BOOST_REQUIRE_MESSAGE(resp.isMember("error"), printJson(resp));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), Web3DefaultError);
+    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), "not found");
+}
+
+// F1, the half that was previously broken: a REAL read failure (storage error, not a missing row)
+// must keep its diagnostics and surface as an internal error. Answering "not found" here would
+// tell kona-host to retry forever against a node that cannot serve the data at all.
+BOOST_AUTO_TEST_CASE(RawTransactionReadFailureIsNotFlattenedIntoNotFound)
+{
+    auto faulty = std::make_shared<FaultyReadLedger>(m_blockFactory, 20, 10, 10);
+    faulty->setSystemConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
+        std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+    faulty->mode = FaultyReadLedger::Mode::Failing;
+    useLedger(faulty);
+
+    auto const resp = call1("debug_getRawTransaction", std::string("0x") + std::string(64, '7'));
+    BOOST_REQUIRE_MESSAGE(resp.isMember("error"), printJson(resp));
+    // Not -32000: this is an operational failure, so it must not look like a miss.
+    BOOST_CHECK(resp["error"]["code"].asInt() != Web3DefaultError);
+    BOOST_CHECK_MESSAGE(resp["error"]["message"].asString().find("not found") == std::string::npos,
+        "a failed read must not be reported as a miss, got: " << printJson(resp));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
