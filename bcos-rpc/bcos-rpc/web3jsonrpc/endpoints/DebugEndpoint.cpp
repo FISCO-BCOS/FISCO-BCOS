@@ -589,8 +589,11 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
     auto const ledger = m_nodeService->ledger();
     auto const blockNumber = co_await resolveRawBlockParameter(request, "debug_getRawBlock");
 
-    // TRANSACTIONS is what the block body needs; RECEIPTS are not part of it.
-    auto const block = co_await ledger::getBlockData(*ledger, blockNumber, ledger::TRANSACTIONS);
+    // HEADER is required, not optional: getBlockData only populates block->blockHeader() when
+    // the HEADER flag is set (LedgerMethods.h), so asking for TRANSACTIONS alone yields a block
+    // with a null header and the lookup below would answer "Block not found" for every block.
+    auto const block = co_await ledger::getBlockData(
+        *ledger, blockNumber, ledger::HEADER | ledger::TRANSACTIONS);
     if (!block) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
@@ -601,6 +604,22 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
     auto const& header = *headerPtr;
+
+    // A hash request must be answered with THAT block, not with whatever now sits at the height
+    // the hash was indexed against. resolveRawBlockParameter reduces a hash to a number through
+    // the SYS_HASH_2_NUMBER row, and a canonical replacement (reorg) can leave that old row in
+    // place pointing at a height that has since been filled by a different block. Re-check the
+    // identity against the requested hash before serving, so a stale index answers "not found"
+    // instead of a block nobody asked for.
+    if (isBlockHashString(toView(request[0U])))
+    {
+        auto const requestedHash =
+            bcos::crypto::HashType(toView(request[0U]), bcos::crypto::HashType::FromHex);
+        if (protocol::canonicalBlockHash(header) != requestedHash) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+        }
+    }
 
     protocol::EthBlockData body;
     try
@@ -693,31 +712,45 @@ task::Task<void> DebugEndpoint::getRawBlock(const Json::Value& request, Json::Va
             auto const entry = co_await storage2::readOne(*stateStorage,
                 executor_v1::StateKeyView{
                     ledger::SYS_NUMBER_2_WITHDRAWALS, std::to_string(blockNumber)});
-            if (entry.has_value())
+            if (!entry.has_value()) [[unlikely]]
             {
-                // The row holds the RLP LIST of per-item withdrawal encodings; decode each item
-                // so the re-encode below goes through the same codec as the body.
-                auto raw = bcos::bytes(entry->get().begin(), entry->get().end());
-                auto items = bcos::ref(raw);
-                auto const listHeader = bcos::codec::rlp::decodeHeader(items);
-                if (!listHeader.isList || listHeader.payloadLength != items.size())
-                {
-                    BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-                        "Block " + std::to_string(blockNumber) +
-                            " carries a malformed withdrawals sidecar row"));
-                }
-                while (!items.empty())
-                {
-                    auto const itemStart = items;
-                    auto const itemHeader = bcos::codec::rlp::decodeHeader(items);
-                    auto const itemSize =
-                        (itemStart.size() - items.size()) + itemHeader.payloadLength;
-                    protocol::EthWithdrawal withdrawal;
-                    withdrawal.rlpDecode(bcos::bytesConstRef(itemStart.data(), itemSize));
-                    body.withdrawals->push_back(withdrawal.data());
-                    items = items.getCroppedData(itemHeader.payloadLength);
-                }
+                // The header commits to a withdrawalsRoot but the sidecar row is gone (pruned, or
+                // committed by a build that did not write it). Emitting an empty list here would
+                // hand out a body that contradicts its own header, which is exactly the class of
+                // silent-wrong-answer this endpoint must never produce.
+                BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                    "Block " + std::to_string(blockNumber) +
+                        " commits to a withdrawalsRoot but its withdrawals row is missing"));
             }
+            // The row holds the RLP LIST of per-item withdrawal encodings; decode each item
+            // so the re-encode below goes through the same codec as the body.
+            auto raw = bcos::bytes(entry->get().begin(), entry->get().end());
+            auto items = bcos::ref(raw);
+            auto const listHeader = bcos::codec::rlp::decodeHeader(items);
+            if (!listHeader.isList || listHeader.payloadLength != items.size())
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                    "Block " + std::to_string(blockNumber) +
+                        " carries a malformed withdrawals sidecar row"));
+            }
+            while (!items.empty())
+            {
+                auto const itemStart = items;
+                auto const itemHeader = bcos::codec::rlp::decodeHeader(items);
+                auto const itemSize = (itemStart.size() - items.size()) + itemHeader.payloadLength;
+                protocol::EthWithdrawal withdrawal;
+                withdrawal.rlpDecode(bcos::bytesConstRef(itemStart.data(), itemSize));
+                body.withdrawals->push_back(withdrawal.data());
+                items = items.getCroppedData(itemHeader.payloadLength);
+            }
+        }
+        else
+        {
+            // No flat state storage means the sidecar row cannot even be looked up. The header
+            // still commits to a withdrawalsRoot, so guessing an empty list is not an option.
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                "Block " + std::to_string(blockNumber) +
+                    " commits to a withdrawalsRoot but this node cannot read the row"));
         }
     }
 

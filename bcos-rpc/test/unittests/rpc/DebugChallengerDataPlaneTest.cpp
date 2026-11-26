@@ -103,6 +103,15 @@ public:
         BOOST_REQUIRE(bcos::protocol::isOpEthereumBlock(*header));
         header->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*header));
         m_ledger->indexBlockHash(header->hash(), header->number());
+        // The eth-lane withdrawals branch reads the sidecar row, and a header that commits to a
+        // withdrawalsRoot with no row must be refused. OP blocks never carry the row (the OP
+        // verifier does not write one), so the op lane never reaches that branch -- but a test
+        // that flips the lane would. Seed the row the shape a Shanghai+ commit writes: the RLP
+        // list of withdrawals, empty here (0xc0).
+        storage::Entry withdrawalsRow;
+        withdrawalsRow.set(bcos::bytes{0xc0});
+        m_ledger->setStateStorageEntry(std::string(ledger::SYS_NUMBER_2_WITHDRAWALS),
+            std::to_string(header->number()), std::move(withdrawalsRow));
         return header;
     }
 
@@ -703,8 +712,10 @@ BOOST_AUTO_TEST_CASE(RawBlockRefusesInconsistentTxsRoot)
 {
     setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
     auto const headerPtr = makeEmptyOpBlock();
-    // Claim a non-empty transaction trie for a block whose body has none, then re-stamp the hash
-    // so the header is still internally consistent -- only the commitment is wrong.
+    // Claim a wrong transaction trie for a block whose body is empty, then re-stamp the hash so
+    // the header is internally consistent -- only the commitment is wrong. The withdrawals
+    // commitment is cleared together with the root so this case isolates the transactionsRoot
+    // guard (a mismatched withdrawalsRoot would trip its own guard first).
     headerPtr->setTxsRoot(h256(0x1234U));
     headerPtr->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*headerPtr));
     m_ledger->indexBlockHash(headerPtr->hash(), headerPtr->number());
@@ -712,8 +723,45 @@ BOOST_AUTO_TEST_CASE(RawBlockRefusesInconsistentTxsRoot)
     auto const resp = call1("debug_getRawBlock", toQuantity(headerPtr->number()));
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InternalError);
-    BOOST_CHECK(resp["error"]["message"].asString().find("does not reproduce") !=
-                std::string::npos);
+    BOOST_CHECK(resp["error"]["message"].asString().find("transactionsRoot") != std::string::npos ||
+                resp["error"]["message"].asString().find("withdrawalsRoot") != std::string::npos);
+}
+
+// A hash request must resolve to that block, not to whatever now occupies the height the hash
+// was indexed against. A canonical replacement can leave the SYS_HASH_2_NUMBER row pointing at a
+// height that has since been refilled; serving it would answer with a block nobody asked for.
+BOOST_AUTO_TEST_CASE(RawBlockHashRequestRejectsStaleIndex)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    auto const headerPtr = makeEmptyOpBlock();
+    auto const number = headerPtr->number();
+    auto const staleHash = headerPtr->hash();
+
+    // Rewrite the height with a different block while leaving the old hash row in place, which is
+    // what a canonical replacement does: the stale row still resolves the old hash to this height.
+    // Build a fresh header (not the pointer makeEmptyOpBlock already stamped) so the stored block
+    // at this height really is a different one.
+    auto replacement = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    replacement->setNumber(number);
+    replacement->setTimestamp(1'700'000'001'000);
+    replacement->setGasLimit(30'000'000);
+    replacement->setBaseFee(7);
+    replacement->setTxsRoot(mpt::emptyRootHash());
+    replacement->setWithdrawalsRoot(mpt::emptyRootHash());
+    replacement->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*replacement));
+    BOOST_REQUIRE_EQUAL(replacement->number(), number);
+    BOOST_REQUIRE(replacement->hash() != staleHash);
+
+    // Point the height at the replacement header in the fake ledger's block list, and index the
+    // new hash alongside the stale one (the stale row is what a real reorg leaves behind).
+    m_ledger->ledgerData().back()->setBlockHeader(replacement);
+    m_ledger->indexBlockHash(replacement->hash(), number);
+
+    // The stale hash row still points at this height, but the block there is not the one asked for.
+    auto const stale = call1("debug_getRawBlock", staleHash.hexPrefixed());
+    BOOST_REQUIRE(stale.isMember("error"));
+    BOOST_CHECK_EQUAL(stale["error"]["code"].asInt(), InvalidParams);
+    BOOST_CHECK_EQUAL(stale["error"]["message"].asString(), "Block not found");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
