@@ -1705,8 +1705,7 @@ BOOST_AUTO_TEST_CASE(storageFaultInSloadCallbackIsRecordedNotFatal)
     auto const* fnTable = bcos::executor::getHostInterface();
     BOOST_REQUIRE(fnTable && fnTable->get_storage);
 
-    evmc_address addr{};
-    std::copy(sender.begin(), sender.end() - 24, addr.bytes);  // 20-byte contract address
+    auto const addr = unhexAddress(sender);
     evmc_bytes32 key{};  // slot 0 as the 32 raw bytes store() reads
     // Arm the exact (table, key) the SLOAD reads: MockTransactionalStorage answers with
     // an Error, which the storage wrapper converts into a thrown bcos::Error — the real
