@@ -33,6 +33,8 @@
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockBody.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
@@ -762,6 +764,187 @@ BOOST_AUTO_TEST_CASE(RawBlockHashRequestRejectsStaleIndex)
     BOOST_REQUIRE(stale.isMember("error"));
     BOOST_CHECK_EQUAL(stale["error"]["code"].asInt(), InvalidParams);
     BOOST_CHECK_EQUAL(stale["error"]["message"].asString(), "Block not found");
+}
+
+// Byte-exact vectors: (signing preimage, 65-byte r||s||yParity signature, canonical tx hash).
+// Copied from the bcos-tars-protocol known-answer table (New1_Web3TxHashCanonicalTest), whose
+// hashes came from a geth cross-checked oracle. Signatures are real secp256k1 outputs from the
+// well-known 0xdead…beef key, so these exercise the same splice the endpoint performs rather
+// than a hand-assembled byte string.
+struct SignedTxVector
+{
+    char const* name;
+    char const* preimageHex;
+    char const* signatureHex;
+    char const* canonicalHashHex;
+};
+
+// clang-format off
+constexpr std::array<SignedTxVector, 5> SIGNED_TX_VECTORS{{
+    {"legacy_pre_eip155",
+     "eb07847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c6800084deadbeef",
+     "a31b27f37d25064dede61b1bf9649134318f38f31a0b75376b77d0fb3e6f70d90d505feb95719789060cce3592145b9e"
+     "309de267cc878ac85eae5a1fa5462beb00",
+     "b2c20c0c72a91024dedbcf57a37e4eb0bbc8e30776902f577f904638e43a71b2"},
+    {"legacy_eip155_chain1",
+     "ee07847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c6800084deadbeef018080",
+     "94f5e0158ba372a7b451996ac591fec2055d7ca7d0f72aa6b473d7b84a69d58262a22960ade9f059d389489fff300213"
+     "df3ef0e09e7b4ab89508b934530c566101",
+     "c063947c632cfcf52d7a11c9e8887430bcfb673b2bfc33ddc6d961ba77ffa2f4"},
+    {"legacy_eip155_chain1337",
+     "f007847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c6800084deadbeef82053980"
+     "80",
+     "beb0472e1fcad9f02fafae6a631e6b0c4be8a0c1f74ed54d9d2654ae02e6149a4f50a93d6ea03a0c1b13e26245882421"
+     "8a80d586ba0b10df8113c2918ffa1dc801",
+     "15f417e7e9a83754c74742402e46695d7fb3e953caf214d6cdf31a9541a3c2c1"},
+    {"eip1559_chain5",
+     "02f20507843b9aca00847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c6800084de"
+     "adbeefc0",
+     "3dc2e61019aa7824a7e290f2b097d10a405e989fe4d3348268df2afcf647b4086e02084295955b070394ea8e604d86b4"
+     "942e4a1638358dca984e9f6adff46d4a01",
+     "220e457c18458cbed1fe2345901fdce4374c2c088416e3c8decf3859f2183ef2"},
+    {"eip2930_chain5",
+     "01ed0507847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c6800084deadbeefc0",
+     "07f6e9652e1023b331f7f8a129ceae1bd9340d4b308b003de8adf70f77f254d93d4061a37f52a20a6b10b77ea63aacab"
+     "3a2d8266d4db8553b2f0b5f727b7abbb00",
+     "e63657a2bdb36ae8b668014c3f8d95c4bd1c0ddea57fc0c1a3e5705fb86a0fd5"},
+}};
+// clang-format on
+
+// A deposit transaction (0x7e) has no signature: its signing preimage IS the full envelope
+// (Web3TxHandler's DepositTxHandler::encodeForSign returns encode()). Built the way that handler
+// builds it so the bytes are the real wire form.
+bcos::bytes buildDepositEnvelope()
+{
+    auto const sourceHash = bcos::h256(0xaaU);
+    auto const from =
+        bcos::Address(std::string_view("0x00000000000000000000000000000000000000f1"), bcos::Address::FromHex);
+    auto const to =
+        bcos::Address(std::string_view("0x4200000000000000000000000000000000000015"), bcos::Address::FromHex);
+    bcos::u256 const mint{0};
+    bcos::u256 const value{1'000'000};
+    uint64_t const gas = 200'000;
+    uint32_t const isSystemTransaction = 0;
+    bcos::bytes const data{};
+    bcos::bytes out;
+    out.push_back(0x7e);
+    bcos::codec::rlp::encode(
+        out, sourceHash, from, to, mint, value, gas, isSystemTransaction, data);
+    return out;
+}
+
+// Make a tars transaction the way the RPC ingress stores one: type=Web3, extraTransactionBytes
+// holds the signing preimage, signature holds r||s||yParity, and extraTransactionHash carries the
+// canonical hash (keccak of the full envelope) so hash lookups resolve to it.
+bcos::protocol::Transaction::Ptr makeStoredTransaction(
+    bcos::bytesConstRef preimage, bcos::bytesConstRef signature, bcos::bytesConstRef canonicalHash)
+{
+    bcostars::Transaction inner{};
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.extraTransactionBytes.assign(preimage.begin(), preimage.end());
+    inner.signature.assign(signature.begin(), signature.end());
+    inner.extraTransactionHash.assign(canonicalHash.begin(), canonicalHash.end());
+    return std::make_shared<bcostars::protocol::TransactionImpl>(
+        [stored = std::move(inner)]() mutable { return std::addressof(stored); });
+}
+
+// BYTE-EXACT integration: a block carrying the five known-answer signed transactions plus a
+// deposit must come back with every envelope byte-identical to the reference wire form, each
+// hashing to its frozen canonical transaction hash, and the whole list reproducing the header's
+// transactionsRoot.
+//
+// This is the test the review asked for (DebugEndpoint.cpp:74): it exercises the actual splice
+// the endpoint performs, for every supported type, instead of only the rejection paths.
+BOOST_AUTO_TEST_CASE(RawBlockServesByteExactSignedTransactions)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+
+    // Expected envelopes, in the order they will be placed in the block.
+    std::vector<bcos::bytes> expected;
+    std::vector<bcos::protocol::Transaction::Ptr> stored;
+    for (auto const& v : SIGNED_TX_VECTORS)
+    {
+        auto const preimage = fromHex(v.preimageHex);
+        auto const signature = fromHex(v.signatureHex);
+        // The reference envelope for this vector is what the shared helper produces from the
+        // stored pair; the frozen hash below is what independently pins it.
+        auto envelope = bcostars::protocol::reassembleWeb3RawTransaction(
+            bcos::ref(preimage), bcos::ref(signature));
+        BOOST_CHECK_MESSAGE(bcos::crypto::keccak256Hash(bcos::ref(envelope)).hexPrefixed() ==
+                                std::string("0x") + v.canonicalHashHex,
+            "vector " << v.name << " does not hash to its frozen canonical tx hash");
+        expected.push_back(std::move(envelope));
+        auto const canonicalHash = fromHex(v.canonicalHashHex);
+        auto tx = makeStoredTransaction(
+            bcos::ref(preimage), bcos::ref(signature), bcos::ref(canonicalHash));
+        // Register the tx by hash so the per-transaction endpoint can find it, exactly as a commit
+        // seeds the SYS_HASH_2_TX row.
+        m_ledger->storeTxAndReceipt(tx, nullptr);
+        stored.push_back(std::move(tx));
+    }
+    // Deposit: no signature, the preimage is already the whole envelope.
+    {
+        auto deposit = buildDepositEnvelope();
+        auto const depositHash = bcos::crypto::keccak256Hash(bcos::ref(deposit));
+        auto tx = makeStoredTransaction(
+            bcos::ref(deposit), bcos::bytesConstRef{},
+            bcos::bytesConstRef(depositHash.data(), depositHash.size()));
+        m_ledger->storeTxAndReceipt(tx, nullptr);
+        expected.push_back(std::move(deposit));
+        stored.push_back(std::move(tx));
+    }
+
+    // Assemble the block around them.
+    auto const number = m_ledger->blockNumber() + 1;
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(number);
+    header->setTimestamp(1'700'000'000'000);
+    header->setBaseFee(7);
+    std::vector<bcos::bytesConstRef> refs;
+    refs.reserve(expected.size());
+    for (auto const& tx : expected)
+    {
+        refs.emplace_back(tx.data(), tx.size());
+    }
+    header->setTxsRoot(bcos::ledger::mpt::calculateTransactionsRoot(refs));
+    header->setWithdrawalsRoot(mpt::emptyRootHash());
+    BOOST_REQUIRE(bcos::protocol::isOpEthereumBlock(*header));
+    header->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*header));
+    block->setBlockHeader(header);
+    block->setBlockType(protocol::CompleteBlock);
+    for (auto& tx : stored)
+    {
+        block->appendTransaction(tx);
+    }
+    m_ledger->appendBuiltBlock(block);
+    m_ledger->indexBlockHash(header->hash(), number);
+    {
+        storage::Entry withdrawalsRow;
+        withdrawalsRow.set(bcos::bytes{0xc0});
+        m_ledger->setStateStorageEntry(
+            std::string(ledger::SYS_NUMBER_2_WITHDRAWALS), std::to_string(number),
+            std::move(withdrawalsRow));
+    }
+
+    auto const rawBlock = resultBytes(call1("debug_getRawBlock", toQuantity(number)));
+    bcos::protocol::EthBlock decoded;
+    auto mutableBlock = rawBlock;
+    decoded.rlpDecode(bcos::bytesConstRef(mutableBlock.data(), mutableBlock.size()));
+
+    BOOST_REQUIRE_EQUAL(decoded.data().transactions.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); ++i)
+    {
+        BOOST_CHECK_MESSAGE(decoded.data().transactions[i] == expected[i],
+            "block transaction " << i << " is not byte-identical to the wire form");
+    }
+    BOOST_CHECK(bcos::ledger::mpt::calculateTransactionsRoot(refs) == header->txsRoot());
+
+    // The per-transaction endpoint must serve the same bytes for a signed one.
+    auto const oneEnvelope = call1("debug_getRawTransaction",
+        bcos::crypto::keccak256Hash(bcos::ref(expected[0])).hexPrefixed());
+    BOOST_REQUIRE(!oneEnvelope.isMember("error"));
+    BOOST_CHECK_EQUAL(oneEnvelope["result"].asString(), toHexStringWithPrefix(expected[0]));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
