@@ -26,50 +26,160 @@
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <bcos-rlp-protocol/EthBlockBody.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
+#include <bcos-rpc/groupmgr/AirGroupManager.h>
+#include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EngineEndpoint.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <array>
+#include <functional>
 #include <future>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace bcos::test
 {
 namespace
 {
+protocol::Block::Ptr copyBlock(protocol::BlockFactory& factory, protocol::Block const& block)
+{
+    bytes encoded;
+    block.encode(encoded);
+    return factory.createBlock(encoded, false, false);
+}
+
 /// A window of hand-built blocks: `headChain` maps the unfinalized heights of the head chain to
 /// their hash, `window` holds every unfinalized block (both branches) by hash, `headTxs` the
 /// transactions the head chain carries. Flat state can be supplied by hash when needed.
 struct FakeReader : engine::OpCanonicalReader
 {
-    explicit FakeReader(protocol::BlockFactory& factory) : blockFactory(factory) {}
+    FakeReader(protocol::BlockFactory& factory, FakeLedger& ledger)
+      : blockFactory(factory), committedLedger(ledger)
+    {}
+
+    struct ReadView : WindowReadView
+    {
+        explicit ReadView(FakeReader& reader) : reader(reader) {}
+
+        task::Task<protocol::Block::Ptr> block(protocol::BlockNumber number, int32_t) override
+        {
+            reader.notifyWindowRead(number);
+            co_return copyBlock(reader.blockFactory, *blocks.at(number));
+        }
+        task::Task<std::optional<protocol::BlockNumber>> blockNumber(h256 hash) override
+        {
+            for (auto const& [number, block] : blocks)
+            {
+                if (protocol::canonicalBlockHash(*block->blockHeader()) == hash)
+                {
+                    co_return number;
+                }
+            }
+            co_return std::nullopt;
+        }
+        std::shared_ptr<MPTNodeReader> takeMptNodeReader(
+            std::shared_ptr<StateStorage>* state) override
+        {
+            if (state)
+            {
+                *state = takeStateStorage();
+            }
+            return nullptr;
+        }
+        std::shared_ptr<StateStorage> takeStateStorage() override { return std::move(flatState); }
+
+        FakeReader& reader;
+        std::map<protocol::BlockNumber, protocol::Block::Ptr> blocks;
+        std::shared_ptr<StateStorage> flatState;
+    };
 
     protocol::BlockFactory& blockFactory;
+    FakeLedger& committedLedger;
     BlockRef finalizedRef;
     BlockRef headRef;
     std::optional<protocol::BlockNumber> safe;
     std::map<protocol::BlockNumber, h256> headChain;
     std::map<h256, protocol::Block::Ptr> window;
     std::map<h256, ChainTransaction> headTxs;
+    std::map<h256, ChainTransaction> finalizedTxs;
     std::map<h256, std::shared_ptr<StateStorage>> flatStates;
+    std::function<void()> onCaptureHeadView;
+    std::function<void(protocol::BlockNumber)> onWindowRead;
+    /// How many times the endpoint asked for the head, and how many views it captured: a read that
+    /// resolves the tag and fetches the block out of ONE capture shows 0 head() and 1 capture.
+    int headReads = 0;
+    int headViewCaptures = 0;
     /// A hash the window still LISTS (unfinalizedNumberOf answers) but no longer HOLDS
     /// (unfinalizedBlock null): the finalize race between an endpoint's two lookups.
     std::optional<BlockRef> evicted;
 
     task::Task<BlockRef> finalized() override { co_return finalizedRef; }
-    task::Task<BlockRef> head() override { co_return headRef; }
+    task::Task<BlockRef> head() override
+    {
+        ++headReads;
+        co_return headRef;
+    }
     task::Task<protocol::BlockNumber> safeNumber() override
     {
         co_return safe.value_or(finalizedRef.number);
+    }
+    task::Task<HeadReadView> captureHeadView() override
+    {
+        ++headViewCaptures;
+        auto view = std::make_unique<ReadView>(*this);
+        if (auto state = flatStates.find(headRef.hash); state != flatStates.end())
+        {
+            view->flatState = state->second;
+        }
+        for (auto const& block : committedLedger.ledgerData())
+        {
+            if (block && block->blockHeader()->number() <= finalizedRef.number)
+            {
+                view->blocks.emplace(block->blockHeader()->number(), block);
+            }
+        }
+        for (auto const& [number, hash] : headChain)
+        {
+            if (number > finalizedRef.number)
+            {
+                view->blocks.emplace(number, window.at(hash));
+            }
+        }
+        auto snapshot = HeadReadView{.head = headRef.number,
+            .safe = safe.value_or(finalizedRef.number),
+            .finalized = finalizedRef.number,
+            .window = std::move(view)};
+        if (auto callback = std::exchange(onCaptureHeadView, {}))
+        {
+            callback();
+        }
+        co_return snapshot;
+    }
+    task::Task<std::optional<WindowBlockView>> captureWindowView(h256 const& hash) override
+    {
+        auto it = window.find(hash);
+        if (it == window.end())
+        {
+            co_return std::nullopt;
+        }
+        auto view = std::make_unique<ReadView>(*this);
+        auto const number = it->second->blockHeader()->number();
+        view->blocks.emplace(number, it->second);
+        co_return WindowBlockView{.number = number, .window = std::move(view)};
     }
     task::Task<std::optional<h256>> canonicalHashAt(protocol::BlockNumber number) override
     {
@@ -93,21 +203,27 @@ struct FakeReader : engine::OpCanonicalReader
         {
             co_return nullptr;
         }
-        bytes encoded;
-        it->second->encode(encoded);
-        co_return blockFactory.createBlock(encoded, false, false);
+        auto block = it->second;
+        notifyWindowRead(block->blockHeader()->number());
+        co_return copyBlock(blockFactory, *block);
     }
-    task::Task<std::optional<ChainTransaction>> transactionOnHeadChain(h256 const& txHash) override
+    task::Task<std::optional<ChainTransaction>> transactionOnHeadChain(
+        h256 const& txHash, int32_t blockFlag = 0) override
     {
         auto it = headTxs.find(txHash);
         if (it == headTxs.end())
         {
-            co_return std::nullopt;
+            it = finalizedTxs.find(txHash);
+            if (it == finalizedTxs.end())
+            {
+                co_return std::nullopt;
+            }
         }
         auto result = it->second;
         bytes encoded;
         result.receipt->encode(encoded);
         result.receipt = blockFactory.receiptFactory()->createReceipt(encoded);
+        result.block = blockFlag != 0 ? copyBlock(blockFactory, *result.block) : nullptr;
         co_return result;
     }
     task::Task<std::shared_ptr<MPTNodeReader>> mptNodeReaderAt(h256 const&) override
@@ -118,6 +234,20 @@ struct FakeReader : engine::OpCanonicalReader
     {
         auto it = flatStates.find(hash);
         co_return it == flatStates.end() ? nullptr : it->second;
+    }
+
+    task::Task<std::shared_ptr<StateStorage>> headStateStorage() override
+    {
+        auto const hash = headRef.hash;
+        co_return co_await stateStorageAt(hash);
+    }
+
+    void notifyWindowRead(protocol::BlockNumber number)
+    {
+        if (onWindowRead)
+        {
+            onWindowRead(number);
+        }
     }
 };
 
@@ -166,7 +296,7 @@ public:
         // head chain runs through sibling B.
         tip = m_ledger->blockNumber();
         tipHash = protocol::canonicalBlockHash(*m_ledger->ledgerData().at(tip)->blockHeader());
-        reader = std::make_shared<FakeReader>(*m_blockFactory);
+        reader = std::make_shared<FakeReader>(*m_blockFactory, *m_ledger);
         reader->finalizedRef = {tipHash, tip};
         a = windowBlock(0xa1);
         b = windowBlock(0xb1);
@@ -196,8 +326,11 @@ public:
         reader->headRef = {head.hash, tip + 1};
         reader->headChain = {{tip + 1, head.hash}};
         reader->headTxs.clear();
-        reader->headTxs[head.txHash] = engine::OpCanonicalReader::ChainTransaction{
-            .transaction = head.tx, .receipt = head.receipt, .blockHash = head.hash};
+        reader->headTxs[head.txHash] =
+            engine::OpCanonicalReader::ChainTransaction{.transaction = head.tx,
+                .receipt = head.receipt,
+                .blockHash = head.hash,
+                .block = head.block};
     }
 
     void finalize(WindowBlock const& head)
@@ -206,37 +339,58 @@ public:
         reader->finalizedRef = {head.hash, tip + 1};
         reader->window.clear();
         reader->headChain.clear();
+        reader->headTxs.clear();
+        reader->finalizedTxs[head.txHash] =
+            engine::OpCanonicalReader::ChainTransaction{.transaction = head.tx,
+                .receipt = head.receipt,
+                .blockHash = head.hash,
+                .block = head.block};
     }
 
     /// One block at tip+1 with one transaction whose receipt carries one log; @p salt makes
     /// the header hash and the tx hash distinct per sibling.
-    WindowBlock windowBlock(uint8_t salt)
+    ///
+    /// The header commits to what the body actually holds: txsRoot is the transactions-trie root
+    /// of the signed envelope (what debug_getRawBlock verifies) and withdrawalsRoot is the empty
+    /// list's root (the OP lane never carries withdrawals). A fabricated commitment here would
+    /// make every raw-block assertion test the refusal path instead of the bytes.
+    WindowBlock windowBlock(uint8_t salt, uint64_t baseFee = 100,
+        std::optional<engine::OpCanonicalReader::BlockRef> parent = std::nullopt)
     {
+        auto const parentRef = parent.value_or(engine::OpCanonicalReader::BlockRef{tipHash, tip});
+        auto const number = parentRef.number + 1;
         auto block = m_blockFactory->createBlock();
         auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-        header->setNumber(tip + 1);
+        header->setNumber(number);
         // Whole seconds: the OP (Eth-shaped) header hash rejects a sub-second timestamp.
         header->setTimestamp(1'700'000'000'000ULL + 1000ULL * salt);
-        header->setParentInfo(protocol::ParentInfo{.blockNumber = tip, .blockHash = tipHash});
+        header->setParentInfo(
+            protocol::ParentInfo{.blockNumber = parentRef.number, .blockHash = parentRef.hash});
         header->setGasLimit(30'000'000);
         header->setGasUsed(21'000);
-        // OP shape (isOpEthereumBlock): Holocene extraData 250/6, base fee 100, withdrawals
+        // OP shape (isOpEthereumBlock): Holocene extraData 250/6, base fee, withdrawals
         // root; the salt keeps the sibling hashes apart through the timestamp.
         header->setExtraData(bytes{0x00, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06});
-        header->setBaseFee(100);
-        header->setWithdrawalsRoot(h256(1U));
+        header->setBaseFee(baseFee);
+        header->setWithdrawalsRoot(ledger::mpt::emptyRootHash());
         header->setExcessBlobGas(0);
         header->setBlobGasUsed(0);
-        header->setRLPHash(protocol::canonicalBlockHash(*header));
-        block->setBlockHeader(header);
+
         h256 const txHash(static_cast<unsigned>(salt));
         auto tx = makeReadPlaneTx(0, txHash);
+        // The signed envelope, exactly as the transactions trie keys it.
+        auto const envelope = bcostars::protocol::reassembleWeb3RawTransaction(
+            tx->extraTransactionBytes(), tx->signatureData());
+        header->setTxsRoot(ledger::mpt::calculateTransactionsRoot(
+            std::vector<bcos::bytesConstRef>{{envelope.data(), envelope.size()}}));
+        header->setRLPHash(protocol::canonicalBlockHash(*header));
+        block->setBlockHeader(header);
         std::vector<protocol::LogEntry> logs;
         // Four topics: the filter's empty `topics` array parses into positional sets, and a
         // log with fewer topics than positions never matches (LogMatcher::matches).
         logs.emplace_back(bytes(20, salt), h256s{h256(1U), h256(2U), h256(3U), h256(4U)}, bytes{});
         auto receipt =
-            m_blockFactory->receiptFactory()->createReceipt(21'000, "", logs, 0, {}, tip + 1);
+            m_blockFactory->receiptFactory()->createReceipt(21'000, "", logs, 0, {}, number);
         receipt->setTransactionIndex(0);
         block->appendTransaction(tx);
         block->appendReceipt(receipt);
@@ -318,6 +472,22 @@ BOOST_AUTO_TEST_CASE(TagsFollowTheFacade)
     BOOST_CHECK(blockByNumber(toQuantity(tip + 2)).isNull());
 }
 
+BOOST_AUTO_TEST_CASE(SafeBlockUsesCapturedHeadDuringReorg)
+{
+    setHead(a);
+    reader->safe = tip + 1;
+    reader->onCaptureHeadView = [&] {
+        setHead(b);
+        reader->safe.reset();
+    };
+
+    auto const captured = blockByNumber("safe");
+    BOOST_REQUIRE(captured.isObject());
+    BOOST_CHECK_EQUAL(captured["hash"].asString(), hashA.hexPrefixed());
+    BOOST_CHECK_EQUAL(blockByNumber("safe")["hash"].asString(), tipHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(blockByNumber("latest")["hash"].asString(), hashB.hexPrefixed());
+}
+
 // By hash: any window block, from its own rows. By number: the head chain only.
 BOOST_AUTO_TEST_CASE(SideBranchByHashOnly)
 {
@@ -352,9 +522,8 @@ BOOST_AUTO_TEST_CASE(SideBranchByHashOnly)
         hashA.hexPrefixed());
 }
 
-// Transactions: the ledger first (finalized), then the head chain's window; a side-branch-only
-// transaction is null, as geth answers for a non-canonical inclusion.
-BOOST_AUTO_TEST_CASE(TransactionsLedgerThenHeadChain)
+// Both finalized and unfinalized transactions use the captured head's chain view.
+BOOST_AUTO_TEST_CASE(TransactionsUseTheCapturedHeadChain)
 {
     auto const headTag = toQuantity(tip + 1);
     auto receiptB = call("eth_getTransactionReceipt", params({txB.hexPrefixed()}))["result"];
@@ -366,8 +535,7 @@ BOOST_AUTO_TEST_CASE(TransactionsLedgerThenHeadChain)
     BOOST_CHECK_EQUAL(txJson["blockHash"].asString(), hashB.hexPrefixed());
     BOOST_CHECK(call("eth_getTransactionReceipt", params({txA.hexPrefixed()}))["result"].isNull());
     BOOST_CHECK(call("eth_getTransactionByHash", params({txA.hexPrefixed()}))["result"].isNull());
-    // A finalized transaction is the ledger's, whatever the head (FakeLedger serves the
-    // receipts it was handed through storeTxAndReceipt).
+    // A durable row that is ahead of the captured view does not show up in the response.
     h256 const ledgerTx(0xeeU);
     auto tx = makeReadPlaneTx(7, ledgerTx);
     auto receipt = m_blockFactory->receiptFactory()->createReceipt(
@@ -380,6 +548,10 @@ BOOST_AUTO_TEST_CASE(TransactionsLedgerThenHeadChain)
     finalizedBlock->appendReceipt(receipt);
     m_ledger->replaceBlock(finalizedBlock);
     m_ledger->storeTxAndReceipt(tx, receipt);
+    BOOST_CHECK(
+        call("eth_getTransactionReceipt", params({ledgerTx.hexPrefixed()}))["result"].isNull());
+    reader->finalizedTxs[ledgerTx] = engine::OpCanonicalReader::ChainTransaction{
+        .transaction = tx, .receipt = receipt, .blockHash = tipHash, .block = finalizedBlock};
     auto ledgerReceipt =
         call("eth_getTransactionReceipt", params({ledgerTx.hexPrefixed()}))["result"];
     BOOST_REQUIRE(ledgerReceipt.isObject());
@@ -421,6 +593,54 @@ BOOST_AUTO_TEST_CASE(LogsOverTheWindow)
     BOOST_CHECK_EQUAL(logs[0U]["blockHash"].asString(), hashB.hexPrefixed());
 }
 
+BOOST_AUTO_TEST_CASE(LogRangesKeepTheirCapturedBranchDuringReorg)
+{
+    auto const first = tip + 1;
+    auto const second = tip + 2;
+    auto a2 = windowBlock(0xa2, 100, engine::OpCanonicalReader::BlockRef{hashA, first});
+    auto b2 = windowBlock(0xb2, 100, engine::OpCanonicalReader::BlockRef{hashB, first});
+    reader->window[a2.hash] = a2.block;
+    reader->window[b2.hash] = b2.block;
+    reader->headRef = {b2.hash, second};
+    reader->headChain.emplace(second, b2.hash);
+    reader->safe = first;
+
+    Json::Value filter(Json::objectValue);
+    filter["fromBlock"] = "safe";
+    filter["toBlock"] = "latest";
+    auto const id = call("eth_newFilter", params({filter}))["result"].asString();
+    BOOST_REQUIRE(!id.empty());
+    auto checkLogs = [&](Json::Value const& logs, h256 const& firstHash, h256 const& secondHash) {
+        BOOST_REQUIRE_EQUAL(logs.size(), 2U);
+        BOOST_CHECK_EQUAL(logs[0U]["blockHash"].asString(), firstHash.hexPrefixed());
+        BOOST_CHECK_EQUAL(logs[1U]["blockHash"].asString(), secondHash.hexPrefixed());
+    };
+
+    for (auto const* method : {"eth_getLogs", "eth_getFilterLogs"})
+    {
+        reader->headRef = {b2.hash, second};
+        reader->headChain = {{first, hashB}, {second, b2.hash}};
+        reader->window[b2.hash] = b2.block;
+        bool switched = false;
+        reader->onWindowRead = [&](protocol::BlockNumber number) {
+            if (!switched && number == first)
+            {
+                switched = true;
+                reader->headRef = {a2.hash, second};
+                reader->headChain = {{first, hashA}, {second, a2.hash}};
+                reader->window.erase(b2.hash);
+            }
+        };
+        auto const arguments =
+            std::string_view(method) == "eth_getLogs" ? params({filter}) : params({id});
+        auto const response = call(method, arguments);
+        reader->onWindowRead = {};
+        BOOST_REQUIRE(switched);
+        checkLogs(response["result"], hashB, b2.hash);
+        checkLogs(call(method, arguments)["result"], hashA, a2.hash);
+    }
+}
+
 // The remaining rerouted reads, each against the head chain's window block: by-number index
 // lookups, block tx count, the head base fee behind eth_gasPrice, eth_feeHistory's block
 // source, and block filters.
@@ -432,7 +652,7 @@ BOOST_AUTO_TEST_CASE(RemainingReadsFollowTheHeadChain)
     BOOST_REQUIRE(byIndex.isObject());
     BOOST_CHECK_EQUAL(byIndex["blockHash"].asString(), hashB.hexPrefixed());
     BOOST_CHECK_EQUAL(byIndex["hash"].asString(), txB.hexPrefixed());
-    // Out of range on the window path is the same InvalidParams as on the ledger path.
+    // Both the window and ledger paths return JSON null for an out-of-range index.
     auto outOfRange = call("eth_getTransactionByBlockNumberAndIndex", params({headTag, "0x1"}));
     BOOST_CHECK(outOfRange["result"].isNull());
     BOOST_CHECK_EQUAL(
@@ -456,6 +676,35 @@ BOOST_AUTO_TEST_CASE(RemainingReadsFollowTheHeadChain)
                           params({headTag, "0x0"}))["result"]["blockHash"]
                           .asString(),
         hashA.hexPrefixed());
+}
+
+BOOST_AUTO_TEST_CASE(FeeHistoryKeepsItsCapturedBranchDuringReorg)
+{
+    auto const first = tip + 1;
+    auto const second = tip + 2;
+    auto a2 = windowBlock(0xa2, 112, engine::OpCanonicalReader::BlockRef{hashA, first});
+    auto b2 = windowBlock(0xb2, 122, engine::OpCanonicalReader::BlockRef{hashB, first});
+    reader->window[a2.hash] = a2.block;
+    reader->window[b2.hash] = b2.block;
+    reader->headRef = {b2.hash, second};
+    reader->headChain.emplace(second, b2.hash);
+    bool switched = false;
+    reader->onWindowRead = [&](protocol::BlockNumber number) {
+        if (!switched && number == first)
+        {
+            switched = true;
+            reader->headRef = {a2.hash, second};
+            reader->headChain = {{first, hashA}, {second, a2.hash}};
+            reader->window.erase(b2.hash);
+        }
+    };
+    auto const result = call("eth_feeHistory", params({"0x2", "latest"}))["result"];
+    BOOST_REQUIRE(switched);
+    BOOST_REQUIRE_EQUAL(result["baseFeePerGas"].size(), 3U);
+    BOOST_CHECK_EQUAL(result["baseFeePerGas"][1U].asString(), toQuantity(122));
+    auto const nextResult = call("eth_feeHistory", params({"0x2", "latest"}))["result"];
+    BOOST_REQUIRE_EQUAL(nextResult["baseFeePerGas"].size(), 3U);
+    BOOST_CHECK_EQUAL(nextResult["baseFeePerGas"][1U].asString(), toQuantity(112));
 }
 
 BOOST_AUTO_TEST_CASE(PayloadBodiesFollowTheHeadChain)
@@ -483,6 +732,48 @@ BOOST_AUTO_TEST_CASE(PayloadBodiesFollowTheHeadChain)
     BOOST_CHECK(invoke(
         &rpc::EngineEndpoint::getPayloadBodiesByRangeV1, params({toQuantity(tip + 2), "0x1"}))
             .empty());
+}
+
+BOOST_AUTO_TEST_CASE(PayloadBodiesRangeKeepsItsCapturedBranchDuringReorg)
+{
+    auto const first = tip + 1;
+    auto const second = tip + 2;
+    auto a2 = windowBlock(0xa2, 112, engine::OpCanonicalReader::BlockRef{hashA, first});
+    auto b2 = windowBlock(0xb2, 122, engine::OpCanonicalReader::BlockRef{hashB, first});
+    a.block->setTransaction(0, makeReadPlaneTx(1, a.txHash));
+    a2.block->setTransaction(0, makeReadPlaneTx(2, a2.txHash));
+    reader->window[a2.hash] = a2.block;
+    reader->window[b2.hash] = b2.block;
+    reader->headRef = {b2.hash, second};
+    reader->headChain.emplace(second, b2.hash);
+
+    rpc::EngineEndpoint endpoint(nodeService);
+    auto fetchRange = [&] {
+        Json::Value response;
+        task::syncWait(
+            endpoint.getPayloadBodiesByRangeV1(params({toQuantity(first), "0x2"}), response));
+        return response["result"];
+    };
+    auto const before = fetchRange();
+    BOOST_REQUIRE_EQUAL(before.size(), 2U);
+    bool switched = false;
+    reader->onWindowRead = [&](protocol::BlockNumber number) {
+        if (!switched && number == first)
+        {
+            switched = true;
+            reader->headRef = {a2.hash, second};
+            reader->headChain = {{first, hashA}, {second, a2.hash}};
+            reader->window.erase(b2.hash);
+        }
+    };
+
+    auto const during = fetchRange();
+    BOOST_REQUIRE(switched);
+    BOOST_CHECK(during == before);
+    auto const after = fetchRange();
+    BOOST_REQUIRE_EQUAL(after.size(), 2U);
+    BOOST_CHECK(after[0U] != before[0U]);
+    BOOST_CHECK(after[1U] != before[1U]);
 }
 
 BOOST_AUTO_TEST_CASE(PollingFiltersReportFinalizedReplacement)
@@ -520,11 +811,71 @@ BOOST_AUTO_TEST_CASE(PollingFiltersReportFinalizedReplacement)
     BOOST_CHECK(changes(blockId).empty());
 }
 
+BOOST_AUTO_TEST_CASE(FailedLogPollKeepsItsCursor)
+{
+    Json::Value filter(Json::objectValue);
+    auto const id = call("eth_newFilter", params({filter}))["result"].asString();
+    BOOST_REQUIRE(!id.empty());
+
+    finalize(a);
+    reader->onWindowRead = [](protocol::BlockNumber) {
+        throw std::runtime_error("injected finalized log poll read error");
+    };
+    BOOST_CHECK(call("eth_getFilterChanges", params({id})).isMember("error"));
+    reader->onWindowRead = {};
+
+    auto const logs = call("eth_getFilterChanges", params({id}))["result"];
+    BOOST_REQUIRE_EQUAL(logs.size(), 1U);
+    BOOST_CHECK_EQUAL(logs[0U]["blockHash"].asString(), hashA.hexPrefixed());
+    BOOST_CHECK(call("eth_getFilterChanges", params({id}))["result"].empty());
+}
+
+BOOST_AUTO_TEST_CASE(ConcurrentLogPollReturnsThePageOnce)
+{
+    auto pollNode = std::make_shared<rpc::NodeService>(
+        m_ledger, nullptr, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    pollNode->setOpCanonicalReader(reader);
+    auto groupManager = std::make_shared<rpc::AirGroupManager>(chainId, groupInfo, pollNode);
+    auto filters = std::make_shared<rpc::Web3FilterSystem>(*ioServicePool->getIOService(),
+        groupManager, groupId, /*filterTimeout=*/10'000, /*maxBlockProcessPerReq=*/1,
+        /*maxBlockRange=*/2);
+    auto request = filters->requestFactory()->create();
+    request->setFromBlock(tip + 1);
+    request->setToBlock(tip + 2);
+    auto const id = u256(task::syncWait(filters->newFilter(request)));
+
+    auto next = windowBlock(0xa2, 100, engine::OpCanonicalReader::BlockRef{hashA, tip + 1});
+    finalize(a);
+    m_ledger->appendBuiltBlock(next.block);
+    reader->finalizedRef = {next.hash, tip + 2};
+    reader->headRef = reader->finalizedRef;
+
+    Json::Value winner;
+    bool interleaved = false;
+    reader->onWindowRead = [&](protocol::BlockNumber number) {
+        if (number == tip + 1 && !std::exchange(interleaved, true))
+        {
+            winner = task::syncWait(filters->getFilterChanges(id));
+        }
+    };
+    // The second poll advances the same cursor while the first poll is reading its block.
+    auto const loser = task::syncWait(filters->getFilterChanges(id));
+    BOOST_REQUIRE_EQUAL(winner.size(), 1U);
+    BOOST_CHECK_EQUAL(winner[0U]["blockHash"].asString(), hashA.hexPrefixed());
+    BOOST_CHECK(loser.isArray());
+    BOOST_CHECK(loser.empty());
+
+    auto const following = task::syncWait(filters->getFilterChanges(id));
+    BOOST_REQUIRE_EQUAL(following.size(), 1U);
+    BOOST_CHECK_EQUAL(following[0U]["blockHash"].asString(), next.hash.hexPrefixed());
+}
+
 // The fake's missing committed MPT reader provides a distinct error after the correct
 // block has been found on disk.
 BOOST_AUTO_TEST_CASE(GetProofByHashSurvivesFinalizeRace)
 {
     reader->evicted = engine::OpCanonicalReader::BlockRef{tipHash, tip};
+    m_ledger->indexBlockHash(tipHash, tip);
     auto const resp =
         call("eth_getProof", params({"0x00000000000000000000000000000000000000b1",
                                  Json::Value(Json::arrayValue), tipHash.hexPrefixed()}));
@@ -596,6 +947,107 @@ BOOST_AUTO_TEST_CASE(LatestFlatStateAndPendingNonceFollowHead)
     BOOST_CHECK_EQUAL(nonce("pending"), "0x1");  // nonce 2 is now queued
     BOOST_CHECK_EQUAL(
         call("eth_getBalance", params({address, "latest"}))["result"].asString(), "0x16");
+}
+
+BOOST_AUTO_TEST_CASE(LatestCodeRequiresAnExactAddress)
+{
+    for (auto const* address : {"0xb1", "0x0000000000000000000000000000000000000000b1",
+             "0x0x000000000000000000000000000000000000b1"})
+    {
+        auto const response = call("eth_getCode", params({address, "latest"}));
+        BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), -32602);
+    }
+    auto const response =
+        call("eth_getCode", params({"0x00000000000000000000000000000000000000b1", "latest"}));
+    BOOST_CHECK_EQUAL(response["result"].asString(), "0x");
+}
+
+// REGRESSION: the raw-data endpoints used to resolve the tag/number against the LEDGER's current
+// number and then read the block from the ledger. On this lane the ledger stops at the finalized
+// tip, so every unfinalized block -- including "latest", the block eth_getBlockByNumber is
+// serving -- answered "Block not found". They now go through the canonical plane (CanonicalReads),
+// which is what this pins: the same blocks, byte for byte, that the window holds.
+BOOST_AUTO_TEST_CASE(RawBlockServesUnfinalizedWindowBlocks)
+{
+    auto const headTag = toQuantity(tip + 1);
+    auto const expected = bcostars::protocol::reassembleWeb3RawTransaction(
+        b.tx->extraTransactionBytes(), b.tx->signatureData());
+
+    // latest, the head's number, and the head's hash must all name the same block.
+    auto const byLatest = call("debug_getRawBlock", params({"latest"}));
+    BOOST_REQUIRE_MESSAGE(!byLatest.isMember("error"), printJson(byLatest));
+    auto const byNumber = call("debug_getRawBlock", params({headTag}));
+    auto const byHash = call("debug_getRawBlock", params({hashB.hexPrefixed()}));
+    BOOST_REQUIRE_MESSAGE(!byNumber.isMember("error"), printJson(byNumber));
+    BOOST_REQUIRE_MESSAGE(!byHash.isMember("error"), printJson(byHash));
+    BOOST_CHECK_EQUAL(byLatest["result"].asString(), byNumber["result"].asString());
+    BOOST_CHECK_EQUAL(byNumber["result"].asString(), byHash["result"].asString());
+
+    // The bytes are a 4-element block whose header hashes to the published block hash and whose
+    // single transaction is the signed envelope, i.e. the body reproduces the header commitments.
+    auto const raw = fromHexWithPrefix(byNumber["result"].asString());
+    protocol::EthBlock decoded;
+    auto mutableRaw = raw;
+    decoded.rlpDecode(bytesConstRef(mutableRaw.data(), mutableRaw.size()));
+    bytes headerRlp;
+    codec::rlp::encode(headerRlp, decoded.data().header);
+    BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bytesConstRef(headerRlp.data(), headerRlp.size()))
+                          .hexPrefixed(),
+        hashB.hexPrefixed());
+    BOOST_REQUIRE_EQUAL(decoded.data().transactions.size(), 1U);
+    BOOST_CHECK(decoded.data().transactions[0] == expected);
+    BOOST_REQUIRE(decoded.data().withdrawals.has_value());
+    BOOST_CHECK(decoded.data().withdrawals->empty());
+
+    // The per-transaction endpoint resolves the same transaction on the head chain.
+    auto const oneTx = call("debug_getRawTransaction", params({txB.hexPrefixed()}));
+    BOOST_REQUIRE_MESSAGE(!oneTx.isMember("error"), printJson(oneTx));
+    BOOST_CHECK_EQUAL(oneTx["result"].asString(), toHexStringWithPrefix(expected));
+
+    // A sibling on a non-head branch is still readable by hash (op-node's restore walks it),
+    // and never by number -- the number always names the head chain's block.
+    auto const sibling = call("debug_getRawBlock", params({hashA.hexPrefixed()}));
+    BOOST_REQUIRE_MESSAGE(!sibling.isMember("error"), printJson(sibling));
+    BOOST_CHECK(sibling["result"].asString() != byNumber["result"].asString());
+    BOOST_CHECK_EQUAL(call("debug_getRawBlock", params({headTag}))["result"].asString(),
+        byNumber["result"].asString());
+
+    // A height above the head is still not found (the head is the canonical tip, not the
+    // backend's finalized tip).
+    BOOST_CHECK_EQUAL(
+        call("debug_getRawBlock", params({toQuantity(tip + 2)}))["error"]["code"].asInt(), -32602);
+}
+
+// REGRESSION (review F3): the tag must be resolved and the block read out of ONE captured head
+// view. Resolving through canonicalLatestNumber() and then calling canonicalBlockByNumber() reads
+// the head twice and captures a second view, so a head replacement in between answers the wrong
+// block (or a spurious miss). The counters pin the shared snapshot directly, and the head is moved
+// at capture time so the returned block proves which view was used.
+BOOST_AUTO_TEST_CASE(RawBlockLatestComesFromOneCapturedHead)
+{
+    setHead(a);
+    reader->onCaptureHeadView = [&] { setHead(b); };
+    auto const headsBefore = reader->headReads;
+    auto const capturesBefore = reader->headViewCaptures;
+
+    auto const response = call("debug_getRawBlock", params({"latest"}));
+    BOOST_REQUIRE_MESSAGE(!response.isMember("error"), printJson(response));
+
+    // One snapshot served both the tag resolution and the body: no separate head() read.
+    BOOST_CHECK_EQUAL(reader->headReads - headsBefore, 0);
+    BOOST_CHECK_EQUAL(reader->headViewCaptures - capturesBefore, 1);
+
+    auto const raw = fromHexWithPrefix(response["result"].asString());
+    protocol::EthBlock decoded;
+    auto mutableRaw = raw;
+    decoded.rlpDecode(bytesConstRef(mutableRaw.data(), mutableRaw.size()));
+    bytes headerRlp;
+    codec::rlp::encode(headerRlp, decoded.data().header);
+    BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bytesConstRef(headerRlp.data(), headerRlp.size()))
+                          .hexPrefixed(),
+        hashA.hexPrefixed());
+    // The head really did move, so the assertion above is discriminating.
+    BOOST_CHECK_EQUAL(blockByNumber("latest")["hash"].asString(), hashB.hexPrefixed());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

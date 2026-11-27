@@ -121,13 +121,11 @@ public:
     std::deque<std::shared_ptr<MutableStorageType>> m_immutableStorages;
     std::variant<BackendStorage, BackendStorage*> m_backendStorage;
     [[no_unique_address]] std::conditional_t<withCacheStorage,
-        std::reference_wrapper<std::remove_reference_t<CachedStorage>>, std::monostate>
-        m_cacheStorage;
+        std::add_pointer_t<std::remove_reference_t<CachedStorage>>, std::monostate>
+        m_cacheStorage{};
 
-    View(BackendStorage backendStorage)
-        requires(!withCacheStorage)
-      : m_backendStorage(std::move(backendStorage))
-    {}
+    // Owned backend snapshots bypass the mutable, unversioned cache.
+    View(BackendStorage backendStorage) : m_backendStorage(std::move(backendStorage)) {}
     View(BackendStorage* backendStorage)
         requires(!withCacheStorage)
       : m_backendStorage(backendStorage)
@@ -137,14 +135,14 @@ public:
             std::monostate>
             cacheStorage)
         requires(withCacheStorage)
-      : m_backendStorage(std::move(backendStorage)), m_cacheStorage(cacheStorage)
+      : m_backendStorage(std::move(backendStorage)), m_cacheStorage(std::addressof(cacheStorage))
     {}
     View(BackendStorage* backendStorage,
         std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
             std::monostate>
             cacheStorage)
         requires(withCacheStorage)
-      : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
+      : m_backendStorage(backendStorage), m_cacheStorage(std::addressof(cacheStorage))
     {}
 
     View(const View&) = delete;
@@ -202,8 +200,9 @@ public:
 
         if constexpr (withCacheStorage)
         {
-            if (co_await fillMissingValues<typename View::Key, typename View::Value>(
-                    m_cacheStorage.get(), keys, values))
+            if (m_cacheStorage &&
+                co_await fillMissingValues<typename View::Key, typename View::Value>(
+                    *m_cacheStorage, keys, values))
             {
                 co_return values;
             }
@@ -234,7 +233,10 @@ public:
 
             if constexpr (withCacheStorage)
             {
-                co_return co_await m_cacheStorage.get().readSomeRaw(std::move(keys));
+                if (m_cacheStorage)
+                {
+                    co_return co_await m_cacheStorage->readSomeRaw(std::move(keys));
+                }
             }
 
             co_return co_await backendStorageRef().readSomeRaw(std::move(keys));
@@ -267,10 +269,13 @@ public:
 
         if constexpr (withCacheStorage)
         {
-            if (auto value = co_await m_cacheStorage.get().readOneRaw(key);
-                !std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
+            if (m_cacheStorage)
             {
-                co_return value;
+                if (auto value = co_await m_cacheStorage->readOneRaw(key);
+                    !std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
+                {
+                    co_return value;
+                }
             }
         }
 
@@ -294,7 +299,10 @@ public:
 
             if constexpr (withCacheStorage)
             {
-                co_return co_await m_cacheStorage.get().readOneRaw(key);
+                if (m_cacheStorage)
+                {
+                    co_return co_await m_cacheStorage->readOneRaw(key);
+                }
             }
 
             co_return co_await backendStorageRef().readOneRaw(key);
@@ -341,9 +349,12 @@ public:
 
         if constexpr (withCacheStorage)
         {
-            if (auto value = co_await storage2::readOne(m_cacheStorage.get(), key))
+            if (m_cacheStorage)
             {
-                co_return value;
+                if (auto value = co_await storage2::readOne(*m_cacheStorage, key))
+                {
+                    co_return value;
+                }
             }
         }
 
@@ -576,6 +587,26 @@ public:
         }
     }
 
+    /// Borrow the same pinned backend as @p pinned, or capture the currently committed version.
+    ViewType forkCommittedSnapshot(ViewType* pinned = nullptr)
+    {
+        if constexpr (requires { m_latestBackend.readSnapshot(); })
+        {
+            auto& backend = pinned ? pinned->backendStorageRef() : m_latestBackend;
+            return ViewType(backend.readSnapshot());
+        }
+        else
+        {
+            return forkCommitted();
+        }
+    }
+
+    ViewType forkChainSnapshot(
+        std::vector<std::shared_ptr<MutableStorageType>> layers, ViewType* pinned = nullptr)
+    {
+        return withLayers(forkCommittedSnapshot(pinned), std::move(layers));
+    }
+
     /// A view over the committed backend (and cache) plus an EXPLICIT ordered layer list,
     /// ignoring the anonymous m_storages deque. @p layers is oldest first: layers.front()
     /// sits directly on the backend, layers.back() is the newest and is read first. Null
@@ -584,7 +615,13 @@ public:
     /// are invisible to each other because only the requested ancestor chain is stacked.
     ViewType forkChain(std::vector<std::shared_ptr<MutableStorageType>> layers)
     {
-        auto view = forkCommitted();
+        return withLayers(forkCommitted(), std::move(layers));
+    }
+
+private:
+    static ViewType withLayers(
+        ViewType view, std::vector<std::shared_ptr<MutableStorageType>> layers)
+    {
         for (auto it = layers.rbegin(); it != layers.rend(); ++it)
         {
             if (*it)
@@ -595,6 +632,7 @@ public:
         return view;
     }
 
+public:
     void pushView(ViewType view)
     {
         if (!view.m_mutableStorage)
@@ -699,6 +737,25 @@ public:
     {
         std::unique_lock mergeLock(m_mergeMutex);
         co_await mergeIntoBackends(fromStorage...);
+    }
+
+    /// Publish the durable block before touching the cache. If cache refresh fails, drop it
+    /// so future non-snapshot reads fall through to disk.
+    task::Task<void> mergeFinalized(auto&... fromStorage)
+    {
+        std::unique_lock mergeLock(m_mergeMutex);
+        co_await storage2::merge(m_latestBackend, fromStorage...);
+        if constexpr (withCacheStorage)
+        {
+            try
+            {
+                co_await storage2::merge(m_cacheStorage.get(), fromStorage...);
+            }
+            catch (...)
+            {
+                m_cacheStorage.get().clear();
+            }
+        }
     }
 
     /// Cache-layer read (nullopt when this composition has no cache layer — a caller

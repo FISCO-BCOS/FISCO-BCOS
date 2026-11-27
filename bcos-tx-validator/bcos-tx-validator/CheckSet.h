@@ -96,9 +96,8 @@ enum class Check : uint32_t
     ChainId = 1U << 10,
     SenderIsEOA = 1U << 11,
     NonceNotMax = 1U << 12,
-    /// Lower bound and queue depth. The "committed nonce" it compares against is
-    /// Web3NonceChecker's in-process LRU cache, with a ledger read only on a miss -- node-local
-    /// state, which is why the proposal column drops it.
+    /// Lower bound and queue depth from the OP head or Web3NonceChecker's cached committed
+    /// nonce on the other lanes. The proposal column drops this node-local check.
     Web3NonceWindow = 1U << 13,
     InitCodeSize = 1U << 14,
     Balance = 1U << 15,
@@ -125,7 +124,7 @@ enum class Check : uint32_t
     BlobHasTo = 1U << 21,
     /// OP lane: the balance also covers the rollup cost (L1 data fee of the signed envelope
     /// plus, from Isthmus on, the operator fee at the gas limit) -- op-geth validation.go
-    /// ValidateTransactionWithState, TotalTxCost = tx.Cost() + RollupCostFn(tx). Same status as
+    /// ValidateTransactionWithState, TotalTxCost = tx.Cost() + rollup cost. Same status as
     /// Balance. Stands down wherever no rollup cost is bound (the FISCO and L1 lanes) -- one
     /// table, no lane dimension.
     L1Cost = 1U << 22,
@@ -296,7 +295,7 @@ inline constexpr Check c_revisionDependent =
     Check::TypeByRevision | Check::MaxGasLimit | Check::InitCodeSize | Check::IntrinsicGas;
 inline constexpr Check c_baseFeeDependent = Check::FeeCapVsBaseFee | Check::Balance | Check::L1Cost;
 
-/// verify() asks the bound RollupCostFn exactly when the set contains one of these.
+/// Rollup cost is collected in the state stage only for checks that use it.
 inline constexpr Check c_rollupCostDependent = Check::L1Cost;
 
 /// Web3PoolNonce IS sender-dependent, and that is the difference between the two pool rules: its

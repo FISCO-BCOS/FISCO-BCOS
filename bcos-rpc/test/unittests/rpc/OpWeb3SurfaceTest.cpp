@@ -395,7 +395,7 @@ BOOST_AUTO_TEST_CASE(SyncingFollowsForkchoiceHead)
     BOOST_CHECK(call("eth_syncing")["result"] == Json::Value(false));
 }
 
-// pending = each sender's gapless run from its account nonce; queued = gaps and passed nonces.
+// Pending starts at the account nonce. Gaps queue; retained lower nonces stay hidden.
 BOOST_AUTO_TEST_CASE(TxpoolPendingQueuedSplit)
 {
     StateStorage state;
@@ -423,7 +423,7 @@ BOOST_AUTO_TEST_CASE(TxpoolPendingQueuedSplit)
 
     auto const status = call("txpool_status")["result"];
     BOOST_CHECK_EQUAL(status["pending"].asString(), "0x3");  // alice 1, 2; bob 0
-    BOOST_CHECK_EQUAL(status["queued"].asString(), "0x3");   // alice 0 (passed), 4 (gap); bob 2
+    BOOST_CHECK_EQUAL(status["queued"].asString(), "0x2");   // alice 4; bob 2
 
     auto const content = call("txpool_content")["result"];
     auto const aliceKey = "0x" + checksummedHexAddress(alice.hex());
@@ -431,8 +431,7 @@ BOOST_AUTO_TEST_CASE(TxpoolPendingQueuedSplit)
     BOOST_CHECK(
         content["pending"][aliceKey].getMemberNames() == (std::vector<std::string>{"1", "2"}));
     BOOST_CHECK(content["pending"][bobKey].getMemberNames() == std::vector<std::string>{"0"});
-    BOOST_CHECK(
-        content["queued"][aliceKey].getMemberNames() == (std::vector<std::string>{"0", "4"}));
+    BOOST_CHECK(content["queued"][aliceKey].getMemberNames() == std::vector<std::string>{"4"});
     BOOST_CHECK(content["queued"][bobKey].getMemberNames() == std::vector<std::string>{"2"});
     // eth_getTransactionByHash's shape, block fields null for a pooled tx.
     auto const& tx = content["pending"][aliceKey]["1"];

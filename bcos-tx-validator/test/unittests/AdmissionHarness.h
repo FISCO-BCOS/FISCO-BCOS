@@ -244,7 +244,7 @@ struct AdmitHarness
     ledger::EvmcRevisionSchedule revisionSchedule;
     AccountState account{};
     bool accountExists = true;
-    /// The OP rollup cost the bound RollupCostFn answers; nullopt = bind nothing, as on the
+    /// The OP rollup cost the bound head view answers; nullopt = bind nothing, as on the
     /// FISCO and L1 lanes. `rollupCostAsks` counts the calls, so a case can state that a
     /// context or lane never priced the envelope rather than infer it from a status.
     std::optional<u512> rollupCost;
@@ -254,10 +254,7 @@ struct AdmitHarness
     std::string lastPendingCostSender;
     std::string lastPendingCostNonce;
     std::optional<protocol::CostBasis> lastPendingCostBasis;
-    /// The envelope and head the callable was last asked about, for pinning what it is handed.
-    bytes lastRollupEnvelope;
-    uint64_t lastRollupGasLimit = 0;
-    protocol::BlockNumber lastRollupHeadNumber = -1;
+    std::optional<u256> lastPendingCostFromNonce;
 
     AdmitHarness()
     {
@@ -321,23 +318,31 @@ struct AdmitHarness
         validator->setScheduler(scheduler);
         if (rollupCost)
         {
-            validator->setRollupCostFn(
-                [this](bytesConstRef envelope, uint64_t gasLimit,
-                    ledger::LedgerConfig const& head) -> task::Task<std::optional<u512>> {
-                    ++rollupCostAsks;
-                    lastRollupEnvelope.assign(envelope.begin(), envelope.end());
-                    lastRollupGasLimit = gasLimit;
-                    lastRollupHeadNumber = head.blockNumber();
-                    co_return rollupCost;
+            validator->setAdmissionChainStateFn(
+                [this](Transaction const&, Check checks) -> task::Task<AdmissionChainState> {
+                    AdmissionChainState state{};
+                    state.config = ledgerConfigState->get();
+                    if ((checks & c_accountStateDependent) != Check::None)
+                    {
+                        state.sender = account;
+                    }
+                    if ((checks & c_rollupCostDependent) != Check::None)
+                    {
+                        ++rollupCostAsks;
+                        state.rollupCost = rollupCost;
+                    }
+                    co_return state;
                 });
         }
         if (pendingCost)
         {
             validator->setPendingCostFn(
-                [this](std::string_view sender, std::string_view nonce, protocol::CostBasis basis) {
+                [this](std::string_view sender, std::string_view nonce, protocol::CostBasis basis,
+                    std::optional<u256> const& fromNonce) {
                     lastPendingCostSender = std::string(sender);
                     lastPendingCostNonce = std::string(nonce);
                     lastPendingCostBasis = basis;
+                    lastPendingCostFromNonce = fromNonce;
                     return *pendingCost;
                 });
         }
