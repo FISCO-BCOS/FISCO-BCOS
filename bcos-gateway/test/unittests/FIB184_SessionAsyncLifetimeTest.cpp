@@ -40,6 +40,8 @@
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/error.hpp>
 #include <boost/test/unit_test.hpp>
+#include <array>
+#include <memory_resource>
 #include <thread>
 
 using namespace bcos;
@@ -475,6 +477,66 @@ BOOST_AUTO_TEST_CASE(WriteInitiationFailureReleasesPendingRequest)
     BOOST_REQUIRE_EQUAL(results.size(), 1);
     BOOST_CHECK_EQUAL(results.front(), static_cast<int>(ba::error::operation_aborted));
     BOOST_CHECK(!callbacks->getCallback(5, false));
+}
+
+BOOST_AUTO_TEST_CASE(FirstBatchAllocationFailureClosesSession)
+{
+    session->m_writings = std::make_shared<Session::Writings>(std::pmr::null_memory_resource());
+    std::vector<int> results;
+    session->asyncSendMessage(message(1), {},
+        [&](NetworkException ec, Message::Ptr) { results.push_back(ec.errorCode()); });
+    host->waitForDelivery();
+    socket->ioService().poll();
+
+    BOOST_REQUIRE_EQUAL(results.size(), 1);
+    BOOST_CHECK_EQUAL(results.front(), static_cast<int>(ba::error::not_connected));
+    BOOST_CHECK(!callbacks->getCallback(1, false));
+    BOOST_CHECK(!socket->isConnected());
+    BOOST_CHECK(!session->m_writings->inProgress);
+    BOOST_CHECK_EQUAL(session->writeQueueSize(), 0);
+    BOOST_CHECK(asio->writeSizes.empty());
+}
+
+BOOST_AUTO_TEST_CASE(PartialBatchAllocationFailureCompletesEveryRequest)
+{
+    struct OneSlotBatch
+    {
+        alignas(Payload) std::array<std::byte, sizeof(Payload)> slot;
+        std::pmr::monotonic_buffer_resource memory{
+            slot.data(), slot.size(), std::pmr::null_memory_resource()};
+        Session::Writings batch{&memory};
+    };
+    auto owner = std::make_shared<OneSlotBatch>();
+    session->m_writings = {owner, &owner->batch};
+    owner->batch.payloads.reserve(1);
+
+    // Hold the first write in flight while three requests queue for the next batch.
+    session->asyncSendMessage(message(0), {}, {});
+    BOOST_REQUIRE(asio->writeHandler);
+    std::array<std::vector<int>, 3> results;
+    for (size_t i = 0; i < results.size(); ++i)
+    {
+        session->asyncSendMessage(message(i + 1), {},
+            [&, i](NetworkException ec, Message::Ptr) { results[i].push_back(ec.errorCode()); });
+    }
+    asio->completeWrite();
+    host->waitForDelivery();
+    socket->ioService().poll();
+
+    for (size_t i = 0; i < results.size(); ++i)
+    {
+        BOOST_REQUIRE_EQUAL(results[i].size(), 1);
+        auto expected = i == 0 ? ba::error::operation_aborted : ba::error::not_connected;
+        BOOST_CHECK_EQUAL(results[i].front(), static_cast<int>(expected));
+        BOOST_CHECK(!callbacks->getCallback(i + 1, false));
+    }
+    BOOST_CHECK(!socket->isConnected());
+    BOOST_CHECK(!owner->batch.inProgress);
+    BOOST_CHECK(owner->batch.payloads.empty());
+    BOOST_CHECK(owner->batch.buffers.empty());
+    BOOST_CHECK_EQUAL(session->writeQueueSize(), 0);
+    BOOST_CHECK_EQUAL(asio->writeSizes.size(), 1);
+    BOOST_CHECK(!asio->writeHandler);
 }
 
 BOOST_AUTO_TEST_CASE(FastSendKeepsPayloadUntilWriteCompletes)

@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <memory_resource>
 #include <utility>
 #include <variant>
 
@@ -214,6 +215,10 @@ public:
 private:
     std::size_t m_maxRecvBufferSize;
 
+    template <class Allocator>
+    bool tryPopSomeEncodedMsgs(
+        std::vector<Payload, Allocator>& batch, size_t maxSendDataSize, size_t maxSendMsgCount);
+
 public:
     SessionRecvBuffer m_recvBuffer;
 
@@ -296,7 +301,14 @@ public:
 
     struct Writings
     {
-        std::vector<Payload> payloads;
+        explicit Writings(std::pmr::memory_resource* resource = std::pmr::get_default_resource())
+          : payloads(resource)
+        {}
+
+        // Held from the start of batch construction through write completion, even if the
+        // first allocation fails before a payload enters the batch. Guarded by m_writingQueueMutex.
+        bool inProgress = false;
+        std::pmr::vector<Payload> payloads;
         std::vector<boost::asio::const_buffer> buffers;
     };
     std::shared_ptr<Writings> m_writings;

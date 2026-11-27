@@ -19,6 +19,7 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/container/container_fwd.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cstddef>
@@ -28,6 +29,7 @@
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
 #include <range/v3/view/transform.hpp>
+#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -249,52 +251,68 @@ void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
             }
         }
         m_writings->payloads.clear();
+        m_writings->inProgress = false;
     }
     write();
 }
 
+template <class Allocator>
 bool Session::tryPopSomeEncodedMsgs(
-    std::vector<Payload>& encodedMsgs, size_t /*maxSendDataSize*/, size_t /*maxSendMsgCount*/)
+    std::vector<Payload, Allocator>& batch, size_t /*maxSendDataSize*/, size_t /*maxSendMsgCount*/)
 {
-    Payload payload;
-    while (m_writeQueue.try_pop(payload))
+    // Reserve the destination before removing the item. TBB destroys the source during
+    // try_pop, so transferring the payload and its callback into this slot must not throw.
+    static_assert(std::is_nothrow_move_assignable_v<Payload>);
+    while (!m_writeQueue.empty())
     {
-        encodedMsgs.emplace_back(std::move(payload));
+        auto& slot = batch.emplace_back();
+        if (!m_writeQueue.try_pop(slot))
+        {
+            batch.pop_back();
+            break;
+        }
     }
-    return !encodedMsgs.empty();
+    return !batch.empty();
+}
+
+bool Session::tryPopSomeEncodedMsgs(
+    std::vector<Payload>& encodedMsgs, size_t maxSendDataSize, size_t maxSendMsgCount)
+{
+    return tryPopSomeEncodedMsgs<std::allocator<Payload>>(
+        encodedMsgs, maxSendDataSize, maxSendMsgCount);
 }
 
 void Session::write()
 {
+    std::unique_lock lock(m_writingQueueMutex);
+    if (m_writings->inProgress)
     {
-        std::lock_guard lock(m_writingQueueMutex);
-        // A nonempty batch owns the socket write until its completion releases the buffers.
-        if (!m_writings->payloads.empty())
+        return;
+    }
+    if (!active())
+    {
+        Payload payload;
+        while (m_writeQueue.try_pop(payload))
         {
-            return;
-        }
-        if (!active())
-        {
-            Payload payload;
-            while (m_writeQueue.try_pop(payload))
+            if (payload.m_callback)
             {
-                if (payload.m_callback)
-                {
-                    m_server.get().asyncTo([callback = std::move(payload.m_callback)] {
-                        callback(boost::asio::error::not_connected);
-                    });
-                }
+                m_server.get().asyncTo([callback = std::move(payload.m_callback)] {
+                    callback(boost::asio::error::not_connected);
+                });
             }
-            return;
         }
-        if (!tryPopSomeEncodedMsgs(m_writings->payloads, m_maxSendDataSize, m_maxSendMsgCount))
-        {
-            return;
-        }
+        return;
     }
 
+    m_writings->inProgress = true;
     try
     {
+        if (!tryPopSomeEncodedMsgs(m_writings->payloads, m_maxSendDataSize, m_maxSendMsgCount))
+        {
+            m_writings->inProgress = false;
+            return;
+        }
+        lock.unlock();
         auto output = std::back_inserter(m_writings->buffers);
         for (const auto& payload : m_writings->payloads)
         {
@@ -304,11 +322,15 @@ void Session::write()
             [session = shared_from_this()](
                 boost::system::error_code ec, size_t length) { session->onWrite(ec, length); });
     }
-    catch (std::exception const& e)
+    catch (...)
     {
-        SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint())
-                           << LOG_KV("what", boost::diagnostic_information(e));
+        if (lock.owns_lock())
+        {
+            lock.unlock();
+        }
         onWrite(boost::asio::error::operation_aborted, 0);
+        SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint())
+                           << LOG_KV("what", boost::current_exception_diagnostic_information());
     }
 }
 
