@@ -19,6 +19,7 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/container/container_fwd.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cstddef>
@@ -28,6 +29,7 @@
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
 #include <range/v3/view/transform.hpp>
+#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -93,25 +95,33 @@ bool Session::active(Host& server) const
     return m_active && server.haveNetwork() && m_socket && m_socket->isConnected();
 }
 
-static void send(Session& session, EncodedMessage encodedMsg)
+static void send(
+    Session& session, EncodedMessage encoded, uint32_t seq, ResponseCallback::Ptr response)
 {
-    if (!session.active() || !session.m_socket->isConnected())
+    Payload payload{.m_data = std::move(encoded), .m_callback = {}};
+    if (response)
     {
-        return;
+        payload.m_notifyOnSuccess = false;
+        payload.m_callback = [manager = session.sessionCallbackManager(), seq,
+                                 weak = std::weak_ptr(response)](boost::system::error_code ec) {
+            if (auto expected = weak.lock())
+            {
+                auto pending = manager->getCallback(seq, true,
+                    [&](const ResponseCallback& item) { return &item == expected.get(); });
+                if (pending)
+                {
+                    pending->callback(NetworkException(ec.value(), ec.message()), {});
+                }
+            }
+        };
     }
-
-    session.m_writeQueue.push({.m_data = std::move(encodedMsg), .m_callback = {}});
+    session.m_writeQueue.push(std::move(payload));
     session.write();
 }
 
 static void send(Session& session, ::ranges::input_range auto payloads,
     std::function<void(boost::system::error_code)> callback)
 {
-    if (!session.active() || !session.m_socket->isConnected())
-    {
-        return;
-    }
-
     Payload payload{.m_data{Payload::MessageList{}}, .m_callback = std::move(callback)};
     auto& vec = std::get<1>(payload.m_data);
     if constexpr (::ranges::sized_range<decltype(payloads)>)
@@ -174,42 +184,30 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         return;
     }
 
-    if (callback)
-    {
-        auto handler = std::make_shared<ResponseCallback>();
-        handler->callback = callback;
-        if (options.timeout > 0)
-        {
-            handler->timeoutHandler.emplace(
-                m_server.get().asioInterface()->newTimer(options.timeout));
-            auto seq = message->seq();
-            handler->timeoutHandler->async_wait(
-                [sessionWeak = std::weak_ptr<Session>(shared_from_this()), seq](
-                    const boost::system::error_code& _error) {
-                    try
-                    {
-                        auto session = sessionWeak.lock();
-                        if (!session)
-                        {
-                            return;
-                        }
-                        session->onTimeout(_error, seq);
-                    }
-                    catch (std::exception const& e)
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
-                                             << LOG_KV("message", boost::diagnostic_information(e));
-                    }
-                });
-            handler->startTime = utcSteadyTime();
-        }
-
-        m_sessionCallbackManager->addCallback(message->seq(), handler);
-    }
-
     EncodedMessage encodedMessage;
     encodedMessage.compress = m_enableCompress;
-    message->encode(encodedMessage);
+    if (!message->encode(encodedMessage))
+    {
+        if (callback)
+        {
+            m_server.get().asyncTo([callback = std::move(callback)] {
+                callback(NetworkException(ProtocolError, "Message encoding failed"), {});
+            });
+        }
+        return;
+    }
+    ResponseCallback::Ptr response;
+    if (callback)
+    {
+        response = registerResponse(*message, options.timeout, callback);
+        if (!response)
+        {
+            m_server.get().asyncTo([callback = std::move(callback)] {
+                callback(NetworkException(ProtocolError, "Request sequence already pending"), {});
+            });
+            return;
+        }
+    }
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
@@ -222,7 +220,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                            << LOG_KV("this", this);
     }
 
-    send(*this, encodedMessage);
+    send(*this, std::move(encodedMessage), message->seq(), std::move(response));
 }
 
 std::size_t Session::writeQueueSize()
@@ -232,114 +230,107 @@ std::size_t Session::writeQueueSize()
 
 void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
 {
-    if (!active())
+    if (ec)
     {
-        return;
+        drop(TCPError);
     }
-
-    try
+    else
     {
         m_lastWriteTime.store(utcSteadyTime());
-        if (ec)
-        {
-            SESSION_LOG(WARNING) << LOG_DESC("onWrite error sending")
-                                 << LOG_KV("message", ec.message())
-                                 << LOG_KV("endpoint", nodeIPEndpoint());
-            drop(TCPError);
-            return;
-        }
-        write();
     }
-    catch (std::exception& e)
+
     {
-        SESSION_LOG(ERROR) << LOG_DESC("onWrite error") << LOG_KV("endpoint", nodeIPEndpoint())
-                           << LOG_KV("what", boost::diagnostic_information(e));
-        drop(TCPError);
-        return;
+        std::lock_guard lock(m_writingQueueMutex);
+        m_writings->buffers.clear();
+        for (auto& payload : m_writings->payloads)
+        {
+            if (payload.m_callback && (ec || payload.m_notifyOnSuccess))
+            {
+                m_server.get().asyncTo(
+                    [callback = std::move(payload.m_callback), ec]() { callback(ec); });
+            }
+        }
+        m_writings->payloads.clear();
+        m_writings->inProgress = false;
     }
+    write();
+}
+
+template <class Allocator>
+bool Session::tryPopSomeEncodedMsgs(
+    std::vector<Payload, Allocator>& batch, size_t /*maxSendDataSize*/, size_t /*maxSendMsgCount*/)
+{
+    // Reserve the destination before removing the item. TBB destroys the source during
+    // try_pop, so transferring the payload and its callback into this slot must not throw.
+    static_assert(std::is_nothrow_move_assignable_v<Payload>);
+    while (!m_writeQueue.empty())
+    {
+        auto& slot = batch.emplace_back();
+        if (!m_writeQueue.try_pop(slot))
+        {
+            batch.pop_back();
+            break;
+        }
+    }
+    return !batch.empty();
 }
 
 bool Session::tryPopSomeEncodedMsgs(
-    std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount)  // NOLINT
+    std::vector<Payload>& encodedMsgs, size_t maxSendDataSize, size_t maxSendMsgCount)
 {
-    // Desc: Try to send multi packets one time to improve the efficiency of sending
-    // data
-    size_t totalDataSize = 0;
-    Payload payload;
-    // while (totalDataSize < _maxSendDataSize && m_writeQueue.try_pop(payload))
-    while (m_writeQueue.try_pop(payload))
-    {
-        totalDataSize += payload.size();
-        encodedMsgs.emplace_back(std::move(payload));
-    }
-
-    return totalDataSize > 0;
+    return tryPopSomeEncodedMsgs<std::allocator<Payload>>(
+        encodedMsgs, maxSendDataSize, maxSendMsgCount);
 }
 
 void Session::write()
 {
-    std::unique_lock lock(m_writingQueueMutex, std::try_to_lock);
-    if (!lock.owns_lock())
+    std::unique_lock lock(m_writingQueueMutex);
+    if (m_writings->inProgress)
     {
         return;
     }
-    if (!m_server.get().haveNetwork())
+    if (!active())
     {
-        SESSION_LOG(WARNING) << "Host has gone";
-        drop(TCPError);
-        return;
-    }
-    if (!m_socket->isConnected())
-    {
-        SESSION_LOG(WARNING) << "Error sending ssl socket is close!"
-                             << LOG_KV("endpoint", nodeIPEndpoint());
-        drop(TCPError);
+        Payload payload;
+        while (m_writeQueue.try_pop(payload))
+        {
+            if (payload.m_callback)
+            {
+                m_server.get().asyncTo([callback = std::move(payload.m_callback)] {
+                    callback(boost::asio::error::not_connected);
+                });
+            }
+        }
         return;
     }
 
+    m_writings->inProgress = true;
     try
     {
         if (!tryPopSomeEncodedMsgs(m_writings->payloads, m_maxSendDataSize, m_maxSendMsgCount))
         {
+            m_writings->inProgress = false;
             return;
         }
-
-        auto outputIt = std::back_inserter(m_writings->buffers);
-        for (auto& payload : m_writings->payloads)
+        lock.unlock();
+        auto output = std::back_inserter(m_writings->buffers);
+        for (const auto& payload : m_writings->payloads)
         {
-            payload.toConstBuffer(outputIt);
+            payload.toConstBuffer(output);
         }
         m_server.get().asioInterface()->asyncWrite(m_socket, m_writings->buffers,
-            // FIB-184: hold a strong reference to the session for the duration of the async write.
-            // async_write operates on this->m_socket and reads from buffers owned via m_writings;
-            // a strong ref keeps the socket/SSL stream (and m_writings, which backs the buffers
-            // asyncWrite captures by reference) alive until the write completes, so a concurrent
-            // teardown on another thread cannot free them mid-write.
-            [session = shared_from_this(), m_lock = std::move(lock)](
-                const boost::system::error_code _error, std::size_t _size) mutable {
-                {
-                    session->m_writings->buffers.clear();
-                    for (auto& payload : session->m_writings->payloads)
-                    {
-                        if (payload.m_callback)
-                        {
-                            session->m_server.get().asyncTo(
-                                [callback = std::move(payload.m_callback), error = _error]() {
-                                    callback(error);
-                                });
-                        }
-                    }
-                    session->m_writings->payloads.clear();
-                    session->onWrite(_error, _size);
-                }
-            });
+            [session = shared_from_this()](
+                boost::system::error_code ec, size_t length) { session->onWrite(ec, length); });
     }
-    catch (std::exception& e)
+    catch (...)
     {
+        if (lock.owns_lock())
+        {
+            lock.unlock();
+        }
+        onWrite(boost::asio::error::operation_aborted, 0);
         SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint())
-                           << LOG_KV("what", boost::diagnostic_information(e));
-        drop(TCPError);
-        return;
+                           << LOG_KV("what", boost::current_exception_diagnostic_information());
     }
 }
 
@@ -741,8 +732,12 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             }
 
             auto callbackManager = session->sessionCallbackManager();
-            auto callbackPtr = callbackManager->getCallback(message->seq(), true);
-            // without callback, call default handler
+            auto source = session->host().canonicalPeerID(message->srcP2PNodeID());
+            auto callbackPtr = callbackManager->getCallback(
+                message->seq(), true, [&](const ResponseCallback& pending) {
+                    return pending.accepts(
+                        *session, session->m_peerID, source, message->packetType());
+                });
             if (!callbackPtr)
             {
                 SESSION_LOG(WARNING)
@@ -754,10 +749,6 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             }
 
             // with callback
-            if (callbackPtr->timeoutHandler)
-            {
-                callbackPtr->timeoutHandler->cancel();
-            }
             auto& callback = callbackPtr->callback;
             if (!callback)
             {
@@ -773,23 +764,65 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
     });
 }
 
-void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
+ResponseCallback::Ptr Session::registerResponse(
+    Message const& message, uint32_t timeout, SessionCallbackFunc callback)
 {
-    if (error)
+    auto handler = std::make_shared<ResponseCallback>();
+    handler->outboundSession = weak_from_this();
+    handler->expectedSource =
+        message.dstP2PNodeID().empty() ? m_peerID : host().canonicalPeerID(message.dstP2PNodeID());
+    // With asymmetric routing a reply can miss the authenticated return hop. Bound the
+    // pending callback even for callers that only specify a timeout on direct requests.
+    if (timeout == 0 && handler->expectedSource != m_peerID)
     {
-        // SESSION_LOG(TRACE) << "timer cancel" << error;
-        return;
+        constexpr uint32_t routedResponseTimeoutMs = 10000;
+        timeout = routedResponseTimeoutMs;
+    }
+    handler->requestType = message.packetType();
+    handler->callback = std::move(callback);
+    if (timeout)
+    {
+        handler->timeoutHandler.emplace(host().asioInterface()->newTimer(timeout));
     }
 
-    ResponseCallback::Ptr callback = m_sessionCallbackManager->getCallback(seq, true);
-    if (!callback)
+    auto seq = message.seq();
+    auto manager = sessionCallbackManager();
+    if (!manager->addCallback(seq, handler))
     {
-        return;
+        return {};
     }
-    m_server.get().asyncTo([callback = std::move(callback)]() {
-        NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
-        callback->callback(e, Message::Ptr());
-    });
+    if (timeout)
+    {
+        try
+        {
+            handler->timeoutHandler->async_wait(
+                [server = host().weak_from_this(), mgr = std::weak_ptr(manager),
+                    weak = std::weak_ptr(handler), seq](const boost::system::error_code& ec) {
+                    auto manager = mgr.lock();
+                    auto expected = weak.lock();
+                    if (ec || !manager || !expected)
+                    {
+                        return;
+                    }
+                    auto pending = manager->getCallback(seq, true,
+                        [&](const ResponseCallback& item) { return &item == expected.get(); });
+                    if (auto host = server.lock(); pending && host)
+                    {
+                        host->asyncTo([pending = std::move(pending)] {
+                            pending->callback(
+                                NetworkException(NetworkTimeout, "NetworkTimeout"), {});
+                        });
+                    }
+                });
+        }
+        catch (...)
+        {
+            manager->getCallback(
+                seq, true, [&](const ResponseCallback& item) { return &item == handler.get(); });
+            throw;
+        }
+    }
+    return handler;
 }
 
 void Session::checkNetworkStatus()
@@ -828,26 +861,33 @@ void Session::checkNetworkStatus()
 
 template <typename View>
 task::Task<Message::Ptr> fastSendMessageWithResponse(
-    Session& session, const Message& message, View& view, Options& options)
+    Session& session, const Message& message, View& view, Options& options, size_t encodedSize)
 {
     struct Awaitable
     {
         std::reference_wrapper<Options> m_options;
-        std::reference_wrapper<Host> m_host;
         std::reference_wrapper<const Message> m_message;
-        std::weak_ptr<Session> m_self;
-        std::reference_wrapper<SessionCallbackManagerInterface> m_sessionCallbackManager;
+        std::reference_wrapper<Session> m_self;
+        size_t m_encodedSize;
         std::reference_wrapper<View> m_view;
         std::variant<NetworkException, Message::Ptr> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            auto handler = std::make_shared<ResponseCallback>();
-            handler->callback = [this, handle](NetworkException exception, Message::Ptr response) {
-                if (exception.errorCode() != 0)
+            auto session = m_self.get().shared_from_this();
+            auto seq = m_message.get().seq();
+            EncodedMessage encoded;
+            // The response or its timer can resume the caller before the socket finishes writing.
+            encoded.payload.reserve(m_encodedSize);
+            for (auto part : m_view.get())
+            {
+                encoded.payload.insert(encoded.payload.end(), part.begin(), part.end());
+            }
+            auto complete = [this, handle](NetworkException error, Message::Ptr response) {
+                if (error.errorCode())
                 {
-                    m_result.emplace<NetworkException>(std::move(exception));
+                    m_result.emplace<NetworkException>(std::move(error));
                 }
                 else
                 {
@@ -855,30 +895,13 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
                 }
                 handle.resume();
             };
-            auto seq = m_message.get().seq();
-            if (m_options.get().timeout > 0)
+            auto response = session->registerResponse(m_message, m_options.get().timeout, complete);
+            if (!response)
             {
-                handler->timeoutHandler.emplace(
-                    m_host.get().asioInterface()->newTimer(m_options.get().timeout));
-                handler->timeoutHandler->async_wait([self = m_self, seq](
-                                                        const boost::system::error_code& _error) {
-                    try
-                    {
-                        if (auto session = self.lock())
-                        {
-                            session->onTimeout(_error, seq);
-                        }
-                    }
-                    catch (std::exception const& e)
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
-                                             << LOG_KV("message", boost::diagnostic_information(e));
-                    }
-                });
-                handler->startTime = utcSteadyTime();
+                complete(NetworkException(ProtocolError, "Request sequence already pending"), {});
+                return;
             }
-            m_sessionCallbackManager.get().addCallback(seq, std::move(handler));
-            ::send(*m_self.lock(), ::ranges::views::all(m_view.get()), {});
+            ::send(*session, std::move(encoded), seq, std::move(response));
         }
         Message::Ptr await_resume()
         {
@@ -892,10 +915,9 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
                 m_result);
         }
     } awaitable{.m_options = options,
-        .m_host = session.m_server,
         .m_message = message,
-        .m_self = session.shared_from_this(),
-        .m_sessionCallbackManager = *session.m_sessionCallbackManager,
+        .m_self = session,
+        .m_encodedSize = encodedSize,
         .m_view = view,
         .m_result = {}};
 
@@ -965,7 +987,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     }
     if (options.response)
     {
-        co_return co_await fastSendMessageWithResponse(*this, message, view, options);
+        co_return co_await fastSendMessageWithResponse(*this, message, view, options, totalLength);
     }
     else
     {
@@ -1155,11 +1177,12 @@ const bcos::gateway::SessionRecvBuffer& bcos::gateway::Session::recvBuffer() con
 }
 std::shared_ptr<SessionFace> bcos::gateway::SessionFactory::createSession(Host& _server,
     std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
-    SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
+    SessionCallbackManagerInterface::Ptr& _sessionCallbackManager, std::string peerID)
 {
     std::shared_ptr<Session> session =
         std::make_shared<Session>(_socket, _server, m_sessionRecvBufferSize);
     session->setHostInfo(m_hostInfo);
+    session->m_peerID = std::move(peerID);
     session->setMessageFactory(_messageFactory);
     session->setSessionCallbackManager(_sessionCallbackManager);
     session->setAllowMaxMsgSize(m_allowMaxMsgSize);

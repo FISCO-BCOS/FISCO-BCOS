@@ -170,6 +170,39 @@ void ASIOInterface::asyncAccept(const std::shared_ptr<SocketFace>& socket, Handl
     m_acceptor->async_accept(socket->ref(), handler);
 }
 
+void ASIOInterface::asyncWrite(const std::shared_ptr<SocketFace>& socket,
+    const std::vector<ba::const_buffer>& buffers, ReadWriteHandler handler)
+{
+    ba::post(socket->ioService(),
+        [type = m_type, socket, &buffers, handler = std::move(handler)]() mutable {
+            if (!socket->isConnected())
+            {
+                handler(ba::error::not_connected, 0);
+                return;
+            }
+            if (type != TCP_ONLY && type != SSL)
+            {
+                handler(ba::error::operation_not_supported, 0);
+                return;
+            }
+            try
+            {
+                if (type == TCP_ONLY)
+                {
+                    ba::async_write(socket->ref(), buffers, handler);
+                }
+                else
+                {
+                    ba::async_write(socket->sslref(), buffers, handler);
+                }
+            }
+            catch (const boost::system::system_error& e)
+            {
+                handler(e.code(), 0);
+            }
+        });
+}
+
 void ASIOInterface::asyncRead(const std::shared_ptr<SocketFace>& socket,
     boost::asio::mutable_buffer buffers, ReadWriteHandler handler)
 {

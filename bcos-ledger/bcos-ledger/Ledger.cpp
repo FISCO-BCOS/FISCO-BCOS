@@ -1579,8 +1579,8 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
     std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback)
 {
     m_stateStorage->asyncOpenTable(
-        table, [this, key = std::string(key), callback = std::move(callback)](
-                   auto&& error, std::optional<Table>&& table) {
+        table, [this, key = std::string(key), optionalRow = table == SYS_CONFIG,
+                   callback = std::move(callback)](auto&& error, std::optional<Table>&& table) {
             auto tableError =
                 checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
             if (tableError)
@@ -1589,8 +1589,13 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
                 return;
             }
 
-            table->asyncGetRow(key, [this, key, callback = std::move(callback)](
+            table->asyncGetRow(key, [this, key, optionalRow, callback = std::move(callback)](
                                         auto&& error, std::optional<Entry>&& entry) {
+                if (optionalRow && !error && !entry)
+                {
+                    callback(nullptr, {});
+                    return;
+                }
                 auto entryError = checkEntryValid(std::forward<decltype(error)>(error), entry, key);
                 if (entryError)
                 {

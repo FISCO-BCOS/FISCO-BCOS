@@ -385,6 +385,16 @@ std::string Host::obtainCommonNameFromSubject(std::string const& subject)
     return subject;
 }
 
+std::string Host::canonicalPeerID(std::string const& id) const
+{
+    if (id.size() <= HASH_NODEID_MAX_SIZE)
+    {
+        return id;
+    }
+    auto hash = m_hashImpl->hash(bcos::bytesConstRef(id));
+    return {hash.begin(), hash.end()};
+}
+
 /// obtain p2pInfo from given vector
 void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
 {
@@ -608,8 +618,8 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
         return;
     }
 
-    std::shared_ptr<SessionFace> session =
-        m_sessionFactory->createSession(*this, socket, m_messageFactory, m_sessionCallbackManager);
+    std::shared_ptr<SessionFace> session = m_sessionFactory->createSession(
+        *this, socket, m_messageFactory, m_sessionCallbackManager, p2pInfo.p2pID);
     // Bind a slot-release guard to the session; the slot is freed when the session is destroyed.
     session->setLifetimeGuard(std::make_shared<SessionSlotGuard>(weakHost, remoteAddress));
 
