@@ -1040,7 +1040,10 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::trac
                     if (n > 0)
                         expectedParent = data.parentInfo.blockHash;
                 }
-                fillExecutionLedgerConfig(ethHeader, *config, *self->m_traceForks);
+                if (auto error = fillExecutionLedgerConfig(ethHeader, *config, *self->m_traceForks))
+                {
+                    throw std::runtime_error(*error);
+                }
                 auto header = makeExecutionBlockHeader(ethHeader, self->m_blockFactory.get(),
                     config->compatibilityVersion(), *self->m_traceForks);
                 auto rev = *config->evmcRevisionForBlock(number);

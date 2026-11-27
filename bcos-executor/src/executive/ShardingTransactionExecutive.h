@@ -48,6 +48,14 @@ public:
 
     bool isUsePromise() const;
 
+    // Sharding executes nested CREATE synchronously, even after a cross-shard CALL.
+    bool usesLocalCreateAddress() const noexcept override { return true; }
+    int64_t createDerivationSeq() const override { return m_seq; }
+
+
+protected:
+    CallParameters::UniquePtr suspendAndWait(CallParameters::UniquePtr input) override;
+
 private:
     std::optional<std::string> m_shardName;
     bool m_usePromise;

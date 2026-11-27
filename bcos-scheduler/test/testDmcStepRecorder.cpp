@@ -120,5 +120,34 @@ BOOST_AUTO_TEST_CASE(ShortAddress)
     BOOST_CHECK_EQUAL(recorder->dumpAndClearChecksum(), "31bf8e84:31bf8e83:0:1");
 }
 
+
+BOOST_AUTO_TEST_CASE(scheduleOutRecordingIsOptInAndClearResetsDiagnostics)
+{
+    DmcStepRecorder recorder;
+    auto record = [&] {
+        recorder.recordScheduleOut(std::string(42, 'a'), 1, 2, 3, 4, std::string(42, 'b'), false,
+            bcos::protocol::ExecutionMessage::MESSAGE);
+    };
+    record();
+    BOOST_CHECK(recorder.scheduleOuts().empty());
+    recorder.enableScheduleOutRecording();
+    record();
+    auto records = recorder.scheduleOuts();
+    BOOST_REQUIRE_EQUAL(records.size(), 1);
+    BOOST_CHECK_EQUAL(records.front().target, std::string(42, 'b'));
+    // Block completion dumps checksums before diagnostics are inspected by tests.
+    recorder.dumpAndClearChecksum();
+    BOOST_CHECK_EQUAL(recorder.scheduleOuts().size(), 1);
+    recorder.recordSchedulerStampViolation("contract", 1, 0);
+    recorder.clear();
+    BOOST_CHECK(recorder.scheduleOuts().empty());
+    BOOST_CHECK_EQUAL(recorder.schedulerStampViolations(), 0);
+    record();
+    BOOST_CHECK_EQUAL(recorder.scheduleOuts().size(), 1);
+    recorder.enableScheduleOutRecording(false);
+    record();
+    BOOST_CHECK_EQUAL(recorder.scheduleOuts().size(), 1);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

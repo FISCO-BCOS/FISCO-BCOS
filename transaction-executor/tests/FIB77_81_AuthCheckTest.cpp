@@ -113,14 +113,35 @@ BOOST_AUTO_TEST_CASE(authFailureWithoutBugfix)
         bcos::bytes helloworldBytecodeBinary;
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
 
+        // Freeze the sender so the auth check really rejects the deploy through the
+        // account-status arm — this fixture sets up no auth tables, and with a plain
+        // account the deploy simply succeeds (the old conditional guard never
+        // proved a reject). Rows live at AccountPrecompiled's legacy "/usr/<hex>"
+        // naming; last_update=0 with last_status=1 freezes at block number 0.
+        auto const sender = std::string("e0e794ca86d198042b64285c5ce667aee747509b");
+        auto const accountTable = std::string("/usr/") + sender;
+        co_await bcos::storage2::writeOne(
+            storage, StateKey{accountTable, "status"}, storage::Entry(std::string(1, '\x01')));
+        co_await bcos::storage2::writeOne(
+            storage, StateKey{accountTable, "last_update"}, storage::Entry("0"));
+        co_await bcos::storage2::writeOne(
+            storage, StateKey{accountTable, "last_status"}, storage::Entry(std::string(1, '\x01')));
+
+        bcos::bytes senderBytes;
+        boost::algorithm::unhex(sender, std::back_inserter(senderBytes));
         auto transaction =
             transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
+        transaction->forceSender(senderBytes);
         auto receipt = co_await executor.executeTransaction(
             storage, blockHeader, *transaction, 0, ledgerConfig, false);
 
         // Without bugfix, behavior is preserved (backward compat)
-        // Just verify we get a receipt without crashing
-        BOOST_CHECK(receipt != nullptr);
+        BOOST_REQUIRE(receipt != nullptr);
+        // The deploy was really rejected: auth on, no auth tables, legacy status
+        // non-None. Its receipt must carry the historical forty-zero address echo
+        // (released v3.16/v3.17.1 value; it is hashed into receiptsRoot).
+        BOOST_REQUIRE_NE(receipt->status(), 0);
+        BOOST_CHECK_EQUAL(receipt->contractAddress(), "0000000000000000000000000000000000000000");
     }());
 }
 

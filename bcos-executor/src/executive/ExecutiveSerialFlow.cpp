@@ -2,6 +2,7 @@
 #include "ExecutiveSerialFlow.h"
 #include "TransactionExecutive.h"
 #include "bcos-framework/executor/ExecuteError.h"
+#include <bcos-framework/executor/HostContextFault.h>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -142,6 +143,10 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
         }
 
         onFinished(nullptr);
+    }
+    catch (HostContextFault const& e)
+    {
+        onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, e.what()));
     }
     catch (std::exception& e)
     {

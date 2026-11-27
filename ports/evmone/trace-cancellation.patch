@@ -1,22 +1,32 @@
---- a/lib/evmone/tracing.hpp
-+++ b/lib/evmone/tracing.hpp
-@@ -23,6 +23,13 @@
+diff --git a/lib/evmone/baseline_execution.cpp b/lib/evmone/baseline_execution.cpp
+index 167ae7b..1c86463 100644
+--- a/lib/evmone/baseline_execution.cpp
++++ b/lib/evmone/baseline_execution.cpp
+@@ -174,6 +174,11 @@ int64_t dispatch(const CostTable& cost_table, ExecutionState& state, int64_t gas
+     {
+         if constexpr (TracingEnabled)
+         {
++            if (tracer->should_abort())
++            {
++                state.status = EVMC_FAILURE;
++                return 0;
++            }
+             const auto offset = static_cast<uint32_t>(position.code_it - code);
+             const auto stack_height = static_cast<int>(position.stack_end - stack_bottom);
+             if (offset < state.original_code.size())  // Skip STOP from code padding.
+@@ -281,6 +286,7 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context*
+     const auto& cost_table = get_baseline_cost_table(state.rev);
  
- public:
-     virtual ~Tracer() = default;
-+
-+    /// Embedder cancellation hook. Only the traced interpreter consults it.
-+    virtual bool should_abort() noexcept { return false; }
-+
-+    /// A CALL/CREATE rejected before Host::call. The VM has already calculated
-+    /// the actual forwarded gas and input; observers must not repeat gas rules.
-+    virtual void notify_call_failure(const evmc_message&, std::string_view) noexcept {}
- 
-     void notify_execution_start(  // NOLINT(misc-no-recursion)
-         evmc_revision rev, const evmc_message& msg, bytes_view code) noexcept
+     auto* tracer = vm.get_tracer();
++    state.tracer = tracer;
+     if (INTX_UNLIKELY(tracer != nullptr))
+     {
+         tracer->notify_execution_start(state.rev, *state.msg, code);
+diff --git a/lib/evmone/execution_state.hpp b/lib/evmone/execution_state.hpp
+index 4de464e..a14c099 100644
 --- a/lib/evmone/execution_state.hpp
 +++ b/lib/evmone/execution_state.hpp
-@@ -134,9 +134,12 @@
+@@ -126,9 +126,12 @@ public:
  
  /// Generic execution state for generic instructions implementations.
  // NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding)
@@ -29,60 +39,44 @@
      int64_t gas_refund = 0;
      Memory memory;
      const evmc_message* msg = nullptr;
-@@ -187,6 +190,7 @@
+@@ -196,6 +199,7 @@ public:
          const evmc_host_interface& host_interface, evmc_host_context* host_ctx,
          bytes_view _code) noexcept
      {
 +        tracer = nullptr;
          gas_refund = 0;
+         state_gas = {{.left = message.state_gas}};
          memory.clear();
-         msg = &message;
---- a/lib/evmone/baseline_execution.cpp
-+++ b/lib/evmone/baseline_execution.cpp
-@@ -174,6 +174,11 @@
-     {
-         if constexpr (TracingEnabled)
-         {
-+            if (tracer->should_abort())
-+            {
-+                state.status = EVMC_FAILURE;
-+                return 0;
-+            }
-             const auto offset = static_cast<uint32_t>(position.code_it - code);
-             const auto stack_height = static_cast<int>(position.stack_end - stack_bottom);
-             if (offset < state.original_code.size())  // Skip STOP from code padding.
-@@ -279,6 +284,7 @@
-     const auto& cost_table = get_baseline_cost_table(state.rev);
- 
-     auto* tracer = vm.get_tracer();
-+    state.tracer = tracer;
-     if (INTX_UNLIKELY(tracer != nullptr))
-     {
-         tracer->notify_execution_start(state.rev, *state.msg, code);
+diff --git a/lib/evmone/instructions_calls.cpp b/lib/evmone/instructions_calls.cpp
+index 858eca9..2bed79d 100644
 --- a/lib/evmone/instructions_calls.cpp
 +++ b/lib/evmone/instructions_calls.cpp
-@@ -4,6 +4,7 @@
- 
+@@ -6,6 +6,7 @@
+ #include "create_address.hpp"
  #include "delegation.hpp"
  #include "instructions.hpp"
 +#include "tracing.hpp"
  #include <variant>
  
- constexpr int64_t CALL_VALUE_COST = 9000;
-@@ -164,12 +165,21 @@
-             msg.gas += 2300;  // Add stipend.
-             gas_left += 2300;
+ namespace evmone::instr::core
+@@ -207,6 +208,13 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
+             gas_left += CALL_STIPEND;
              if (intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < value)
-+            {
+             {
++                // The value/balance arm runs before the depth arm in 0.24. When both
++                // limits fail the depth one wins, matching the EVM's failure precedence.
 +                if (state.tracer)
-+                    state.tracer->notify_call_failure(msg, state.msg->depth >= 1024 ?
-+                        "max call depth exceeded" : "insufficient balance for transfer");
++                    state.tracer->notify_call_failure(msg,
++                        state.rev < EVMC_OSAKA && state.msg->depth >= 1024 ?
++                            "max call depth exceeded" :
++                            "insufficient balance for transfer");
+                 if (new_account_charged)
+                     state.state_gas.refill(gas_left, NEW_ACCOUNT_STATE_GAS);
                  return {EVMC_SUCCESS, gas_left};  // "Light" failure.
-+            }
-         }
+@@ -215,7 +223,11 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
      }
  
-     if (state.msg->depth >= 1024)
+     if (state.rev < EVMC_OSAKA && state.msg->depth >= 1024)
 +    {
 +        if (state.tracer)
 +            state.tracer->notify_call_failure(msg, "max call depth exceeded");
@@ -91,25 +85,42 @@
  
      const auto result = state.host.call(msg);
      state.return_data.assign(result.output_data, result.output_size);
-@@ -223,13 +233,6 @@
+@@ -279,13 +291,6 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
      if ((gas_left -= init_code_cost) < 0)
          return {EVMC_OUT_OF_GAS, gas_left};
  
--    if (state.msg->depth >= 1024)
+-    if (state.rev < EVMC_OSAKA && state.msg->depth >= 1024)
 -        return {EVMC_SUCCESS, gas_left};  // "Light" failure.
 -
 -    if (endowment != 0 &&
 -        intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < endowment)
 -        return {EVMC_SUCCESS, gas_left};  // "Light" failure.
 -
-     evmc_message msg{.kind = to_call_kind(Op)};
-     msg.gas = gas_left;
-     if (state.rev >= EVMC_TANGERINE_WHISTLE)
-@@ -246,6 +249,20 @@
-     msg.create2_salt = intx::be::store<evmc::bytes32>(salt);
-     msg.value = intx::be::store<evmc::uint256be>(endowment);
+     const auto& sender = state.msg->recipient;
+     const auto sender_nonce = state.host.get_nonce(sender);  // Pre-bump sender nonce.
  
-+    if (state.msg->depth >= 1024)
+@@ -306,6 +311,37 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
+                 reinterpret_cast<const evmc_bytes32*>(&salt), init_code.data(), init_code.size()) :
+             compute_create2_address(sender, salt, init_code));
+ 
++    // Shape the message before the light-failure checks so the tracer sees the
++    // same forwarding context a real create would report. The checks stay ahead
++    // of the EIP-2929 warm and the EIP-8037 charge so a light failure keeps its
++    // no-side-effect semantics.
++    msg.input_data = init_code.data();
++    msg.input_size = init_code.size();
++    msg.sender = sender;
++    msg.depth = state.msg->depth + 1;
++    msg.value = intx::be::store<evmc::uint256be>(endowment);
++    auto forwarded_gas = [&]() noexcept {
++        auto gas = gas_left;
++        if (state.rev >= EVMC_TANGERINE_WHISTLE)
++            gas -= gas / 64;
++        return gas;
++    };
++    msg.gas = forwarded_gas();
++
++    if (state.rev < EVMC_OSAKA && state.msg->depth >= 1024)
 +    {
 +        if (state.tracer)
 +            state.tracer->notify_call_failure(msg, "max call depth exceeded");
@@ -123,6 +134,43 @@
 +        return {EVMC_SUCCESS, gas_left};
 +    }
 +
+     // Access to the new address is warmed and never reverted (EIP-2929).
+     if (state.rev >= EVMC_BERLIN)
+         state.host.access_account(msg.recipient);
+@@ -318,16 +354,9 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
+         new_account_charged = true;
+     }
+ 
+-    msg.gas = gas_left;
+-    if (state.rev >= EVMC_TANGERINE_WHISTLE)
+-        msg.gas -= msg.gas / 64;
+-
++    // A state-gas spill may have reduced gas_left; recompute the forwarded gas.
++    msg.gas = forwarded_gas();
+     msg.state_gas = state.state_gas.left;
+-    msg.input_data = init_code.data();
+-    msg.input_size = init_code.size();
+-    msg.sender = sender;
+-    msg.depth = state.msg->depth + 1;
+-    msg.value = intx::be::store<evmc::uint256be>(endowment);
+ 
      const auto result = state.host.call(msg);
      gas_left -= msg.gas - result.gas_left;
-     state.gas_refund += result.gas_refund;
+diff --git a/lib/evmone/tracing.hpp b/lib/evmone/tracing.hpp
+index dd0334f..d11de8e 100644
+--- a/lib/evmone/tracing.hpp
++++ b/lib/evmone/tracing.hpp
+@@ -24,6 +24,13 @@ class Tracer
+ public:
+     virtual ~Tracer() = default;
+ 
++    /// Embedder cancellation hook. Only the traced interpreter consults it.
++    virtual bool should_abort() noexcept { return false; }
++
++    /// A CALL/CREATE rejected before Host::call. The VM has already calculated
++    /// the actual forwarded gas and input; observers must not repeat gas rules.
++    virtual void notify_call_failure(const evmc_message&, std::string_view) noexcept {}
++
+     void notify_execution_start(  // NOLINT(misc-no-recursion)
+         evmc_revision rev, const evmc_message& msg, bytes_view code) noexcept
+     {

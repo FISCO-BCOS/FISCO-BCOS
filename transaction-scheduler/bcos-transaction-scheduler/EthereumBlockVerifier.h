@@ -118,10 +118,32 @@ inline constexpr uint64_t kSecondsToMilliseconds = 1000;
 inline constexpr size_t kHashBytes = 32;
 inline constexpr size_t kChainIdBytes = 8;
 
+/// Constantinople (EIP-1283 net-gas SSTORE) is not a revision EVMC ABI 19 can
+/// name: evmone 0.24 removed EVMC_CONSTANTINOPLE and kept Petersburg, which
+/// reverted EIP-1283. A non-zero-difficulty block in that gap must not be run
+/// as Petersburg — the same SSTORE would be metered differently, so gas,
+/// receipts, and state roots would fork. Zero difficulty is the per-block TTD
+/// signal and selects Paris below, before this gap is considered.
+inline constexpr char const* kUnsupportedConstantinopleRevision =
+    "unsupported EVM revision Constantinople: non-zero difficulty with Petersburg "
+    "inactive (EIP-1283 SSTORE metering is not available in EVMC ABI 19; refusing "
+    "to execute the block as Petersburg)";
+
+struct UnsupportedConstantinopleRevision : std::runtime_error
+{
+    UnsupportedConstantinopleRevision() : std::runtime_error(kUnsupportedConstantinopleRevision) {}
+};
+
 /// The EVMC revision active for a block with the given timestamp. Activation is
 /// bcos::protocol::isForkActive (bcos-rlp-protocol/EthPoSHeaderValidation.h): a
 /// zero fork timestamp means "active from genesis"; an unset field (the
 /// UINT64_MAX default) means the fork never activates.
+///
+/// Returns nullopt only for the Constantinople-only gap: Constantinople is
+/// active, Petersburg and every later fork are not, and difficulty is non-zero.
+/// Callers must refuse that block before execution. Petersburg, including
+/// simultaneous Constantinople+Petersburg activation, still selects
+/// EVMC_PETERSBURG.
 ///
 /// Paris (the Merge) is special: geth activates it at paris_time OR as soon as
 /// the chain's Terminal Total Difficulty has been reached — a PoW-configured
@@ -133,7 +155,7 @@ inline constexpr size_t kChainIdBytes = 8;
 /// difficulty 0 is the per-block signal that the TTD has been passed. (A pure
 /// PoS chain, parisTime == 0, is already covered by the forkTime == 0 rule;
 /// its blocks are all difficulty 0 too, so the check is harmless there.)
-inline evmc_revision evmcRevisionForTimestamp(
+inline std::optional<evmc_revision> evmcRevisionForTimestamp(
     EvmcForkTimestamps const& schedule, int64_t timestamp, u256 const& difficulty)
 {
     using bcos::protocol::isForkActive;
@@ -179,7 +201,11 @@ inline evmc_revision evmcRevisionForTimestamp(
     }
     if (isForkActive(schedule.constantinopleTime, timestamp))
     {
-        return EVMC_CONSTANTINOPLE;
+        // Difficulty 0 already returned EVMC_PARIS above. Reaching here means a
+        // PoW block whose schedule has Constantinople and not Petersburg (or any
+        // later fork). ABI 19 cannot price EIP-1283, so there is no revision to
+        // return — Petersburg's SSTORE rules are not a substitute.
+        return std::nullopt;
     }
     if (isForkActive(schedule.byzantiumTime, timestamp))
     {
@@ -202,6 +228,20 @@ inline evmc_revision evmcRevisionForTimestamp(
         return EVMC_FRONTIER;
     }
     return EVMC_LONDON;  // pre-Paris fallback on a London-or-later schedule
+}
+
+/// Same selection as evmcRevisionForTimestamp. Throws
+/// UnsupportedConstantinopleRevision for the Constantinople-only gap so a caller
+/// with no block-error channel (eth_call, admission) still stops before the VM.
+inline evmc_revision requireEvmcRevisionForTimestamp(
+    EvmcForkTimestamps const& schedule, int64_t timestamp, u256 const& difficulty)
+{
+    auto revision = evmcRevisionForTimestamp(schedule, timestamp, difficulty);
+    if (!revision)
+    {
+        BOOST_THROW_EXCEPTION(UnsupportedConstantinopleRevision{});
+    }
+    return *revision;
 }
 
 /// u256 -> "0x"-prefixed lowercase hex string (the format buildBlockInfo parses).
@@ -308,12 +348,20 @@ inline protocol::BlockHeader::Ptr makeExecutionBlockHeader(
 /// Overlay the per-block Ethereum EVM context (base fee, blob gas, prevRandao,
 /// difficulty, revision) onto a LedgerConfig fetched from storage via
 /// ledger::getLedgerConfig. Preserve its chain id from the existing chain configuration.
-inline void fillExecutionLedgerConfig(protocol::EthBlockHeaderData const& ethHeader,
-    ledger::LedgerConfig& config, EvmcForkTimestamps const& schedule)
+/// Returns the Constantinople-only refusal when that gap is active, before any
+/// revision is installed. nullopt means the overlay was applied.
+inline std::optional<std::string> fillExecutionLedgerConfig(
+    protocol::EthBlockHeaderData const& ethHeader, ledger::LedgerConfig& config,
+    EvmcForkTimestamps const& schedule)
 {
+    auto const revision =
+        evmcRevisionForTimestamp(schedule, ethHeader.timestamp, ethHeader.difficulty);
+    if (!revision)
+    {
+        return std::string("EthereumBlockVerifier: ") + kUnsupportedConstantinopleRevision;
+    }
     config.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
-    config.setEVMCRevision(
-        evmcRevisionForTimestamp(schedule, ethHeader.timestamp, ethHeader.difficulty));
+    config.setEVMCRevision(*revision);
     // Block gas limit: the EVM's GASLIMIT opcode (0x45) must return the BLOCK's
     // gas limit (header.gasLimit), NOT the chain's tx_gas_limit system config.
     // geth's BlockContext.GasLimit is the header field; on Sepolia it is 30,000,000
@@ -359,19 +407,26 @@ inline void fillExecutionLedgerConfig(protocol::EthBlockHeaderData const& ethHea
             .bpo1Time = schedule.bpo1Time,
             .bpo2Time = schedule.bpo2Time},
         static_cast<uint64_t>(ethHeader.timestamp)));
+
+    return std::nullopt;
 }
 
 /// Block-import callers supply their configured chain id explicitly.
-inline void fillExecutionLedgerConfig(protocol::EthBlockHeaderData const& ethHeader,
-    ledger::LedgerConfig& config, EvmcForkTimestamps const& schedule, uint64_t chainId)
+inline std::optional<std::string> fillExecutionLedgerConfig(
+    protocol::EthBlockHeaderData const& ethHeader, ledger::LedgerConfig& config,
+    EvmcForkTimestamps const& schedule, uint64_t chainId)
 {
-    fillExecutionLedgerConfig(ethHeader, config, schedule);
+    if (auto error = fillExecutionLedgerConfig(ethHeader, config, schedule))
+    {
+        return error;
+    }
     // chain id -> big-endian evmc_uint256be.
     evmc_uint256be cid{};
     bcos::bytes chainIdBytes(kChainIdBytes, 0);
     bcos::toBigEndian(chainId, chainIdBytes);
     std::memcpy(cid.bytes + (kHashBytes - kChainIdBytes), chainIdBytes.data(), kChainIdBytes);
     config.setChainId(cid);
+    return std::nullopt;
 }
 
 /// The deterministic post-execution block values that must match the header.
@@ -393,7 +448,8 @@ inline u256 powBlockRewardFor(evmc_revision revision)
     {
         return kPoWBlockRewardFrontier;
     }
-    if (revision < EVMC_CONSTANTINOPLE)
+    // evmc 0.24 (ABI 19) merged Constantinople into Petersburg — same revision value.
+    if (revision < EVMC_PETERSBURG)
     {
         return kPoWBlockRewardByzantium;
     }
@@ -679,7 +735,14 @@ public:
         ledger::LedgerConfig ledgerConfig;
         co_await ledger::getLedgerConfig(
             view, ledgerConfig, ethHeader.number - 1, m_blockFactory.get());
-        fillExecutionLedgerConfig(ethHeader, ledgerConfig, forkSchedule, chainId);
+        if (auto unsupported =
+                fillExecutionLedgerConfig(ethHeader, ledgerConfig, forkSchedule, chainId))
+        {
+            // Before system calls, transaction decode, and executeBlock. A
+            // Constantinople-only PoW block has no ABI 19 revision; installing
+            // Petersburg here would meter SSTORE with the wrong schedule.
+            co_return co_await fail(std::move(*unsupported));
+        }
 
         // Execution header carrying the block context for the EVM.
         auto blockHeader = makeExecutionBlockHeader(

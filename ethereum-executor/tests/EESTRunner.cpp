@@ -607,7 +607,9 @@ evmc_revision forkNameToRevision(std::string const& forkName)
     if (lower == "byzantium")
         return EVMC_BYZANTIUM;
     if (lower == "constantinople")
-        return EVMC_CONSTANTINOPLE;
+        // evmc 0.24 (ABI 19) merged Constantinople into Petersburg; the corpus's
+        // "Constantinople" fixtures execute under the Petersburg alias here.
+        return EVMC_PETERSBURG;
     if (lower == "constantinoplefix" || lower == "petersburg")
         return EVMC_PETERSBURG;
     if (lower == "istanbul")
@@ -1006,8 +1008,14 @@ public:
         {
             header.baseFee = test::hexToU256(env.baseFee);
         }
-        auto const revision = scheduler_v1::evmcRevisionForTimestamp(
+        auto const revisionOpt = scheduler_v1::evmcRevisionForTimestamp(
             schedule.forks, header.timestamp, header.difficulty);
+        if (!revisionOpt)
+        {
+            // Not an expected transaction exception: the binary cannot price the block.
+            return fail(scheduler_v1::kUnsupportedConstantinopleRevision);
+        }
+        auto const revision = *revisionOpt;
         std::optional<std::vector<bytes>> withdrawals;
         if (revision >= EVMC_SHANGHAI)
         {

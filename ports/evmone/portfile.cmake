@@ -1,4 +1,4 @@
-# Official evmone (ipsilon) v0.21.0. FISCO-BCOS's SM3 (national crypto) support is
+# Official evmone (ipsilon) v0.24.0. FISCO-BCOS's SM3 (national crypto) support is
 # applied as a transparent patch instead of consuming a private fork: evmone::VM
 # carries an optional host-provided hash_fn used by the KECCAK256 opcode, so SM
 # chains hash with SM3. The evmc/ headers are NOT modified (evmc_host_context stays
@@ -19,8 +19,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO ipsilon/evmone
-    REF v0.21.0
-    SHA512 bc2928d42140d2fbb47d1e06773e634d208945e52ac70a418798586897a60164910cc2b23c80479ae172941d8d9142ea6fdd86e13f560195cff44ccdc1f1d0f2
+    REF v0.24.0
+    SHA512 83351c486c0638e8cae7fb826c9341ccadc1362d46346a331451695b53a79366e8354843bed431afddd0102221c48644d38385330f1198b5705bb2e8c60c6d53
     HEAD_REF master
     PATCHES fisco-sm3.patch trace-cancellation.patch precompile-errors.patch
 )
@@ -29,9 +29,9 @@ vcpkg_from_github(
 # cache, including on every patch-induced build-tree reset. Seed its exact
 # upstream archive after configure (which recreates the build directories).
 vcpkg_download_distfile(BLST_ARCHIVE
-    URLS "https://github.com/supranational/blst/archive/refs/tags/v0.3.15.tar.gz"
-    FILENAME "blst-v0.3.15.tar.gz"
-    SHA512 1437165bb1402d1295a8448f48b24175d740781f38c239f2d5f5ad65693042955c8b11f71dc02b6af7bd0252b5136beac18b0fbe59f5fa0834ff8cfd52444212
+    URLS "https://github.com/supranational/blst/archive/refs/tags/v0.3.17.tar.gz"
+    FILENAME "blst-v0.3.17.tar.gz"
+    SHA512 e7c930284e2473b511fce3037cbcc704d38986ee1622a6de387e8bde9cc54179f6eb0e3fb1a675eccfaf106c0b42ad6879367f98d6c4f54a7549bbcaa300cda5
 )
 
 vcpkg_cmake_configure(
@@ -46,7 +46,7 @@ vcpkg_cmake_configure(
 foreach(BLST_CONFIG dbg rel)
     set(BLST_DOWNLOAD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-${BLST_CONFIG}/deps/src")
     file(MAKE_DIRECTORY "${BLST_DOWNLOAD_DIR}")
-    file(COPY_FILE "${BLST_ARCHIVE}" "${BLST_DOWNLOAD_DIR}/v0.3.15.tar.gz" ONLY_IF_DIFFERENT)
+    file(COPY_FILE "${BLST_ARCHIVE}" "${BLST_DOWNLOAD_DIR}/v0.3.17.tar.gz" ONLY_IF_DIFFERENT)
 endforeach()
 vcpkg_cmake_install()
 
@@ -95,6 +95,8 @@ endif()
 
 # 4c. Install phase-1 precompile crypto headers used directly by FISCO-BCOS.
 #     (lib/evmone/*.hpp internal headers are installed by the patch's DIRECTORY install.)
+#     modarith.hpp is pulled in by ecc.hpp (evmone 0.24 rewrote the field arithmetic on it);
+#     kzg_precomputed_lines.{hpp,cpp} is only consumed by evmone's own kzg TU, not by us.
 file(INSTALL
     "${SOURCE_PATH}/lib/evmone_precompiles/sha256.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/ripemd160.hpp"
@@ -102,6 +104,7 @@ file(INSTALL
     "${SOURCE_PATH}/lib/evmone_precompiles/blake2b.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/bn254.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/ecc.hpp"
+    "${SOURCE_PATH}/lib/evmone_precompiles/modarith.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/hash_types.h"
     "${SOURCE_PATH}/lib/evmone_precompiles/keccak.h"
     "${SOURCE_PATH}/lib/evmone_precompiles/keccak.hpp"
@@ -164,7 +167,7 @@ endif()
 # Write version file
 set(EVMONE_VERSION_CONFIG "${CURRENT_PACKAGES_DIR}/share/evmone/evmoneConfigVersion.cmake")
 file(WRITE "${EVMONE_VERSION_CONFIG}" [=[
-set(PACKAGE_VERSION "0.21.0")
+set(PACKAGE_VERSION "0.24.0")
 if(PACKAGE_VERSION VERSION_LESS PACKAGE_FIND_VERSION)
     set(PACKAGE_VERSION_COMPATIBLE FALSE)
 else()

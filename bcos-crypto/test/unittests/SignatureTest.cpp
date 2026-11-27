@@ -506,6 +506,7 @@ BOOST_AUTO_TEST_CASE(testEd25519VerifyShortSignature)
 
 // positive control for the sizeof(in) fix: a real hash‖pub‖r‖s buffer must verify and
 // recover the signing key's address (reverting to sizeof(_input) turns this red);
+// omitting the public key and signature leaves them zero-filled and fails verification;
 // a truncated input must be rejected before verification
 BOOST_AUTO_TEST_CASE(testEd25519RecoverAddressFromInput)
 {
@@ -527,6 +528,8 @@ BOOST_AUTO_TEST_CASE(testEd25519RecoverAddressFromInput)
     BOOST_CHECK(ok);
     BOOST_CHECK(addr == calculateAddress(hashImpl, keyPair->publicKey()).asBytes());
 
+    // Short input is rejected by the size check. A one-byte tail that happens to
+    // be zero is covered by testEd25519RecoverRejectsZeroTailTruncation.
     auto truncated = bytes(input.begin(), input.end() - 1);
     auto [okShort, addrShort] = signatureCrypto->recoverAddress(*hashImpl, ref(truncated));
     BOOST_CHECK(!okShort);

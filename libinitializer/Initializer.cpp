@@ -433,7 +433,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         evmcRevisionSchedule = [schedule =
                                        EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig)](
                                    int64_t timestampSeconds, u256 const& difficulty) {
-            return scheduler_v1::evmcRevisionForTimestamp(schedule, timestampSeconds, difficulty);
+            return scheduler_v1::requireEvmcRevisionForTimestamp(
+                schedule, timestampSeconds, difficulty);
         };
     }
 
