@@ -22,6 +22,7 @@
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <tbb/parallel_for.h>
 #include <boost/test/unit_test.hpp>
+#include <future>
 
 using namespace bcos;
 using namespace std;
@@ -135,6 +136,41 @@ BOOST_AUTO_TEST_CASE(serialTest)
     bucketMap.clear();
     BOOST_CHECK(!bucketMap.contains(6));
     BOOST_CHECK(bucketMap.empty());
+}
+
+BOOST_AUTO_TEST_CASE(sizeWhileBucketIsWriteLocked)
+{
+    using Map = bcos::BucketMap<int, int, std::hash<int>>;
+    Map map(1);
+    {
+        Map::WriteAccessor accessor;
+        BOOST_REQUIRE(map.insert(accessor, {1, 1}));
+        BOOST_CHECK_EQUAL(map.size(), 1);
+    }
+    std::promise<void> start;
+    auto sample = std::async(std::launch::async, [&] {
+        start.set_value();
+        for (size_t i = 0; i < 10000; ++i)
+        {
+            auto size = map.size();
+            if (size < 1 || size > 2)
+            {
+                return false;
+            }
+        }
+        return true;
+    });
+    start.get_future().wait();
+    for (size_t i = 0; i < 10000; ++i)
+    {
+        Map::WriteAccessor accessor;
+        map.insert(accessor, {2, 2});
+        map.remove(accessor);
+    }
+    BOOST_CHECK(sample.get());
+    Map::WriteAccessor duplicate;
+    BOOST_CHECK(!map.insert(duplicate, {1, 2}));
+    BOOST_CHECK_EQUAL(map.size(), 1);
 }
 
 BOOST_AUTO_TEST_CASE(batchFindTest)

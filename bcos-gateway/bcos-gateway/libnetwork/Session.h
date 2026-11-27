@@ -76,6 +76,7 @@ struct Payload
     using MessageList = boost::container::small_vector<bytesConstRef, 3>;
     std::variant<EncodedMessage, MessageList> m_data;
     std::function<void(boost::system::error_code)> m_callback;
+    bool m_notifyOnSuccess = true;
 
     size_t size() const;
     void toConstBuffer(std::output_iterator<boost::asio::const_buffer> auto output) const
@@ -245,7 +246,8 @@ public:
     /// Check error code after reading and drop peer if error code.
     bool checkRead(boost::system::error_code _ec);
 
-    void onTimeout(const boost::system::error_code& error, uint32_t seq);
+    ResponseCallback::Ptr registerResponse(
+        Message const& message, uint32_t timeout, SessionCallbackFunc callback);
 
     /// Perform a single round of the write operation. This could end up calling
     /// itself asynchronously.
@@ -286,6 +288,7 @@ public:
     // actual teardown body runs exactly once; all subsequent callers no-op.
     std::atomic_bool m_dropped{false};
     P2PInfo m_hostInfo;
+    std::string m_peerID;
 
     // FIB-184: opaque guard whose destructor releases the Host session-cap slot. Destroyed with
     // the session, so the slot is freed exactly once on session teardown.
@@ -321,7 +324,7 @@ public:
 
     virtual std::shared_ptr<SessionFace> createSession(Host& _server,
         std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
-        SessionCallbackManagerInterface::Ptr& _sessionCallbackManager);
+        SessionCallbackManagerInterface::Ptr& _sessionCallbackManager, std::string peerID);
 
 private:
     P2PInfo m_hostInfo;

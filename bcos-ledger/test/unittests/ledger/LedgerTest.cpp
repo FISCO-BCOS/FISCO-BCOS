@@ -23,6 +23,7 @@
 
 #include "bcos-ledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
@@ -107,6 +108,18 @@ public:
     MockStorage(std::shared_ptr<StorageInterface> prev)
       : storage::StateStorageInterface(prev), StateStorage(prev, false)
     {}
+    bool failGasPriceRead = false;
+    void asyncGetRow(std::string_view table, std::string_view key,
+        std::function<void(Error::UniquePtr, std::optional<Entry>)> callback) override
+    {
+        if (failGasPriceRead && table == SYS_CONFIG && key == SYSTEM_KEY_TX_GAS_PRICE)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(-1, "test storage unavailable"), {});
+            return;
+        }
+        StateStorage::asyncGetRow(table, key, std::move(callback));
+    }
+
     bcos::Error::Ptr setRows(std::string_view tableName,
         ::ranges::any_view<std::string_view,
             ::ranges::category::random_access | ::ranges::category::sized>
@@ -1360,12 +1373,29 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     // get error key
     m_ledger->asyncGetSystemConfigByKey(
         "test", [&](Error::Ptr _error, std::string _value, bcos::protocol::BlockNumber _number) {
-            BOOST_CHECK(_error->errorCode() == LedgerError::GetStorageError);
+            BOOST_REQUIRE(_error);
+            BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::EmptyEntry);
             BOOST_CHECK_EQUAL(_value, "");
             BOOST_CHECK_EQUAL(_number, -1);
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);
+}
+
+BOOST_AUTO_TEST_CASE(gasPriceReadFailureIsDistinctFromAbsentConfig)
+{
+    initFixture(protocol::BlockVersion::V3_1_VERSION);
+    auto read = [&] {
+        return task::syncWait(ledger::getSystemConfig(*m_ledger, SYSTEM_KEY_TX_GAS_PRICE));
+    };
+    BOOST_CHECK(!read());
+    auto storage = std::dynamic_pointer_cast<MockStorage>(m_storage);
+    BOOST_REQUIRE(storage);
+    storage->failGasPriceRead = true;
+    BOOST_CHECK_EXCEPTION(read(), Error,
+        [](Error const& error) { return error.errorCode() == LedgerError::GetStorageError; });
+    storage->failGasPriceRead = false;
+    BOOST_CHECK(!read());
 }
 
 BOOST_AUTO_TEST_CASE(testEmptyBlock)

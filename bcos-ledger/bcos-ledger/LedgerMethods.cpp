@@ -291,9 +291,12 @@ bcos::task::Task<std::optional<bcos::ledger::SystemConfigEntry>> bcos::ledger::t
                            bcos::protocol::BlockNumber blockNumber) {
                     if (error)
                     {
+                        // Older configs can be absent. Fee validation must surface storage
+                        // failures.
                         if (error->errorCode() == LedgerError::EmptyEntry ||
                             error->errorCode() == LedgerError::ErrorArgument ||
-                            error->errorCode() == LedgerError::GetStorageError)
+                            (error->errorCode() == LedgerError::GetStorageError &&
+                                m_key != SYSTEM_KEY_TX_GAS_PRICE))
                         {
                             m_result.emplace<std::optional<SystemConfigEntry>>();
                         }

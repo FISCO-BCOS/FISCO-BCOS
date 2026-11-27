@@ -28,6 +28,7 @@
 #include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/rw_mutex.h>
 #include <rapidhash.h>
+#include <atomic>
 #include <concepts>
 #include <optional>
 #include <random>
@@ -193,6 +194,10 @@ public:
         accessor.emplaceLock(m_mutex);
 
         auto [it, inserted] = m_values.try_emplace(keyValue.first, keyValue.second);
+        if (inserted)
+        {
+            m_size.store(m_values.size(), std::memory_order_relaxed);
+        }
         accessor.setIterator(it, this);
         return inserted;
     }
@@ -201,9 +206,10 @@ public:
     {
         auto it = accessor.iterator();
         m_values.erase(it);
+        m_size.store(m_values.size(), std::memory_order_relaxed);
     }
 
-    size_t size() { return m_values.size(); }
+    size_t size() const { return m_size.load(std::memory_order_relaxed); }
     bool contains(const auto& key)
     {
         Guard guard(m_mutex, false);
@@ -214,10 +220,15 @@ public:
     {
         Guard guard(m_mutex, true);
         m_values.clear();
+        m_size.store(0, std::memory_order_relaxed);
     }
 
     MapType m_values;
     mutable SharedMutex m_mutex;
+
+private:
+    // Writers publish under the bucket lock. size() can also be called by its current owner.
+    std::atomic_size_t m_size{0};
 };
 
 template <class KeyType, class ValueType, class BucketHasher = RapidHasher,

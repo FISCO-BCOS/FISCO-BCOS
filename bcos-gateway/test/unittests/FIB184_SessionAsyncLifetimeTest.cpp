@@ -39,6 +39,7 @@
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/error.hpp>
 #include <boost/test/unit_test.hpp>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -55,8 +56,18 @@ BOOST_FIXTURE_TEST_SUITE(FIB184_SessionAsyncLifetimeTest, TestPromptFixture)
 class FakeASIO_Lifetime : public bcos::gateway::ASIOInterface
 {
 public:
-    FakeASIO_Lifetime() = default;
+    FakeASIO_Lifetime() { m_timerIOService = std::make_shared<ba::io_context>(); }
     ~FakeASIO_Lifetime() noexcept override = default;
+
+    void asyncWrite(const std::shared_ptr<SocketFace>&,
+        const std::vector<ba::const_buffer>& buffers, ReadWriteHandler handler) override
+    {
+        writeSizes.push_back(ba::buffer_size(buffers));
+        writeHandler = std::move(handler);
+    }
+
+    std::vector<size_t> writeSizes;
+    ReadWriteHandler writeHandler;
 
     void asyncReadSome(
         const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler handler) override
@@ -221,6 +232,82 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
     // Drain the shutdown handlers closeSocket() queued (they hold the socket, not the session) so
     // the fake io_context tears down cleanly.
     fakeSocket->ioService().poll();
+}
+
+BOOST_AUTO_TEST_CASE(QueuedWritesContinueAfterCompletionOnAnotherThread)
+{
+    auto socket = std::make_shared<FakeSocket_Lifetime>();
+    auto asio = std::make_shared<FakeASIO_Lifetime>();
+    auto host = std::make_shared<FakeHost_Lifetime>(
+        std::make_shared<Keccak256>(), asio, nullptr, std::make_shared<P2PMessageFactory>());
+    auto session = std::make_shared<Session>(socket, *host, 1024, true);
+    session->m_active = true;
+    auto enqueue = [&](size_t size) {
+        EncodedMessage encoded;
+        encoded.payload.resize(size);
+        session->m_writeQueue.push(Payload{std::move(encoded), {}});
+        session->write();
+    };
+    enqueue(3);
+    enqueue(5);
+    enqueue(7);
+    BOOST_REQUIRE_EQUAL(asio->writeSizes.size(), 1);
+    BOOST_CHECK_EQUAL(asio->writeSizes[0], 3);
+
+    auto first = std::exchange(asio->writeHandler, {});
+    std::thread worker([first = std::move(first)] { first({}, 3); });
+    worker.join();
+    BOOST_REQUIRE_EQUAL(asio->writeSizes.size(), 2);
+    BOOST_CHECK_EQUAL(asio->writeSizes[1], 12);
+    auto last = std::exchange(asio->writeHandler, {});
+    last({}, 12);
+    BOOST_CHECK(!asio->writeHandler);
+}
+
+BOOST_AUTO_TEST_CASE(OnlyMatchingResponseConsumesPendingRequest)
+{
+    auto asio = std::make_shared<FakeASIO_Lifetime>();
+    auto host = std::make_shared<FakeHost_Lifetime>(
+        std::make_shared<Keccak256>(), asio, nullptr, std::make_shared<P2PMessageFactory>());
+    auto socket = std::make_shared<FakeSocket_Lifetime>();
+    auto outbound = std::make_shared<Session>(socket, *host, 1024, true);
+    auto other = std::make_shared<Session>(socket, *host, 1024, true);
+    auto manager = std::make_shared<SessionCallbackManagerBucket>();
+    outbound->setSessionCallbackManager(manager);
+    outbound->m_peerID = "relay";
+
+    P2PMessage request;
+    std::string destination(128, 'a');
+    auto canonical = host->canonicalPeerID(destination);
+    request.setDstP2PNodeID(destination);
+    request.setSeq(1);
+    request.setPacketType(GatewayMessageType::AMOPMessageType);
+    auto pending = outbound->registerResponse(request, 0, [](NetworkException, Message::Ptr) {});
+    BOOST_REQUIRE(pending);
+    BOOST_CHECK(pending->timeoutHandler.has_value());
+    auto take = [&](Session& session, std::string_view peer, std::string_view source,
+                    uint16_t type) {
+        return manager->getCallback(1, true, [&](const ResponseCallback& callback) {
+            return callback.accepts(session, peer, source, type);
+        });
+    };
+    BOOST_CHECK(!take(*other, "other", canonical, GatewayMessageType::WSMessageType));
+    BOOST_CHECK(!take(*outbound, "relay", "other", GatewayMessageType::AMOPMessageType));
+    BOOST_CHECK(!take(*outbound, "relay", canonical, GatewayMessageType::PeerToPeerMessage));
+    BOOST_CHECK(take(*outbound, "relay", canonical, GatewayMessageType::WSMessageType) == pending);
+    BOOST_CHECK(!take(*outbound, "relay", canonical, GatewayMessageType::WSMessageType));
+    BOOST_CHECK(
+        pending->accepts(*other, canonical, canonical, GatewayMessageType::AMOPMessageType));
+
+    P2PMessage direct;
+    direct.setSeq(1);
+    direct.setPacketType(GatewayMessageType::PeerToPeerMessage);
+    auto ack = outbound->registerResponse(direct, 0, [](NetworkException, Message::Ptr) {});
+    BOOST_REQUIRE(ack);
+    BOOST_CHECK(!ack->timeoutHandler.has_value());
+    BOOST_CHECK(!manager->getCallback(
+        1, true, [&](const ResponseCallback& item) { return &item == pending.get(); }));
+    BOOST_CHECK(take(*outbound, "relay", {}, 0) == ack);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -6,6 +6,7 @@
  * @date 2018-09-13
  */
 #pragma once
+#include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Message.h"
 #include <boost/asio/deadline_timer.hpp>
@@ -18,11 +19,38 @@ namespace bcos::gateway
 
 using SessionCallbackFunc = std::function<void(NetworkException, Message::Ptr)>;
 
+class Session;
+
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
     using Ptr = std::shared_ptr<ResponseCallback>;
 
-    uint64_t startTime;
+    std::weak_ptr<Session> outboundSession;
+    std::string expectedSource;
+    uint16_t requestType{};
+
+    bool accepts(Session const& incoming, std::string_view peer, std::string_view source,
+        uint16_t responseType) const
+    {
+        // A routed reply may arrive directly from the final peer or through the hop we used.
+        bool direct = !expectedSource.empty() && peer == expectedSource;
+        if (!direct && outboundSession.lock().get() != &incoming)
+        {
+            return false;
+        }
+        if ((source.empty() ? peer : source) != expectedSource)
+        {
+            return false;
+        }
+        if (requestType == GatewayMessageType::AMOPMessageType)
+        {
+            return responseType == GatewayMessageType::AMOPMessageType ||
+                   responseType == GatewayMessageType::WSMessageType;
+        }
+        // Built-in acknowledgements use type zero. Echo responders retain the request type.
+        return responseType == 0 || responseType == requestType;
+    }
+
     SessionCallbackFunc callback;
     std::optional<boost::asio::deadline_timer> timeoutHandler;
 };
@@ -43,7 +71,9 @@ public:
 
     virtual ~SessionCallbackManagerInterface() = default;
 
-    virtual SessionResponseCallback::Ptr getCallback(uint32_t seq, bool isRemove) = 0;
+    using Predicate = std::function<bool(const ResponseCallback&)>;
+    virtual SessionResponseCallback::Ptr getCallback(
+        uint32_t seq, bool isRemove, const Predicate& matches = {}) = 0;
     virtual bool addCallback(uint32_t seq, SessionResponseCallback::Ptr callback) = 0;
     virtual bool removeCallback(uint32_t seq) = 0;
 };
@@ -62,11 +92,12 @@ public:
 
     ~SessionCallbackManager() override = default;
 
-    SessionResponseCallback::Ptr getCallback(uint32_t seq, bool isRemove) override
+    SessionResponseCallback::Ptr getCallback(
+        uint32_t seq, bool isRemove, const Predicate& matches = {}) override
     {
         std::lock_guard<std::mutex> lockGuard(x_sessionCallbackMap);
         auto it = m_sessionCallbackMap.find(seq);
-        if (it == m_sessionCallbackMap.end())
+        if (it == m_sessionCallbackMap.end() || (matches && !matches(*it->second)))
         {
             return nullptr;
         }
@@ -113,10 +144,11 @@ public:
 
     ~SessionCallbackManagerBucket() override = default;
 
-    SessionResponseCallback::Ptr getCallback(uint32_t seq, bool isRemove) override
+    SessionResponseCallback::Ptr getCallback(
+        uint32_t seq, bool isRemove, const Predicate& matches = {}) override
     {
         auto bucket = (seq % SessionCallbackBucketNum);
-        return m_sessionCallbackBucket.at(bucket).getCallback(seq, isRemove);
+        return m_sessionCallbackBucket.at(bucket).getCallback(seq, isRemove, matches);
     }
 
     bool addCallback(uint32_t seq, SessionResponseCallback::Ptr callback) override

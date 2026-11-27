@@ -94,6 +94,7 @@ public:
     virtual std::shared_ptr<SessionFactory> sessionFactory() const;
     virtual MessageFactory::Ptr messageFactory() const;
     virtual P2PInfo p2pInfo();
+    std::string canonicalPeerID(std::string const& id) const;
 
     virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist);
     virtual PeerBlackWhitelistInterface::Ptr peerBlacklist();
