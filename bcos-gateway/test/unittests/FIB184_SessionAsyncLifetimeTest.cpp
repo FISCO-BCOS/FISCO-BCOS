@@ -36,6 +36,7 @@
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/error.hpp>
 #include <boost/test/unit_test.hpp>
@@ -62,12 +63,29 @@ public:
     void asyncWrite(const std::shared_ptr<SocketFace>&,
         const std::vector<ba::const_buffer>& buffers, ReadWriteHandler handler) override
     {
+        if (throwOnWrite)
+        {
+            throw boost::system::system_error(ba::error::operation_aborted);
+        }
         writeSizes.push_back(ba::buffer_size(buffers));
+        writeBuffers = buffers;
         writeHandler = std::move(handler);
     }
 
     std::vector<size_t> writeSizes;
+    std::vector<ba::const_buffer> writeBuffers;
     ReadWriteHandler writeHandler;
+    bool throwOnWrite = false;
+
+    void completeWrite(boost::system::error_code error = {})
+    {
+        auto handler = std::exchange(writeHandler, {});
+        BOOST_REQUIRE(handler);
+        writeBuffers.clear();
+        handler(error, error ? 0 : writeSizes.back());
+    }
+
+    void runTimers() { m_timerIOService->run(); }
 
     void asyncReadSome(
         const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler handler) override
@@ -122,6 +140,10 @@ public:
     // threads), so haveNetwork() returns false and no io_context is left to service posted
     // handlers.
     void stopNetwork() { m_run = false; }
+
+    using Host::startPeerSession;
+    void waitForDelivery() { m_asyncGroup.wait(); }
+    void waitForConnection() { m_taskArena.execute([this] { m_asyncGroup.wait(); }); }
 };
 
 // A socket backed by a real SSL stream so drop()/closeSocket() can call sslref() safely; close()
@@ -308,6 +330,197 @@ BOOST_AUTO_TEST_CASE(OnlyMatchingResponseConsumesPendingRequest)
     BOOST_CHECK(!manager->getCallback(
         1, true, [&](const ResponseCallback& item) { return &item == pending.get(); }));
     BOOST_CHECK(take(*outbound, "relay", {}, 0) == ack);
+}
+
+struct SessionWriteFixture
+{
+    std::shared_ptr<FakeASIO_Lifetime> asio = std::make_shared<FakeASIO_Lifetime>();
+    std::shared_ptr<FakeSocket_Lifetime> socket = std::make_shared<FakeSocket_Lifetime>();
+    std::shared_ptr<SessionCallbackManagerBucket> callbacks =
+        std::make_shared<SessionCallbackManagerBucket>();
+    std::shared_ptr<FakeHost_Lifetime> host =
+        std::make_shared<FakeHost_Lifetime>(std::make_shared<Keccak256>(), asio,
+            std::make_shared<SessionFactory>(P2PInfo{}, 1024, 4096, 1024, 4096, 4, false),
+            std::make_shared<P2PMessageFactory>());
+    std::shared_ptr<Session> session;
+
+    SessionWriteFixture()
+    {
+        P2PInfo peer;
+        peer.p2pID = "peer";
+        host->setSessionCallbackManager(callbacks);
+        host->setConnectionHandler([this](NetworkException, const P2PInfo&, SessionFace::Ptr s) {
+            session = std::dynamic_pointer_cast<Session>(s);
+        });
+        host->startPeerSession(peer, socket, {});
+        host->waitForConnection();
+        BOOST_REQUIRE(session);
+        session->m_active = true;
+    }
+
+    static std::shared_ptr<P2PMessage> message(uint32_t seq)
+    {
+        auto msg = std::make_shared<P2PMessage>();
+        msg->setSeq(seq);
+        msg->setPacketType(GatewayMessageType::AMOPMessageType);
+        return msg;
+    }
+};
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(SessionWriteTest, FIB184_SessionAsyncLifetimeTest::SessionWriteFixture)
+
+BOOST_AUTO_TEST_CASE(ReplyCompletesOriginalSendOnce)
+{
+    auto request = message(7);
+    auto reply = message(7);
+    reply->setPacketType(GatewayMessageType::WSMessageType);
+    reply->setSrcP2PNodeID("peer");
+    reply->setRespPacket();
+    std::vector<std::pair<int, Message::Ptr>> responses;
+    int duplicateError = 0;
+    session->asyncSendMessage(
+        request, {.timeout = 100}, [&](NetworkException ec, Message::Ptr response) {
+            responses.emplace_back(ec.errorCode(), std::move(response));
+        });
+    session->asyncSendMessage(
+        request, {}, [&](NetworkException ec, Message::Ptr) { duplicateError = ec.errorCode(); });
+    asio->completeWrite();
+    host->waitForDelivery();
+    BOOST_CHECK(responses.empty());
+    BOOST_CHECK_EQUAL(duplicateError, ProtocolError);
+    BOOST_CHECK_EQUAL(asio->writeSizes.size(), 1);
+    BOOST_REQUIRE(callbacks->getCallback(7, false));
+
+    session->onMessage({}, reply);
+    host->waitForDelivery();
+    session->onMessage({}, reply);
+    host->waitForDelivery();
+    asio->runTimers();
+    host->waitForDelivery();
+    BOOST_REQUIRE_EQUAL(responses.size(), 1);
+    BOOST_CHECK_EQUAL(responses.front().first, Success);
+    BOOST_CHECK(responses.front().second == reply);
+    BOOST_CHECK(!callbacks->getCallback(7, false));
+}
+
+BOOST_AUTO_TEST_CASE(EncodingFailureDoesNotReserveSequenceOrWrite)
+{
+    struct UnencodableMessage : P2PMessage
+    {
+        bool encode(EncodedMessage&) const override { return false; }
+    };
+    auto request = std::make_shared<UnencodableMessage>();
+    request->setSeq(8);
+    int result = 0;
+    session->asyncSendMessage(
+        request, {}, [&](NetworkException ec, Message::Ptr) { result = ec.errorCode(); });
+    host->waitForDelivery();
+    BOOST_CHECK_EQUAL(result, ProtocolError);
+    BOOST_CHECK(!callbacks->getCallback(8, false));
+    BOOST_CHECK(asio->writeSizes.empty());
+}
+
+BOOST_AUTO_TEST_CASE(WriteFailureCompletesActiveAndQueuedSends)
+{
+    int activeError = 0, queuedError = 0;
+    session->asyncSendMessage(
+        message(1), {}, [&](NetworkException ec, Message::Ptr) { activeError = ec.errorCode(); });
+    session->asyncSendMessage(
+        message(2), {}, [&](NetworkException ec, Message::Ptr) { queuedError = ec.errorCode(); });
+    socket->m_connected = false;
+    asio->completeWrite(ba::error::connection_reset);
+    host->waitForDelivery();
+    socket->ioService().poll();
+    BOOST_CHECK_EQUAL(activeError, static_cast<int>(ba::error::connection_reset));
+    BOOST_CHECK_EQUAL(queuedError, static_cast<int>(ba::error::not_connected));
+    BOOST_CHECK(!callbacks->getCallback(1, false));
+    BOOST_CHECK(!callbacks->getCallback(2, false));
+    BOOST_CHECK_EQUAL(asio->writeSizes.size(), 1);
+}
+
+BOOST_AUTO_TEST_CASE(TimeoutAllowsSequenceReuseBeforeWriteCompletes)
+{
+    auto request = message(11);
+    std::vector<int> firstResult;
+    session->asyncSendMessage(request, {.timeout = 1},
+        [&](NetworkException ec, Message::Ptr) { firstResult.push_back(ec.errorCode()); });
+    asio->runTimers();
+    host->waitForDelivery();
+    BOOST_REQUIRE_EQUAL(firstResult.size(), 1);
+    BOOST_CHECK_EQUAL(firstResult.front(), NetworkTimeout);
+    BOOST_CHECK(!callbacks->getCallback(11, false));
+
+    int secondError = 0;
+    session->asyncSendMessage(
+        request, {}, [&](NetworkException ec, Message::Ptr) { secondError = ec.errorCode(); });
+    socket->m_connected = false;
+    asio->completeWrite(ba::error::connection_reset);
+    host->waitForDelivery();
+    socket->ioService().poll();
+    BOOST_CHECK_EQUAL(firstResult.size(), 1);
+    BOOST_CHECK_EQUAL(secondError, static_cast<int>(ba::error::not_connected));
+    BOOST_CHECK(!callbacks->getCallback(11, false));
+}
+
+BOOST_AUTO_TEST_CASE(WriteInitiationFailureReleasesPendingRequest)
+{
+    asio->throwOnWrite = true;
+    std::vector<int> results;
+    session->asyncSendMessage(message(5), {},
+        [&](NetworkException ec, Message::Ptr) { results.push_back(ec.errorCode()); });
+    host->waitForDelivery();
+    socket->m_connected = false;
+    socket->ioService().poll();
+    BOOST_REQUIRE_EQUAL(results.size(), 1);
+    BOOST_CHECK_EQUAL(results.front(), static_cast<int>(ba::error::operation_aborted));
+    BOOST_CHECK(!callbacks->getCallback(5, false));
+}
+
+BOOST_AUTO_TEST_CASE(FastSendKeepsPayloadUntilWriteCompletes)
+{
+    auto request = message(19);
+    bytes payload{1, 2, 3};
+    request->setPayload(payload);
+    bytes expected;
+    BOOST_REQUIRE(request->encode(expected));
+    std::vector<bytesConstRef> parts{ref(std::as_const(payload))};
+    Message::Ptr received;
+    auto send = [&]() -> task::Task<void> {
+        received = co_await session->fastSendMessage(*request, parts, {.response = true});
+    };
+    task::wait(send());
+    BOOST_REQUIRE(asio->writeHandler);
+    BOOST_REQUIRE(callbacks->getCallback(19, false));
+    std::optional<int> duplicateError;
+    auto duplicate = [&]() -> task::Task<void> {
+        try
+        {
+            co_await session->fastSendMessage(*request, parts, {.response = true});
+            duplicateError = 0;
+        }
+        catch (const NetworkException& e)
+        {
+            duplicateError = e.errorCode();
+        }
+    };
+    task::wait(duplicate());
+    BOOST_REQUIRE(duplicateError);
+    BOOST_CHECK_EQUAL(*duplicateError, ProtocolError);
+
+    std::fill(payload.begin(), payload.end(), 0);
+    bytes written(ba::buffer_size(asio->writeBuffers));
+    ba::buffer_copy(ba::buffer(written), asio->writeBuffers);
+    BOOST_CHECK(written == expected);
+
+    auto reply = message(19);
+    reply->setRespPacket();
+    session->onMessage({}, reply);
+    host->waitForDelivery();
+    BOOST_CHECK(received == reply);
+    BOOST_CHECK(!callbacks->getCallback(19, false));
+    BOOST_CHECK_EQUAL(asio->writeSizes.size(), 1);
+    asio->completeWrite();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
