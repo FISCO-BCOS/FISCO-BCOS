@@ -1385,17 +1385,17 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
 BOOST_AUTO_TEST_CASE(gasPriceReadFailureIsDistinctFromAbsentConfig)
 {
     initFixture(protocol::BlockVersion::V3_1_VERSION);
-    auto read = [&] {
+    const auto fetchGasPriceConfig = [this] {
         return task::syncWait(ledger::getSystemConfig(*m_ledger, SYSTEM_KEY_TX_GAS_PRICE));
     };
-    BOOST_CHECK(!read());
+    BOOST_CHECK(!fetchGasPriceConfig().has_value());
     auto storage = std::dynamic_pointer_cast<MockStorage>(m_storage);
     BOOST_REQUIRE(storage);
     storage->failGasPriceRead = true;
-    BOOST_CHECK_EXCEPTION(read(), Error,
+    BOOST_CHECK_EXCEPTION(fetchGasPriceConfig(), Error,
         [](Error const& error) { return error.errorCode() == LedgerError::GetStorageError; });
     storage->failGasPriceRead = false;
-    BOOST_CHECK(!read());
+    BOOST_CHECK(!fetchGasPriceConfig().has_value());
 }
 
 BOOST_AUTO_TEST_CASE(testEmptyBlock)
